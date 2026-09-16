@@ -1,0 +1,9 @@
+packages:
+  - "apps/agency"
+
+onlyBuiltDependencies:
+  - '@heroui/shared-utils'
+  - esbuild
+  - sharp
+  - unrs-resolver
+  - workerd

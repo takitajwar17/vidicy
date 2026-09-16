@@ -1,0 +1,27 @@
+{
+  "name": "vidicy",
+  "version": "0.1.0",
+  "private": true,
+  "packageManager": "pnpm@10.27.0",
+  "engines": {
+    "node": "22.x"
+  },
+  "scripts": {
+    "dev:agency": "pnpm --filter @vidicy/agency run dev",
+    "build": "pnpm -r run build",
+    "build:agency": "pnpm --filter @vidicy/agency run build",
+    "lint": "pnpm -r run lint",
+    "lint:agency": "pnpm --filter @vidicy/agency run lint",
+    "test": "pnpm -r run test",
+    "test:agency": "pnpm --filter @vidicy/agency run test",
+    "deploy:agency": "pnpm --filter @vidicy/agency run deploy",
+    "cf-typegen": "pnpm -r run cf-typegen",
+    "cf-typegen:agency": "pnpm --filter @vidicy/agency run cf-typegen",
+    "db:generate:agency": "pnpm --filter @vidicy/agency run db:generate",
+    "db:migrate:dev:agency": "pnpm --filter @vidicy/agency run db:migrate:dev",
+    "dev": "pnpm --filter @vidicy/agency run dev"
+  },
+  "volta": {
+    "node": "22.18.0"
+  }
+}
