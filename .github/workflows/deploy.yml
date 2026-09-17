@@ -1,0 +1,79 @@
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      deployments: write
+    name: Deploy to Cloudflare Workers
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          # We need to fetch all the history in order to get the updated date for...
+          # ... the blog posts and sitemap.
+          fetch-depth: 0
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.27.0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: "pnpm"
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Set app D1 environment variables
+        id: set-d1-vars
+        run: |
+          echo "AGENCY_D1_DATABASE_NAME=$(node apps/agency/scripts/get-db-name.mjs)" >> $GITHUB_ENV
+          echo "AGENCY_D1_DATABASE_ID=$(node apps/agency/scripts/get-db-id.mjs)" >> $GITHUB_ENV
+
+      - name: Migrate local Agency D1 database
+        run: pnpm run db:migrate:dev:agency
+
+      - name: Validate Agency deploy bundle
+        run: pnpm --filter @vidicy/agency run deploy:dry-run
+        env:
+          DATABASE_ID: ${{ env.AGENCY_D1_DATABASE_ID }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          NEXT_PUBLIC_SITE_URL: https://agency.vidicy.com
+          NEXT_PUBLIC_TURNSTILE_SITE_KEY: ${{ vars.NEXT_PUBLIC_TURNSTILE_SITE_KEY }}
+          NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: ${{ vars.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY }}
+
+      - name: Run Agency DB migrations
+        # Assumes additive/backward-compatible D1 migrations; use a two-phase
+        # rollout instead if a migration is not backward-compatible.
+        run: |
+          cd apps/agency
+          pnpm exec wrangler d1 migrations apply "${{ env.AGENCY_D1_DATABASE_NAME }}" --remote
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+
+      - name: Deploy Agency
+        run: pnpm run deploy:agency
+        env:
+          DATABASE_ID: ${{ env.AGENCY_D1_DATABASE_ID }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          NEXT_PUBLIC_SITE_URL: https://agency.vidicy.com
+          NEXT_PUBLIC_TURNSTILE_SITE_KEY: ${{ vars.NEXT_PUBLIC_TURNSTILE_SITE_KEY }}
+          NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: ${{ vars.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY }}
+
+      - name: Purge Cloudflare CDN cache
+        if: ${{ vars.CLOUDFLARE_ZONE_ID != '' }}
+        uses: nathanvaughn/actions-cloudflare-purge@master
+        with:
+          cf_zone: ${{ vars.CLOUDFLARE_ZONE_ID }}
+          cf_auth: ${{ secrets.CLOUDFLARE_API_TOKEN }}
