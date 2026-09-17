@@ -1,0 +1,42 @@
+# Cloudflare-backed preview/testing only.
+# Create `.dev.vars` from this file when you run `pnpm preview` or direct Wrangler-backed local flows.
+# For plain `pnpm dev`, you only need `.env`.
+# Remote deploy credentials do not belong here; keep those in `.env` or your shell environment.
+NEXTJS_ENV=development
+NEXT_PUBLIC_SITE_URL=http://localhost:3000
+NEXT_PUBLIC_APP_URL=http://localhost:3000
+
+# Optional integrations for Worker preview/testing. Leave blank until you need the feature.
+
+# Google OAuth
+# GOOGLE_CLIENT_ID=
+# GOOGLE_CLIENT_SECRET=
+
+# Cloudflare Turnstile
+# NEXT_PUBLIC_TURNSTILE_SITE_KEY=
+# TURNSTILE_SECRET_KEY=
+
+# Stripe
+# NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=
+# STRIPE_SECRET_KEY=
+# STRIPE_WEBHOOK_SECRET=
+
+# Resend
+# RESEND_API_KEY=
+# RESEND_WEBHOOK_SECRET=
+
+# Email sender identity
+# EMAIL_FROM=
+# EMAIL_FROM_NAME=
+# EMAIL_REPLY_TO=
+# SENTRY_DSN=
+
+# AI services
+# OPENAI_API_KEY=
+# PERPLEXITY_API_KEY=
+# GOOGLE_CLOUD_PROJECT=
+# GOOGLE_CLOUD_LOCATION=global
+# GEMINI_DOCUMENT_EXTRACTION=true
+
+# Optional diagnostics
+# DB_SQL_LOG=
