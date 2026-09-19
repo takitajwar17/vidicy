@@ -1,0 +1,18 @@
+User-agent: *
+Allow: /
+Disallow: /admin
+Disallow: /admin/
+Disallow: /dashboard
+Disallow: /dashboard/
+Disallow: /forgot-password
+Disallow: /pending-verification
+Disallow: /reset-password
+Disallow: /settings
+Disallow: /settings/
+Disallow: /sign-in
+Disallow: /sign-up
+Disallow: /verify-email
+Disallow: /api/
+
+Host: agency.vidicy.com
+Sitemap: https://agency.vidicy.com/sitemap.xml
