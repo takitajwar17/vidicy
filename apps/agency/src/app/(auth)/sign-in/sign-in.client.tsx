@@ -1,0 +1,178 @@
+"use client";
+
+import { signInAction } from "./sign-in.action";
+import { type SignInSchema, signInSchema } from "@/schemas/signin.schema";
+import { useState, useMemo } from "react";
+import { useSearchParams } from "next/navigation";
+import type { Route } from "next";
+
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import { Spinner } from "@/components/ui/spinner";
+import { AuthDivider } from "@/components/auth-divider";
+import { AuthShell } from "../_components/auth-shell";
+
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { toast } from "sonner";
+import { useServerAction } from "zsa-react";
+import Link from "next/link";
+import SSOButtons from "../_components/sso-buttons";
+import { EyeIcon, EyeOffIcon } from "lucide-react";
+import { useCsrfToken } from "@/components/csrf-provider";
+import { getAuthRouteHref } from "@/utils/auth-redirect";
+
+interface SignInClientProps {
+  redirectPath: string;
+  isGoogleSSOEnabled: boolean;
+}
+
+const SignInPage = ({ redirectPath, isGoogleSSOEnabled }: SignInClientProps) => {
+  const csrfToken = useCsrfToken();
+  const searchParams = useSearchParams();
+  const emailParam = searchParams.get("email") ?? "";
+  const [showPassword, setShowPassword] = useState(false);
+  const { execute: signIn, isPending: isSigningIn } = useServerAction(signInAction, {
+    onError: (error) => {
+      toast.dismiss()
+      toast.error(error.err?.message)
+    },
+    onStart: () => {
+      toast.loading("Signing you in...")
+    },
+    onSuccess: (response) => {
+      toast.dismiss()
+      toast.success("Signed in successfully")
+      window.location.href = response?.data?.redirectTo ?? redirectPath;
+    }
+  })
+  const form = useForm<SignInSchema>({
+    resolver: zodResolver(signInSchema),
+    defaultValues: useMemo(() => ({ email: emailParam }), [emailParam]),
+  });
+
+  const onSubmit = async (data: SignInSchema) => {
+    signIn({ ...data, csrfToken, verifiedRedirectPath: redirectPath })
+  }
+
+  return (
+    <AuthShell
+      testimonial={{
+        quote:
+          "Vidicy helped me organize my entire visa application in under an hour. The AI feedback was incredibly detailed.",
+        author: "Sarah M., UK Student Visa Applicant",
+      }}
+    >
+      {/* Header */}
+      <div className="space-y-2.5">
+        <h1 className="text-2xl font-semibold tracking-[-0.02em] text-foreground sm:text-3xl">
+          Sign In or Join Now!
+        </h1>
+        <p className="text-sm leading-6 text-muted-foreground/90">
+          Login or create your Vidicy account.
+        </p>
+      </div>
+
+      {/* Social login buttons */}
+      <div className="space-y-3">
+        <SSOButtons isSignIn redirectPath={redirectPath} isGoogleSSOEnabled={isGoogleSSOEnabled} />
+      </div>
+
+      <AuthDivider>or</AuthDivider>
+
+      {/* Email / password form */}
+      <Form {...form}>
+        <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-5">
+          <p className="text-sm leading-6 text-muted-foreground/90">
+            Enter your email address to sign in to your account
+          </p>
+
+          <FormField
+            control={form.control}
+            name="email"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel className="text-[13px] font-medium tracking-[0.01em] text-foreground/90">Email address</FormLabel>
+                <FormControl>
+                  <Input
+                    placeholder="you@example.com"
+                    type="email"
+                    autoFocus
+                    autoComplete="email"
+                    className="h-11 text-[15px]"
+                    {...field}
+                  />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+
+          <FormField
+            control={form.control}
+            name="password"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel className="text-[13px] font-medium tracking-[0.01em] text-foreground/90">Password</FormLabel>
+                <FormControl>
+                  <div className="relative">
+                    <Input
+                      type={showPassword ? "text" : "password"}
+                      placeholder="Password"
+                      autoComplete="current-password"
+                      className="h-11 pr-10 text-[15px]"
+                      {...field}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword((v) => !v)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                      aria-label={showPassword ? "Hide password" : "Show password"}
+                    >
+                      {showPassword ? <EyeOffIcon className="h-4 w-4" /> : <EyeIcon className="h-4 w-4" />}
+                    </button>
+                  </div>
+                </FormControl>
+                <FormMessage />
+                <div className="flex justify-end">
+                  <Link href="/forgot-password" className="text-xs font-semibold tracking-[0.01em] text-primary hover:text-primary/90">
+                    Forgot password?
+                  </Link>
+                </div>
+              </FormItem>
+            )}
+          />
+
+          <Button
+            type="submit"
+            className="h-11 w-full bg-sidebar text-sm font-semibold tracking-[0.01em] text-sidebar-foreground hover:bg-sidebar/90"
+            size="lg"
+            disabled={isSigningIn}
+          >
+            {isSigningIn ? (
+              <>
+                <Spinner className="mr-2 h-5 w-5" />
+                Signing in…
+              </>
+            ) : (
+              "Continue with email"
+            )}
+          </Button>
+        </form>
+      </Form>
+
+      <p className="text-sm text-center text-muted-foreground/90">
+        Don&#39;t have an account?{" "}
+        <Link
+          href={getAuthRouteHref("/sign-up", redirectPath) as Route}
+          className="font-semibold text-primary hover:text-primary/90 underline"
+        >
+          Create one free
+        </Link>
+      </p>
+    </AuthShell>
+  );
+};
+
+export default SignInPage;
