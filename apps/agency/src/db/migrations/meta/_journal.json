@@ -1,0 +1,97 @@
+{
+  "version": "7",
+  "dialect": "sqlite",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "6",
+      "when": 1789786800000,
+      "tag": "0000_initial",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "6",
+      "when": 1789792626870,
+      "tag": "0001_add_stripe_customer_id",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1789797879246,
+      "tag": "0002_add_marketing_email_tables",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "6",
+      "when": 1790306917936,
+      "tag": "0003_enforce_unique_application_role_name",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "6",
+      "when": 1790307813516,
+      "tag": "0004_add_hot_composite_indexes",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "6",
+      "when": 1790355675635,
+      "tag": "0005_add_remaining_hot_composite_indexes",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1790356381468,
+      "tag": "0006_add_document_hot_indexes",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "6",
+      "when": 1790474252999,
+      "tag": "0007_add_announcements_module",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "6",
+      "when": 1790484534607,
+      "tag": "0008_add_announcement_rich_content",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "6",
+      "when": 1790492301464,
+      "tag": "0009_add_announcement_update_counters",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "6",
+      "when": 1791117198283,
+      "tag": "0010_document_extraction_pipeline_redesign",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "6",
+      "when": 1791120041052,
+      "tag": "0011_drop_legacy_document_processing_columns",
+      "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "6",
+      "when": 1791126168377,
+      "tag": "0012_drop-passkey-credential-table",
+      "breakpoints": true
+    }
+  ]
+}
