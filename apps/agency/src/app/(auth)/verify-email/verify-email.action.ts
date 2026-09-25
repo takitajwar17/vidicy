@@ -13,7 +13,6 @@ import { createServerAction, ZSAError } from "zsa";
 import { logger } from "@/infra/logger";
 import { recordMarketingEvent } from "@/server/marketing/events";
 import { MARKETING_EVENT_TYPE } from "@/db/schema";
-import { runMarketingLifecyclePass } from "@/server/marketing/scheduler";
 
 export const verifyEmailAction = createServerAction()
   .input(verifyEmailSchema)
@@ -77,15 +76,6 @@ export const verifyEmailAction = createServerAction()
             type: MARKETING_EVENT_TYPE.USER_VERIFIED_EMAIL,
             userId: verificationToken.userId,
           });
-
-          try {
-            await runMarketingLifecyclePass({ db });
-          } catch (marketingError) {
-            logger.error("Failed to run immediate onboarding lifecycle pass", {
-              marketingError: marketingError instanceof Error ? marketingError.message : String(marketingError),
-              userId: verificationToken.userId,
-            });
-          }
 
           // Update all sessions of the user to reflect the new email verification status
           await updateAllSessionsOfUser(verificationToken.userId);

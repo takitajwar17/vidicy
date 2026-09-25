@@ -3,7 +3,6 @@ import "server-only";
 import { SITE_DOMAIN, SITE_URL, ADMIN_EMAIL, SITE_NAME } from "@/constants";
 import { resetPasswordText } from "@/react-email/reset-password";
 import { verifyEmailText } from "@/react-email/verify-email";
-import { welcomeEmailText } from "@/react-email/welcome";
 import { supportTicketAdminText } from "@/react-email/support-ticket-admin";
 import { supportTicketReplyText } from "@/react-email/support-ticket-reply";
 import { supportTicketUserReplyText } from "@/react-email/support-ticket-user-reply";
@@ -113,28 +112,6 @@ export async function sendVerificationEmail({
     subject: `Verify your email for ${SITE_DOMAIN}`,
     text,
     tags: [{ name: "type", value: "email-verification" }],
-  });
-}
-
-export async function sendWelcomeEmail({
-  email,
-  firstName,
-}: {
-  email: string;
-  firstName: string;
-}) {
-  if (!isProd) {
-    logger.warn("Welcome email skipped in dev", { email, firstName });
-    return;
-  }
-
-  const text = welcomeEmailText({ firstName });
-
-  await sendEmail({
-    to: [email],
-    subject: `Welcome to Vidicy - your first step takes 60 seconds`,
-    text,
-    tags: [{ name: "type", value: "welcome" }],
   });
 }
 

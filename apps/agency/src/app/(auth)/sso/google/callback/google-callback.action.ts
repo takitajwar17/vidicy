@@ -18,7 +18,7 @@ import { canSignUp, createAndStoreSession } from "@/utils/auth";
 import { isGoogleSSOEnabled } from "@/flags";
 import { getIP } from "@/utils/get-IP";
 import { logger } from "@/infra/logger";
-import { sendNewUserSignupNotificationEmail, sendWelcomeEmail } from "@/utils/email";
+import { sendNewUserSignupNotificationEmail } from "@/utils/email";
 import { linkApplicantRecordsByEmail } from "@/server/applicant-server";
 import { getPostAuthRedirectPath, normalizeRedirectPath } from "@/utils/auth-redirect";
 import { sendEmailBestEffort } from "@/lib/best-effort-email";
@@ -219,18 +219,6 @@ export const googleSSOCallbackAction = createServerAction()
             },
           });
 
-          // Send welcome email for new users (non-fatal)
-          try {
-            await sendWelcomeEmail({
-              email: userEmail,
-              firstName: user.firstName || userEmail,
-            });
-          } catch (welcomeError) {
-            logger.error("Failed to send welcome email (Google OAuth):", {
-              welcomeError: welcomeError instanceof Error ? welcomeError.message : String(welcomeError),
-              userId: user.id,
-            });
-          }
         }
 
         return {
