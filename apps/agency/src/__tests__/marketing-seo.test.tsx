@@ -13,7 +13,7 @@ import SubprocessorsPage, {
 } from "@/app/(legal)/subprocessors/page";
 import TermsPage from "@/app/(legal)/terms/page";
 import { metadata as toolsMetadata } from "@/app/tools/page";
-import { metadata as homepageMetadata } from "@/app/(marketing)/page";
+import { metadata as homepageMetadata } from "@/app/(agency-home)/page";
 import { CANONICAL_SITE_URL } from "@/constants";
 
 function toIsoDate(value: string | Date | null | undefined): string | undefined {
@@ -24,16 +24,13 @@ function toIsoDate(value: string | Date | null | undefined): string | undefined 
 describe("marketing SEO surfaces", () => {
   it("keeps the homepage title plain so the root template adds branding once", () => {
     expect(typeof homepageMetadata.title).toBe("string");
-    expect(homepageMetadata.title).toBe("AI Visa Document Review & Checklist");
-    expect(String(homepageMetadata.title)).toContain("Visa Document Review");
+    expect(homepageMetadata.title).toBe("Vidicy Agency");
     expect(String(homepageMetadata.title)).not.toContain("Vidicy - Vidicy");
   });
 
-  it("uses a fuller homepage meta description with visa document review intent", () => {
+  it("uses minimal agency homepage metadata", () => {
     expect(typeof homepageMetadata.description).toBe("string");
-    expect(homepageMetadata.description).toContain("visa document review");
-    expect((homepageMetadata.description as string).length).toBeGreaterThanOrEqual(140);
-    expect((homepageMetadata.description as string).length).toBeLessThanOrEqual(160);
+    expect(homepageMetadata.description).toBe("Sign in to the Vidicy agency workspace.");
   });
 
   it("uses a descriptive About page metadata title", () => {
@@ -74,11 +71,7 @@ describe("marketing SEO surfaces", () => {
     );
   });
 
-  it("keeps homepage pricing links and copy aligned after removing the features section", () => {
-    const homepageSource = readFileSync(
-      resolve(process.cwd(), "src/components/homepage/sections.tsx"),
-      "utf8",
-    );
+  it("keeps public navigation free of removed feature anchors", () => {
     const footerSource = readFileSync(
       resolve(process.cwd(), "src/components/sections/footer.tsx"),
       "utf8",
@@ -87,7 +80,6 @@ describe("marketing SEO surfaces", () => {
 
     expect(`${footerSource}\n${configSource}`).not.toContain('href: "/#features"');
     expect(`${footerSource}\n${configSource}`).not.toContain("built-for-approval");
-    expect(homepageSource).toContain("Get approved or get your money back!");
   });
 
   it("defers non-critical third-party scripts from the root layout", () => {

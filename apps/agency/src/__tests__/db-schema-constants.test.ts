@@ -33,7 +33,7 @@ describe('Database Schema Constants Consistency', () => {
     })
   })
 
-  describe('marketing lifecycle schema', () => {
+  describe('marketing schema', () => {
     it('should export the expected marketing sequences', () => {
       expect(MARKETING_SEQUENCE.ONBOARDING).toBe('onboarding')
       expect(MARKETING_SEQUENCE.POST_PURCHASE).toBe('post_purchase')
@@ -56,7 +56,7 @@ describe('Database Schema Constants Consistency', () => {
       expect(MARKETING_EVENT_TYPE.ONBOARDING_COMPLETED).toBe('onboarding_completed')
     })
 
-    it('should expose the marketing lifecycle tables', () => {
+    it('should expose the marketing tables', () => {
       expect(getTableName(marketingContactTable)).toBe('marketing_contact')
       expect(getTableName(marketingSequenceEnrollmentTable)).toBe('marketing_sequence_enrollment')
       expect(getTableName(marketingEmailSendTable)).toBe('marketing_email_send')

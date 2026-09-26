@@ -6,7 +6,6 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
 import sitemap from "@/app/sitemap";
-import MarketingHomepage from "@/app/(marketing)/page";
 import MarketingLayout from "@/app/(marketing)/layout";
 import {
   GUIDE_DEFAULT_IMAGE,
@@ -146,17 +145,6 @@ describe("problem-solving marketing guides", () => {
         ),
       ),
     ).toBe(false);
-  });
-
-  it("links the homepage to the guides hub and avoids legacy root guide routes", async () => {
-    const markup = renderToStaticMarkup(
-      <MarketingLayout>{await MarketingHomepage()}</MarketingLayout>,
-    );
-
-    expect(markup).toContain('href="/guides"');
-    expect(markup).not.toContain("/avoid-visa-rejection-document-mistakes");
-    expect(markup).not.toContain("/proof-of-funds-for-visa-application");
-    expect(markup).not.toContain("/employment-letter-for-visa-application");
   });
 
   it("includes the problem-solving guides in the sitemap", async () => {

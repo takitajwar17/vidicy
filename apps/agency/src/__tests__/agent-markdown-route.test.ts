@@ -12,10 +12,9 @@ describe("agent markdown route", () => {
     expect(response.headers.get("x-markdown-tokens")).toMatch(/^\d+$/);
 
     const body = await response.text();
-    expect(body).toContain("title: AI Visa Document Review & Checklist");
-    expect(body).toContain("# Vidicy");
-    expect(body).toContain("## How it works");
-    expect(body).toContain("https://agency.vidicy.com/sign-up");
+    expect(body).toContain("title: Vidicy Agency");
+    expect(body).toContain("# Vidicy Agency");
+    expect(body).toContain("https://agency.vidicy.com/sign-in");
   });
 
   it("returns tools index markdown when requested", async () => {

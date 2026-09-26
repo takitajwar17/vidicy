@@ -2,8 +2,6 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const {
   mockGetCloudflareContext,
-  mockSendWelcomeEmail,
-  mockRunMarketingLifecyclePass,
   mockRecordMarketingEvent,
   mockUpdateAllSessionsOfUser,
   mockWithRateLimit,
@@ -14,8 +12,6 @@ const {
   mockWhereUpdate,
 } = vi.hoisted(() => ({
   mockGetCloudflareContext: vi.fn(),
-  mockSendWelcomeEmail: vi.fn(),
-  mockRunMarketingLifecyclePass: vi.fn(),
   mockRecordMarketingEvent: vi.fn(),
   mockUpdateAllSessionsOfUser: vi.fn(),
   mockWithRateLimit: vi.fn(),
@@ -52,14 +48,6 @@ vi.mock("zsa", () => {
 
 vi.mock("@opennextjs/cloudflare", () => ({
   getCloudflareContext: mockGetCloudflareContext,
-}));
-
-vi.mock("@/utils/email", () => ({
-  sendWelcomeEmail: mockSendWelcomeEmail,
-}));
-
-vi.mock("@/server/marketing/scheduler", () => ({
-  runMarketingLifecyclePass: mockRunMarketingLifecyclePass,
 }));
 
 vi.mock("@/server/marketing/events", () => ({
@@ -127,7 +115,7 @@ mockWithRateLimit.mockImplementation(async (fn: () => Promise<unknown>) => fn())
 
 import { verifyEmailAction } from "@/app/(auth)/verify-email/verify-email.action";
 
-describe("verifyEmailAction lifecycle behavior", () => {
+describe("verifyEmailAction behavior", () => {
   beforeEach(() => {
     vi.clearAllMocks();
 
@@ -153,20 +141,16 @@ describe("verifyEmailAction lifecycle behavior", () => {
     });
     mockWhereUpdate.mockResolvedValue(undefined);
     mockRecordMarketingEvent.mockResolvedValue(undefined);
-    mockRunMarketingLifecyclePass.mockResolvedValue(undefined);
     mockUpdateAllSessionsOfUser.mockResolvedValue(undefined);
-    mockSendWelcomeEmail.mockResolvedValue(undefined);
   });
 
-  it("runs onboarding without sending the legacy welcome email", async () => {
+  it("verifies email without sending marketing email", async () => {
     const result = await verifyEmailAction({
       token: "token_123",
     });
 
     expect(result).toEqual({ success: true });
     expect(mockRecordMarketingEvent).toHaveBeenCalledTimes(1);
-    expect(mockRunMarketingLifecyclePass).toHaveBeenCalledTimes(1);
     expect(mockUpdateAllSessionsOfUser).toHaveBeenCalledWith("usr_123");
-    expect(mockSendWelcomeEmail).not.toHaveBeenCalled();
   });
 });

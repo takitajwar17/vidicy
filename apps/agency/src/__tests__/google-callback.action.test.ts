@@ -13,7 +13,6 @@ const {
   mockGetIP,
   mockLoggerError,
   mockLoggerWarn,
-  mockSendWelcomeEmail,
   mockSendNewUserSignupNotificationEmail,
   mockLinkApplicantRecordsByEmail,
   mockGetPostAuthRedirectPath,
@@ -30,7 +29,6 @@ const {
   mockGetIP: vi.fn(),
   mockLoggerError: vi.fn(),
   mockLoggerWarn: vi.fn(),
-  mockSendWelcomeEmail: vi.fn(),
   mockSendNewUserSignupNotificationEmail: vi.fn(),
   mockLinkApplicantRecordsByEmail: vi.fn(),
   mockGetPostAuthRedirectPath: vi.fn(),
@@ -130,7 +128,6 @@ vi.mock("@/infra/logger", () => ({
 }));
 
 vi.mock("@/utils/email", () => ({
-  sendWelcomeEmail: mockSendWelcomeEmail,
   sendNewUserSignupNotificationEmail: mockSendNewUserSignupNotificationEmail,
 }));
 
@@ -171,7 +168,6 @@ describe("googleSSOCallbackAction", () => {
     mockCanSignUp.mockResolvedValue(undefined);
     mockCreateAndStoreSession.mockResolvedValue(undefined);
     mockGetIP.mockResolvedValue("2402:d000:a400:bad0:1057:3320:abd7:9029");
-    mockSendWelcomeEmail.mockResolvedValue(undefined);
     mockSendNewUserSignupNotificationEmail.mockResolvedValue(undefined);
     mockLinkApplicantRecordsByEmail.mockResolvedValue(undefined);
     mockGetPostAuthRedirectPath.mockReturnValue("/dashboard");
@@ -238,10 +234,6 @@ describe("googleSSOCallbackAction", () => {
     expect(mockLinkApplicantRecordsByEmail).toHaveBeenCalledWith({
       userId: createdUser.id,
       email: createdUser.email,
-    });
-    expect(mockSendWelcomeEmail).toHaveBeenCalledWith({
-      email: createdUser.email,
-      firstName: createdUser.firstName,
     });
     expect(mockSendNewUserSignupNotificationEmail).toHaveBeenCalledWith({
       email: createdUser.email,
@@ -330,7 +322,6 @@ describe("googleSSOCallbackAction", () => {
     expect(mockCreateAndStoreSession).toHaveBeenCalledWith(createdUser.id, "google-oauth");
     expect(mockLinkApplicantRecordsByEmail).not.toHaveBeenCalled();
     expect(mockSendNewUserSignupNotificationEmail).not.toHaveBeenCalled();
-    expect(mockSendWelcomeEmail).not.toHaveBeenCalled();
   });
 });
 
