@@ -12,8 +12,9 @@ describe("agent markdown route", () => {
     expect(response.headers.get("x-markdown-tokens")).toMatch(/^\d+$/);
 
     const body = await response.text();
-    expect(body).toContain("title: Vidicy Agency");
-    expect(body).toContain("# Vidicy Agency");
+    expect(body).toContain("title: Logopipsum");
+    expect(body).toContain("# Logopipsum");
+    expect(body).toContain("Smart Care Begins with Data + Insight");
     expect(body).toContain("https://agency.vidicy.com/sign-in");
   });
 

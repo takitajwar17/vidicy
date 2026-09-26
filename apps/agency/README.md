@@ -160,7 +160,7 @@ For standard UI and App Router iteration, start the plain Next.js dev server:
 pnpm dev
 ```
 
-This runs `next dev` and serves the app at [http://localhost:3002](http://localhost:3002).
+This runs `next dev -p 3002` and serves the app at [http://localhost:3002](http://localhost:3002).
 
 For Cloudflare-backed local preview/testing, use:
 

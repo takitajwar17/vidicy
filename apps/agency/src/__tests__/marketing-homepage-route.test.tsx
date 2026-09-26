@@ -16,11 +16,25 @@ async function renderMarketingHomepageMarkup() {
 }
 
 describe("main marketing homepage route", () => {
-  it("renders only the agency login entry on /", async () => {
+  it("renders the healthcare AI landing page on /", async () => {
     const markup = await renderMarketingHomepageMarkup();
 
+    expect(markup).toContain("Logopipsum");
+    expect(markup).toContain("Vitara");
+    expect(markup).toContain("Smart Care Begins with Data + Insight");
+    expect(markup).toContain("Turn medical insights into personalized wellness plans.");
+    expect(markup).toContain("Welcome to Vitara");
+    expect(markup).toContain("Start Wellness Check");
+    expect(markup).toContain("Chat with MedAI");
+    expect(markup).toContain("View Insights");
+    expect(markup).toContain("Your proactive shield against disease");
+    expect(markup).toContain(
+      "/videos/vidicy-hero.mp4",
+    );
     expect(markup).toContain('href="/sign-in"');
+    expect(markup).toContain('href="/sign-up"');
     expect(markup).toContain("Login");
+    expect(markup).toContain("Sign up");
     expect(markup).not.toContain("Small Mistake");
     expect(markup).not.toContain("Visa Rejected");
     expect(markup).not.toContain("Get My Free Review");

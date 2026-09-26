@@ -154,13 +154,13 @@ Run this after pulling or making `wrangler.jsonc` binding changes.
 
 ### 5. Start Local Development
 
-For standard UI and App Router iteration, start the plain Next.js dev server:
+For standard UI and App Router iteration, start a plain Next.js dev server:
 
 ```bash
-pnpm dev
+pnpm dev:agency
 ```
 
-This runs `next dev` and serves the app at [http://localhost:3002](http://localhost:3002).
+This serves the agency app at [http://localhost:3002](http://localhost:3002).
 
 For Cloudflare-backed local preview/testing, use:
 
