@@ -17,8 +17,10 @@ export interface MarkdownPayload {
 }
 
 const homepageHowItWorksSteps = [
-  "Smart Care Begins with Data + Insight.",
-  "Turn medical insights into personalized wellness plans.",
+  "Review visa applications faster in scale.",
+  "Bulk upload client files and organize applications in queues.",
+  "Flag missing documents, mistakes, and inconsistencies before submission.",
+  "Generate client-ready reports while keeping reviewers in control.",
   "Sign in to the agency workspace.",
 ] as const;
 
@@ -55,11 +57,11 @@ function createFrontmatter(input: {
 function buildHomepageMarkdown(): MarkdownPayload {
   const body = [
     createFrontmatter({
-      title: "Logopipsum",
-      description: "Turn medical insights into personalized wellness plans.",
+      title: "Vidicy Agency",
+      description: "Bulk visa application review for travel and visa agencies.",
       canonicalPath: "/",
     }),
-    "# Logopipsum",
+    "# Vidicy Agency",
     ...homepageHowItWorksSteps.map((step, index) => `${index + 1}. ${step}`),
     "## Key links",
     `- Login: ${toAbsoluteUrl("/sign-in")}`,

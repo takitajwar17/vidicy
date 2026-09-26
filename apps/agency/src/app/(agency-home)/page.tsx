@@ -1,7 +1,14 @@
 import type { CSSProperties } from "react";
 import Link from "next/link";
-import { BarChart3, Send, Stethoscope } from "lucide-react";
+import {
+  AlertCircle,
+  CheckCircle2,
+  ClipboardCheck,
+  FileCheck2,
+  FileUp,
+} from "lucide-react";
 
+import Logo from "@/components/logo";
 import { constructMetadata } from "@/lib/utils";
 
 const heroVideoUrl =
@@ -16,15 +23,15 @@ const bodyStyle: CSSProperties = {
   fontFamily: "'Helvetica Neue', Helvetica, Arial, sans-serif",
 };
 
-const actionItems = [
-  { label: "Start Wellness Check", icon: null },
-  { label: "Chat with MedAI", icon: Stethoscope },
-  { label: "View Insights", icon: BarChart3 },
+const resultItems = [
+  { label: "Missing bank statement", status: "Flagged", icon: AlertCircle },
+  { label: "Passport scan readable", status: "Passed", icon: CheckCircle2 },
+  { label: "Client report ready", status: "Ready", icon: FileCheck2 },
 ] as const;
 
 export const metadata = constructMetadata({
-  title: "Logopipsum",
-  description: "Turn medical insights into personalized wellness plans.",
+  title: "Vidicy Agency",
+  description: "Bulk visa application review for travel and visa agencies.",
   alternates: {
     canonical: "/",
   },
@@ -79,27 +86,21 @@ export default function Home() {
         />
 
         <nav className="relative z-20 flex items-center justify-between px-6 py-4 md:px-12 lg:px-20">
-          <Link className="flex items-center gap-2 text-gray-900" href="/" aria-label="Logopipsum home">
-            <svg
-              aria-hidden="true"
-              className="h-7 w-9 text-[#171a1f] md:h-8 md:w-10"
-              fill="none"
-              viewBox="-5 0 61 44"
-            >
-              <path d="M18.2 1.8h18.1L25.8 12.3H7.7L18.2 1.8Z" fill="currentColor" />
-              <path d="M6.4 13.7h18.1L14 24.2H-4.1L6.4 13.7Z" fill="currentColor" />
-              <path d="M30.2 13.7h18.1L37.8 24.2H19.7l10.5-10.5Z" fill="currentColor" />
-              <path d="M18.2 25.7h18.1L25.8 36.2H7.7l10.5-10.5Z" fill="currentColor" />
-              <path d="M37.8 1.8h10.5l-10.5 10.5H27.3L37.8 1.8Z" fill="currentColor" />
-              <path d="M6.4 25.7h10.5L6.4 36.2H-4.1L6.4 25.7Z" fill="currentColor" />
-            </svg>
-            <span className="text-xl font-black italic leading-none tracking-[-0.09em] text-[#171a1f] md:text-2xl">
-              Logopipsum
-            </span>
+          <Link
+            className="flex items-center text-gray-900"
+            href="/"
+            aria-label="Vidicy Agency home"
+          >
+            <Logo
+              alt="Vidicy"
+              className="h-7 w-auto"
+              surface="light"
+              variant="horizontal"
+            />
           </Link>
 
           <div className="hidden items-center gap-8 md:flex">
-            {["Home", "Services", "Team", "Membership", "Resources"].map((item) => (
+            {["Product", "Workflow", "Reports", "Security"].map((item) => (
               <Link
                 className="text-sm font-medium text-gray-600 transition-colors hover:text-gray-900"
                 href="/"
@@ -126,48 +127,89 @@ export default function Home() {
           </div>
         </nav>
 
-        <div className="relative z-10 flex min-h-[calc(650px-72px)] flex-col items-center justify-center px-6 py-16 text-center md:px-12 lg:px-20">
+        <div className="relative z-10 flex min-h-[calc(650px-72px)] -translate-y-2 flex-col items-center justify-center px-6 py-16 text-center md:-translate-y-3 md:px-12 lg:px-20">
           <AnimatedText
             as="h1"
             className="max-w-5xl text-4xl font-normal leading-[0.94] text-gray-900 md:text-6xl lg:text-7xl"
             style={headingStyle}
-            text="Smart Care Begins with Data + Insight"
+            text="Review visa applications faster in scale"
           />
           <AnimatedText
             className="mt-6 max-w-2xl text-lg leading-8 text-gray-600 md:text-xl"
-            text="Turn medical insights into personalized wellness plans."
+            text="Vidicy helps agencies check client files for missing documents, mistakes, and inconsistencies before submission."
           />
 
-          <div className="mx-auto mt-10 w-full max-w-xl rounded-2xl bg-[#2B3534] p-4 text-left shadow-2xl">
-            <textarea
-              className="min-h-[60px] w-full resize-none bg-transparent px-2 py-1 text-base text-white outline-none placeholder:text-gray-400"
-              placeholder="Welcome to Vitara — your care intelligence hub!"
-            />
-
-            <div className="mt-4 flex items-center gap-3 border-t border-white/15 pt-4">
-              <div className="relative min-w-0 flex-1">
-                <div className="scrollbar-hide flex gap-2 overflow-x-auto pr-10">
-                  {actionItems.map(({ icon: Icon, label }) => (
-                    <button
-                      className="inline-flex shrink-0 items-center gap-2 rounded-full border border-white/15 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-white/10"
-                      key={label}
-                      type="button"
-                    >
-                      {Icon ? <Icon aria-hidden="true" className="h-4 w-4" /> : null}
-                      {label}
-                    </button>
-                  ))}
+          <div className="mx-auto mt-9 w-full max-w-2xl rounded-2xl bg-[#2B3534] p-3 text-left shadow-2xl">
+            <div className="grid items-stretch gap-3 md:grid-cols-[1.05fr_0.95fr]">
+              <div className="relative flex flex-col rounded-xl border border-dashed border-white/20 bg-white/[0.03] p-3 pb-12">
+                <div className="flex items-start gap-3">
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white text-gray-800">
+                    <FileUp aria-hidden="true" className="h-4 w-4" />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-base font-medium text-white">
+                      Upload client documents
+                    </p>
+                    <p className="mt-1 text-xs leading-5 text-gray-400">
+                      Passport, forms, bank statements, and supporting files.
+                      Vidicy checks them and returns review results.
+                    </p>
+                  </div>
                 </div>
-                <div className="pointer-events-none absolute inset-y-0 right-0 w-12 bg-gradient-to-l from-[#2B3534] to-transparent" />
+
+                <label
+                  className="absolute bottom-4 left-1/2 inline-flex h-9 w-fit -translate-x-1/2 cursor-pointer items-center gap-2 rounded-full border border-white border-b-gray-300 border-t-white bg-[linear-gradient(180deg,#ffffff_0%,#f8fafc_48%,#eef2f7_100%)] px-4 text-xs font-semibold text-gray-800 shadow-[0_1px_0_rgba(255,255,255,0.9)_inset,0_-7px_12px_rgba(15,23,42,0.10)_inset,0_10px_22px_rgba(0,0,0,0.28)] ring-1 ring-gray-950/5 transition-[background-image,box-shadow] duration-200 hover:bg-[linear-gradient(180deg,#ffffff_0%,#fbfcfe_48%,#f1f5f9_100%)] hover:shadow-[0_1px_0_rgba(255,255,255,0.95)_inset,0_-7px_12px_rgba(15,23,42,0.11)_inset,0_10px_22px_rgba(0,0,0,0.28)] active:shadow-[0_1px_0_rgba(255,255,255,0.9)_inset,0_-5px_10px_rgba(15,23,42,0.12)_inset,0_8px_18px_rgba(0,0,0,0.24)]"
+                  htmlFor="agency-file-upload"
+                >
+                  <FileUp
+                    aria-hidden="true"
+                    className="h-3.5 w-3.5"
+                  />
+                  Upload files
+                </label>
+                <input
+                  className="sr-only"
+                  id="agency-file-upload"
+                  multiple
+                  type="file"
+                />
               </div>
 
-              <button
-                aria-label="Send"
-                className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-white text-gray-800 transition-colors hover:bg-gray-100"
-                type="button"
-              >
-                <Send aria-hidden="true" className="h-4 w-4" />
-              </button>
+              <div className="rounded-xl border border-white/10 p-3">
+                <div className="mb-2.5 flex items-center justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium text-white">
+                      Review results
+                    </p>
+                    <p className="text-[11px] leading-4 text-gray-400">
+                      Checks, issues, and reports in one queue.
+                    </p>
+                  </div>
+                  <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-white/10 text-gray-300">
+                    <ClipboardCheck aria-hidden="true" className="h-3.5 w-3.5" />
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  {resultItems.map(({ icon: Icon, label, status }) => (
+                    <div
+                      className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2 rounded-lg border border-white/10 px-2.5 py-1.5 text-xs text-white"
+                      key={label}
+                    >
+                      <span className="inline-flex min-w-0 items-center gap-2">
+                        <Icon
+                          aria-hidden="true"
+                          className="h-3.5 w-3.5 shrink-0 text-gray-300"
+                        />
+                        <span className="truncate">{label}</span>
+                      </span>
+                      <span className="rounded-full bg-white/[0.04] px-2 py-0.5 text-[11px] font-medium text-gray-400">
+                        {status}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -181,11 +223,11 @@ export default function Home() {
             as="h2"
             className="max-w-3xl text-3xl font-normal leading-[0.98] text-white md:text-5xl lg:text-6xl"
             style={headingStyle}
-            text="Your proactive shield against disease"
+            text="Turn manual review into a repeatable workflow"
           />
           <AnimatedText
             className="max-w-sm text-right text-lg leading-8 text-gray-300 md:justify-self-end md:text-xl"
-            text="We blend smart technology & clinical wisdom to provide tailored, preventive, & insight-rich medicine for tomorrow."
+            text="Built for visa and travel agencies that need queues, issue tracking, and client-ready reports without losing control of the final decision."
           />
         </div>
       </section>
