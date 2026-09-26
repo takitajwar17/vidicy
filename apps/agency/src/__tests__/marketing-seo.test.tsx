@@ -24,13 +24,13 @@ function toIsoDate(value: string | Date | null | undefined): string | undefined 
 describe("marketing SEO surfaces", () => {
   it("keeps the homepage title plain so the root template adds branding once", () => {
     expect(typeof homepageMetadata.title).toBe("string");
-    expect(homepageMetadata.title).toBe("Logopipsum");
+    expect(homepageMetadata.title).toBe("Vidicy Agency");
     expect(String(homepageMetadata.title)).not.toContain("Vidicy - Vidicy");
   });
 
-  it("uses Vitara homepage metadata", () => {
+  it("uses agency homepage metadata", () => {
     expect(typeof homepageMetadata.description).toBe("string");
-    expect(homepageMetadata.description).toBe("Turn medical insights into personalized wellness plans.");
+    expect(homepageMetadata.description).toBe("Bulk visa application review for travel and visa agencies.");
   });
 
   it("uses a descriptive About page metadata title", () => {

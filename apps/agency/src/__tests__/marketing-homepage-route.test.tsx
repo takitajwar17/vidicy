@@ -16,18 +16,18 @@ async function renderMarketingHomepageMarkup() {
 }
 
 describe("main marketing homepage route", () => {
-  it("renders the healthcare AI landing page on /", async () => {
+  it("renders the minimal agency landing page on /", async () => {
     const markup = await renderMarketingHomepageMarkup();
 
-    expect(markup).toContain("Logopipsum");
-    expect(markup).toContain("Vitara");
-    expect(markup).toContain("Smart Care Begins with Data + Insight");
-    expect(markup).toContain("Turn medical insights into personalized wellness plans.");
-    expect(markup).toContain("Welcome to Vitara");
-    expect(markup).toContain("Start Wellness Check");
-    expect(markup).toContain("Chat with MedAI");
-    expect(markup).toContain("View Insights");
-    expect(markup).toContain("Your proactive shield against disease");
+    expect(markup).toContain("Vidicy");
+    expect(markup).toContain("Review visa applications faster in scale");
+    expect(markup).toContain("check client files for missing documents");
+    expect(markup).toContain("Upload client documents");
+    expect(markup).toContain("Review results");
+    expect(markup).toContain("Upload files");
+    expect(markup).toContain("Missing bank statement");
+    expect(markup).toContain("Client report ready");
+    expect(markup).toContain("Turn manual review into a repeatable workflow");
     expect(markup).toContain(
       "/videos/vidicy-hero.mp4",
     );
@@ -35,6 +35,7 @@ describe("main marketing homepage route", () => {
     expect(markup).toContain('href="/sign-up"');
     expect(markup).toContain("Login");
     expect(markup).toContain("Sign up");
+    expect(markup).not.toContain("Logopipsum");
     expect(markup).not.toContain("Small Mistake");
     expect(markup).not.toContain("Visa Rejected");
     expect(markup).not.toContain("Get My Free Review");
