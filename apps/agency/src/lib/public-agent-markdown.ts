@@ -17,6 +17,8 @@ export interface MarkdownPayload {
 }
 
 const homepageHowItWorksSteps = [
+  "Smart Care Begins with Data + Insight.",
+  "Turn medical insights into personalized wellness plans.",
   "Sign in to the agency workspace.",
 ] as const;
 
@@ -53,14 +55,15 @@ function createFrontmatter(input: {
 function buildHomepageMarkdown(): MarkdownPayload {
   const body = [
     createFrontmatter({
-      title: "Vidicy Agency",
-      description: "Sign in to the Vidicy agency workspace.",
+      title: "Logopipsum",
+      description: "Turn medical insights into personalized wellness plans.",
       canonicalPath: "/",
     }),
-    "# Vidicy Agency",
+    "# Logopipsum",
     ...homepageHowItWorksSteps.map((step, index) => `${index + 1}. ${step}`),
     "## Key links",
     `- Login: ${toAbsoluteUrl("/sign-in")}`,
+    `- Sign up: ${toAbsoluteUrl("/sign-up")}`,
     `- Tools: ${toAbsoluteUrl(TOOLS_ROUTE)}`,
     `- API catalog: ${toAbsoluteUrl("/.well-known/api-catalog")}`,
   ].join("\n\n");
