@@ -116,7 +116,7 @@ Only add these when you enable the feature:
 - `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` for Google SSO.
 - `NEXT_PUBLIC_TURNSTILE_SITE_KEY` and `TURNSTILE_SECRET_KEY` for captcha-protected auth flows.
 - `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY`, `STRIPE_SECRET_KEY`, and `STRIPE_WEBHOOK_SECRET` for Stripe checkout and webhook handling.
-- `RESEND_API_KEY` and `RESEND_WEBHOOK_SECRET` for outbound email and inbound email-suppression webhooks.
+- `RESEND_API_KEY` for outbound transactional email.
 - `EMAIL_FROM`, `EMAIL_FROM_NAME`, `EMAIL_REPLY_TO`, and `SENTRY_DSN` for sender identity and observability.
 - `OPENAI_API_KEY` and `PERPLEXITY_API_KEY` for AI features.
 

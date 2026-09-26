@@ -24,7 +24,6 @@ declare namespace Cloudflare {
 		OPENAI_API_KEY: string;
 		SENTRY_DSN: string;
 		STRIPE_WEBHOOK_SECRET: string;
-		RESEND_WEBHOOK_SECRET: string;
 		NEXT_CACHE_DO_QUEUE: DurableObjectNamespace<import("./worker").DOQueueHandler>;
 		WORKER_SELF_REFERENCE: Service<typeof import("./worker").default>;
 	}

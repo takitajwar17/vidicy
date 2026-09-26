@@ -2,6 +2,8 @@
 
 # dependencies
 node_modules
+apps/*/node_modules
+.pnpm-store/
 .pnp
 .pnp.js
 .yarn/install-state.gz
@@ -9,31 +11,46 @@ package-lock.json
 
 # next.js
 .next
+apps/*/.next
 .next-dev
+apps/*/.next-dev
 .react-email/
+apps/*/.react-email/
 out
 
 # production
 build
+apps/*/build
 
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+apps/*/next-env.d.ts
 
 # OpenNext
 .open-next
+apps/*/.open-next
 .open-next-deploy-backup
+apps/*/.open-next-deploy-backup
 .deploy-cleanup-*/
 dist
+apps/*/dist
 
 # Cloudflare Workers
 .wrangler
+apps/*/.wrangler
 .env
 .env.*
+apps/*/.env
+apps/*/.env.*
 .dev.vars
 .dev.vars*
+apps/*/.dev.vars
+apps/*/.dev.vars*
 !.dev.vars.example
 !.env*example
+!apps/*/.dev.vars.example
+!apps/*/.env*example
 
 # Database
 *.db

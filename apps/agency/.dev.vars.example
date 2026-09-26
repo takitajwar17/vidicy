@@ -23,7 +23,6 @@ NEXT_PUBLIC_APP_URL=http://localhost:3000
 
 # Resend
 # RESEND_API_KEY=
-# RESEND_WEBHOOK_SECRET=
 
 # Email sender identity
 # EMAIL_FROM=

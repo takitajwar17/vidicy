@@ -15,7 +15,6 @@ async function loadWebhookDeps() {
     schemaModule,
     loggerModule,
     marketingEventModule,
-    marketingSchedulerModule,
     stripeModule,
     paymentStateModule,
   ] = await Promise.all([
@@ -24,7 +23,6 @@ async function loadWebhookDeps() {
     import("@/db/schema"),
     import("@/infra/logger"),
     import("@/server/marketing/events"),
-    import("@/server/marketing/scheduler"),
     import("@/lib/stripe"),
     import("@/lib/payment-state"),
   ]);
@@ -41,7 +39,6 @@ async function loadWebhookDeps() {
     visaApplicationTable: schemaModule.visaApplicationTable,
     logger: loggerModule.logger,
     recordMarketingEvent: marketingEventModule.recordMarketingEvent,
-    runMarketingLifecyclePass: marketingSchedulerModule.runMarketingLifecyclePass,
     getStripeClient: stripeModule.getStripeClient,
     getApplicationUpdateForCompletedPaymentEvent:
       paymentStateModule.getApplicationUpdateForCompletedPaymentEvent,
@@ -74,7 +71,6 @@ async function fulfillTrackedCheckoutSession(
     PAYMENT_EVENT_TYPE,
     MARKETING_EVENT_TYPE,
     recordMarketingEvent,
-    runMarketingLifecyclePass,
     visaApplicationTable,
     getApplicationUpdateForCompletedPaymentEvent,
   } = deps;
@@ -150,15 +146,6 @@ async function fulfillTrackedCheckoutSession(
         },
       });
 
-      try {
-        await runMarketingLifecyclePass({ db });
-      } catch (marketingError) {
-        logger.error("Failed to run immediate post-purchase lifecycle pass", {
-          paymentEventId: paymentEvent.id,
-          applicationId: paymentEvent.applicationId,
-          marketingError,
-        });
-      }
     }
   } catch (err) {
     logger.error("Failed to fulfill tracked checkout session", {
@@ -192,7 +179,6 @@ async function fulfillLegacyCheckoutSession(
     PAYMENT_STATUS,
     MARKETING_EVENT_TYPE,
     recordMarketingEvent,
-    runMarketingLifecyclePass,
     visaApplicationTable,
     getApplicationUpdateForCompletedPaymentEvent,
   } = deps;
@@ -291,15 +277,6 @@ async function fulfillLegacyCheckoutSession(
       },
     });
 
-    try {
-      await runMarketingLifecyclePass({ db });
-    } catch (marketingError) {
-      logger.error("Failed to run immediate legacy post-purchase lifecycle pass", {
-        applicationId,
-        stripeSessionId: stripeSession.id,
-        marketingError,
-      });
-    }
   } catch (err) {
     logger.error("Failed to fulfill legacy initial checkout session", {
       applicationId,

@@ -1,21 +1,21 @@
+name: Deploy Cloudflare Workers
+
 on:
   push:
     branches:
       - main
 
 jobs:
-  publish:
+  deploy-agency:
     runs-on: ubuntu-latest
     permissions:
       contents: read
       deployments: write
-    name: Deploy to Cloudflare Workers
+    name: Deploy Agency Worker
     steps:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          # We need to fetch all the history in order to get the updated date for...
-          # ... the blog posts and sitemap.
           fetch-depth: 0
 
       - name: Setup pnpm
@@ -32,8 +32,7 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Set app D1 environment variables
-        id: set-d1-vars
+      - name: Set Agency D1 environment variables
         run: |
           echo "AGENCY_D1_DATABASE_NAME=$(node apps/agency/scripts/get-db-name.mjs)" >> $GITHUB_ENV
           echo "AGENCY_D1_DATABASE_ID=$(node apps/agency/scripts/get-db-id.mjs)" >> $GITHUB_ENV
@@ -48,8 +47,8 @@ jobs:
           CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           NEXT_PUBLIC_SITE_URL: https://agency.vidicy.com
-          NEXT_PUBLIC_TURNSTILE_SITE_KEY: ${{ vars.NEXT_PUBLIC_TURNSTILE_SITE_KEY }}
-          NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: ${{ vars.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY }}
+          NEXT_PUBLIC_TURNSTILE_SITE_KEY: ${{ vars.AGENCY_NEXT_PUBLIC_TURNSTILE_SITE_KEY }}
+          NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: ${{ vars.AGENCY_NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY }}
 
       - name: Run Agency DB migrations
         # Assumes additive/backward-compatible D1 migrations; use a two-phase
@@ -68,12 +67,12 @@ jobs:
           CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           NEXT_PUBLIC_SITE_URL: https://agency.vidicy.com
-          NEXT_PUBLIC_TURNSTILE_SITE_KEY: ${{ vars.NEXT_PUBLIC_TURNSTILE_SITE_KEY }}
-          NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: ${{ vars.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY }}
+          NEXT_PUBLIC_TURNSTILE_SITE_KEY: ${{ vars.AGENCY_NEXT_PUBLIC_TURNSTILE_SITE_KEY }}
+          NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: ${{ vars.AGENCY_NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY }}
 
-      - name: Purge Cloudflare CDN cache
-        if: ${{ vars.CLOUDFLARE_ZONE_ID != '' }}
+      - name: Purge Agency Cloudflare CDN cache
+        if: ${{ vars.AGENCY_CLOUDFLARE_ZONE_ID != '' }}
         uses: nathanvaughn/actions-cloudflare-purge@master
         with:
-          cf_zone: ${{ vars.CLOUDFLARE_ZONE_ID }}
+          cf_zone: ${{ vars.AGENCY_CLOUDFLARE_ZONE_ID }}
           cf_auth: ${{ secrets.CLOUDFLARE_API_TOKEN }}
