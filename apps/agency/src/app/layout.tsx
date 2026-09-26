@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Instrument_Serif } from "next/font/google";
+import { Inria_Serif } from "next/font/google";
 import { Manrope } from "next/font/google";
 import Script from "next/script";
 import "./globals.css";
@@ -17,6 +18,13 @@ const instrumentSerif = Instrument_Serif({
   style: ["normal", "italic"],
   weight: "400",
   variable: "--font-display",
+  display: "swap",
+});
+
+const inriaSerif = Inria_Serif({
+  subsets: ["latin"],
+  weight: ["300", "400", "700"],
+  variable: "--font-inria",
   display: "swap",
 });
 
@@ -83,7 +91,7 @@ export default function BaseLayout({
     <html
       lang="en"
       suppressHydrationWarning
-      className={`${instrumentSerif.variable} ${manrope.variable}`}
+      className={`${instrumentSerif.variable} ${inriaSerif.variable} ${manrope.variable}`}
     >
       <body
         suppressHydrationWarning
