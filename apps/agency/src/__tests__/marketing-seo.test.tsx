@@ -12,7 +12,6 @@ import SubprocessorsPage, {
   metadata as subprocessorsMetadata,
 } from "@/app/(legal)/subprocessors/page";
 import TermsPage from "@/app/(legal)/terms/page";
-import { metadata as toolsMetadata } from "@/app/tools/page";
 import { metadata as homepageMetadata } from "@/app/(agency-home)/page";
 import { CANONICAL_SITE_URL } from "@/constants";
 
@@ -24,13 +23,15 @@ function toIsoDate(value: string | Date | null | undefined): string | undefined 
 describe("marketing SEO surfaces", () => {
   it("keeps the homepage title plain so the root template adds branding once", () => {
     expect(typeof homepageMetadata.title).toBe("string");
-    expect(homepageMetadata.title).toBe("Vidicy Agency");
+    expect(homepageMetadata.title).toBe("Vidicy Agency | AI Visa Application Review for Agencies");
     expect(String(homepageMetadata.title)).not.toContain("Vidicy - Vidicy");
   });
 
   it("uses agency homepage metadata", () => {
     expect(typeof homepageMetadata.description).toBe("string");
-    expect(homepageMetadata.description).toBe("Bulk visa application review for travel and visa agencies.");
+    expect(homepageMetadata.description).toBe(
+      "Bulk visa application review software for travel and visa agencies that need faster document checks, issue tracking, and client-ready reports.",
+    );
   });
 
   it("uses a descriptive About page metadata title", () => {
@@ -40,16 +41,6 @@ describe("marketing SEO surfaces", () => {
   it("keeps static utility and legal page titles descriptive", () => {
     expect(privacyMetadata.title).toBe("Privacy Policy for Visa Data");
     expect(subprocessorsMetadata.title).toBe("Subprocessors and Data Vendors");
-    expect(toolsMetadata.title).toBe("Free Visa Photo and Document Tools");
-  });
-
-  it("includes the new photo tool urls in the sitemap", async () => {
-    const entries = await sitemap();
-    const byUrl = new Map(entries.map((entry) => [entry.url, entry]));
-
-    expect(byUrl.get(`${CANONICAL_SITE_URL}/tools`)).toBeDefined();
-    expect(byUrl.get(`${CANONICAL_SITE_URL}/tools/us-visa-photo-requirements`)).toBeDefined();
-    expect(byUrl.get(`${CANONICAL_SITE_URL}/tools/schengen-visa-photo-requirements`)).toBeDefined();
   });
 
   it("includes stable sitemap dates and the public subprocessors page", async () => {

@@ -13,20 +13,15 @@ describe("api catalog well-known route", () => {
       'profile="https://www.rfc-editor.org/info/rfc9727"',
     );
     expect(response.headers.get("link")).toContain('</.well-known/api-catalog>; rel="api-catalog"');
-    expect(response.headers.get("link")).toContain("</tools>; rel=\"service-doc\"");
 
     await expect(response.json()).resolves.toEqual({
       linkset: [
         {
           anchor: `${CANONICAL_SITE_URL}/.well-known/api-catalog`,
-          item: [
-            {
-              href: `${CANONICAL_SITE_URL}/api/tools/photo-requirements/analyze`,
-            },
-          ],
+          item: [],
           "service-doc": [
             {
-              href: `${CANONICAL_SITE_URL}/tools`,
+              href: CANONICAL_SITE_URL,
               type: "text/html",
             },
           ],
@@ -44,7 +39,6 @@ describe("api catalog well-known route", () => {
       'profile="https://www.rfc-editor.org/info/rfc9727"',
     );
     expect(response.headers.get("link")).toContain('</.well-known/api-catalog>; rel="api-catalog"');
-    expect(response.headers.get("link")).toContain("</tools>; rel=\"service-doc\"");
     expect(await response.text()).toBe("");
   });
 });

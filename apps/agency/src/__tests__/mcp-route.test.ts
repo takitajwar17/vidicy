@@ -2,6 +2,20 @@ import { describe, expect, it } from "vitest";
 
 import { POST } from "@/app/mcp/route";
 
+interface McpToolListBody {
+  result: {
+    tools: unknown;
+  };
+}
+
+interface McpToolCallBody {
+  result: {
+    isError: unknown;
+    content: unknown;
+    structuredContent: unknown;
+  };
+}
+
 describe("public MCP route", () => {
   it("responds to initialize with server capabilities", async () => {
     const response = await POST(
@@ -39,13 +53,13 @@ describe("public MCP route", () => {
           },
         },
         serverInfo: expect.objectContaining({
-          name: "vidicy-public-tools",
+          name: "vidicy-public-pages",
         }),
       }),
     });
   });
 
-  it("lists public tools", async () => {
+  it("lists the public markdown tool", async () => {
     const response = await POST(
       new Request("https://vidicy.com/mcp", {
         method: "POST",
@@ -62,20 +76,15 @@ describe("public MCP route", () => {
 
     expect(response.status).toBe(200);
 
-    const body = await response.json();
-    expect(body.result.tools).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          name: "get_public_markdown",
-        }),
-        expect.objectContaining({
-          name: "get_photo_tool_profile",
-        }),
-      ]),
-    );
+    const body = (await response.json()) as McpToolListBody;
+    expect(body.result.tools).toEqual([
+      expect.objectContaining({
+        name: "get_public_markdown",
+      }),
+    ]);
   });
 
-  it("returns markdown content through the public markdown tool", async () => {
+  it("returns homepage markdown content through the public markdown tool", async () => {
     const response = await POST(
       new Request("https://vidicy.com/mcp", {
         method: "POST",
@@ -89,7 +98,7 @@ describe("public MCP route", () => {
           params: {
             name: "get_public_markdown",
             arguments: {
-              path: "/tools",
+              path: "/",
             },
           },
         }),
@@ -98,20 +107,20 @@ describe("public MCP route", () => {
 
     expect(response.status).toBe(200);
 
-    const body = await response.json();
+    const body = (await response.json()) as McpToolCallBody;
     expect(body.result.isError).toBe(false);
     expect(body.result.content).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
           type: "text",
-          text: expect.stringContaining("# Free visa tools"),
+          text: expect.stringContaining("# Vidicy Agency"),
         }),
       ]),
     );
     expect(body.result.structuredContent).toEqual(
       expect.objectContaining({
         contentType: "text/markdown; charset=utf-8",
-        path: "/tools",
+        path: "/",
       }),
     );
   });

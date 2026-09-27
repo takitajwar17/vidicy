@@ -20,16 +20,16 @@ describe("main marketing homepage route", () => {
     const markup = await renderMarketingHomepageMarkup();
 
     expect(markup).toContain("Vidicy");
-    expect(markup).toContain("Faster, more accurate visa reviews");
-    expect(markup).toContain("Every file. Every time.");
-    expect(markup).toContain("process more applications with confidence");
-    expect(markup).toContain("Start free trial");
-    expect(markup).toContain("Book a demo");
+    expect(markup).toContain("10x your agency");
+    expect(markup).toContain("visa application review capacity.");
+    expect(markup).toContain("check client files in bulk");
+    expect(markup).toContain("Start agency pilot");
+    expect(markup).toContain("Request a demo");
     expect(markup).toContain("Vidicy agency dashboard showing application review results");
     expect(markup).toContain("dashboard.png");
-    expect(markup).toContain("Trusted by agencies worldwide");
-    expect(markup).toContain("98%");
-    expect(markup).toContain("10k+");
+    expect(markup).toContain("What your review team gets");
+    expect(markup).toContain("30 sec");
+    expect(markup).toContain("Turn manual review into a repeatable workflow");
     expect(markup).toContain(
       "/videos/vidicy-hero.mp4",
     );

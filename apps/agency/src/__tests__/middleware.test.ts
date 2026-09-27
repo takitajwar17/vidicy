@@ -34,7 +34,7 @@ describe("middleware", () => {
     expect(response.cookies.get("csrf-token")?.value).toBe("csrf_token_value");
   });
 
-  it("advertises the API catalog and service docs from the homepage response", async () => {
+  it("advertises the API catalog from the homepage response", async () => {
     mockGenerateCsrfTokenValue.mockReturnValue("csrf_token_value");
 
     const response = await middleware(new NextRequest(`${CANONICAL_SITE_URL}/`));
@@ -42,7 +42,6 @@ describe("middleware", () => {
 
     expect(response.status).toBe(200);
     expect(linkHeader).toContain('</.well-known/api-catalog>; rel="api-catalog"');
-    expect(linkHeader).toContain("</tools>; rel=\"service-doc\"");
     expect(response.headers.get("vary")).toContain("Accept");
   });
 
