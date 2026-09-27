@@ -157,14 +157,13 @@ export function FaqsSection({ sections }: FaqsSectionProps) {
       <div className="mt-10 rounded-2xl border bg-muted/30 px-5 py-6 text-center shadow-sm sm:px-6">
         <p className="text-sm font-semibold text-foreground">Still have questions?</p>
         <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
-          Our support team can help you decide what to upload first and how to strengthen your
-          file.
+          Tell us how your agency reviews client files today and what volume you want to handle.
         </p>
         <Link
-          href="/sign-up"
+          href="/enterprise"
           className="mt-3 inline-block text-sm font-semibold text-primary underline-offset-4 hover:underline"
         >
-          Start free
+          Talk to us
         </Link>
       </div>
     </div>

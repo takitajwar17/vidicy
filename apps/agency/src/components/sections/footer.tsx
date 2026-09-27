@@ -30,19 +30,20 @@ const complianceBadges: readonly ComplianceBadge[] = [
 
 const footerSections = [
   {
-    title: "Resources",
+    title: "Pages",
     links: [
-      { href: "/how-it-works", text: "How It Works" },
-      { href: "/#pricing", text: "Pricing" },
-      { href: "/about", text: "About Us" },
+      { href: "/faq", text: "FAQ" },
+      { href: "/enterprise", text: "Enterprise" },
+      { href: "/about", text: "About" },
     ],
   },
   {
     title: "Support",
     links: [
-      { href: "/faq", text: "FAQ" },
       { href: `mailto:${siteConfig.links.email}`, text: "Contact Us" },
-      { href: "/enterprise", text: "Enterprise" },
+      { href: "/pilot-access", text: "Pilot Access" },
+      { href: "/pitch-deck", text: "Pitch Deck" },
+      { href: "/funding", text: "Funding" },
     ],
   },
   {
@@ -62,12 +63,7 @@ const socialLinks = [
 
 export default function Footer({ className }: { className?: string }) {
   return (
-    <footer className={cn("relative mt-16 overflow-hidden border-t border-border/70 bg-background/90 shadow-[inset_0_1px_0_rgba(255,255,255,0.32)] backdrop-blur-md", className)}>
-      <div
-        aria-hidden="true"
-        className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,hsl(var(--secondary)/0.62),transparent_44%),linear-gradient(180deg,hsl(var(--background)/0.96),hsl(var(--muted)/0.9))]"
-      />
-
+    <footer className={cn("dark relative mt-10 overflow-hidden border-t border-border bg-background text-foreground", className)}>
       <div className="relative mx-auto max-w-7xl px-5 pb-4 pt-10 sm:px-8 sm:pt-12 lg:px-12 lg:pt-14">
         <div className="grid gap-9 lg:grid-cols-[minmax(0,1.12fr)_minmax(0,0.88fr)] lg:gap-12">
           <div className="flex flex-col gap-7 lg:pr-8">

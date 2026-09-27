@@ -1,5 +1,6 @@
 import Logo from "@/components/logo";
 import { buttonVariants } from "@/components/ui/button";
+import { PUBLIC_SIGN_UP_CTA_LABEL } from "@/constants";
 import {
   Drawer,
   DrawerContent,
@@ -14,8 +15,10 @@ import Link from "next/link";
 import { IoMenuSharp } from "react-icons/io5";
 
 export default function drawerDemo({
+  hideAuthActions = false,
   hidePrimaryCta = false,
 }: {
+  hideAuthActions?: boolean;
   hidePrimaryCta?: boolean;
 }) {
   return (
@@ -40,7 +43,7 @@ export default function drawerDemo({
                   {siteConfig.name}
                 </p>
                 <p className="mt-1 text-sm leading-5 text-muted-foreground">
-                  Start your free evaluation or sign in to pick up where you left off.
+                  Request pilot access or sign in to continue your agency workflow.
                 </p>
               </div>
             </div>
@@ -62,31 +65,33 @@ export default function drawerDemo({
             ))}
           </nav>
         </div>
-        <DrawerFooter className="gap-3 px-6 pb-6 pt-1">
-          <Link
-            href="/sign-in"
-            className={cn(
-              buttonVariants({ variant: "outline", size: "lg" }),
-              "h-12 w-full rounded-full border-border/75 bg-background/95 text-base font-medium hover:bg-muted/50"
-            )}
-          >
-            Login
-          </Link>
-          {hidePrimaryCta ? null : (
+        {hideAuthActions ? null : (
+          <DrawerFooter className="gap-3 px-6 pb-6 pt-1">
             <Link
-              href="/sign-up"
+              href="/sign-in"
               className={cn(
-                buttonVariants({ variant: "default", size: "lg" }),
-                "!h-12 w-full rounded-full border border-black/80 border-b-black/95 border-t-white/25 !bg-[linear-gradient(180deg,#1a1a1a_0%,#070707_52%,#000000_100%)] text-base font-semibold !text-[#FFFFFF] transition-[transform,background-image,border-color] duration-200 hover:!bg-[linear-gradient(180deg,#202020_0%,#0d0d0d_52%,#040404_100%)] hover:border-t-white/35 active:translate-y-[2px]"
+                buttonVariants({ variant: "outline", size: "lg" }),
+                "h-12 w-full rounded-full border-border/75 bg-background/95 text-base font-medium hover:bg-muted/50",
               )}
             >
-              Get My Free Review
+              Login
             </Link>
-          )}
-          <p className="pt-1 text-center text-xs leading-5 text-muted-foreground">
-            No card needed. Your first checklist takes about a minute.
-          </p>
-        </DrawerFooter>
+            {hidePrimaryCta ? null : (
+              <Link
+                href="/sign-up"
+                className={cn(
+                  buttonVariants({ variant: "default", size: "lg" }),
+                  "!h-12 w-full rounded-full border border-black/80 border-b-black/95 border-t-white/25 !bg-[linear-gradient(180deg,#1a1a1a_0%,#070707_52%,#000000_100%)] text-base font-semibold !text-[#FFFFFF] transition-[transform,background-image,border-color] duration-200 hover:!bg-[linear-gradient(180deg,#202020_0%,#0d0d0d_52%,#040404_100%)] hover:border-t-white/35 active:translate-y-[2px]",
+                )}
+              >
+                {PUBLIC_SIGN_UP_CTA_LABEL}
+              </Link>
+            )}
+            <p className="pt-1 text-center text-xs leading-5 text-muted-foreground">
+              Built for agency teams reviewing client files at volume.
+            </p>
+          </DrawerFooter>
+        )}
       </DrawerContent>
     </Drawer>
   );

@@ -1,42 +1,17 @@
-import type { CSSProperties, ReactNode } from "react";
+import type { ReactNode } from "react";
 
 import Footer from "@/components/sections/footer";
 import Header from "@/components/sections/header";
-import PublicPreFooterCta from "@/components/sections/public-pre-footer-cta";
 import { cn } from "@/lib/utils";
-
-const publicSiteTheme: CSSProperties = {
-  "--background": "218 38% 98%",
-  "--foreground": "223 34% 14%",
-  "--primary": "216 78% 45%",
-  "--primary-foreground": "0 0% 100%",
-  "--secondary": "214 54% 94%",
-  "--secondary-foreground": "223 43% 28%",
-  "--muted": "218 28% 95%",
-  "--muted-foreground": "223 14% 40%",
-  "--accent": "207 89% 55%",
-  "--accent-foreground": "0 0% 100%",
-  "--border": "217 28% 86%",
-  "--ring": "215 87% 54%",
-  "--radius": "1rem",
-  "--font-display": "'Instrument Serif', serif",
-  "--font-body": "var(--font-sans)",
-  "--shadow-dashboard":
-    "0 24px 70px -28px hsl(223 44% 18% / 0.28), 0 0 0 1px hsl(219 20% 85% / 0.85)",
-  "--status-warning": "42 89% 55%",
-  "--status-success": "214 78% 52%",
-} as CSSProperties;
 
 export function PublicSiteShell({ children }: { children: ReactNode }) {
   return (
     <div
       data-public-site-shell
-      style={publicSiteTheme}
-      className="relative isolate w-full overflow-x-hidden text-foreground [font-family:var(--font-body)]"
+      className="public-site-font-system relative isolate w-full overflow-x-hidden text-foreground"
     >
       <Header />
       <main id="main-content">{children}</main>
-      <PublicPreFooterCta />
       <Footer />
     </div>
   );
@@ -86,12 +61,11 @@ export function PublicPageHero({
   return (
     <section
       data-public-page-hero
-      className="relative overflow-hidden border-b bg-gradient-to-b from-background via-muted/40 to-background"
+      className="dark relative overflow-hidden border-b border-border bg-background text-foreground"
     >
-      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_12%_10%,hsl(var(--primary)/0.15),transparent_36%),radial-gradient(circle_at_88%_0%,hsl(var(--accent)/0.12),transparent_28%)]" />
       <div
         className={cn(
-          "relative mx-auto px-4 py-16 sm:py-24",
+          "relative mx-auto px-4 py-14 sm:py-20",
           maxWidthClassName,
           isCentered && "text-center",
           className,
@@ -99,7 +73,7 @@ export function PublicPageHero({
       >
         <div
           className={cn(
-            "mb-3 flex items-center gap-2 text-xs font-mono font-medium uppercase tracking-[0.22em] text-primary",
+            "mb-4 flex items-center gap-2 text-[0.68rem] font-bold uppercase tracking-[0.18em] text-foreground/55",
             isCentered ? "justify-center" : "justify-start",
           )}
         >
@@ -107,7 +81,7 @@ export function PublicPageHero({
         </div>
         <h1
           className={cn(
-            "max-w-3xl text-3xl font-semibold leading-[1.1] tracking-[-0.03em] text-foreground sm:text-5xl",
+            "max-w-3xl font-display text-4xl font-normal leading-[0.98] tracking-[-0.07em] text-foreground sm:text-6xl",
             isCentered && "mx-auto",
             titleClassName,
           )}
@@ -128,7 +102,7 @@ export function PublicPageHero({
         {description ? (
           <p
             className={cn(
-              "mt-6 max-w-2xl text-base leading-relaxed text-muted-foreground sm:text-lg",
+              "mt-6 max-w-2xl text-base leading-7 text-muted-foreground sm:text-lg",
               isCentered && "mx-auto",
               descriptionClassName,
             )}
