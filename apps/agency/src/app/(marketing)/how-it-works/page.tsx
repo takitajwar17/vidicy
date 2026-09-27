@@ -1,4 +1,4 @@
-import type { Metadata, Route } from "next"
+import type { Metadata } from "next"
 import Link from "next/link"
 import { CANONICAL_SITE_URL, PUBLIC_SIGN_UP_CTA_LABEL } from "@/constants"
 import {
@@ -17,7 +17,6 @@ import {
   AlertTriangleIcon,
   MessageSquareIcon,
   RefreshCwIcon,
-  ArrowRightIcon,
 } from "lucide-react"
 
 export const metadata: Metadata = constructMetadata({
@@ -353,38 +352,6 @@ export default function HowItWorksPage() {
                 </div>
               )
             )}
-          </div>
-        </section>
-
-        {/* Visa type links */}
-        <section>
-          <h2 className="text-2xl font-semibold text-foreground mb-2">
-            Supported visa types
-          </h2>
-          <p className="text-sm text-muted-foreground mb-6">
-            Each visa type has its own document requirements and small embassy-level differences.
-            Browse the checklist for your destination.
-          </p>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            {[
-              { href: "/visas/us", label: "US Visas", description: "B1/B2, F-1, H-1B, O-1" },
-              { href: "/visas/schengen", label: "Schengen Visas", description: "All 29 member states" },
-              { href: "/visas/uk", label: "UK Visas", description: "Visitor, Skilled Worker, Student" },
-              { href: "/visas/canada", label: "Canada Visas", description: "Visitor, Study, Work Permit" },
-              { href: "/visas/australia", label: "Australia Visas", description: "Visitor, Student, Skilled" },
-            ].map((visa) => (
-              <Link
-                key={visa.href}
-                href={visa.href as Route}
-                className="flex items-center justify-between rounded-lg border bg-muted/30 px-4 py-3 hover:bg-muted/60 transition-colors group"
-              >
-                <div>
-                  <p className="text-sm font-medium text-foreground">{visa.label}</p>
-                  <p className="text-xs text-muted-foreground">{visa.description}</p>
-                </div>
-                <ArrowRightIcon className="h-4 w-4 text-muted-foreground group-hover:text-primary transition-colors shrink-0" />
-              </Link>
-            ))}
           </div>
         </section>
 

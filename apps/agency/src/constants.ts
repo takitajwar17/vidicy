@@ -22,7 +22,6 @@ export const TOOLS_ROUTE = "/tools";
 export const AGENT_DISCOVERY_LINK_HEADER = `<${API_CATALOG_PATH}>; rel="api-catalog", <${TOOLS_ROUTE}>; rel="service-doc"`;
 export const MARKDOWN_AGENT_ROUTE = "/agent-markdown";
 export const MARKDOWN_CONTENT_TYPE = "text/markdown; charset=utf-8";
-export const PUBLIC_VISA_ROUTE_LAST_REVIEWED_AT = "2026-10-15";
 export const PUBLIC_ROBOTS_DISALLOW_PATHS = [
   "/admin",
   "/admin/",

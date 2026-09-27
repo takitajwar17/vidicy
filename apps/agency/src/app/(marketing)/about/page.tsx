@@ -1,4 +1,3 @@
-import type { Route } from "next"
 import Link from "next/link"
 import {
   PublicPage,
@@ -16,9 +15,7 @@ import {
   FileTextIcon,
   UsersIcon,
   LockIcon,
-  CheckCircle2Icon,
   ApertureIcon,
-  ArrowRightIcon,
 } from "lucide-react"
 
 export const metadata = constructMetadata({
@@ -97,15 +94,6 @@ const TRUST_POINTS = [
   "Each application is access-controlled: only you and explicitly invited collaborators can view it",
   "Documents are used solely to evaluate your visa application — never for advertising or model training",
   "Sessions are secured with cryptographic tokens and expire automatically",
-]
-
-const VISA_TYPES = [
-  { href: "/visas/us", label: "US visas", description: "B1/B2, F-1, H-1B, O-1, and more" },
-  { href: "/visas/schengen", label: "Schengen visas", description: "All 29 member states" },
-  { href: "/visas/uk", label: "UK visas", description: "Standard Visitor, Skilled Worker, Student" },
-  { href: "/visas/canada", label: "Canada visas", description: "TRV, Study Permit, Work Permit" },
-  { href: "/visas/australia", label: "Australia visas", description: "Subclass 600, 500, and skilled migration" },
-  { href: null, label: "More destinations", description: "More are on the way" },
 ]
 
 export default function AboutPage() {
@@ -201,32 +189,6 @@ export default function AboutPage() {
               </div>
             ))}
           </div>
-        </section>
-
-        {/* Supported visa types */}
-        <section>
-          <h2 className="text-2xl font-semibold text-foreground mb-6">
-            Supported visa types
-          </h2>
-          <ul className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            {VISA_TYPES.map((type) => (
-              <li key={type.label} className="flex items-start gap-2.5">
-                <CheckCircle2Icon className="h-5 w-5 text-primary shrink-0 mt-0.5" />
-                {type.href ? (
-                  <Link href={type.href as Route} className="text-sm text-foreground hover:text-primary transition-colors group flex items-center gap-1">
-                    <span className="font-medium">{type.label}</span>
-                    <span className="text-muted-foreground">— {type.description}</span>
-                    <ArrowRightIcon className="h-3 w-3 opacity-0 group-hover:opacity-100 transition-opacity shrink-0" />
-                  </Link>
-                ) : (
-                  <span className="text-sm text-foreground">
-                    <span className="font-medium">{type.label}</span>
-                    <span className="text-muted-foreground"> - {type.description}</span>
-                  </span>
-                )}
-              </li>
-            ))}
-          </ul>
         </section>
 
         {/* Technology */}

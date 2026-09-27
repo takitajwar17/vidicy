@@ -38,16 +38,6 @@ const footerSections = [
     ],
   },
   {
-    title: "Visa Types",
-    links: [
-      { href: "/visas/us", text: "US Visas" },
-      { href: "/visas/schengen", text: "Schengen Visas" },
-      { href: "/visas/uk", text: "UK Visas" },
-      { href: "/visas/canada", text: "Canada Visas" },
-      { href: "/visas/australia", text: "Australia Visas" },
-    ],
-  },
-  {
     title: "Support",
     links: [
       { href: "/faq", text: "FAQ" },

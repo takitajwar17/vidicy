@@ -57,7 +57,7 @@ export const siteConfig = {
             description: "AI evaluates your full application and flags risks and inconsistencies.",
           },
           {
-            href: "/visas" as Route,
+            href: "/how-it-works#step-1" as Route,
             title: "Embassy-Specific Checklists",
             description: "Personalized requirements based on your exact visa and consulate.",
           },
@@ -65,46 +65,6 @@ export const siteConfig = {
             href: "/how-it-works#step-3" as Route,
             title: "Visa Chatbot",
             description: "Context-aware assistant that knows your application inside out.",
-          },
-        ],
-      },
-    },
-    {
-      trigger: "Visa Types",
-      content: {
-        items: [
-          {
-            title: "US Visas",
-            href: "/visas/us" as Route,
-            description: "B1/B2, H-1B, O-1, F-1 and more — tailored document preparation.",
-          },
-          {
-            title: "Schengen Visas",
-            href: "/visas/schengen" as Route,
-            description:
-              "France, Germany, Italy, Spain — embassy-specific guidance for all Schengen countries.",
-          },
-          {
-            title: "UK Visas",
-            href: "/visas/uk" as Route,
-            description:
-              "Skilled Worker, Student, Standard Visitor — complete document review and risk assessment.",
-          },
-          {
-            title: "Canada Visas",
-            href: "/visas/canada" as Route,
-            description:
-              "Visitor, study, work, and start-up visas with location-specific requirements.",
-          },
-          {
-            title: "Australia Visas",
-            href: "/visas/australia" as Route,
-            description: "Skilled, student, and visitor visas — personalized for your situation.",
-          },
-          {
-            title: "Other Countries",
-            href: "/visas" as Route,
-            description: "Japan, Ireland, and more high-demand destinations coming soon.",
           },
         ],
       },
@@ -187,16 +147,6 @@ export const siteConfig = {
         { href: "/#pricing", text: "Pricing", icon: null },
         { href: "/enterprise", text: "Enterprise", icon: null },
         { href: "/how-it-works", text: "How It Works", icon: null },
-      ],
-    },
-    {
-      title: "Visa Types",
-      links: [
-        { href: "/visas/us", text: "US Visas", icon: null },
-        { href: "/visas/schengen", text: "Schengen Visas", icon: null },
-        { href: "/visas/uk", text: "UK Visas", icon: null },
-        { href: "/visas/canada", text: "Canada Visas", icon: null },
-        { href: "/visas/australia", text: "Australia Visas", icon: null },
       ],
     },
     {
