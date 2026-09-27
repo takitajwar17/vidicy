@@ -55,7 +55,7 @@
     "EMAIL_FROM_NAME": "Vidicy",
     "EMAIL_REPLY_TO": "support@vidicy.com",
     "SENTRY_DSN": "https://2205a26662a98553c00ff1af4b639432@o4509695829540864.ingest.us.sentry.io/4510965026390016",
-    "GOOGLE_CLIENT_ID": "600776052247-g86f72aq1to2usib02lmae5mr0f499k7.apps.googleusercontent.com",
+    "GOOGLE_CLIENT_ID": "600776052247-u1vjvu7ccd1rso27c5h81estus9mbodi.apps.googleusercontent.com",
     "NEXT_PUBLIC_SITE_URL": "https://agency.vidicy.com",
     "NEXT_PUBLIC_TURNSTILE_SITE_KEY": "0x4AAAAAACY3QEqdhpl26JyY",
     // Stripe publishable key (safe to expose — starts with pk_)
