@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
-import { getPhotoToolBySlug } from "@/app/tools/_content";
 import {
   AGENT_DISCOVERY_LINK_HEADER,
   CANONICAL_SITE_DOMAIN,
@@ -25,16 +24,11 @@ function getLegacySiteRedirectUrl(request: NextRequest): URL | null {
 }
 
 function getMarkdownNegotiationPath(pathname: string): string | null {
-  if (pathname === "/" || pathname === "/tools") {
+  if (pathname === "/") {
     return pathname;
   }
 
-  const toolMatch = pathname.match(/^\/tools\/([^/]+)$/);
-  if (!toolMatch) {
-    return null;
-  }
-
-  return getPhotoToolBySlug(toolMatch[1]) ? pathname : null;
+  return null;
 }
 
 function isSeoMetadataPath({ pathname }: { pathname: string }) {

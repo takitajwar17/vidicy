@@ -18,8 +18,7 @@ export const MCP_ENDPOINT_PATH = "/mcp";
 export const MCP_SERVER_CARD_PATH = "/.well-known/mcp/server-card.json";
 export const MCP_PROTOCOL_VERSION = "2025-06-18";
 export const A2A_PROTOCOL_VERSION = "1.0";
-export const TOOLS_ROUTE = "/tools";
-export const AGENT_DISCOVERY_LINK_HEADER = `<${API_CATALOG_PATH}>; rel="api-catalog", <${TOOLS_ROUTE}>; rel="service-doc"`;
+export const AGENT_DISCOVERY_LINK_HEADER = `<${API_CATALOG_PATH}>; rel="api-catalog"`;
 export const MARKDOWN_AGENT_ROUTE = "/agent-markdown";
 export const MARKDOWN_CONTENT_TYPE = "text/markdown; charset=utf-8";
 export const PUBLIC_ROBOTS_DISALLOW_PATHS = [

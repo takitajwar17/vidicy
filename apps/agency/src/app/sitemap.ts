@@ -1,16 +1,12 @@
 import { MetadataRoute } from "next";
 
-import { PHOTO_TOOL_DEFINITIONS } from "@/app/tools/_content";
 import { CANONICAL_SITE_URL } from "@/constants";
-
-type DynamicDateSource = "tools";
 
 interface StaticSitemapEntry {
   path: string;
   lastModified: string;
   changeFrequency: NonNullable<MetadataRoute.Sitemap[number]["changeFrequency"]>;
   priority: number;
-  dynamicDateSource?: DynamicDateSource;
 }
 
 const STATIC_SITEMAP_ENTRIES: StaticSitemapEntry[] = [
@@ -51,13 +47,6 @@ const STATIC_SITEMAP_ENTRIES: StaticSitemapEntry[] = [
     priority: 0.7,
   },
   {
-    path: "/tools",
-    lastModified: "2026-10-09",
-    changeFrequency: "weekly",
-    priority: 0.85,
-    dynamicDateSource: "tools",
-  },
-  {
     path: "/privacy",
     lastModified: "2026-10-02",
     changeFrequency: "yearly",
@@ -84,54 +73,15 @@ function parseSitemapDate(value: string): Date | null {
   return Number.isNaN(parsedDate.getTime()) ? null : parsedDate;
 }
 
-function getLatestSitemapDate(values: string[]): string | null {
-  let latest: Date | null = null;
-
-  for (const value of values) {
-    const parsedValue = parseSitemapDate(value);
-
-    if (!parsedValue) {
-      continue;
-    }
-
-    if (!latest || parsedValue > latest) {
-      latest = parsedValue;
-    }
-  }
-
-  return latest ? latest.toISOString().slice(0, 10) : null;
-}
-
 function lastModified(date: string) {
   return parseSitemapDate(date) ?? new Date("2026-09-19T00:00:00.000Z");
 }
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
-  const enabledTools = Object.values(PHOTO_TOOL_DEFINITIONS).filter((tool) => tool.enabled);
-  const toolEntries: MetadataRoute.Sitemap = enabledTools.map((tool) => ({
-    url: `${CANONICAL_SITE_URL}/tools/${tool.slug}`,
-    lastModified: lastModified(tool.updatedAt),
-    changeFrequency: "monthly" as const,
-    priority: 0.8,
+  return STATIC_SITEMAP_ENTRIES.map((entry) => ({
+    url: entry.path === "/" ? CANONICAL_SITE_URL : `${CANONICAL_SITE_URL}${entry.path}`,
+    lastModified: lastModified(entry.lastModified),
+    changeFrequency: entry.changeFrequency,
+    priority: entry.priority,
   }));
-
-  const latestDatesBySource: Record<DynamicDateSource, string | null> = {
-    tools: getLatestSitemapDate(enabledTools.map((tool) => tool.updatedAt)),
-  };
-
-  return [
-    ...STATIC_SITEMAP_ENTRIES.map((entry) => {
-      const dynamicLastModified = entry.dynamicDateSource
-        ? latestDatesBySource[entry.dynamicDateSource]
-        : null;
-
-      return {
-        url: entry.path === "/" ? CANONICAL_SITE_URL : `${CANONICAL_SITE_URL}${entry.path}`,
-        lastModified: lastModified(dynamicLastModified ?? entry.lastModified),
-        changeFrequency: entry.changeFrequency,
-        priority: entry.priority,
-      };
-    }),
-    ...toolEntries,
-  ];
 }

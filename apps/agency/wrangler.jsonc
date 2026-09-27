@@ -15,9 +15,6 @@
     "binding": "ASSETS",
     "directory": ".open-next/assets"
   },
-  "triggers": {
-    "crons": ["*/15 * * * *"]
-  },
   "observability": {
     "enabled": true,
     "logs": {
