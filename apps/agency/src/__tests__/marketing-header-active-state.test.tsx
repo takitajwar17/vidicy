@@ -104,7 +104,7 @@ describe("marketing header active state", () => {
   it("treats the pricing anchor as selected only when the landing-page hash matches", () => {
     expect(isActiveTopBarLink({ href: "/#pricing", pathname: "/", hash: "#pricing" })).toBe(true);
     expect(isActiveTopBarLink({ href: "/#pricing", pathname: "/", hash: "" })).toBe(false);
-    expect(isActiveTopBarLink({ href: "/#pricing", pathname: "/guides", hash: "#pricing" })).toBe(
+    expect(isActiveTopBarLink({ href: "/#pricing", pathname: "/faq", hash: "#pricing" })).toBe(
       false,
     );
   });

@@ -1,10 +1,9 @@
 import { MetadataRoute } from "next";
 
-import { problemGuides } from "@/app/(marketing)/_content/problem-guides";
 import { PHOTO_TOOL_DEFINITIONS } from "@/app/tools/_content";
 import { CANONICAL_SITE_URL, PUBLIC_VISA_ROUTE_LAST_REVIEWED_AT } from "@/constants";
 
-type DynamicDateSource = "guides" | "tools";
+type DynamicDateSource = "tools";
 
 interface StaticSitemapEntry {
   path: string;
@@ -50,13 +49,6 @@ const STATIC_SITEMAP_ENTRIES: StaticSitemapEntry[] = [
     lastModified: "2026-10-08",
     changeFrequency: "monthly",
     priority: 0.7,
-  },
-  {
-    path: "/guides",
-    lastModified: "2026-10-08",
-    changeFrequency: "weekly",
-    priority: 0.85,
-    dynamicDateSource: "guides",
   },
   {
     path: "/tools",
@@ -121,12 +113,6 @@ const STATIC_SITEMAP_ENTRIES: StaticSitemapEntry[] = [
   },
 ];
 
-const GUIDE_PRIORITY_BY_SLUG: Record<string, number> = {
-  "avoid-visa-rejection-document-mistakes": 0.85,
-  "proof-of-funds-for-visa-application": 0.8,
-  "employment-letter-for-visa-application": 0.8,
-};
-
 function parseSitemapDate(value: string): Date | null {
   const normalizedValue = /^\d{4}-\d{2}-\d{2}$/.test(value) ? `${value}T00:00:00.000Z` : value;
   const parsedDate = new Date(normalizedValue);
@@ -157,13 +143,6 @@ function lastModified(date: string) {
 }
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
-  const guideEntries: MetadataRoute.Sitemap = Object.values(problemGuides).map((guide) => ({
-    url: `${CANONICAL_SITE_URL}${guide.href}`,
-    lastModified: lastModified(guide.updatedAt ?? guide.publishedAt),
-    changeFrequency: "monthly" as const,
-    priority: GUIDE_PRIORITY_BY_SLUG[guide.slug] ?? 0.8,
-  }));
-
   const enabledTools = Object.values(PHOTO_TOOL_DEFINITIONS).filter((tool) => tool.enabled);
   const toolEntries: MetadataRoute.Sitemap = enabledTools.map((tool) => ({
     url: `${CANONICAL_SITE_URL}/tools/${tool.slug}`,
@@ -173,9 +152,6 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   }));
 
   const latestDatesBySource: Record<DynamicDateSource, string | null> = {
-    guides: getLatestSitemapDate(
-      Object.values(problemGuides).map((guide) => guide.updatedAt ?? guide.publishedAt),
-    ),
     tools: getLatestSitemapDate(enabledTools.map((tool) => tool.updatedAt)),
   };
 
@@ -192,7 +168,6 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
         priority: entry.priority,
       };
     }),
-    ...guideEntries,
     ...toolEntries,
   ];
 }
