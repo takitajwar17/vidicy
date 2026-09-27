@@ -176,7 +176,7 @@ const SignUpPage = ({ redirectPath, isGoogleSSOEnabled }: SignUpClientProps) => 
 
               <Button
                 type="button"
-                className="h-11 w-full bg-sidebar text-sidebar-foreground hover:bg-sidebar/90"
+                className="h-11 w-full"
                 size="lg"
                 onClick={handleStartEmailSignup}
               >
@@ -323,7 +323,7 @@ const SignUpPage = ({ redirectPath, isGoogleSSOEnabled }: SignUpClientProps) => 
                   </Button>
                   <Button
                     type="submit"
-                    className="h-11 flex-1 bg-sidebar text-sm font-semibold tracking-[0.01em] text-sidebar-foreground hover:bg-sidebar/90"
+                    className="h-11 flex-1 text-sm"
                     size="lg"
                     disabled={isSigningUp || Boolean(isTurnstileEnabled && !captchaToken)}
                   >

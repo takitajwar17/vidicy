@@ -29,7 +29,7 @@ export default function SSOButtons({
     <>
       {resolvedIsGoogleSSOEnabled && (
         <>
-          <Button className="h-11 w-full bg-sidebar text-sm font-semibold tracking-[0.01em] text-sidebar-foreground hover:bg-sidebar/90" asChild size='lg'>
+          <Button className="h-11 w-full text-sm" asChild size='lg'>
             <a href={googleAuthHref}>
               <Google className="w-[22px] h-[22px] mr-1" />
               {isSignIn ? "Sign in with Google" : "Sign up with Google"}

@@ -146,7 +146,7 @@ const SignInPage = ({ redirectPath, isGoogleSSOEnabled }: SignInClientProps) => 
 
           <Button
             type="submit"
-            className="h-11 w-full bg-sidebar text-sm font-semibold tracking-[0.01em] text-sidebar-foreground hover:bg-sidebar/90"
+            className="h-11 w-full text-sm"
             size="lg"
             disabled={isSigningIn}
           >
