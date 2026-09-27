@@ -17,11 +17,11 @@ export interface MarkdownPayload {
 }
 
 const homepageHowItWorksSteps = [
-  "Review visa applications faster in scale.",
-  "Bulk upload client files and organize applications in queues.",
-  "Flag missing documents, mistakes, and inconsistencies before submission.",
-  "Generate client-ready reports while keeping reviewers in control.",
-  "Sign in to the agency workspace.",
+  "Faster, more accurate visa reviews. Every file. Every time.",
+  "Check client files for missing documents, mistakes, and inconsistencies.",
+  "Review summary, severity breakdowns, top issues, and client-ready reports.",
+  "Trusted by agencies worldwide with 98% issue detection accuracy.",
+  "Start a free trial or book a demo.",
 ] as const;
 
 export function countEstimatedMarkdownTokens(markdown: string): string {

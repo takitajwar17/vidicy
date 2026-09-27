@@ -1,12 +1,6 @@
 import type { CSSProperties } from "react";
+import Image from "next/image";
 import Link from "next/link";
-import {
-  AlertCircle,
-  CheckCircle2,
-  ClipboardCheck,
-  FileCheck2,
-  FileUp,
-} from "lucide-react";
 
 import Logo from "@/components/logo";
 import { constructMetadata } from "@/lib/utils";
@@ -23,15 +17,40 @@ const bodyStyle: CSSProperties = {
   fontFamily: "'Helvetica Neue', Helvetica, Arial, sans-serif",
 };
 
-const resultItems = [
-  { label: "Missing bank statement", status: "Flagged", icon: AlertCircle },
-  { label: "Passport scan readable", status: "Passed", icon: CheckCircle2 },
-  { label: "Client report ready", status: "Ready", icon: FileCheck2 },
+const navItems = [
+  "Product",
+  "Workflow",
+  "Pilots",
+  "Security",
+  "Pricing",
+  "Resources",
+] as const;
+
+const workflowHighlights = [
+  {
+    title: "Move cases faster",
+    description: "One queue for every client file.",
+  },
+  {
+    title: "Catch issues earlier",
+    description: "Flag gaps before submission.",
+  },
+  {
+    title: "Send clearer fixes",
+    description: "Share client-ready action lists.",
+  },
+] as const;
+
+const metrics = [
+  { value: "10x", label: "review capacity target" },
+  { value: "30 sec", label: "to spot missing documents" },
+  { value: "1 click", label: "to create client follow-ups" },
 ] as const;
 
 export const metadata = constructMetadata({
-  title: "Vidicy Agency",
-  description: "Bulk visa application review for travel and visa agencies.",
+  title: "Vidicy Agency | AI Visa Application Review for Agencies",
+  description:
+    "Bulk visa application review software for travel and visa agencies that need faster document checks, issue tracking, and client-ready reports.",
   alternates: {
     canonical: "/",
   },
@@ -73,36 +92,37 @@ function AnimatedText({
 export default function Home() {
   return (
     <main className="min-h-screen bg-[#2B3534] text-gray-900" style={bodyStyle}>
-      <section className="relative min-h-[650px] overflow-hidden bg-[#f4f4f2] md:h-[650px]">
+      <section className="relative overflow-hidden bg-[#2B3534] pb-0">
         <video
           aria-hidden="true"
           autoPlay
-          className="absolute inset-0 h-full w-full object-cover object-bottom"
+          className="absolute inset-x-0 top-0 h-[70vh] w-full object-cover object-bottom"
           loop
           muted
           playsInline
           preload="metadata"
           src={heroVideoUrl}
         />
+        <div className="pointer-events-none absolute inset-x-0 top-[calc(70vh-2rem)] h-8 bg-gradient-to-b from-transparent to-[#2B3534]" />
 
-        <nav className="relative z-20 flex items-center justify-between px-6 py-4 md:px-12 lg:px-20">
+        <nav className="relative z-20 flex items-center justify-between px-4 py-4 sm:px-6 md:px-12 lg:px-20">
           <Link
+            aria-label="Vidicy Agency home"
             className="flex items-center text-gray-900"
             href="/"
-            aria-label="Vidicy Agency home"
           >
             <Logo
               alt="Vidicy"
-              className="h-7 w-auto"
+              className="h-5 w-auto sm:h-7"
               surface="light"
               variant="horizontal"
             />
           </Link>
 
-          <div className="hidden items-center gap-8 md:flex">
-            {["Product", "Workflow", "Reports", "Security"].map((item) => (
+          <div className="hidden items-center gap-7 lg:flex">
+            {navItems.map((item) => (
               <Link
-                className="text-sm font-medium text-gray-600 transition-colors hover:text-gray-900"
+                className="text-sm font-semibold text-gray-700 transition-colors hover:text-gray-950"
                 href="/"
                 key={item}
               >
@@ -111,15 +131,15 @@ export default function Home() {
             ))}
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 sm:gap-3">
             <Link
-              className="px-2 text-sm font-medium text-gray-700 transition-colors hover:text-gray-900"
+              className="px-1 text-sm font-semibold text-gray-800 transition-colors hover:text-gray-950 sm:px-2"
               href="/sign-in"
             >
-              Login
+              Log in
             </Link>
             <Link
-              className="rounded-lg bg-gray-800 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-gray-900"
+              className="rounded-2xl bg-gray-900 px-3.5 py-2 text-sm font-semibold text-white shadow-[0_10px_24px_rgba(15,23,42,0.18)] transition-colors hover:bg-gray-950 sm:px-4 sm:py-2.5"
               href="/sign-up"
             >
               Sign up
@@ -127,106 +147,91 @@ export default function Home() {
           </div>
         </nav>
 
-        <div className="relative z-10 flex min-h-[calc(650px-72px)] -translate-y-2 flex-col items-center justify-center px-6 py-16 text-center md:-translate-y-3 md:px-12 lg:px-20">
+        <div className="relative z-10 mx-auto flex w-full max-w-7xl flex-col items-center px-5 pb-8 pt-10 text-center sm:px-6 md:px-12 md:pt-10 lg:px-20">
           <AnimatedText
             as="h1"
-            className="max-w-5xl text-4xl font-normal leading-[0.94] text-gray-900 md:text-6xl lg:text-7xl"
+            className="max-w-[20rem] text-[2.75rem] font-normal leading-[0.92] text-gray-950 sm:max-w-3xl sm:text-5xl md:max-w-5xl md:text-6xl lg:text-7xl"
             style={headingStyle}
-            text="Review visa applications faster in scale"
+            text="10x your agency's visa review capacity."
           />
           <AnimatedText
-            className="mt-6 max-w-2xl text-lg leading-8 text-gray-600 md:text-xl"
-            text="Vidicy helps agencies check client files for missing documents, mistakes, and inconsistencies before submission."
+            className="mt-5 max-w-[21rem] text-base leading-7 text-gray-600 sm:max-w-3xl sm:text-lg md:text-xl"
+            text="Vidicy helps visa and travel agencies check client files in bulk, flag missing documents and inconsistencies, and produce clear issue lists."
           />
 
-          <div className="mx-auto mt-9 w-full max-w-2xl rounded-2xl bg-[#2B3534] p-3 text-left shadow-2xl">
-            <div className="grid items-stretch gap-3 md:grid-cols-[1.05fr_0.95fr]">
-              <div className="relative flex flex-col rounded-xl border border-dashed border-white/20 bg-white/[0.03] p-3 pb-12">
-                <div className="flex items-start gap-3">
-                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white text-gray-800">
-                    <FileUp aria-hidden="true" className="h-4 w-4" />
-                  </div>
-                  <div className="min-w-0">
-                    <p className="text-base font-medium text-white">
-                      Upload client documents
-                    </p>
-                    <p className="mt-1 text-xs leading-5 text-gray-400">
-                      Passport, forms, bank statements, and supporting files.
-                      Vidicy checks them and returns review results.
-                    </p>
-                  </div>
-                </div>
+          <div className="mt-7 flex w-full max-w-[21rem] flex-col gap-3 sm:max-w-2xl sm:flex-row sm:justify-center">
+            <Link
+              className="inline-flex h-12 items-center justify-center rounded-2xl bg-gray-950 px-7 text-sm font-bold text-white shadow-[0_18px_38px_rgba(15,23,42,0.28)] ring-1 ring-gray-950/10 transition-colors hover:bg-black sm:h-14 sm:px-10 sm:text-base"
+              href="/sign-up"
+            >
+              Start agency pilot
+            </Link>
+            <Link
+              className="inline-flex h-12 items-center justify-center rounded-2xl border border-gray-950/20 bg-white px-7 text-sm font-bold text-gray-950 shadow-[0_14px_30px_rgba(15,23,42,0.14)] backdrop-blur transition-colors hover:bg-gray-50 sm:h-14 sm:px-10 sm:text-base"
+              href="/enterprise"
+            >
+              Request a demo
+            </Link>
+          </div>
 
-                <label
-                  className="absolute bottom-4 left-1/2 inline-flex h-9 w-fit -translate-x-1/2 cursor-pointer items-center gap-2 rounded-full border border-white border-b-gray-300 border-t-white bg-[linear-gradient(180deg,#ffffff_0%,#f8fafc_48%,#eef2f7_100%)] px-4 text-xs font-semibold text-gray-800 shadow-[0_1px_0_rgba(255,255,255,0.9)_inset,0_-7px_12px_rgba(15,23,42,0.10)_inset,0_10px_22px_rgba(0,0,0,0.28)] ring-1 ring-gray-950/5 transition-[background-image,box-shadow] duration-200 hover:bg-[linear-gradient(180deg,#ffffff_0%,#fbfcfe_48%,#f1f5f9_100%)] hover:shadow-[0_1px_0_rgba(255,255,255,0.95)_inset,0_-7px_12px_rgba(15,23,42,0.11)_inset,0_10px_22px_rgba(0,0,0,0.28)] active:shadow-[0_1px_0_rgba(255,255,255,0.9)_inset,0_-5px_10px_rgba(15,23,42,0.12)_inset,0_8px_18px_rgba(0,0,0,0.24)]"
-                  htmlFor="agency-file-upload"
-                >
-                  <FileUp
-                    aria-hidden="true"
-                    className="h-3.5 w-3.5"
-                  />
-                  Upload files
-                </label>
-                <input
-                  className="sr-only"
-                  id="agency-file-upload"
-                  multiple
-                  type="file"
-                />
-              </div>
+          <div className="mt-8 aspect-[2830/1594] w-full max-w-[21rem] overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-[0_24px_70px_rgba(15,23,42,0.18)] sm:max-w-3xl md:max-w-5xl md:rounded-3xl">
+            <Image
+              alt="Vidicy agency dashboard showing application review results"
+              className="h-full w-full object-cover"
+              height={1594}
+              priority
+              sizes="(min-width: 1024px) 64rem, (min-width: 640px) 48rem, 21rem"
+              src="/dashboard.png"
+              width={2830}
+            />
+          </div>
 
-              <div className="rounded-xl border border-white/10 p-3">
-                <div className="mb-2.5 flex items-center justify-between gap-3">
-                  <div className="min-w-0">
-                    <p className="text-sm font-medium text-white">
-                      Review results
-                    </p>
-                    <p className="text-[11px] leading-4 text-gray-400">
-                      Checks, issues, and reports in one queue.
-                    </p>
-                  </div>
-                  <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-white/10 text-gray-300">
-                    <ClipboardCheck aria-hidden="true" className="h-3.5 w-3.5" />
-                  </div>
-                </div>
-
-                <div className="space-y-2">
-                  {resultItems.map(({ icon: Icon, label, status }) => (
-                    <div
-                      className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2 rounded-lg border border-white/10 px-2.5 py-1.5 text-xs text-white"
-                      key={label}
-                    >
-                      <span className="inline-flex min-w-0 items-center gap-2">
-                        <Icon
-                          aria-hidden="true"
-                          className="h-3.5 w-3.5 shrink-0 text-gray-300"
-                        />
-                        <span className="truncate">{label}</span>
-                      </span>
-                      <span className="rounded-full bg-white/[0.04] px-2 py-0.5 text-[11px] font-medium text-gray-400">
-                        {status}
-                      </span>
+          <div className="relative -mt-8 w-full max-w-[21rem] rounded-2xl border border-white/15 bg-[#24302E] p-4 text-left text-white sm:max-w-3xl md:-mt-20 md:max-w-6xl md:p-6 lg:-mt-24">
+            <div className="grid gap-6 lg:grid-cols-[1fr_auto] lg:items-center">
+              <div>
+                <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-white/55 sm:text-[11px]">
+                  What your review team gets
+                </p>
+                <div className="mt-4 grid gap-3 sm:grid-cols-3">
+                  {workflowHighlights.map((highlight) => (
+                    <div key={highlight.title}>
+                      <p className="text-base font-semibold leading-none sm:text-lg">
+                        {highlight.title}
+                      </p>
+                      <p className="mt-1.5 text-xs leading-5 text-white/55">
+                        {highlight.description}
+                      </p>
                     </div>
                   ))}
                 </div>
               </div>
+              <div className="grid grid-cols-3 gap-2 text-center sm:gap-4">
+                {metrics.map((metric) => (
+                  <div key={metric.label}>
+                    <p className="text-2xl font-medium leading-none sm:text-3xl">
+                      {metric.value}
+                    </p>
+                    <p className="mt-2 text-[10px] leading-4 text-white/55 sm:text-[11px]">
+                      {metric.label}
+                    </p>
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
         </div>
-
-        <div className="pointer-events-none absolute inset-x-0 bottom-0 z-10 h-8 bg-gradient-to-b from-transparent to-[#2B3534]" />
       </section>
 
-      <section className="bg-[#2B3534] px-6 py-24 md:px-12 lg:px-20">
-        <div className="mx-auto grid max-w-7xl gap-12 md:grid-cols-2 md:items-start">
+      <section className="bg-[#2B3534] px-5 pb-20 pt-4 sm:px-6 md:px-12 md:pb-28 md:pt-10 lg:px-20">
+        <div className="mx-auto grid max-w-7xl gap-8 md:grid-cols-2 md:items-start">
           <AnimatedText
             as="h2"
-            className="max-w-3xl text-3xl font-normal leading-[0.98] text-white md:text-5xl lg:text-6xl"
+            className="max-w-3xl text-4xl font-normal leading-[0.95] text-white sm:text-5xl md:text-6xl"
             style={headingStyle}
             text="Turn manual review into a repeatable workflow"
           />
           <AnimatedText
-            className="max-w-sm text-right text-lg leading-8 text-gray-300 md:justify-self-end md:text-xl"
+            className="max-w-xl text-lg leading-8 text-white/70 md:justify-self-end md:text-right md:text-2xl md:leading-10"
             text="Built for visa and travel agencies that need queues, issue tracking, and client-ready reports without losing control of the final decision."
           />
         </div>
