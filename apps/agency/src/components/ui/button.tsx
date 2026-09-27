@@ -14,15 +14,15 @@ const buttonVariants = cva(
         destructive:
           "bg-destructive text-destructive-foreground shadow-[0_14px_30px_rgba(127,29,29,0.22)] ring-1 ring-destructive/10 hover:bg-destructive-hover hover:shadow-[0_16px_34px_rgba(127,29,29,0.28)] active:bg-destructive-strong",
         outline:
-          "border border-primary/20 bg-card text-primary shadow-[0_14px_30px_rgba(15,23,42,0.14)] hover:border-primary/25 hover:bg-card/90 hover:text-primary active:bg-accent",
+          "border border-primary/10 bg-primary text-primary-foreground shadow-[0_18px_38px_rgba(15,23,42,0.28)] ring-1 ring-primary/10 hover:bg-primary-hover hover:shadow-[0_18px_38px_rgba(15,23,42,0.34)] active:bg-primary-strong",
         secondary:
-          "border border-primary/15 bg-card text-primary shadow-[0_14px_30px_rgba(15,23,42,0.12)] hover:bg-card/90 hover:text-primary active:bg-accent",
-        ghost: "text-muted-foreground hover:bg-accent/80 hover:text-accent-foreground active:bg-accent",
+          "border border-primary/10 bg-primary text-primary-foreground shadow-[0_18px_38px_rgba(15,23,42,0.28)] ring-1 ring-primary/10 hover:bg-primary-hover hover:shadow-[0_18px_38px_rgba(15,23,42,0.34)] active:bg-primary-strong",
+        ghost: "text-primary hover:bg-primary hover:text-primary-foreground active:bg-primary-strong",
         link: "text-primary underline-offset-4 hover:underline",
         hero:
-          "rounded-xl bg-gradient-to-b from-[hsl(24,100%,72%)] to-[hsl(18,98%,53%)] text-lg font-medium text-primary-foreground shadow-md hover:brightness-[1.03] hover:shadow-lg active:brightness-[0.98]",
+          "bg-primary text-lg font-bold text-primary-foreground shadow-[0_18px_38px_rgba(15,23,42,0.28)] ring-1 ring-primary/10 hover:bg-primary-hover hover:shadow-[0_18px_38px_rgba(15,23,42,0.34)] active:bg-primary-strong",
         "hero-outline":
-          "rounded-xl border border-border/60 bg-secondary text-lg font-medium text-secondary-foreground shadow-xs hover:bg-muted",
+          "border border-primary/10 bg-primary text-lg font-bold text-primary-foreground shadow-[0_18px_38px_rgba(15,23,42,0.28)] ring-1 ring-primary/10 hover:bg-primary-hover hover:shadow-[0_18px_38px_rgba(15,23,42,0.34)] active:bg-primary-strong",
       },
       size: {
         default: "h-11 px-5 py-2",
