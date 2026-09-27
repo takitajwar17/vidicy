@@ -8,10 +8,6 @@ export const BLUR_FADE_DELAY = 0.15;
 
 export const marketingTopBarLinks = [
   {
-    href: "/guides",
-    label: "Guides",
-  },
-  {
     href: "/#pricing",
     label: "Pricing",
   },

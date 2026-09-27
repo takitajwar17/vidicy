@@ -76,8 +76,8 @@ describe("shared public site shell", () => {
       </MarketingLayout>,
     );
 
-    expect(markup).toContain('href="/guides"');
-    expect(markup).toContain(">Guides<");
+    expect(markup).not.toContain('href="/guides"');
+    expect(markup).not.toContain(">Guides<");
     expect(markup).not.toContain('href="/blog"');
     expect(markup).not.toContain(">Blog<");
     expect(markup).toContain('href="/#pricing"');

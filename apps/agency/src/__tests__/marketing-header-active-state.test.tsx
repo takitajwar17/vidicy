@@ -85,7 +85,6 @@ function expectInactiveLinkMarkup({
 describe("marketing header active state", () => {
   it("uses bold text for the selected primary destination in the desktop topbar", () => {
     const topBarSelections = [
-      { href: "/guides", label: "Guides" },
       { href: "/faq", label: "FAQ" },
     ];
 
@@ -115,7 +114,6 @@ describe("marketing header active state", () => {
 
     const markup = renderToStaticMarkup(<Header />);
 
-    expectInactiveLinkMarkup({ markup, href: "/guides", label: "Guides" });
     expectInactiveLinkMarkup({ markup, href: "/#pricing", label: "Pricing" });
   });
 });
