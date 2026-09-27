@@ -1,14 +1,9 @@
 import "server-only";
 
 import {
-  getPhotoToolBySlug,
-  toolsIndexItems,
-} from "@/app/tools/_content";
-import {
   AGENT_DISCOVERY_LINK_HEADER,
   CANONICAL_SITE_URL,
   MARKDOWN_CONTENT_TYPE,
-  TOOLS_ROUTE,
 } from "@/constants";
 
 export interface MarkdownPayload {
@@ -66,7 +61,6 @@ function buildHomepageMarkdown(): MarkdownPayload {
     "## Key links",
     `- Login: ${toAbsoluteUrl("/sign-in")}`,
     `- Sign up: ${toAbsoluteUrl("/sign-up")}`,
-    `- Tools: ${toAbsoluteUrl(TOOLS_ROUTE)}`,
     `- API catalog: ${toAbsoluteUrl("/.well-known/api-catalog")}`,
   ].join("\n\n");
 
@@ -78,77 +72,12 @@ function buildHomepageMarkdown(): MarkdownPayload {
   };
 }
 
-function buildToolsIndexMarkdown(): MarkdownPayload {
-  const body = [
-    createFrontmatter({
-      title: "Free Visa Tools",
-      description:
-        "Free visa tools for checking photo requirements, document readiness, and common mistakes before you submit.",
-      canonicalPath: TOOLS_ROUTE,
-    }),
-    "# Free visa tools",
-    "Run a fast pre-check before you submit.",
-    "## Available tools",
-    ...toolsIndexItems.map(
-      (tool) =>
-        `### ${tool.title}\n- Summary: ${tool.routeSummary}\n- Page: ${toAbsoluteUrl(tool.href)}`
-    ),
-  ].join("\n\n");
-
-  return { body };
-}
-
-function buildToolMarkdown(pathname: string): MarkdownPayload | null {
-  const slugMatch = pathname.match(/^\/tools\/([^/]+)$/);
-  if (!slugMatch) {
-    return null;
-  }
-
-  const tool = getPhotoToolBySlug(slugMatch[1]);
-  if (!tool) {
-    return null;
-  }
-
-  const body = [
-    createFrontmatter({
-      title: tool.metaTitle,
-      description: tool.metaDescription,
-      canonicalPath: pathname,
-      updatedAt: tool.updatedAt,
-    }),
-    `# ${tool.title}`,
-    tool.description,
-    `## ${tool.heroKicker}`,
-    tool.heroDescription,
-    "## Quick facts",
-    ...tool.quickFacts.map((fact) => `- ${fact.label}: ${fact.value}`),
-    "## Supported uploads",
-    ...tool.supportedFileTypes.map((fileType) => `- ${fileType}`),
-    "## Validation checklist",
-    ...tool.validationChecklist.map((item) => `- ${item}`),
-    "## File requirements",
-    ...tool.fileRequirements.map((item) => `- ${item}`),
-    "## Official sources",
-    ...tool.officialSources.map((source) => `- [${source.label}](${source.href}) — ${source.note}`),
-    "## FAQ",
-    ...tool.faqItems.map((item) => `### ${item.question}\n${item.answer}`),
-    "## Programmatic endpoint",
-    `- Analyze route: ${toAbsoluteUrl("/api/tools/photo-requirements/analyze")}`,
-  ].join("\n\n");
-
-  return { body };
-}
-
 export function getPublicMarkdownPayload(pathname: string): MarkdownPayload | null {
   if (pathname === "/") {
     return buildHomepageMarkdown();
   }
 
-  if (pathname === TOOLS_ROUTE) {
-    return buildToolsIndexMarkdown();
-  }
-
-  return buildToolMarkdown(pathname);
+  return null;
 }
 
 export function getPublicMarkdownContentType() {

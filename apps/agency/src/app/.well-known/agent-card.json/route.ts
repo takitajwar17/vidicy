@@ -14,9 +14,9 @@ function getAgentCard() {
   return {
     name: "Vidicy Agent",
     description:
-      "Public discovery card for Vidicy's structured markdown pages, public visa photo tools, and application-readiness guidance.",
+      "Public discovery card for Vidicy's structured markdown pages and application-readiness guidance.",
     version: packageJson.version,
-    documentationUrl: `${CANONICAL_SITE_URL}/tools`,
+    documentationUrl: CANONICAL_SITE_URL,
     provider: {
       organization: "Vidicy",
       url: CANONICAL_SITE_URL,
@@ -36,7 +36,7 @@ function getAgentCard() {
     defaultInputModes: ["text/plain", "application/json"],
     defaultOutputModes: ["text/plain", "text/markdown", "application/json"],
     skills: getPublishedAgentSkills().map((skill) => ({
-      id: skill.slug === "vidicy-visa-photo-checker" ? "visa-photo-checker" : skill.slug,
+      id: skill.slug,
       name: skill.slug,
       description: skill.description,
     })),

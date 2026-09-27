@@ -5,7 +5,6 @@ import {
   AGENT_DISCOVERY_LINK_HEADER,
   API_CATALOG_PATH,
   CANONICAL_SITE_URL,
-  TOOLS_ROUTE,
 } from "@/constants";
 
 const API_CATALOG_CONTENT_TYPE =
@@ -29,14 +28,10 @@ function getApiCatalogDocument(): ApiCatalogDocument {
     linkset: [
       {
         anchor: `${CANONICAL_SITE_URL}${API_CATALOG_PATH}`,
-        item: [
-          {
-            href: `${CANONICAL_SITE_URL}/api/tools/photo-requirements/analyze`,
-          },
-        ],
+        item: [],
         "service-doc": [
           {
-            href: `${CANONICAL_SITE_URL}${TOOLS_ROUTE}`,
+            href: CANONICAL_SITE_URL,
             type: "text/html",
           },
         ],

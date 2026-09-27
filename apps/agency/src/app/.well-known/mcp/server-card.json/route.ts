@@ -26,13 +26,13 @@ function getServerCard() {
     version: "1.0",
     protocolVersion: MCP_PROTOCOL_VERSION,
     serverInfo: {
-      name: "vidicy-public-tools",
-      title: "Vidicy Public Tools",
+      name: "vidicy-public-pages",
+      title: "Vidicy Public Pages",
       version: packageJson.version,
     },
     description:
-      "Public structured tools for Vidicy's markdown pages and visa photo requirement checkers.",
-    documentationUrl: `${CANONICAL_SITE_URL}/tools`,
+      "Public structured interface for Vidicy's markdown pages.",
+    documentationUrl: CANONICAL_SITE_URL,
     transport: {
       type: "streamable-http",
       endpoint: MCP_ENDPOINT_PATH,
