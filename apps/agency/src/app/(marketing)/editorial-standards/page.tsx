@@ -98,9 +98,9 @@ export default function EditorialStandardsPage() {
               route-specific rules fit together in a way that helps readers prepare a cleaner file.
             </p>
             <p>
-              Because visa content is high-stakes and can change, our guides are refreshed with a
-              strong bias toward current official source pages, especially when a post includes live
-              fees, eligibility windows, upload rules, or other procedural details.
+              Because visa content is high-stakes and can change, our public pages are refreshed
+              with a strong bias toward current official source pages, especially when a page
+              includes live fees, eligibility windows, upload rules, or other procedural details.
             </p>
           </div>
         </section>
