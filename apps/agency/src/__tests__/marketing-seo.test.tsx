@@ -28,7 +28,7 @@ function toIsoDate(value: string | Date | null | undefined): string | undefined 
 describe("marketing SEO surfaces", () => {
   it("keeps the homepage title plain so the root template adds branding once", () => {
     expect(typeof homepageMetadata.title).toBe("string");
-    expect(homepageMetadata.title).toBe("AI Visa Review Software for Agencies");
+    expect(homepageMetadata.title).toBe("AI Visa Review Software for High-Volume Agency Teams");
     expect(String(homepageMetadata.title)).not.toContain("Vidicy - Vidicy");
   });
 

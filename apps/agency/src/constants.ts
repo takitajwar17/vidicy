@@ -6,8 +6,8 @@ export const SITE_DESCRIPTION =
 export const CANONICAL_SITE_URL = "https://agency.vidicy.com";
 export const CANONICAL_SITE_DOMAIN = "agency.vidicy.com";
 export const OPEN_GRAPH_IMAGE_PATH = "/og_image.png";
-export const OPEN_GRAPH_IMAGE_WIDTH = 1731;
-export const OPEN_GRAPH_IMAGE_HEIGHT = 909;
+export const OPEN_GRAPH_IMAGE_WIDTH = 1200;
+export const OPEN_GRAPH_IMAGE_HEIGHT = 630;
 export const SITE_URL =
   process.env.NEXT_PUBLIC_SITE_URL ??
   (process.env.NODE_ENV === "development"

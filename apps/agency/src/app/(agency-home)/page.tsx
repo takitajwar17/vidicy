@@ -48,7 +48,7 @@ const metrics = [
 ] as const;
 
 export const metadata = constructMetadata({
-  title: "AI Visa Review Software for Agencies",
+  title: "AI Visa Review Software for High-Volume Agency Teams",
   description:
     "Review client visa files faster with AI document checks, missing requirement detection, case tracking, and client-ready follow-ups for agency teams.",
   alternates: {
