@@ -12,7 +12,7 @@ const PITCH_DECK_PDF_PATH = "/vidicy_pitch_deck.pdf"
 export const metadata: Metadata = constructMetadata({
   title: "Vidicy Pitch Deck",
   description:
-    "View the Vidicy pitch deck for an overview of the AI visa document review platform.",
+    "View the Vidicy pitch deck for an overview of the agency visa application review platform.",
   alternates: {
     canonical: "/pitch-deck",
   },
@@ -24,7 +24,7 @@ export default function PitchDeckPage() {
       <PublicPageHero
         eyebrow="Pitch Deck"
         title="Vidicy Pitch Deck"
-        description="View the latest Vidicy pitch deck directly in your browser."
+        description="A concise overview of the agency review problem, product direction, market, and operating plan."
       />
 
       <PublicPageContent maxWidthClassName="max-w-6xl" className="space-y-6">

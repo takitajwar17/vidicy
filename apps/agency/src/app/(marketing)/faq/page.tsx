@@ -10,9 +10,9 @@ import {
 import { constructMetadata } from "@/lib/utils";
 
 export const metadata: Metadata = constructMetadata({
-  title: "Visa application FAQ",
+  title: "Agency FAQ",
   description:
-    "FAQ for Vidicy: embassy-specific checklists, AI document review, Atlas, privacy, pricing, refunds, and when to re-check official government guidance.",
+    "FAQ for Vidicy agency pilots: bulk visa file review, reviewer workflows, security, pricing, and official requirement handling.",
   alternates: {
     canonical: "/faq",
   },
@@ -28,8 +28,8 @@ export default function MarketingFaqPage() {
       />
       <PublicPageHero
         eyebrow="FAQ"
-        title="Visa application FAQ"
-        description="Everything you need to know before you start, pay, upload, and submit."
+        title="Questions agencies ask before using Vidicy."
+        description="How the review workflow, pilots, security, and commercial setup work for visa and travel agencies."
       />
 
       <PublicPageContent>

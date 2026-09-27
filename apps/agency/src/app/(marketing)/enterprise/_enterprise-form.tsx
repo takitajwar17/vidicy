@@ -12,11 +12,11 @@ import { CheckCircle2Icon, BuildingIcon, UsersIcon, ZapIcon, ShieldCheckIcon, He
 import Link from "next/link"
 
 const PERKS = [
-  { icon: UsersIcon,       label: "Unlimited applicants in one application" },
-  { icon: BuildingIcon,    label: "Bulk application management dashboard" },
-  { icon: ZapIcon,         label: "API access for workflow integrations" },
-  { icon: ShieldCheckIcon, label: "White-label portal for your clients" },
-  { icon: HeadphonesIcon,  label: "Dedicated account manager and SLA" },
+  { icon: UsersIcon,       label: "Bulk client-file intake and review queues" },
+  { icon: BuildingIcon,    label: "Reviewer dashboard for agency operations" },
+  { icon: ZapIcon,         label: "Workflow integrations for high-volume teams" },
+  { icon: ShieldCheckIcon, label: "Client-ready reports and controlled final review" },
+  { icon: HeadphonesIcon,  label: "Pilot support, onboarding, and workflow setup" },
 ]
 
 export function EnterpriseForm() {
@@ -77,8 +77,8 @@ export function EnterpriseForm() {
         </ul>
         <p className="text-xs text-muted-foreground pt-2">
           Have a question before you reach out?{" "}
-          <Link href="/dashboard/support" className="underline underline-offset-2 hover:text-foreground">
-            Open a support ticket
+          <Link href="/faq" className="underline underline-offset-2 hover:text-foreground">
+            Read the FAQ
           </Link>
         </p>
       </div>

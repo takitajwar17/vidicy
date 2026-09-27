@@ -10,7 +10,7 @@ import {
 
 export const metadata: Metadata = constructMetadata({
   title: "Enterprise visa document review",
-  description: "Custom pricing, unlimited applicants, and a dedicated account manager for agencies and teams that process 10+ visa applications a month.",
+  description: "Custom pilots, review queues, client-ready reports, and workflow support for agencies processing visa applications at volume.",
   alternates: {
     canonical: "/enterprise",
   },
@@ -22,7 +22,7 @@ const enterpriseServiceSchema = {
   name: "Vidicy Enterprise",
   serviceType: "Enterprise visa document review platform",
   description:
-    "Custom pricing, unlimited applicants, API access, and dedicated support for immigration agencies and high-volume visa-processing teams.",
+    "Custom pilots, review queues, reporting workflows, and dedicated support for immigration agencies and high-volume visa-processing teams.",
   url: `${CANONICAL_SITE_URL}/enterprise`,
   areaServed: "Worldwide",
   audience: {
@@ -51,7 +51,7 @@ export default function EnterprisePage() {
       <PublicPageHero
         eyebrow="Enterprise"
         title="Built for agencies and high-volume teams"
-        description="Custom pricing, unlimited applicants, and hands-on support, tailored to the way your team works."
+        description="Pilot setup, review queues, client-ready reports, and hands-on support tailored to the way your agency works."
       />
       <PublicPageContent maxWidthClassName="max-w-5xl">
         <EnterpriseForm />

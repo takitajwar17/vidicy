@@ -18,12 +18,9 @@ const bodyStyle: CSSProperties = {
 };
 
 const navItems = [
-  "Product",
-  "Workflow",
-  "Pilots",
-  "Security",
-  "Pricing",
-  "Resources",
+  { label: "FAQ", href: "/faq" },
+  { label: "Enterprise", href: "/enterprise" },
+  { label: "About", href: "/about" },
 ] as const;
 
 const workflowHighlights = [
@@ -123,10 +120,10 @@ export default function Home() {
             {navItems.map((item) => (
               <Link
                 className="text-sm font-semibold text-gray-700 transition-colors hover:text-gray-950"
-                href="/"
-                key={item}
+                href={item.href}
+                key={item.href}
               >
-                {item}
+                {item.label}
               </Link>
             ))}
           </div>
@@ -164,7 +161,7 @@ export default function Home() {
               className="inline-flex h-12 items-center justify-center rounded-2xl bg-gray-950 px-7 text-sm font-bold text-white shadow-[0_18px_38px_rgba(15,23,42,0.28)] ring-1 ring-gray-950/10 transition-colors hover:bg-black sm:h-14 sm:px-10 sm:text-base"
               href="/sign-up"
             >
-              Start agency pilot
+              Start a pilot
             </Link>
             <Link
               className="inline-flex h-12 items-center justify-center rounded-2xl border border-gray-950/20 bg-white px-7 text-sm font-bold text-gray-950 shadow-[0_14px_30px_rgba(15,23,42,0.14)] backdrop-blur transition-colors hover:bg-gray-50 sm:h-14 sm:px-10 sm:text-base"
