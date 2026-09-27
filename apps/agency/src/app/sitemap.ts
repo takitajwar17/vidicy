@@ -1,7 +1,7 @@
 import { MetadataRoute } from "next";
 
 import { PHOTO_TOOL_DEFINITIONS } from "@/app/tools/_content";
-import { CANONICAL_SITE_URL, PUBLIC_VISA_ROUTE_LAST_REVIEWED_AT } from "@/constants";
+import { CANONICAL_SITE_URL } from "@/constants";
 
 type DynamicDateSource = "tools";
 
@@ -74,42 +74,6 @@ const STATIC_SITEMAP_ENTRIES: StaticSitemapEntry[] = [
     lastModified: "2026-10-07",
     changeFrequency: "yearly",
     priority: 0.3,
-  },
-  {
-    path: "/visas",
-    lastModified: PUBLIC_VISA_ROUTE_LAST_REVIEWED_AT,
-    changeFrequency: "monthly",
-    priority: 0.9,
-  },
-  {
-    path: "/visas/us",
-    lastModified: PUBLIC_VISA_ROUTE_LAST_REVIEWED_AT,
-    changeFrequency: "monthly",
-    priority: 0.9,
-  },
-  {
-    path: "/visas/schengen",
-    lastModified: PUBLIC_VISA_ROUTE_LAST_REVIEWED_AT,
-    changeFrequency: "monthly",
-    priority: 0.9,
-  },
-  {
-    path: "/visas/uk",
-    lastModified: PUBLIC_VISA_ROUTE_LAST_REVIEWED_AT,
-    changeFrequency: "monthly",
-    priority: 0.9,
-  },
-  {
-    path: "/visas/canada",
-    lastModified: PUBLIC_VISA_ROUTE_LAST_REVIEWED_AT,
-    changeFrequency: "monthly",
-    priority: 0.9,
-  },
-  {
-    path: "/visas/australia",
-    lastModified: PUBLIC_VISA_ROUTE_LAST_REVIEWED_AT,
-    changeFrequency: "monthly",
-    priority: 0.9,
   },
 ];
 

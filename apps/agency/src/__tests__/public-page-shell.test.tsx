@@ -5,8 +5,6 @@ import AboutPage from "@/app/(marketing)/about/page";
 import MarketingFaqPage from "@/app/(marketing)/faq/page";
 import HowItWorksPage from "@/app/(marketing)/how-it-works/page";
 import MarketingLayout from "@/app/(marketing)/layout";
-import VisasPage from "@/app/(marketing)/visas/page";
-import { VisaPage } from "@/app/(marketing)/visas/_components/visa-page";
 import LegalLayout from "@/app/(legal)/layout";
 import PrivacyPage from "@/app/(legal)/privacy/page";
 import SubprocessorsPage from "@/app/(legal)/subprocessors/page";
@@ -36,28 +34,6 @@ describe("shared public site shell", () => {
       renderToStaticMarkup(<AboutPage />),
       renderToStaticMarkup(<MarketingFaqPage />),
       renderToStaticMarkup(<HowItWorksPage />),
-      renderToStaticMarkup(<VisasPage />),
-      renderToStaticMarkup(
-        <VisaPage
-          heroTitle="US Visa Document Checklist"
-          heroSubtitle="US Visas"
-          heroDescription="Prepare your US visa documents before you submit."
-          countryCode="US"
-          coreDocuments={["Passport"]}
-          sections={[{ title: "Supporting documents", documents: ["Bank statements"] }]}
-          schemaName="US visa documents"
-          schemaDescription="Checklist"
-          schemaItems={["Passport", "Bank statements"]}
-          lastReviewedAt="2026-10-13"
-          officialSources={[
-            {
-              label: "U.S. visas overview",
-              href: "https://travel.state.gov/content/travel/en/us-visas.html",
-            },
-          ]}
-          currentVisa="us"
-        />,
-      ),
       renderToStaticMarkup(<TermsPage />),
       renderToStaticMarkup(<PrivacyPage />),
       renderToStaticMarkup(<SubprocessorsPage />),

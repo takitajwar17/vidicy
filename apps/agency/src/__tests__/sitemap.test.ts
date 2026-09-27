@@ -1,12 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import sitemap from "@/app/sitemap";
-import { CANONICAL_SITE_URL, PUBLIC_VISA_ROUTE_LAST_REVIEWED_AT } from "@/constants";
-
-function toIsoDate(value: string | Date | null | undefined): string | undefined {
-  if (!value) return undefined;
-  return value instanceof Date ? value.toISOString() : new Date(value).toISOString();
-}
+import { CANONICAL_SITE_URL } from "@/constants";
 
 const expectedPublicStaticUrls = [
   CANONICAL_SITE_URL,
@@ -21,12 +16,6 @@ const expectedPublicStaticUrls = [
   `${CANONICAL_SITE_URL}/privacy`,
   `${CANONICAL_SITE_URL}/terms`,
   `${CANONICAL_SITE_URL}/subprocessors`,
-  `${CANONICAL_SITE_URL}/visas`,
-  `${CANONICAL_SITE_URL}/visas/us`,
-  `${CANONICAL_SITE_URL}/visas/schengen`,
-  `${CANONICAL_SITE_URL}/visas/uk`,
-  `${CANONICAL_SITE_URL}/visas/canada`,
-  `${CANONICAL_SITE_URL}/visas/australia`,
 ];
 
 describe("sitemap metadata route", () => {
@@ -51,26 +40,6 @@ describe("sitemap metadata route", () => {
         entry.url === CANONICAL_SITE_URL || entry.url.startsWith(`${CANONICAL_SITE_URL}/`);
 
       expect(hasCanonicalOrigin).toBe(true);
-    }
-  });
-
-  it("keeps visa route sitemap dates aligned with visible freshness metadata", async () => {
-    const entries = await sitemap();
-    const byUrl = new Map(entries.map((entry) => [entry.url, entry]));
-    const expectedLastModified = `${PUBLIC_VISA_ROUTE_LAST_REVIEWED_AT}T00:00:00.000Z`;
-    const visaRoutes = [
-      "/visas",
-      "/visas/us",
-      "/visas/schengen",
-      "/visas/uk",
-      "/visas/canada",
-      "/visas/australia",
-    ] as const;
-
-    for (const route of visaRoutes) {
-      expect(toIsoDate(byUrl.get(`${CANONICAL_SITE_URL}${route}`)?.lastModified)).toBe(
-        expectedLastModified,
-      );
     }
   });
 

@@ -24,8 +24,6 @@ import HowItWorksPage from "@/app/(marketing)/how-it-works/page";
 import LegalLayout from "@/app/(legal)/layout";
 import TermsPage from "@/app/(legal)/terms/page";
 import MarketingLayout from "@/app/(marketing)/layout";
-import VisasPage from "@/app/(marketing)/visas/page";
-import { VisaPage } from "@/app/(marketing)/visas/_components/visa-page";
 
 const SHARED_PRE_FOOTER_HEADING = "Start Your Free Evaluation Before You Submit";
 
@@ -54,33 +52,9 @@ describe("public CTA copy", () => {
     const howItWorksMarkup = renderToStaticMarkup(
       <MarketingLayout><HowItWorksPage /></MarketingLayout>,
     );
-    const visasMarkup = renderToStaticMarkup(<MarketingLayout><VisasPage /></MarketingLayout>);
-    const visaDetailMarkup = renderToStaticMarkup(
-      <MarketingLayout>
-        <VisaPage
-          heroTitle="US Visa Document Checklist"
-          heroSubtitle="US Visas"
-          heroDescription="Prepare your US visa documents before you submit."
-          countryCode="US"
-          coreDocuments={["Passport"]}
-          sections={[{ title: "Supporting documents", documents: ["Bank statements"] }]}
-          schemaName="US visa documents"
-          schemaDescription="Checklist"
-          schemaItems={["Passport", "Bank statements"]}
-          lastReviewedAt="2026-10-13"
-          officialSources={[
-            {
-              label: "U.S. visas overview",
-              href: "https://travel.state.gov/content/travel/en/us-visas.html",
-            },
-          ]}
-          currentVisa="us"
-        />
-      </MarketingLayout>,
-    );
     const termsMarkup = renderToStaticMarkup(<LegalLayout><TermsPage /></LegalLayout>);
 
-    for (const markup of [aboutMarkup, howItWorksMarkup, visasMarkup, visaDetailMarkup, termsMarkup]) {
+    for (const markup of [aboutMarkup, howItWorksMarkup, termsMarkup]) {
       expect(markup).toContain(SHARED_PRE_FOOTER_HEADING);
       expect(markup).toContain("Get My Free Review");
       expect(markup.match(new RegExp(SHARED_PRE_FOOTER_HEADING, "g"))).toHaveLength(1);
@@ -88,8 +62,6 @@ describe("public CTA copy", () => {
 
     expect(aboutMarkup).not.toContain("Ready to check your documents?");
     expect(howItWorksMarkup).not.toContain("Start your first application");
-    expect(visasMarkup).not.toContain("Let AI review your document package");
-    expect(visaDetailMarkup).not.toContain("Let AI review your document package");
     expect(termsMarkup).not.toContain("Questions about these terms?");
   });
 
