@@ -48,9 +48,9 @@ const metrics = [
 ] as const;
 
 export const metadata = constructMetadata({
-  title: "Vidicy Agency | AI Visa Application Review for Agencies",
+  title: "AI Visa Review Software for Agencies",
   description:
-    "Bulk visa application review software for travel and visa agencies that need faster document checks, issue tracking, and client-ready reports.",
+    "Review client visa files faster with AI document checks, missing requirement detection, case tracking, and client-ready follow-ups for agency teams.",
   alternates: {
     canonical: "/",
   },

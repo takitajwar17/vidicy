@@ -2,9 +2,12 @@ import type { Route } from "next";
 
 export const SITE_NAME = "Vidicy";
 export const SITE_DESCRIPTION =
-  "Build a stronger visa application with embassy-specific checklists, document review, and AI guidance that helps you catch hidden red flags before you submit.";
+  "AI visa review software for agencies: check client documents, spot missing requirements, manage cases, and send clear follow-ups before submission.";
 export const CANONICAL_SITE_URL = "https://agency.vidicy.com";
 export const CANONICAL_SITE_DOMAIN = "agency.vidicy.com";
+export const OPEN_GRAPH_IMAGE_PATH = "/og_image.png";
+export const OPEN_GRAPH_IMAGE_WIDTH = 1731;
+export const OPEN_GRAPH_IMAGE_HEIGHT = 909;
 export const SITE_URL =
   process.env.NEXT_PUBLIC_SITE_URL ??
   (process.env.NODE_ENV === "development"

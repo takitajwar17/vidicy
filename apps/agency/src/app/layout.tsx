@@ -10,7 +10,14 @@ import { ThemeProvider } from "@/components/providers";
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import NextTopLoader from "nextjs-toploader";
-import { CANONICAL_SITE_URL, SITE_NAME, SITE_DESCRIPTION } from "@/constants";
+import {
+  CANONICAL_SITE_URL,
+  OPEN_GRAPH_IMAGE_HEIGHT,
+  OPEN_GRAPH_IMAGE_PATH,
+  OPEN_GRAPH_IMAGE_WIDTH,
+  SITE_DESCRIPTION,
+  SITE_NAME,
+} from "@/constants";
 import { siteFaviconIcons } from "@/lib/site-icons";
 
 const instrumentSerif = Instrument_Serif({
@@ -44,9 +51,11 @@ export const metadata: Metadata = {
   keywords: [
     "Vidicy",
     "Visa Application",
+    "Visa Agency Software",
     "Visa Rejection",
     "Document Review",
     "AI Visa Assistant",
+    "Travel Agency Visa Review",
     "Schengen Visa",
     "US Visa",
     "UK Visa",
@@ -58,11 +67,22 @@ export const metadata: Metadata = {
     type: "website",
     locale: "en_US",
     siteName: SITE_NAME,
-    images: [{ url: "/og", width: 1200, height: 630, alt: SITE_NAME }],
+    title: SITE_NAME,
+    description: SITE_DESCRIPTION,
+    images: [
+      {
+        url: OPEN_GRAPH_IMAGE_PATH,
+        width: OPEN_GRAPH_IMAGE_WIDTH,
+        height: OPEN_GRAPH_IMAGE_HEIGHT,
+        alt: "Vidicy Agency AI visa review dashboard",
+      },
+    ],
   },
   twitter: {
     card: "summary_large_image",
-    images: ["/og"],
+    title: SITE_NAME,
+    description: SITE_DESCRIPTION,
+    images: [OPEN_GRAPH_IMAGE_PATH],
   },
   robots: {
     index: true,

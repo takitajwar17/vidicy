@@ -1,5 +1,10 @@
 import { siteConfig } from "@/lib/config";
 import { siteFaviconIcons } from "@/lib/site-icons";
+import {
+  OPEN_GRAPH_IMAGE_HEIGHT,
+  OPEN_GRAPH_IMAGE_PATH,
+  OPEN_GRAPH_IMAGE_WIDTH,
+} from "@/constants";
 import { clsx, type ClassValue } from "clsx"
 import { Metadata } from "next";
 import { twMerge } from "tailwind-merge"
@@ -15,7 +20,7 @@ export function absoluteUrl(path: string) {
 export function constructMetadata({
   title = siteConfig.name,
   description = siteConfig.description,
-  image = absoluteUrl("/og"),
+  image = absoluteUrl(OPEN_GRAPH_IMAGE_PATH),
   ...props
 }: {
   title?: string;
@@ -58,8 +63,8 @@ export function constructMetadata({
       images: [
         {
           url: image,
-          width: 1200,
-          height: 630,
+          width: OPEN_GRAPH_IMAGE_WIDTH,
+          height: OPEN_GRAPH_IMAGE_HEIGHT,
           alt: ogTitle,
         },
       ],

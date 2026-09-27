@@ -13,7 +13,12 @@ import SubprocessorsPage, {
 } from "@/app/(legal)/subprocessors/page";
 import TermsPage from "@/app/(legal)/terms/page";
 import { metadata as homepageMetadata } from "@/app/(agency-home)/page";
-import { CANONICAL_SITE_URL } from "@/constants";
+import {
+  CANONICAL_SITE_URL,
+  OPEN_GRAPH_IMAGE_HEIGHT,
+  OPEN_GRAPH_IMAGE_PATH,
+  OPEN_GRAPH_IMAGE_WIDTH,
+} from "@/constants";
 
 function toIsoDate(value: string | Date | null | undefined): string | undefined {
   if (!value) return undefined;
@@ -23,15 +28,26 @@ function toIsoDate(value: string | Date | null | undefined): string | undefined 
 describe("marketing SEO surfaces", () => {
   it("keeps the homepage title plain so the root template adds branding once", () => {
     expect(typeof homepageMetadata.title).toBe("string");
-    expect(homepageMetadata.title).toBe("Vidicy Agency | AI Visa Application Review for Agencies");
+    expect(homepageMetadata.title).toBe("AI Visa Review Software for Agencies");
     expect(String(homepageMetadata.title)).not.toContain("Vidicy - Vidicy");
   });
 
   it("uses agency homepage metadata", () => {
     expect(typeof homepageMetadata.description).toBe("string");
     expect(homepageMetadata.description).toBe(
-      "Bulk visa application review software for travel and visa agencies that need faster document checks, issue tracking, and client-ready reports.",
+      "Review client visa files faster with AI document checks, missing requirement detection, case tracking, and client-ready follow-ups for agency teams.",
     );
+  });
+
+  it("uses the static public Open Graph image for social previews", () => {
+    const serializedHomepageMetadata = JSON.stringify(homepageMetadata);
+    const ogRouteSource = readFileSync(resolve(process.cwd(), "src/app/og/route.tsx"), "utf8");
+
+    expect(serializedHomepageMetadata).toContain(`${CANONICAL_SITE_URL}${OPEN_GRAPH_IMAGE_PATH}`);
+    expect(serializedHomepageMetadata).toContain(`"width":${OPEN_GRAPH_IMAGE_WIDTH}`);
+    expect(serializedHomepageMetadata).toContain(`"height":${OPEN_GRAPH_IMAGE_HEIGHT}`);
+    expect(ogRouteSource).toContain("OPEN_GRAPH_IMAGE_PATH");
+    expect(ogRouteSource).not.toContain("/og.png");
   });
 
   it("uses a descriptive About page metadata title", () => {
