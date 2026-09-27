@@ -12,7 +12,7 @@ import { SUBPROCESSORS, SUBPROCESSORS_LAST_UPDATED } from "@/lib/subprocessors";
 import { cn, constructMetadata } from "@/lib/utils";
 
 const subprocessorsDescription =
-  "Third-party vendors that may process personal data for Vidicy: hosting, email, analytics, security, and AI. Table lists name, purpose, and region.";
+  "Third-party vendors that may process agency account data or client visa documents for Vidicy review workflows.";
 
 export const metadata = constructMetadata({
   title: "Subprocessors and Data Vendors",
@@ -62,7 +62,7 @@ export default function SubprocessorsPage() {
         eyebrow="Legal"
         title="Subprocessors"
         meta={`Current as of ${SUBPROCESSORS_LAST_UPDATED}`}
-        description={`A current list of the third-party service providers that may process personal data on behalf of ${siteConfig.name}.`}
+        description={`A current list of third-party service providers that may process agency account data or client visa documents on behalf of ${siteConfig.name}.`}
       />
 
       <PublicPageContent maxWidthClassName="max-w-6xl" className="space-y-10 sm:px-6">
@@ -123,7 +123,7 @@ export default function SubprocessorsPage() {
           </div>
         </div>
 
-        <div className="mx-auto mt-10 max-w-3xl text-center">
+        <div className="mt-10 max-w-3xl">
           <p className="text-sm leading-relaxed text-muted-foreground">
             This registry reflects our current subprocessors as of {SUBPROCESSORS_LAST_UPDATED}. If you need a signed
             data processing agreement or have a vendor-specific question, contact{" "}
@@ -132,7 +132,7 @@ export default function SubprocessorsPage() {
             </a>
             .
           </p>
-          <div className="mt-6 flex flex-col justify-center gap-3 sm:flex-row">
+          <div className="mt-6 flex flex-col gap-3 sm:flex-row">
             <Link href="/privacy" className={cn(buttonVariants({ variant: "outline", size: "lg" }))}>
               Privacy Policy
             </Link>

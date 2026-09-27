@@ -25,10 +25,10 @@ import {
 } from "lucide-react";
 
 const privacyDescription =
-  "Learn how Vidicy collects, uses, and protects your personal data. Our privacy policy covers data storage, cookies, and your rights.";
+  "Learn how Vidicy collects, uses, and protects agency account data and client visa documents processed through the review workflow.";
 
 export const metadata: Metadata = constructMetadata({
-  title: "Privacy Policy for Visa Data",
+  title: "Privacy Policy for Agency Visa Data",
   description: privacyDescription,
   alternates: {
     canonical: "/privacy",
@@ -93,7 +93,7 @@ export default function PrivacyPage() {
         eyebrow="Legal"
         title="Privacy Policy"
         meta="Last updated: October 2, 2026"
-        description="Learn how Vidicy collects, uses, and protects your personal data, including document storage, cookies, subprocessors, and your rights."
+        description="How Vidicy handles agency accounts, client visa documents, uploaded files, subprocessors, cookies, and data rights."
       />
 
       <PublicPageContent className="space-y-16">
@@ -102,13 +102,13 @@ export default function PrivacyPage() {
         <section>
           <SectionHeading icon={DatabaseIcon} title="1. Information We Collect" />
           <p className="text-sm text-muted-foreground leading-relaxed mb-4">
-            At {siteConfig.name}, we collect information to provide you with our AI-powered visa preparation services. This includes:
+            At {siteConfig.name}, we collect information needed to operate agency visa review workflows. This includes:
           </p>
           <ul className="space-y-3">
-            <ListItem><strong className="text-foreground">Account Information:</strong> Name, email address, and authentication data when you create an account or sign in via third-party providers (e.g., Google).</ListItem>
-            <ListItem><strong className="text-foreground">Applicant Details:</strong> Passport number, date of birth, nationality, visa history, and travel dates you provide for your visa applications.</ListItem>
-            <ListItem><strong className="text-foreground">Visa Documents:</strong> Documents, images, and forms you upload directly into our platform for AI evaluation, which may include passports, bank statements, invitation letters, and other supporting materials.</ListItem>
-            <ListItem><strong className="text-foreground">Usage Data:</strong> Information about how you interact with our platform, including specific visa types selected, application progress, and interactions with our chatbot.</ListItem>
+            <ListItem><strong className="text-foreground">Agency account information:</strong> Names, email addresses, authentication data, organization details, and role information for agency users.</ListItem>
+            <ListItem><strong className="text-foreground">Client and applicant details:</strong> Passport number, date of birth, nationality, visa history, travel dates, and related information entered or uploaded by an agency user.</ListItem>
+            <ListItem><strong className="text-foreground">Visa documents:</strong> Documents, images, and forms uploaded for review, which may include passports, bank statements, invitation letters, employment records, bookings, and other supporting materials.</ListItem>
+            <ListItem><strong className="text-foreground">Usage data:</strong> Information about how agency users interact with queues, reviews, reports, document checks, and support workflows.</ListItem>
             <ListItem><strong className="text-foreground">Payment Information:</strong> We use Stripe to process payments. We do not store your complete credit card information on our servers.</ListItem>
             <ListItem><strong className="text-foreground">Technical Data:</strong> IP address (stored with your session for security purposes), browser type, and device information collected automatically.</ListItem>
           </ul>
@@ -119,8 +119,8 @@ export default function PrivacyPage() {
           <SectionHeading icon={ScaleIcon} title="2. Legal Basis for Processing (GDPR Article 6)" />
           <p className="text-sm text-muted-foreground leading-relaxed mb-4">We process your personal data based on the following lawful grounds:</p>
           <ul className="space-y-3">
-            <ListItem><strong className="text-foreground">Contract Performance:</strong> Processing your data is necessary to provide the visa preparation service you signed up for, including document evaluation, checklist generation, and AI-powered feedback.</ListItem>
-            <ListItem><strong className="text-foreground">Consent:</strong> You provide explicit consent when creating your account and agreeing to our Terms of Service and this Privacy Policy. You may withdraw consent at any time by deleting your account.</ListItem>
+            <ListItem><strong className="text-foreground">Contract Performance:</strong> Processing data is necessary to provide agency review workflows, document evaluation, issue tracking, and client-ready reporting.</ListItem>
+            <ListItem><strong className="text-foreground">Consent:</strong> Agency users provide consent when creating an account and agreeing to our Terms of Service and this Privacy Policy. Consent may be withdrawn where applicable.</ListItem>
             <ListItem><strong className="text-foreground">Legitimate Interest:</strong> We process certain data to improve our services, ensure platform security, and prevent fraud, where such interests are not overridden by your rights.</ListItem>
           </ul>
         </section>
@@ -130,15 +130,15 @@ export default function PrivacyPage() {
           <SectionHeading icon={UserIcon} title="3. How We Use Your Information" />
           <p className="text-sm text-muted-foreground leading-relaxed mb-4">We use the information we collect primarily to deliver our core services:</p>
           <ul className="space-y-3">
-            <ListItem>To analyze your uploaded documents using AI algorithms to detect inconsistencies and calculate rejection risks.</ListItem>
-            <ListItem>To provide personalized, embassy-specific checklists and feedback.</ListItem>
-            <ListItem>To power our AI chat assistant that answers visa-related questions using context from your documents.</ListItem>
+            <ListItem>To analyze uploaded client documents and detect missing items, weak evidence, and inconsistencies.</ListItem>
+            <ListItem>To provide route-specific checklists, reviewer flags, and feedback for agency workflows.</ListItem>
+            <ListItem>To support AI-assisted review and question-answering using context from the relevant case files.</ListItem>
             <ListItem>To process transactions and send you related information, including confirmations and receipts.</ListItem>
             <ListItem>To send technical notices, updates, security alerts, and support messages.</ListItem>
           </ul>
           <div className="mt-6 rounded-xl border border-primary/20 bg-primary/5 p-4">
             <p className="text-sm text-foreground">
-              <strong>Important:</strong> We do <strong>not</strong> use your personal documents or data to train AI models. Your documents are processed solely for your individual visa evaluation.
+              <strong>Important:</strong> We do <strong>not</strong> use agency client documents or data to train public AI models. Documents are processed solely to provide the review workflow.
             </p>
           </div>
         </section>
@@ -181,11 +181,11 @@ export default function PrivacyPage() {
         {/* 6. Data Retention */}
         <section>
           <SectionHeading icon={ClockIcon} title="6. Data Retention" />
-          <p className="text-sm text-muted-foreground leading-relaxed mb-4">We retain your data for the following periods:</p>
+          <p className="text-sm text-muted-foreground leading-relaxed mb-4">We retain agency and client data for the following periods:</p>
           <ul className="space-y-3">
-            <ListItem><strong className="text-foreground">Account data:</strong> Retained until you delete your account.</ListItem>
-            <ListItem><strong className="text-foreground">Visa applications and uploaded documents:</strong> Retained until you delete the application or your account. You can delete individual applications at any time from your dashboard.</ListItem>
-            <ListItem><strong className="text-foreground">AI chat history:</strong> Retained as part of your visa application and deleted when the application is deleted.</ListItem>
+            <ListItem><strong className="text-foreground">Account data:</strong> Retained until the account is deleted.</ListItem>
+            <ListItem><strong className="text-foreground">Client applications and uploaded documents:</strong> Retained until the relevant case, workspace, or account is deleted, unless a legal or operational retention obligation applies.</ListItem>
+            <ListItem><strong className="text-foreground">AI review history:</strong> Retained as part of the relevant client case and deleted when the case is deleted.</ListItem>
             <ListItem><strong className="text-foreground">Document embeddings (Vectorize):</strong> Deleted when the associated document or application is deleted.</ListItem>
             <ListItem><strong className="text-foreground">Session data:</strong> Automatically expires after 30 days of inactivity.</ListItem>
             <ListItem><strong className="text-foreground">Payment records:</strong> Retained as required by applicable tax and accounting laws.</ListItem>
@@ -199,7 +199,7 @@ export default function PrivacyPage() {
             <h2 className="text-2xl font-semibold text-foreground">7. Data Security</h2>
           </div>
           <p className="text-sm text-muted-foreground leading-relaxed mb-6">
-            Security is critical when handling your sensitive visa application materials. We implement multiple layers of protection:
+            Security is critical when handling sensitive agency and client visa application materials. We implement multiple layers of protection:
           </p>
           <ul className="space-y-3">
             {[
@@ -228,7 +228,7 @@ export default function PrivacyPage() {
           <ul className="space-y-3">
             <ListItem><strong className="text-foreground">session</strong> — Authentication session cookie (httpOnly, secure, 30-day expiry).</ListItem>
             <ListItem><strong className="text-foreground">csrf-token</strong> — Cross-site request forgery protection (httpOnly, secure, 24-hour expiry).</ListItem>
-            <ListItem><strong className="text-foreground">lastActiveApp</strong> — Remembers your last active visa application for convenience (30-day expiry).</ListItem>
+            <ListItem><strong className="text-foreground">lastActiveApp</strong> — Remembers the last active review workspace for convenience (30-day expiry).</ListItem>
           </ul>
           <p className="text-sm text-muted-foreground leading-relaxed mt-4">
             We use Cloudflare Web Analytics for anonymous, aggregated performance metrics. This does not use cookies and does not track individual users.
@@ -254,7 +254,7 @@ export default function PrivacyPage() {
             <ListItem><strong className="text-foreground">Right to Lodge a Complaint:</strong> File a complaint with your local data protection authority.</ListItem>
           </ul>
           <p className="text-sm text-muted-foreground leading-relaxed mt-4">
-            <strong className="text-foreground">How to exercise your rights:</strong> You can delete individual visa applications and their documents directly from your dashboard. To delete your entire account or exercise any other right listed above, please contact us at{" "}
+            <strong className="text-foreground">How to exercise your rights:</strong> Agency users can delete review cases and their documents directly from the dashboard where available. To delete an entire account or exercise any other right listed above, please contact us at{" "}
             <a href={`mailto:${siteConfig.links.email}`} className="text-primary hover:underline">{siteConfig.links.email}</a>.
             We will respond to your request within 30 days.
           </p>

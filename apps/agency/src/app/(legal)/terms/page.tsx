@@ -22,7 +22,7 @@ import {
 } from "lucide-react";
 
 const termsDescription =
-  "Read the terms of service for Vidicy. Understand your rights, obligations, acceptable use policies, and our service limits.";
+  "Read the terms of service for Vidicy agency review workflows, including acceptable use, AI limits, data processing, and service boundaries.";
 
 export const metadata: Metadata = constructMetadata({
   title: "Terms of service",
@@ -98,7 +98,7 @@ export default function TermsPage() {
         eyebrow="Legal"
         title="Terms of Service"
         meta="Last updated: October 2, 2026"
-        description="Read the terms that govern Vidicy, including acceptable use, payments, AI limitations, and liability boundaries."
+        description="The terms that govern Vidicy for agency review workflows, including acceptable use, AI limitations, data processing, and liability boundaries."
       />
 
       <PublicPageContent className="space-y-16">
@@ -106,18 +106,17 @@ export default function TermsPage() {
         <section>
           <SectionHeading icon={FileTextIcon} title="1. Acceptance of Terms" />
           <p className="text-sm text-muted-foreground leading-relaxed mb-4">
-            By accessing {siteConfig.name}, creating an account, or purchasing a subscription, you
+            By accessing {siteConfig.name}, creating an account, joining a pilot, or purchasing a subscription, you
             accept and agree to be bound by the terms and provisions of this agreement. Our platform
-            leverages artificial intelligence to analyze documents for potential inconsistencies and
-            risks related to visa applications.
+            uses artificial intelligence to help agencies review visa application files for missing
+            documents, weak evidence, and cross-file inconsistencies.
           </p>
           <div className="rounded-xl border border-status-warning/40 bg-status-warning/10 p-4 flex items-start gap-3">
             <AlertTriangleIcon className="h-5 w-5 text-status-warning shrink-0 mt-0.5" />
             <p className="text-sm text-foreground font-medium">
-              CRITICAL DISCLAIMER: {siteConfig.name} is an analytics tool. We are NOT a law firm,
-              nor are we licensed immigration attorneys. The information and risk scores we provide
-              do not constitute legal advice and cannot guarantee visa approval by any embassy or
-              consulate.
+              IMPORTANT DISCLAIMER: {siteConfig.name} is review workflow software. We are not a law
+              firm or licensed immigration advisor. Output from the product does not constitute
+              legal advice and cannot guarantee visa approval by any government authority.
             </p>
           </div>
         </section>
@@ -127,8 +126,8 @@ export default function TermsPage() {
           <SectionHeading icon={UserIcon} title="2. User Responsibilities" />
           <p className="text-sm text-muted-foreground leading-relaxed mb-4">
             You agree that all information and documents uploaded to our service are true, accurate,
-            and belong to you or the applicant you represent. You must not upload fraudulent
-            documents.
+            and uploaded with appropriate authority from your agency, client, applicant, or other
+            authorized party. You must not upload fraudulent documents.
           </p>
           <p className="text-sm text-muted-foreground leading-relaxed">
             You agree not to reverse-engineer our service, spam our AI chatbot, or attempt to
@@ -140,15 +139,14 @@ export default function TermsPage() {
         <section>
           <SectionHeading icon={CreditCardIcon} title="3. Payments and Refunds" />
           <p className="text-sm text-muted-foreground leading-relaxed mb-4">
-            Our service is offered as a one-time payment per application. Payments are securely
-            processed via Stripe.
+            Our agency product is offered through pilot, subscription, usage-based, or enterprise
+            commercial terms depending on the scope of the workflow. Payments are securely
+            processed via Stripe where applicable.
           </p>
           <p className="text-sm text-muted-foreground leading-relaxed">
-            Because our AI incurs compute costs immediately upon document upload and analysis, we
-            generally do not offer refunds once you have used the system to review documents. A
-            limited exception may apply if you followed the platform&apos;s guidance completely,
-            received a visa rejection, and both the rejection and your compliance with that guidance
-            can be verified.
+            Because document review can incur compute, storage, and support costs immediately,
+            refunds, credits, cancellations, and pilot terms are handled according to the applicable
+            written agreement or order form.
           </p>
         </section>
 
@@ -158,7 +156,7 @@ export default function TermsPage() {
           <p className="text-sm text-muted-foreground leading-relaxed">
             The software, algorithms, codebases, branding, and workflows on {siteConfig.name} are
             the intellectual property of our company. You are granted a limited license strictly for
-            personal or internal business use related to evaluating visa applications.
+            internal business use related to reviewing visa application files.
           </p>
         </section>
 
@@ -171,33 +169,32 @@ export default function TermsPage() {
             </h2>
           </div>
           <p className="text-sm text-muted-foreground leading-relaxed mb-4">
-            Our platform uses artificial intelligence to generate document checklists, evaluate
-            uploaded documents, assign risk scores, and provide chat-based guidance. You acknowledge
-            and agree that:
+            Our platform uses artificial intelligence to generate document checks, evaluate uploaded
+            documents, flag review issues, and support reviewer workflows. You acknowledge and agree
+            that:
           </p>
           <ul className="space-y-3">
             <ListItem>
-              AI-generated checklists may not include every document required by a specific embassy
-              or consulate. Requirements vary by location, visa category, and individual
-              circumstances.
+              AI-generated checks may not include every document required by a specific government,
+              embassy, consulate, or visa application center. Requirements vary by route and
+              applicant circumstances.
             </ListItem>
             <ListItem>
-              Evaluation scores and risk assessments are algorithmic estimates, not guarantees of
-              approval or rejection. Scores may fluctuate between evaluations due to model updates.
+              Review flags and risk signals are algorithmic estimates, not guarantees of approval,
+              rejection, or agency quality control completion.
             </ListItem>
             <ListItem>
-              Chat responses from our AI assistant (&quot;Atlas&quot;) are informational only and
-              may contain inaccuracies. They do not constitute immigration advice.
+              AI responses are informational workflow support and may contain inaccuracies. They do
+              not constitute immigration advice.
             </ListItem>
             <ListItem>
-              {siteConfig.name} shall not be liable for any losses, damages, or adverse outcomes
-              arising from reliance on AI-generated checklists, scores, recommendations, or chat
-              responses.
+              {siteConfig.name} shall not be liable for adverse outcomes arising from reliance on
+              AI-generated checks, flags, recommendations, or responses.
             </ListItem>
           </ul>
           <p className="text-sm text-foreground font-semibold mt-6">
-            You are solely responsible for verifying all requirements with the relevant embassy or
-            consulate and for the accuracy of your final visa application submission.
+            Agencies remain responsible for verifying official requirements, reviewing the final
+            file, and deciding what is submitted to the relevant authority.
           </p>
         </section>
 
@@ -205,16 +202,16 @@ export default function TermsPage() {
         <section>
           <SectionHeading icon={ShieldAlertIcon} title="6. Limitations of Liability" />
           <p className="text-sm text-muted-foreground leading-relaxed mb-4">
-            Immigration decisions are entirely at the discretion of the respective embassy or
-            consulate officers. Under no circumstances shall {siteConfig.name} or our suppliers be
+            Immigration decisions are entirely at the discretion of the relevant government
+            authority. Under no circumstances shall {siteConfig.name} or our suppliers be
             liable for any direct, indirect, incidental, or consequential damages (including, but
             not limited to, financial loss, travel delays, emotional distress, or loss of
             employment) resulting from an application rejection or the use/inability to use our
             service.
           </p>
           <p className="text-sm text-muted-foreground leading-relaxed">
-            You are exclusively responsible for the final submission of your visa application to the
-            government portal. Our tool operates as a pre-submission review assistant only.
+            The agency, client, or authorized representative is responsible for final submission.
+            Our product operates as a pre-submission review workflow only.
           </p>
         </section>
 
@@ -222,8 +219,8 @@ export default function TermsPage() {
         <section>
           <SectionHeading icon={DatabaseIcon} title="7. Data Processing" id="data-processing" />
           <p className="text-sm text-muted-foreground leading-relaxed">
-            By using our service, you acknowledge that your uploaded documents and personal data
-            will be processed by third-party AI providers (including OpenAI and Perplexity AI) as
+            By using our service, you acknowledge that uploaded documents and personal data may be
+            processed by third-party AI providers (including OpenAI and Perplexity AI) as
             described in our{" "}
             <Link href="/privacy" className="text-primary hover:underline">
               Privacy Policy
