@@ -152,7 +152,7 @@ export default function Home() {
             as="h1"
             className="max-w-[20rem] text-[2.75rem] font-normal leading-[0.92] text-gray-950 sm:max-w-3xl sm:text-5xl md:max-w-5xl md:text-6xl lg:text-7xl"
             style={headingStyle}
-            text="10x your agency's visa review capacity."
+            text="10x your agency's visa application review capacity."
           />
           <AnimatedText
             className="mt-5 max-w-[21rem] text-base leading-7 text-gray-600 sm:max-w-3xl sm:text-lg md:text-xl"
@@ -232,7 +232,7 @@ export default function Home() {
           />
           <AnimatedText
             className="max-w-xl text-lg leading-8 text-white/70 md:justify-self-end md:text-right md:text-2xl md:leading-10"
-            text="Built for visa and travel agencies that need queues, issue tracking, and client-ready reports without losing control of the final decision."
+            text="Review more applications each day, catch issues before they slow your team down, and give clients clear fixes in minutes."
           />
         </div>
       </section>

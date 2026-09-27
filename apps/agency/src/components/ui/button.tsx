@@ -5,18 +5,18 @@ import { cva, type VariantProps } from "class-variance-authority"
 import { cn } from "@/lib/utils"
 
 const buttonVariants = cva(
-  "ui-feedback inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-lg text-sm font-medium tracking-tight ring-offset-background transition-[background-color,color,box-shadow,border-color,transform] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/70 focus-visible:ring-offset-2 disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50 aria-[busy=true]:cursor-wait aria-[busy=true]:opacity-85 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0",
+  "ui-feedback inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-2xl text-sm font-bold tracking-tight ring-offset-background transition-[background-color,color,box-shadow,border-color,transform] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/70 focus-visible:ring-offset-2 disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50 aria-[busy=true]:cursor-wait aria-[busy=true]:opacity-85 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0",
   {
     variants: {
       variant: {
         default:
-          "bg-primary text-primary-foreground shadow-xs hover:bg-primary-hover hover:shadow-sm active:bg-primary-strong",
+          "bg-primary text-primary-foreground shadow-[0_18px_38px_rgba(15,23,42,0.28)] ring-1 ring-primary/10 hover:bg-primary-hover hover:shadow-[0_18px_38px_rgba(15,23,42,0.34)] active:bg-primary-strong",
         destructive:
-          "bg-destructive text-destructive-foreground shadow-xs hover:bg-destructive-hover hover:shadow-sm active:bg-destructive-strong",
+          "bg-destructive text-destructive-foreground shadow-[0_14px_30px_rgba(127,29,29,0.22)] ring-1 ring-destructive/10 hover:bg-destructive-hover hover:shadow-[0_16px_34px_rgba(127,29,29,0.28)] active:bg-destructive-strong",
         outline:
-          "border border-input bg-background text-foreground shadow-2xs hover:border-primary/30 hover:bg-accent/75 hover:text-accent-foreground active:bg-accent",
+          "border border-primary/20 bg-card text-primary shadow-[0_14px_30px_rgba(15,23,42,0.14)] hover:border-primary/25 hover:bg-card/90 hover:text-primary active:bg-accent",
         secondary:
-          "bg-secondary text-secondary-foreground shadow-2xs hover:bg-secondary/84 hover:text-foreground active:bg-secondary/88",
+          "border border-primary/15 bg-card text-primary shadow-[0_14px_30px_rgba(15,23,42,0.12)] hover:bg-card/90 hover:text-primary active:bg-accent",
         ghost: "text-muted-foreground hover:bg-accent/80 hover:text-accent-foreground active:bg-accent",
         link: "text-primary underline-offset-4 hover:underline",
         hero:
@@ -25,11 +25,11 @@ const buttonVariants = cva(
           "rounded-xl border border-border/60 bg-secondary text-lg font-medium text-secondary-foreground shadow-xs hover:bg-muted",
       },
       size: {
-        default: "h-10 px-4 py-2",
-        sm: "h-9 px-3 text-xs",
-        lg: "h-11 px-8 text-sm",
+        default: "h-11 px-5 py-2",
+        sm: "h-10 px-4 text-xs",
+        lg: "h-12 px-8 text-sm",
         xl: "h-14 px-10 py-4",
-        icon: "h-10 w-10 rounded-md",
+        icon: "h-10 w-10 rounded-xl",
       },
     },
     defaultVariants: {
