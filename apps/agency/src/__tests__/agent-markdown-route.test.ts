@@ -14,7 +14,7 @@ describe("agent markdown route", () => {
     const body = await response.text();
     expect(body).toContain("title: Vidicy Agency");
     expect(body).toContain("# Vidicy Agency");
-    expect(body).toContain("Review visa applications faster in scale");
+    expect(body).toContain("Faster, more accurate visa reviews");
     expect(body).toContain("https://agency.vidicy.com/sign-in");
   });
 

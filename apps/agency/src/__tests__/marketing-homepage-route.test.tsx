@@ -20,21 +20,29 @@ describe("main marketing homepage route", () => {
     const markup = await renderMarketingHomepageMarkup();
 
     expect(markup).toContain("Vidicy");
-    expect(markup).toContain("Review visa applications faster in scale");
-    expect(markup).toContain("check client files for missing documents");
-    expect(markup).toContain("Upload client documents");
-    expect(markup).toContain("Review results");
-    expect(markup).toContain("Upload files");
-    expect(markup).toContain("Missing bank statement");
-    expect(markup).toContain("Client report ready");
-    expect(markup).toContain("Turn manual review into a repeatable workflow");
+    expect(markup).toContain("Faster, more accurate visa reviews");
+    expect(markup).toContain("Every file. Every time.");
+    expect(markup).toContain("process more applications with confidence");
+    expect(markup).toContain("Start free trial");
+    expect(markup).toContain("Book a demo");
+    expect(markup).toContain("Vidicy agency dashboard showing application review results");
+    expect(markup).toContain("dashboard.png");
+    expect(markup).toContain("Trusted by agencies worldwide");
+    expect(markup).toContain("98%");
+    expect(markup).toContain("10k+");
     expect(markup).toContain(
       "/videos/vidicy-hero.mp4",
     );
     expect(markup).toContain('href="/sign-in"');
     expect(markup).toContain('href="/sign-up"');
-    expect(markup).toContain("Login");
+    expect(markup).toContain("Log in");
     expect(markup).toContain("Sign up");
+    expect(markup).not.toContain("Upload client documents");
+    expect(markup).not.toContain("Review visa applications faster in scale");
+    expect(markup).not.toContain("Built for visa &amp; travel agencies");
+    expect(markup).not.toContain("No credit card required");
+    expect(markup).not.toContain("Setup in minutes");
+    expect(markup).not.toContain("Cancel anytime");
     expect(markup).not.toContain("Logopipsum");
     expect(markup).not.toContain("Small Mistake");
     expect(markup).not.toContain("Visa Rejected");
