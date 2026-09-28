@@ -87,7 +87,7 @@ export function FaqsSection({ sections }: FaqsSectionProps) {
   );
 
   return (
-    <div className="mx-auto w-full max-w-3xl">
+    <div className="w-full max-w-3xl">
       <div className="space-y-6">
         <div className="relative max-w-md">
           <SearchIcon className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
@@ -109,14 +109,15 @@ export function FaqsSection({ sections }: FaqsSectionProps) {
             <button
               key={category.id}
               type="button"
-              className="flex flex-col"
+              className="flex flex-col rounded-none outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
               aria-current={isActive ? "true" : undefined}
               onClick={() => setActiveCategory(category.id)}
             >
               <span
                 className={cn(
-                  "rounded-md px-2 py-1 text-base text-muted-foreground transition-colors hover:text-primary md:px-2.5 md:py-1.5",
-                  isActive && "bg-primary/10 font-semibold text-primary ring-1 ring-primary/20",
+                  "px-2 py-1 text-base text-muted-foreground transition-colors hover:text-primary md:px-2.5 md:py-1.5",
+                  // Active: bold + bottom bar only (no ring/bg box outline)
+                  isActive && "font-semibold text-primary",
                 )}
               >
                 {category.label}

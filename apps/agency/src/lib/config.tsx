@@ -116,7 +116,6 @@ export const siteConfig = {
     {
       title: "Company",
       links: [
-        { href: "/funding", text: "Funding", icon: null },
         { href: "/enterprise", text: "Contact", icon: null },
       ],
     },

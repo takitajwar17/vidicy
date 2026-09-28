@@ -41,9 +41,6 @@ const footerSections = [
     title: "Support",
     links: [
       { href: `mailto:${siteConfig.links.email}`, text: "Contact Us" },
-      { href: "/pilot-access", text: "Pilot Access" },
-      { href: "/pitch-deck", text: "Pitch Deck" },
-      { href: "/funding", text: "Funding" },
     ],
   },
   {

@@ -1,9 +1,6 @@
 "use client";
 
-import Drawer from "@/components/drawer";
 import Logo from "@/components/logo";
-import { buttonVariants } from "@/components/ui/button";
-import { PUBLIC_SIGN_UP_CTA_LABEL } from "@/constants";
 import { marketingTopBarLinks } from "@/lib/config";
 import { cn } from "@/lib/utils";
 import Link from "next/link";
@@ -45,7 +42,6 @@ export default function Header() {
   const [currentHash, setCurrentHash] = useState("");
   const pathname = usePathname() ?? "";
   const hidePrimaryCta = pathname === "/sign-up";
-  const hideAuthActions = pathname === "/pilot-access";
 
   useEffect(() => {
     const handleScroll = () => {
@@ -86,33 +82,38 @@ export default function Header() {
     </a>
     <header
       className={cn(
-        "dark fixed top-0 inset-x-0 z-50 h-16 sm:h-20 transition-all duration-300 ease-out",
+        "fixed top-0 inset-x-0 z-50 h-16 bg-[#f3f4f2]/90 text-gray-900 backdrop-blur-xl transition-all duration-300 ease-out sm:h-20",
         addBorder
-          ? "bg-background/70 backdrop-blur-xl border-b border-white/10 shadow-[0_4px_30px_rgba(0,0,0,0.1)] dark:shadow-[0_4px_30px_rgba(0,0,0,0.5)]"
-          : "bg-transparent"
+          ? "border-b border-gray-950/10 shadow-[0_10px_30px_rgba(15,23,42,0.08)]"
+          : "border-b border-transparent"
       )}
     >
-      <div className="mx-auto flex h-full max-w-[1400px] items-center justify-between px-4 sm:px-8 lg:grid lg:grid-cols-[1fr_auto_1fr] lg:gap-6">
+      <div className="mx-auto flex h-full max-w-[1400px] items-center justify-between px-4 sm:px-6 md:px-12 lg:px-20">
         <Link
           href="/"
-          title="brand-logo"
-          className="relative flex items-center space-x-2 ml-4 sm:ml-8 lg:justify-self-start"
+          aria-label="Vidicy Agency home"
+          className="flex items-center text-gray-900"
         >
-          <Logo variant="mark" className="h-10 w-10 sm:h-12 sm:w-12" />
+          <Logo
+            alt="Vidicy"
+            className="h-5 w-auto sm:h-7"
+            surface="light"
+            variant="horizontal"
+          />
         </Link>
 
-        <nav aria-label="Primary" className="hidden items-center gap-1 lg:flex lg:justify-self-center">
+        <nav aria-label="Primary" className="hidden items-center gap-7 lg:flex">
           {marketingTopBarLinks.map((item) => (
             <Link
               key={item.href}
               href={item.href as Route}
               className={cn(
-                "px-4 py-2 text-sm font-medium text-foreground/72 transition-colors hover:text-foreground",
+                "text-sm font-semibold text-gray-700 transition-colors hover:text-gray-950",
                 isActiveTopBarLink({
                   href: item.href,
                   pathname,
                   hash: currentHash,
-                }) && "text-foreground font-bold",
+                }) && "font-bold text-gray-950",
               )}
             >
               {item.label}
@@ -120,31 +121,21 @@ export default function Header() {
           ))}
         </nav>
 
-        {hideAuthActions ? (
-          <div className="hidden lg:block lg:justify-self-end" />
-        ) : (
-          <div className="hidden items-center gap-2 lg:flex lg:justify-self-end">
+        <div className="flex items-center gap-2 sm:gap-3">
+          <Link
+            className="px-1 text-sm font-semibold text-gray-800 transition-colors hover:text-gray-950 sm:px-2"
+            href="/sign-in"
+          >
+            Log in
+          </Link>
+          {hidePrimaryCta ? null : (
             <Link
-              href="/sign-in"
-              className={buttonVariants({ variant: "outline" })}
+              className="rounded-2xl bg-gray-900 px-3.5 py-2 text-sm font-semibold text-white shadow-[0_10px_24px_rgba(15,23,42,0.18)] transition-colors hover:bg-gray-950 sm:px-4 sm:py-2.5"
+              href="/sign-up"
             >
-              Sign in
+              Sign up
             </Link>
-            {hidePrimaryCta ? null : (
-              <Link
-                href="/sign-up"
-                className={cn(
-                  buttonVariants({ variant: "default" }),
-                  "w-full h-10! rounded-[6px]! border border-black/80 border-b-black/95 border-t-white/25 bg-[linear-gradient(180deg,#1a1a1a_0%,#070707_52%,#000000_100%)]! px-5 text-[#FFFFFF]! transition-[transform,background-image,border-color] duration-200 hover:bg-[linear-gradient(180deg,#202020_0%,#0d0d0d_52%,#040404_100%)]! hover:border-t-white/35 active:translate-y-[2px] sm:w-auto"
-                )}
-              >
-                <span className="font-medium">{PUBLIC_SIGN_UP_CTA_LABEL}</span>
-              </Link>
-            )}
-          </div>
-        )}
-        <div className="mt-1 cursor-pointer block lg:hidden">
-          <Drawer hideAuthActions={hideAuthActions} hidePrimaryCta={hidePrimaryCta} />
+          )}
         </div>
       </div>
 
