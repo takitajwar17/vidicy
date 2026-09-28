@@ -57,11 +57,11 @@ describe("main marketing homepage route", () => {
     expect(source).not.toContain("renderHomepage");
   });
 
-  it("does not render the public marketing chrome on /", async () => {
+  it("does not render the full PublicSiteShell chrome on / (custom nav; shared footer allowed)", async () => {
     const markup = await renderMarketingHomepageMarkup();
 
     expect(markup).not.toContain("Skip to main content");
-    expect(markup).not.toContain("All rights reserved.");
+    expect(markup).toContain("All rights reserved.");
     expect(markup).not.toContain("Start Your Free Evaluation Before You Submit");
   });
 

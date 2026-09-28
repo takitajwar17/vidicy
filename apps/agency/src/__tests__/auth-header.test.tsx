@@ -25,8 +25,8 @@ describe("auth header CTA behavior", () => {
 
     const markup = renderToStaticMarkup(<Header />);
 
-    expect(markup).not.toContain("Start a pilot");
-    expect(markup).toContain("Sign in");
+    expect(markup).not.toContain("Sign up");
+    expect(markup).toContain("Log in");
   });
 
   it("keeps the signup CTA on non-auth routes", () => {
@@ -34,15 +34,15 @@ describe("auth header CTA behavior", () => {
 
     const markup = renderToStaticMarkup(<Header />);
 
-    expect(markup).toContain("Start a pilot");
+    expect(markup).toContain("Sign up");
   });
 
-  it("hides auth buttons on the pilot access route", () => {
+  it("keeps the landing-style auth buttons on the pilot access route", () => {
     mockUsePathname.mockReturnValue("/pilot-access");
 
     const markup = renderToStaticMarkup(<Header />);
 
-    expect(markup).not.toContain("Start a pilot");
-    expect(markup).not.toContain("Sign in");
+    expect(markup).toContain("Sign up");
+    expect(markup).toContain("Log in");
   });
 });

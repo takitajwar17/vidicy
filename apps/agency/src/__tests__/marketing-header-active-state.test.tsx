@@ -78,7 +78,7 @@ function expectInactiveLinkMarkup({
     label,
   });
 
-  expect(linkMarkup).toContain("font-medium");
+  expect(linkMarkup).toContain("font-semibold");
   expect(linkMarkup).not.toContain("font-bold");
 }
 
