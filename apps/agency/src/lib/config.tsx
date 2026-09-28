@@ -1,19 +1,21 @@
-import Logo from "@/components/logo";
 import { CANONICAL_SITE_URL, SITE_NAME, SITE_DESCRIPTION } from "@/constants";
 import { pricingPlans } from "@/config/pricing";
 import { FaTwitter } from "react-icons/fa";
-import type { Route } from "next";
 
 export const BLUR_FADE_DELAY = 0.15;
 
 export const marketingTopBarLinks = [
   {
-    href: "/#pricing",
-    label: "Pricing",
-  },
-  {
     href: "/faq",
     label: "FAQ",
+  },
+  {
+    href: "/enterprise",
+    label: "Enterprise",
+  },
+  {
+    href: "/about",
+    label: "About",
   },
 ] as const;
 
@@ -40,80 +42,45 @@ export const siteConfig = {
     email: "support@vidicy.com",
     twitter: "https://twitter.com/takitajwar17",
   },
-  header: [
-    {
-      trigger: "Features",
-      content: {
-        main: {
-          icon: <Logo className="h-16 w-[120px] -ml-2" />,
-          title: "AI-Powered Visa Preparation",
-          description: "End-to-end guidance from document upload to submission readiness.",
-          href: "/how-it-works" as Route,
-        },
-        items: [
-          {
-            href: "/how-it-works#step-2" as Route,
-            title: "Document Analysis",
-            description: "AI evaluates your full application and flags risks and inconsistencies.",
-          },
-          {
-            href: "/how-it-works#step-1" as Route,
-            title: "Embassy-Specific Checklists",
-            description: "Personalized requirements based on your exact visa and consulate.",
-          },
-          {
-            href: "/how-it-works#step-3" as Route,
-            title: "Visa Chatbot",
-            description: "Context-aware assistant that knows your application inside out.",
-          },
-        ],
-      },
-    },
-    ...marketingTopBarLinks,
-  ],
+  header: [...marketingTopBarLinks],
   pricing: pricingPlans,
   faqs: [
     {
       question: "What is Vidicy?",
       answer: (
         <span>
-          Vidicy is a guided, AI-powered visa preparation platform. We help you
-          submit the right documents, in the right way, for high-demand visas like the US, UK,
-          Schengen, Canada, and Australia. We provide embassy-specific checklists, AI document
-          evaluation, risk assessments, and iterative improvement until your application is
-          submission-ready.
+          Vidicy is AI-powered visa application review software for visa and travel agencies. It
+          helps teams check client files in bulk, catch missing documents and inconsistencies, and
+          turn review notes into clear client follow-ups.
         </span>
       ),
     },
     {
-      question: "How is this different from a visa consultant?",
+      question: "Who is Vidicy built for?",
       answer: (
         <span>
-          Unlike traditional consultants, our AI reviews your full document package in minutes,
-          cross-referencing every detail for inconsistencies. You get 24/7 access to a context-aware
-          chatbot that understands your specific application, plus iterative feedback every time you
-          re-upload. It&apos;s faster, more thorough, and more affordable than a human consultant.
+          Vidicy is built for agencies that already handle visa clients and need a faster review
+          desk: intake queues, document checks, issue tracking, reviewer notes, and client-ready
+          reports without losing control of the final submission decision.
         </span>
       ),
     },
     {
-      question: "Which visa types do you support?",
+      question: "Which workflows does Vidicy support?",
       answer: (
         <span>
-          We focus on high-demand, low-acceptance visas where rejections are common and guidance
-          matters most. This includes US (B1/B2, H-1B, O-1, F-1), UK (Skilled Worker, Student, Global
-          Talent), Schengen (all countries), Canada (visitor, study, work, start-up), and Australia
-          (skilled, student, visitor). We&apos;re continuously adding more visa types.
+          The product is focused on high-volume tourist, visit, study, work, and family visa review
+          workflows where document completeness, evidence quality, and cross-file consistency
+          affect agency throughput.
         </span>
       ),
     },
     {
-      question: "How does the refund policy work?",
+      question: "Is Vidicy replacing agency reviewers?",
       answer: (
         <span>
-          Refunds are generally not available once the service has been used. A limited exception
-          may apply if you followed the platform&apos;s guidance completely, received a visa
-          rejection, and both the rejection and your compliance can be verified.
+          No. Vidicy is designed to make review teams faster and more consistent. Agencies keep the
+          client relationship, reviewer judgment, and final submission decision.
         </span>
       ),
     },
@@ -121,38 +88,35 @@ export const siteConfig = {
       question: "Is my data secure?",
       answer: (
         <span>
-          Absolutely. Your documents are encrypted in transit and at rest. We use enterprise-grade
-          security and never share your personal information with third parties. Documents are only
-          used for your visa evaluation and are automatically deleted after your application period
-          ends.
+          Client documents are handled through protected infrastructure with access controls,
+          encrypted transport, and vendor-limited processing. We do not use client files to train
+          public AI models.
         </span>
       ),
     },
     {
-      question: "Can I re-upload documents after getting feedback?",
+      question: "How can an agency get access?",
       answer: (
         <span>
-          Yes — that&apos;s the core of our platform. Our iterative improvement loop lets you upload
-          revised documents anytime. Each upload triggers a fresh AI evaluation with updated risk
-          analysis and progress tracking, so you can keep improving until your application is in a
-          strong, low-risk state.
+          Vidicy is currently onboarding selected agency teams through private pilots. Teams can
+          reach out through the Enterprise page to discuss volume, workflow, and rollout needs.
         </span>
       ),
     },
   ],
   footer: [
     {
-      title: "Product",
+      title: "Pages",
       links: [
-        { href: "/#pricing", text: "Pricing", icon: null },
+        { href: "/faq", text: "FAQ", icon: null },
         { href: "/enterprise", text: "Enterprise", icon: null },
-        { href: "/how-it-works", text: "How It Works", icon: null },
+        { href: "/about", text: "About", icon: null },
       ],
     },
     {
       title: "Company",
       links: [
-        { href: "/about", text: "About Us", icon: null },
+        { href: "/funding", text: "Funding", icon: null },
         { href: "/enterprise", text: "Contact", icon: null },
       ],
     },

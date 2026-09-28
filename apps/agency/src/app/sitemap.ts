@@ -17,34 +17,40 @@ const STATIC_SITEMAP_ENTRIES: StaticSitemapEntry[] = [
     priority: 1.0,
   },
   {
-    path: "/about",
-    lastModified: "2026-10-08",
-    changeFrequency: "monthly",
-    priority: 0.8,
-  },
-  {
     path: "/faq",
     lastModified: "2026-10-08",
     changeFrequency: "monthly",
     priority: 0.8,
   },
   {
-    path: "/how-it-works",
-    lastModified: "2026-10-08",
-    changeFrequency: "monthly",
-    priority: 0.8,
-  },
-  {
-    path: "/editorial-standards",
-    lastModified: "2026-10-12",
-    changeFrequency: "monthly",
-    priority: 0.5,
-  },
-  {
     path: "/enterprise",
     lastModified: "2026-10-08",
     changeFrequency: "monthly",
     priority: 0.7,
+  },
+  {
+    path: "/about",
+    lastModified: "2026-10-18",
+    changeFrequency: "monthly",
+    priority: 0.6,
+  },
+  {
+    path: "/pilot-access",
+    lastModified: "2026-10-18",
+    changeFrequency: "monthly",
+    priority: 0.45,
+  },
+  {
+    path: "/pitch-deck",
+    lastModified: "2026-10-18",
+    changeFrequency: "monthly",
+    priority: 0.2,
+  },
+  {
+    path: "/funding",
+    lastModified: "2026-10-18",
+    changeFrequency: "monthly",
+    priority: 0.2,
   },
   {
     path: "/privacy",

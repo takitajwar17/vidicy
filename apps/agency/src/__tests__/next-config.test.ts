@@ -142,12 +142,12 @@ describe("next config", () => {
 
       expect(redirects).toContainEqual({
         source: "/pricing",
-        destination: "/#pricing",
+        destination: "/enterprise",
         permanent: true,
       });
       expect(redirects).toContainEqual({
         source: "/features",
-        destination: "/how-it-works",
+        destination: "/enterprise",
         permanent: true,
       });
     } finally {

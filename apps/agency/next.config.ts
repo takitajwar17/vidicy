@@ -53,8 +53,8 @@ const nextConfig: NextConfig = {
   },
   async redirects() {
     return [
-      { source: "/pricing", destination: "/#pricing", permanent: true },
-      { source: "/features", destination: "/how-it-works", permanent: true },
+      { source: "/pricing", destination: "/enterprise", permanent: true },
+      { source: "/features", destination: "/enterprise", permanent: true },
       { source: "/contact", destination: "/enterprise", permanent: true },
       { source: "/login", destination: "/sign-in", permanent: true },
       { source: "/signup", destination: "/sign-up", permanent: true },

@@ -39,7 +39,7 @@ export const PUBLIC_ROBOTS_DISALLOW_PATHS = [
   "/verify-email",
   "/api/",
 ] as const;
-export const PUBLIC_SIGN_UP_CTA_LABEL = "Get My Free Review";
+export const PUBLIC_SIGN_UP_CTA_LABEL = "Start a pilot";
 
 export const SITE_DOMAIN = new URL(SITE_URL).hostname;
 export const LEGACY_SITE_DOMAINS = [] as const;

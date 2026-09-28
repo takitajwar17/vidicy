@@ -347,6 +347,7 @@
   --brand-google-red: #eb4335;
   --font-sans: "Manrope", sans-serif;
   --font-body: var(--font-sans);
+  --font-display: var(--font-inria), "Inria Serif", serif;
   --font-serif: Georgia, serif;
   --font-mono: JetBrains Mono, monospace;
   --radius: 1rem;
@@ -415,6 +416,7 @@
   --brand-google-yellow: #fbbc05;
   --brand-google-red: #eb4335;
   --font-sans: "Manrope", sans-serif;
+  --font-display: var(--font-inria), "Inria Serif", serif;
   --font-serif: Georgia, serif;
   --font-mono: JetBrains Mono, monospace;
   --radius: 1rem;
@@ -567,6 +569,18 @@ body {
 
 .ui-feedback:active {
   transform: translateY(1px) scale(0.995);
+}
+
+.public-site-font-system {
+  --font-body: "Helvetica Neue", Helvetica, Arial, sans-serif;
+  --font-display: var(--font-inria), "Inria Serif", serif;
+  font-family: var(--font-body);
+}
+
+.public-site-font-system h1 {
+  font-family: var(--font-display);
+  font-weight: 400;
+  letter-spacing: -0.07em;
 }
 
 .ui-overlay-readable {
