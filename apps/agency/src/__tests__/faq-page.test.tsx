@@ -26,12 +26,12 @@ describe("dedicated FAQ page", () => {
 
   it("groups FAQ questions into clear user-facing sections", () => {
     expect(faqSections.map((section) => section.title)).toEqual([
-      "Before You Start",
-      "How It Works",
-      "Evaluations",
-      "Pricing",
-      "Trust & Support",
-      "Official requirements",
+      "Agency Fit",
+      "Workflow",
+      "Pilots",
+      "Commercials",
+      "Security",
+      "Official Requirements",
     ]);
 
     expect(faqSections.every((section) => section.items.length > 0)).toBe(true);
@@ -41,18 +41,18 @@ describe("dedicated FAQ page", () => {
     const markup = renderToStaticMarkup(<MarketingFaqPage />);
 
     expect(markup).toContain("FAQ");
-    expect(markup).toContain("Everything you need to know");
-    expect(markup).toContain("Before You Start");
-    expect(markup).toContain("How It Works");
-    expect(markup).toContain("Evaluations");
-    expect(markup).toContain("Pricing");
-    expect(markup).toContain("Trust &amp; Support");
-    expect(markup).toContain("Official requirements");
+    expect(markup).toContain("Questions agencies ask before using Vidicy.");
+    expect(markup).toContain("Agency Fit");
+    expect(markup).toContain("Workflow");
+    expect(markup).toContain("Pilots");
+    expect(markup).toContain("Commercials");
+    expect(markup).toContain("Security");
+    expect(markup).toContain("Official Requirements");
     expect(markup).toContain("What is Vidicy?");
-    expect(markup).toContain("Do I need to have all my documents ready before I start?");
-    expect(markup).toContain("Can Atlas explain why a document was flagged?");
-    expect(markup).toContain("What unlocks after payment?");
-    expect(markup).toContain("What happens if I follow the guidance and still get rejected?");
+    expect(markup).toContain("What does Vidicy check?");
+    expect(markup).toContain("How do agency pilots work?");
+    expect(markup).toContain("How is Vidicy priced?");
+    expect(markup).toContain("Is client data safe in Vidicy?");
     expect(markup).toContain("Still have questions?");
   });
 

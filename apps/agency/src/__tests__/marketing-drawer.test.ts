@@ -18,8 +18,8 @@ describe("marketing drawer accessibility", () => {
     const source = readDrawerSource();
 
     expect(source).not.toContain("Secure access");
-    expect(source).toContain("Start your free evaluation or sign in to pick up where you left off.");
-    expect(source).toContain("Get My Free Review");
+    expect(source).toContain("Request pilot access or sign in to continue your agency workflow.");
+    expect(source).toContain("PUBLIC_SIGN_UP_CTA_LABEL");
     expect(source).not.toContain("Get Started for Free");
     expect(source).not.toContain('<Logo className="h-6 w-6" />');
   });

@@ -13,7 +13,7 @@ vi.mock("next/navigation", async () => {
   };
 });
 
-import Header, { isActiveTopBarLink } from "@/components/sections/header";
+import Header from "@/components/sections/header";
 
 function getTopBarLinkMarkup({
   pageMarkup,
@@ -86,6 +86,8 @@ describe("marketing header active state", () => {
   it("uses bold text for the selected primary destination in the desktop topbar", () => {
     const topBarSelections = [
       { href: "/faq", label: "FAQ" },
+      { href: "/enterprise", label: "Enterprise" },
+      { href: "/about", label: "About" },
     ];
 
     for (const item of topBarSelections) {
@@ -101,19 +103,11 @@ describe("marketing header active state", () => {
     }
   });
 
-  it("treats the pricing anchor as selected only when the landing-page hash matches", () => {
-    expect(isActiveTopBarLink({ href: "/#pricing", pathname: "/", hash: "#pricing" })).toBe(true);
-    expect(isActiveTopBarLink({ href: "/#pricing", pathname: "/", hash: "" })).toBe(false);
-    expect(isActiveTopBarLink({ href: "/#pricing", pathname: "/faq", hash: "#pricing" })).toBe(
-      false,
-    );
-  });
-
   it("keeps unselected links at the default weight", () => {
-    mockUsePathname.mockReturnValue("/faq");
+    mockUsePathname.mockReturnValue("/enterprise");
 
     const markup = renderToStaticMarkup(<Header />);
 
-    expectInactiveLinkMarkup({ markup, href: "/#pricing", label: "Pricing" });
+    expectInactiveLinkMarkup({ markup, href: "/faq", label: "FAQ" });
   });
 });

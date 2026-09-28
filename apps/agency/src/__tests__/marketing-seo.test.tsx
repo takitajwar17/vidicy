@@ -4,8 +4,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
 import sitemap from "@/app/sitemap";
-import AboutPage, { metadata as aboutMetadata } from "@/app/(marketing)/about/page";
-import EditorialStandardsPage from "@/app/(marketing)/editorial-standards/page";
+import AboutPage from "@/app/(marketing)/about/page";
 import EnterprisePage from "@/app/(marketing)/enterprise/page";
 import PrivacyPage, { metadata as privacyMetadata } from "@/app/(legal)/privacy/page";
 import SubprocessorsPage, {
@@ -50,12 +49,8 @@ describe("marketing SEO surfaces", () => {
     expect(ogRouteSource).not.toContain("/og.png");
   });
 
-  it("uses a descriptive About page metadata title", () => {
-    expect(aboutMetadata.title).toBe("About Vidicy: AI Visa Document Review");
-  });
-
   it("keeps static utility and legal page titles descriptive", () => {
-    expect(privacyMetadata.title).toBe("Privacy Policy for Visa Data");
+    expect(privacyMetadata.title).toBe("Privacy Policy for Agency Visa Data");
     expect(subprocessorsMetadata.title).toBe("Subprocessors and Data Vendors");
   });
 
@@ -67,9 +62,9 @@ describe("marketing SEO surfaces", () => {
     expect(toIsoDate(byUrl.get(CANONICAL_SITE_URL)?.lastModified)).toBe(
       "2026-10-08T00:00:00.000Z",
     );
-    expect(toIsoDate(byUrl.get(`${CANONICAL_SITE_URL}/about`)?.lastModified)).toBe(
-      "2026-10-08T00:00:00.000Z",
-    );
+    expect(byUrl.get(`${CANONICAL_SITE_URL}/about`)).toBeDefined();
+    expect(byUrl.get(`${CANONICAL_SITE_URL}/how-it-works`)).toBeUndefined();
+    expect(byUrl.get(`${CANONICAL_SITE_URL}/editorial-standards`)).toBeUndefined();
     expect(toIsoDate(byUrl.get(`${CANONICAL_SITE_URL}/privacy`)?.lastModified)).toBe(
       "2026-10-02T00:00:00.000Z",
     );
@@ -87,6 +82,8 @@ describe("marketing SEO surfaces", () => {
 
     expect(`${footerSource}\n${configSource}`).not.toContain('href: "/#features"');
     expect(`${footerSource}\n${configSource}`).not.toContain("built-for-approval");
+    expect(`${footerSource}\n${configSource}`).not.toContain('href: "/how-it-works"');
+    expect(`${footerSource}\n${configSource}`).not.toContain('href: "/editorial-standards"');
   });
 
   it("defers non-critical third-party scripts from the root layout", () => {
@@ -108,8 +105,7 @@ describe("marketing SEO surfaces", () => {
 
   it("renders WebPage schema on static informational and legal pages", () => {
     const pages = [
-      { name: "Vidicy", markup: renderToStaticMarkup(<AboutPage />), schemaType: "Organization" },
-      { name: "Editorial Standards", markup: renderToStaticMarkup(<EditorialStandardsPage />), schemaType: "WebPage" },
+      { name: "About Vidicy", markup: renderToStaticMarkup(<AboutPage />), schemaType: "AboutPage" },
       { name: "Privacy Policy", markup: renderToStaticMarkup(<PrivacyPage />), schemaType: "WebPage" },
       { name: "Terms of Service", markup: renderToStaticMarkup(<TermsPage />), schemaType: "WebPage" },
       { name: "Subprocessors", markup: renderToStaticMarkup(<SubprocessorsPage />), schemaType: "WebPage" },

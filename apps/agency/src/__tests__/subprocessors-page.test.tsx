@@ -10,7 +10,9 @@ describe("Subprocessors page", () => {
 
     expect(markup).toContain("Subprocessors");
     expect(markup).toContain(`Current as of ${SUBPROCESSORS_LAST_UPDATED}`);
-    expect(markup).toContain("A current list of the third-party service providers");
+    expect(markup).toContain(
+      "A current list of third-party service providers that may process agency account data or client visa documents",
+    );
     expect(markup).toContain("Name");
     expect(markup).toContain("Purpose");
     expect(markup).toContain("Location");

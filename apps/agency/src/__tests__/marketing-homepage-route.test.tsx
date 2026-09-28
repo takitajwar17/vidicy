@@ -23,7 +23,7 @@ describe("main marketing homepage route", () => {
     expect(markup).toContain("10x your agency");
     expect(markup).toContain("visa application review capacity.");
     expect(markup).toContain("check client files in bulk");
-    expect(markup).toContain("Start agency pilot");
+    expect(markup).toContain("Start a pilot");
     expect(markup).toContain("Request a demo");
     expect(markup).toContain("Vidicy agency dashboard showing application review results");
     expect(markup).toContain("dashboard.png");

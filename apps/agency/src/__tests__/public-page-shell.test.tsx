@@ -1,14 +1,16 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
-import AboutPage from "@/app/(marketing)/about/page";
 import MarketingFaqPage from "@/app/(marketing)/faq/page";
-import HowItWorksPage from "@/app/(marketing)/how-it-works/page";
+import EnterprisePage from "@/app/(marketing)/enterprise/page";
+import AboutPage from "@/app/(marketing)/about/page";
+import FundingPage from "@/app/funding/page";
 import MarketingLayout from "@/app/(marketing)/layout";
 import LegalLayout from "@/app/(legal)/layout";
 import PrivacyPage from "@/app/(legal)/privacy/page";
 import SubprocessorsPage from "@/app/(legal)/subprocessors/page";
 import TermsPage from "@/app/(legal)/terms/page";
+import { marketingTopBarLinks } from "@/lib/config";
 
 describe("shared public site shell", () => {
   it("renders the marketing and legal layouts through the same public site wrapper", () => {
@@ -31,9 +33,10 @@ describe("shared public site shell", () => {
 
   it("renders representative public info pages through the shared page hero and content shell", () => {
     const pages = [
-      renderToStaticMarkup(<AboutPage />),
       renderToStaticMarkup(<MarketingFaqPage />),
-      renderToStaticMarkup(<HowItWorksPage />),
+      renderToStaticMarkup(<EnterprisePage />),
+      renderToStaticMarkup(<AboutPage />),
+      renderToStaticMarkup(<FundingPage />),
       renderToStaticMarkup(<TermsPage />),
       renderToStaticMarkup(<PrivacyPage />),
       renderToStaticMarkup(<SubprocessorsPage />),
@@ -54,9 +57,18 @@ describe("shared public site shell", () => {
 
     expect(markup).not.toContain('href="/blog"');
     expect(markup).not.toContain(">Blog<");
-    expect(markup).toContain('href="/#pricing"');
-    expect(markup).toContain(">Pricing<");
+    expect(markup).not.toContain('href="/#pricing"');
+    expect(markup).not.toContain(">Pricing<");
     expect(markup).toContain('href="/faq"');
     expect(markup).toContain(">FAQ<");
+    expect(markup).toContain('href="/enterprise"');
+    expect(markup).toContain(">Enterprise<");
+    expect(markup).toContain('href="/about"');
+    expect(markup).toContain(">About<");
+    expect(marketingTopBarLinks.map((link) => link.label)).toEqual([
+      "FAQ",
+      "Enterprise",
+      "About",
+    ]);
   });
 });

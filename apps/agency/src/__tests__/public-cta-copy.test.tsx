@@ -19,8 +19,8 @@ vi.mock("next/navigation", async () => {
   };
 });
 
-import AboutPage from "@/app/(marketing)/about/page";
-import HowItWorksPage from "@/app/(marketing)/how-it-works/page";
+import EnterprisePage from "@/app/(marketing)/enterprise/page";
+import PilotAccessPage from "@/app/(marketing)/pilot-access/page";
 import LegalLayout from "@/app/(legal)/layout";
 import TermsPage from "@/app/(legal)/terms/page";
 import MarketingLayout from "@/app/(marketing)/layout";
@@ -28,7 +28,7 @@ import MarketingLayout from "@/app/(marketing)/layout";
 const SHARED_PRE_FOOTER_HEADING = "Start Your Free Evaluation Before You Submit";
 
 describe("public CTA copy", () => {
-  it("adds the shared pre-footer CTA through the public layouts", () => {
+  it("does not add the old shared pre-footer CTA through public layouts", () => {
     const marketingMarkup = renderToStaticMarkup(
       <MarketingLayout>
         <div>Marketing body</div>
@@ -41,33 +41,40 @@ describe("public CTA copy", () => {
     );
 
     for (const markup of [marketingMarkup, legalMarkup]) {
-      expect(markup).toContain(SHARED_PRE_FOOTER_HEADING);
-      expect(markup).toContain("Get My Free Review");
-      expect(markup.match(new RegExp(SHARED_PRE_FOOTER_HEADING, "g"))).toHaveLength(1);
+      expect(markup).not.toContain(SHARED_PRE_FOOTER_HEADING);
+      expect(markup).not.toContain("Get My Free Review");
+      expect(markup).not.toContain("Compare Plans");
     }
   });
 
-  it("keeps representative public pages on one shared pre-footer CTA block", () => {
-    const aboutMarkup = renderToStaticMarkup(<MarketingLayout><AboutPage /></MarketingLayout>);
-    const howItWorksMarkup = renderToStaticMarkup(
-      <MarketingLayout><HowItWorksPage /></MarketingLayout>,
+  it("keeps representative public pages free of the removed evaluation CTA block", () => {
+    const enterpriseMarkup = renderToStaticMarkup(
+      <MarketingLayout><EnterprisePage /></MarketingLayout>,
+    );
+    const pilotAccessMarkup = renderToStaticMarkup(
+      <MarketingLayout><PilotAccessPage /></MarketingLayout>,
     );
     const termsMarkup = renderToStaticMarkup(<LegalLayout><TermsPage /></LegalLayout>);
 
-    for (const markup of [aboutMarkup, howItWorksMarkup, termsMarkup]) {
-      expect(markup).toContain(SHARED_PRE_FOOTER_HEADING);
-      expect(markup).toContain("Get My Free Review");
-      expect(markup.match(new RegExp(SHARED_PRE_FOOTER_HEADING, "g"))).toHaveLength(1);
+    for (const markup of [enterpriseMarkup, pilotAccessMarkup, termsMarkup]) {
+      expect(markup).not.toContain(SHARED_PRE_FOOTER_HEADING);
+      expect(markup).not.toContain("Get My Free Review");
+      expect(markup).not.toContain("Compare Plans");
     }
 
-    expect(aboutMarkup).not.toContain("Ready to check your documents?");
-    expect(howItWorksMarkup).not.toContain("Start your first application");
+    expect(enterpriseMarkup).not.toContain("Ready to check your documents?");
+    expect(pilotAccessMarkup).not.toContain("Start your first application");
     expect(termsMarkup).not.toContain("Questions about these terms?");
   });
 
-  it("removes generic page-local CTA components in favor of the shared pre-footer CTA", () => {
+  it("removes generic page-local and shared pre-footer CTA components", () => {
     const genericCtaPath = resolve(process.cwd(), "src/components/sections/cta.tsx");
+    const preFooterCtaPath = resolve(
+      process.cwd(),
+      "src/components/sections/public-pre-footer-cta.tsx",
+    );
 
     expect(existsSync(genericCtaPath)).toBe(false);
+    expect(existsSync(preFooterCtaPath)).toBe(false);
   });
 });
