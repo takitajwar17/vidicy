@@ -25,7 +25,7 @@ export default function FundingPage() {
           title="Vidicy is currently fundraising"
           description="We are speaking with investors who understand agency workflows, document-heavy operations, and high-volume visa markets."
         />
-        <PublicPageContent maxWidthClassName="max-w-2xl">
+        <PublicPageContent>
           <p className="text-base leading-relaxed text-muted-foreground sm:text-lg">
             We are currently in the process of fundraising.
           </p>

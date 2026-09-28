@@ -53,7 +53,7 @@ export default function EnterprisePage() {
         title="Built for agencies and high-volume teams"
         description="Pilot setup, review queues, client-ready reports, and hands-on support tailored to the way your agency works."
       />
-      <PublicPageContent maxWidthClassName="max-w-5xl">
+      <PublicPageContent>
         <EnterpriseForm />
       </PublicPageContent>
     </PublicPage>

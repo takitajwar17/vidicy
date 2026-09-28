@@ -65,7 +65,7 @@ export default function SubprocessorsPage() {
         description={`A current list of third-party service providers that may process agency account data or client visa documents on behalf of ${siteConfig.name}.`}
       />
 
-      <PublicPageContent maxWidthClassName="max-w-6xl" className="space-y-10 sm:px-6">
+      <PublicPageContent className="space-y-10">
         <div className="overflow-hidden rounded-[1.75rem] border border-border/70 bg-background/92 shadow-[0_18px_50px_-32px_rgba(0,0,0,0.18)]">
           <div className={cn(columnClassName, "hidden border-b border-border/80 bg-muted/35 md:grid")}>
             <p className="text-sm font-semibold uppercase tracking-[0.16em] text-muted-foreground">Name</p>

@@ -285,16 +285,16 @@ export default function PrivacyPage() {
         </section>
 
         {/* 13. Contact Us */}
-        <section className="text-center pb-4">
-          <div className="flex items-center justify-center gap-3 mb-4">
+        <section className="pb-4">
+          <div className="flex items-center gap-3 mb-4">
             <SectionIcon icon={MailIcon} />
             <h2 className="text-2xl font-semibold text-foreground">13. Contact Us</h2>
           </div>
-          <p className="text-sm text-muted-foreground leading-relaxed mb-6 max-w-md mx-auto">
+          <p className="text-sm text-muted-foreground leading-relaxed mb-6 max-w-3xl">
             If you have any questions about this Privacy Policy, wish to exercise your data protection rights, or want to request the deletion of your data, please contact us at{" "}
             <a href={`mailto:${siteConfig.links.email}`} className="text-primary hover:underline">{siteConfig.links.email}</a>.
           </p>
-          <div className="flex flex-col sm:flex-row gap-3 justify-center">
+          <div className="flex flex-col sm:flex-row gap-3">
             <Link
               href="/"
               className={cn(buttonVariants({ variant: "default", size: "lg" }))}

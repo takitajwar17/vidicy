@@ -27,7 +27,7 @@ export default function PitchDeckPage() {
         description="A concise overview of the agency review problem, product direction, market, and operating plan."
       />
 
-      <PublicPageContent maxWidthClassName="max-w-6xl" className="space-y-6">
+      <PublicPageContent className="space-y-6">
         <section aria-label="Vidicy pitch deck PDF viewer">
           <div className="overflow-hidden rounded-lg border border-border bg-background shadow-sm">
             <iframe
