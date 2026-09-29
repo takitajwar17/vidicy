@@ -225,7 +225,7 @@ Rules:
 
     // Step 2: Use GPT-4o to structure the research into the required JSON format
     try {
-      const systemPrompt = `You are a senior visa officer with 15 years of experience reviewing ${application.visaType} visa applications for ${application.destinationCountry}. Return ONLY valid JSON in the exact schema requested. Do not add commentary outside the JSON.`;
+      const systemPrompt = `You are a senior visa agency review lead with deep experience preparing ${application.visaType} visa applications for ${application.destinationCountry}. Generate a checklist that an agency review desk can use for intake, uploads, AI review, and client follow-up. Return ONLY valid JSON in the exact schema requested. Do not add commentary outside the JSON.`;
 
       const primaryAnchor = primaryChecklist.length > 0
         ? `\n\nCONSISTENCY REQUIREMENT — PRIMARY APPLICANT'S CHECKLIST (already generated):
@@ -259,7 +259,7 @@ This applicant was previously approved for a ${application.destinationCountry} v
       const mistakesInstruction = `For "commonMistakes": describe the single most common reason this specific document causes a visa rejection or delay. Be concrete, not generic (e.g. NOT "make sure it's valid" — instead "Bank statements must cover the last 3 months and show a minimum balance of €3,000 — statements older than 30 days are rejected").`;
 
       const userPrompt = researchContext
-        ? `Based on the following up-to-date official visa requirements, generate a precise document checklist.
+        ? `Based on the following up-to-date official visa requirements, generate a precise agency review checklist.
 
 OFFICIAL REQUIREMENTS (from live embassy sources):
 ${researchContext}
@@ -291,7 +291,7 @@ Rules:
 - Mark isRequired: false ONLY if the official source explicitly labels it optional or "if applicable"
 - Return between 5 and 18 items — never fewer, never more
 - Assign sequential sortOrder: required items first (1, 2, 3...), then optional items after`
-        : `Generate a precise document checklist for a ${application.visaType} visa to ${application.destinationCountry}.
+        : `Generate a precise agency review checklist for a ${application.visaType} visa to ${application.destinationCountry}.
 Applicant: ${application.homeCountry} passport, applying from ${application.currentCountry} at ${application.embassy}.
 ${applicantContext}${historyBlock ? `\n\nAPPLICATION HISTORY:\n${historyBlock}` : ""}${rejectionBlock}${primaryAnchor}
 
@@ -603,4 +603,3 @@ Is this a legitimate document for this visa application?`,
     revalidatePath(`/dashboard/${input.applicationId}`);
     return inserted;
   });
-

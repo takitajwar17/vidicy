@@ -14,13 +14,13 @@ import {
 } from "@/lib/openai";
 import { queryDocumentChunksFromVectorize } from "@/lib/vectorize-query";
 import { AI_MAX_TOKENS_LARGE, AI_MAX_TOKENS_SMALL, AI_MAX_COMBINED_TEXT_LENGTH, MODIFICATION_GAP_DAYS_THRESHOLD, AI_TIMEOUT_CHAT_MS, AI_TIMEOUT_EMBEDDING_MS } from "@/constants";
-import { requireApplicationPermission, isEvalLocked } from "@/utils/application-auth";
+import { requireApplicationPermission } from "@/utils/application-auth";
 import { revalidatePath } from "next/cache";
 import { checkActionRateLimit } from "@/infra/action-rate-limit";
 import { logger, logAlert } from "@/infra/logger";
 import { extractDocumentImages, extractPdfMetadata, type PdfMetadataSignals } from "@/services/pdf-parser";
 import { ensureDocumentExtraction } from "@/services/document-pipeline";
-import { sanitizeForPrompt, generateAtlasPreview } from "@/services/atlas-prompt";
+import { sanitizeForPrompt } from "@/services/atlas-prompt";
 import { trackUsage, USAGE_EVENTS } from "@/infra/usage-tracking";
 import {
   visaApplicationTable,
@@ -31,6 +31,8 @@ import {
   APPLICATION_PERMISSIONS,
   DOCUMENT_INDEXING_STATUS,
   VISA_APPLICATION_STATUS,
+  AGENCY_CASE_STATUS,
+  CLIENT_REPORT_STATUS,
   MARKETING_EVENT_TYPE,
 } from "@/db/schema";
 import { recordMarketingEvent } from "@/server/marketing/events";
@@ -479,11 +481,6 @@ export const evaluateDocumentsAction = createServerAction()
       throw new ZSAError("NOT_FOUND", "Application not found");
     }
 
-    // Free trial gate — only one evaluation allowed
-    if (isEvalLocked(application)) {
-      throw new ZSAError("FORBIDDEN", "Your free evaluation has been used. Pay to unlock unlimited re-evaluations and Atlas AI chat.");
-    }
-
     if (!applicant) {
       throw new ZSAError("NOT_FOUND", "Applicant not found");
     }
@@ -868,11 +865,11 @@ Applicant name: ${sanitizeForPrompt(applicant.name, 200)} (${applicant.relations
 
         // If document may be non-English and no pre-translation was done (first evaluation),
         // the system prompt instructs the AI to translate before evaluating.
-        const perDocSystemPrompt = `You are a visa document expert evaluating documents from a visa officer's perspective. The primary concern is overstay risk — will the applicant return home after their visit? Evaluate each document for what it reveals about the applicant's ties, finances, and intentions. Return ONLY valid JSON. If the document text is in a language other than English, translate the content to English before evaluating it.`;
+        const perDocSystemPrompt = `You are a senior visa agency review specialist evaluating client documents before final submission. Focus on completeness, route-specific requirements, document quality, cross-file consistency, authenticity signals, and submission risk. Return ONLY valid JSON. If the document text is in a language other than English, translate the content to English before evaluating it.`;
 
         const { dimension: docDimension, signals: docSignals } = getDocumentDimension(item.documentName);
 
-        const perDocUserPrompt = `You are evaluating a document for a visa application from a visa officer's perspective. The main rejection reason is suspected overstay. Analyse this document carefully and return a structured JSON evaluation.
+        const perDocUserPrompt = `You are evaluating a document for an agency review desk before the application reaches final submission. Analyse this document carefully and return a structured JSON evaluation that a human reviewer can act on.
 
 APPLICATION CONTEXT:
 ${applicationContext}
@@ -897,7 +894,7 @@ Evaluate whether this document:
 3. Contains complete and accurate information
 4. Has any of the common mistakes listed above
 5. Shows any red flags (expiry, illegibility, wrong format, missing signatures, name mismatches, etc.)
-6. Increases or decreases overstay risk based on the dimension signals above
+6. Increases or decreases submission risk based on the dimension signals above
 
 Return JSON with this exact structure:
 {
@@ -1087,9 +1084,9 @@ Return JSON with this exact structure:
       })
       .join("\n\n---\n\n");
 
-    const orchestratorSystemPrompt = `You are a senior visa officer conducting a holistic risk assessment of a visa application. Your primary concern is overstay risk — will this applicant return home? You evaluate applications through a 5-dimension framework that mirrors how embassies actually make decisions. Return ONLY valid JSON.`;
+    const orchestratorSystemPrompt = `You are a senior visa agency review lead conducting a holistic pre-submission review. Your job is to help the agency review more cases accurately by identifying missing documents, weak evidence, contradictions, and client follow-up actions. Return ONLY valid JSON.`;
 
-    const orchestratorUserPrompt = `You are the final evaluator of a visa application. Review all per-document evaluations and produce a comprehensive risk assessment using the 5-Dimension Overstay Risk Framework below.
+    const orchestratorUserPrompt = `You are the final agency reviewer for this application. Review all per-document evaluations and produce a comprehensive readiness assessment using the framework below.
 
 APPLICATION CONTEXT:
 ${applicationContext}
@@ -1101,7 +1098,7 @@ ${missingDocs.length > 0 ? `MISSING REQUIRED DOCUMENTS (${missingDocs.length}):\
 ${consistencySection}
 
 ═══════════════════════════════════════════════════════════════
-5-DIMENSION OVERSTAY RISK SCORING FRAMEWORK (Total: 100 pts)
+5-DIMENSION AGENCY READINESS SCORING FRAMEWORK (Total: 100 pts)
 ═══════════════════════════════════════════════════════════════
 
 DIMENSION 1 — Ties to Home Country (25 pts)
@@ -1182,16 +1179,16 @@ SCORING INSTRUCTIONS:
 4. Build on (not re-derive) the programmatic consistency checks — treat them as established facts
 5. Identify additional cross-document discrepancies not already caught
 6. Weight low-confidence document evaluations less heavily
-7. List the specific overstay risk signals that most influenced your score in redFlags
+7. List the specific missing items, contradictions, weak evidence, and refusal-risk signals that most influenced your score in redFlags
 
 Return JSON with this exact structure:
 {
   "overallScore": <integer 0-100, sum of all dimension sub-scores>,
   "riskLevel": "low" | "medium" | "high",
-  "summary": "<2-3 sentence comprehensive summary of the overall application status and primary overstay risk factors>",
-  "redFlags": ["<critical overstay risk signal or rejection reason>", ...],
+  "summary": "<2-3 sentence comprehensive summary of the overall case readiness and most important reviewer concerns>",
+  "redFlags": ["<critical missing item, inconsistency, weak evidence, authenticity signal, or refusal risk>", ...],
   "strengths": ["<genuine return incentive or application strength>", ...],
-  "recommendations": ["<specific actionable step the applicant should take to reduce overstay risk perception>", ...],
+  "recommendations": ["<specific reviewer action or client follow-up needed before the case is marked ready>", ...],
   "itemFeedback": {
     ${checklistItems.map((item) => `"${item.id}": { "status": "ok" | "missing" | "needs_review", "feedback": "<brief feedback>", "score": <0-100>, "issues": ["<issue>"], "strengths": ["<strength>"], "hasDocument": true|false, "hasContent": true|false }`).join(",\n    ")}
   }
@@ -1278,7 +1275,7 @@ Return JSON with this exact structure:
 
     if (isBorderline) {
       try {
-        const adversarialSystemPrompt = `You are a highly skeptical visa officer whose job is to find every reason to reject this application. Using the same 5-Dimension Overstay Risk Framework, assume the worst interpretation of every ambiguous document, treat missing documents as deliberate omissions, and be strict about marginal evidence. Your role is to stress-test this application. Return ONLY valid JSON.`;
+    const adversarialSystemPrompt = `You are a highly skeptical agency review lead whose job is to stress-test this application before final submission. Using the same agency readiness framework, assume the worst interpretation of every ambiguous document, treat missing documents as deliberate omissions, and be strict about marginal evidence. Return ONLY valid JSON.`;
 
         const adversarialResponse = await createEvaluationCompletionWithFallback({
           openai,
@@ -1370,32 +1367,15 @@ Return JSON with this exact structure:
       db
         .update(visaApplicationTable)
         .set({
-          riskLevel: evaluationData.riskLevel,
-          readinessScore: evaluationData.overallScore,
-          status: newStatus,
-          // Mark free evaluation as used on trial apps
-          ...(application.isFreeTrialApp ? { freeEvaluationUsed: true } : {}),
-        })
+	          riskLevel: evaluationData.riskLevel,
+	          readinessScore: evaluationData.overallScore,
+	          status: newStatus,
+	          agencyStatus: AGENCY_CASE_STATUS.AI_REVIEWED,
+	          clientReportStatus: CLIENT_REPORT_STATUS.DRAFT,
+	        })
         .where(eq(visaApplicationTable.id, application.id))
         .catch((err) => logger.error("Failed to update application status after evaluation", { applicationId: application.id, error: err })),
     ]);
-
-    // Fire-and-forget: generate Atlas preview Q&A for free trial teaser
-    if (application.isFreeTrialApp) {
-      generateAtlasPreview({
-        evaluationId: evaluation.id,
-        summary: evaluationData.summary,
-        overallScore: evaluationData.overallScore,
-        riskLevel: evaluationData.riskLevel,
-        redFlags: evaluationData.redFlags ?? [],
-        strengths: evaluationData.strengths ?? [],
-        recommendations: evaluationData.recommendations ?? [],
-        visaType: application.visaType,
-        destinationCountry: application.destinationCountry,
-      }).catch((err) =>
-        logger.error("Failed to generate Atlas preview", { evaluationId: evaluation.id, error: err })
-      );
-    }
 
     await recordMarketingEvent({
       db,
