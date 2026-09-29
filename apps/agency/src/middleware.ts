@@ -9,12 +9,7 @@ import {
 import { generateCsrfTokenValue } from "@/infra/csrf-token";
 
 const SEO_METADATA_PATHS = new Set(["/robots.txt", "/sitemap.xml", "/manifest.webmanifest"]);
-const AUTH_GATE_PATHS = new Set([
-  "/sign-in",
-  "/sign-up",
-  "/sso/google",
-  "/sso/google/callback",
-]);
+const AUTH_GATE_ENTRY_PATHS = new Set(["/sign-in", "/sign-up"]);
 const AUTH_GATE_ACCESS_PARAM = "access";
 const AUTH_GATE_BYPASS_COOKIE = "vidicy-auth-gate";
 const AUTH_GATE_REDIRECT_PATH = "/pilot-access";
@@ -70,7 +65,7 @@ function getAuthGateBypassToken() {
 }
 
 function getAuthGateResponse(request: NextRequest): NextResponse | null {
-  if (!isAuthGateEnabled() || !AUTH_GATE_PATHS.has(request.nextUrl.pathname)) {
+  if (!isAuthGateEnabled() || !AUTH_GATE_ENTRY_PATHS.has(request.nextUrl.pathname)) {
     return null;
   }
 

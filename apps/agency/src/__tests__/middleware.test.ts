@@ -113,17 +113,25 @@ describe("middleware", () => {
     expect(response.cookies.get("vidicy-auth-gate")?.value).toBe("founder-token");
   });
 
-  it("allows gated auth traffic after the bypass cookie is set", async () => {
+  it("allows the Google OAuth start route while the construction gate is on", async () => {
+    process.env.AUTH_UNDER_CONSTRUCTION = "true";
+    process.env.AUTH_GATE_BYPASS_TOKEN = "founder-token";
+    mockGenerateCsrfTokenValue.mockReturnValue("csrf_token_value");
+
+    const response = await middleware(new NextRequest(`${CANONICAL_SITE_URL}/sso/google`));
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("location")).toBeNull();
+    expect(response.cookies.get("csrf-token")?.value).toBe("csrf_token_value");
+  });
+
+  it("allows the Google OAuth callback while the construction gate is on", async () => {
     process.env.AUTH_UNDER_CONSTRUCTION = "true";
     process.env.AUTH_GATE_BYPASS_TOKEN = "founder-token";
     mockGenerateCsrfTokenValue.mockReturnValue("csrf_token_value");
 
     const response = await middleware(
-      new NextRequest(`${CANONICAL_SITE_URL}/sso/google`, {
-        headers: {
-          cookie: "vidicy-auth-gate=founder-token",
-        },
-      }),
+      new NextRequest(`${CANONICAL_SITE_URL}/sso/google/callback?code=abc&state=xyz`),
     );
 
     expect(response.status).toBe(200);
