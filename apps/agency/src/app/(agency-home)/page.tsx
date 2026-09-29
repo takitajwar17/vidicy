@@ -79,14 +79,14 @@ export default function Home() {
           <video
             aria-hidden="true"
             autoPlay
-            className="absolute inset-x-0 top-0 h-[70vh] w-full object-cover object-bottom"
+            className="absolute inset-x-0 top-0 h-[84vh] w-full object-cover object-bottom"
             loop
             muted
             playsInline
             preload="metadata"
             src={heroVideoUrl}
           />
-          <div className="public-landing-media-fade pointer-events-none absolute inset-x-0 top-[calc(70vh-2rem)] h-8" />
+          <div className="public-landing-media-fade pointer-events-none absolute inset-x-0 top-[calc(84vh-2rem)] h-8" />
 
           <nav className="relative z-20 flex items-center justify-between px-4 py-4 sm:px-6 md:px-12 lg:px-20">
             <Link
