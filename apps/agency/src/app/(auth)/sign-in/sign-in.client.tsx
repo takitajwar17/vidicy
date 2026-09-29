@@ -60,8 +60,8 @@ const SignInPage = ({ redirectPath, isGoogleSSOEnabled }: SignInClientProps) => 
     <AuthShell
       testimonial={{
         quote:
-          "Vidicy helped me organize my entire visa application in under an hour. The AI feedback was incredibly detailed.",
-        author: "Sarah M., UK Student Visa Applicant",
+          "We moved first-pass reviews from hours to minutes and sent clients clear fixes the same day.",
+        author: "Operations Lead, Visa & Travel Agency",
       }}
     >
       {/* Header */}
