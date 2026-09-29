@@ -17,7 +17,7 @@ export const APPLICANT_RELATIONSHIP = {
 
 export const applicantRelationshipTuple = Object.values(APPLICANT_RELATIONSHIP) as [string, ...string[]];
 
-// Applicant workspace role — controls what actions the person can take
+// Legacy applicant role retained for older records.
 export const APPLICANT_ROLE = {
   OWNER: 'owner',
   ADMIN: 'admin',
@@ -35,9 +35,8 @@ export const applicantTable = sqliteTable("applicant", {
   name: text({ length: 255 }).notNull(),
   relationship: text({ enum: applicantRelationshipTuple }).notNull(),
   /**
-   * Workspace role. Defaults to OWNER so that primary applicants are always
-   * owners even if the insert omits an explicit role. Dependent applicants
-   * must explicitly pass MEMBER (see createApplicantAction).
+   * Legacy applicant role. Agency reviewers work from agency_team_member;
+   * applicant rows keep this value for older records and compatibility.
    */
   role: text({ enum: applicantRoleTuple }).notNull().default(APPLICANT_ROLE.OWNER),
   dateOfBirth: text({ length: 20 }),

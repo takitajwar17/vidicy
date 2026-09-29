@@ -39,13 +39,37 @@ export const VISA_OUTCOME = {
 
 export const visaOutcomeTuple = Object.values(VISA_OUTCOME) as [string, ...string[]];
 
-// Payment status for an application
-export const PAYMENT_STATUS = {
-  UNPAID: 'unpaid',
-  PAID: 'paid',
+export const AGENCY_CASE_STATUS = {
+  INTAKE: "intake",
+  READY_FOR_REVIEW: "ready_for_review",
+  AI_REVIEWED: "ai_reviewed",
+  NEEDS_CLIENT: "needs_client",
+  IN_REVIEW: "in_review",
+  READY_TO_SUBMIT: "ready_to_submit",
+  SUBMITTED: "submitted",
+  COMPLETED: "completed",
+  ARCHIVED: "archived",
 } as const;
 
-export const paymentStatusTuple = Object.values(PAYMENT_STATUS) as [string, ...string[]];
+export const agencyCaseStatusTuple = Object.values(AGENCY_CASE_STATUS) as [string, ...string[]];
+
+export const AGENCY_CASE_PRIORITY = {
+  LOW: "low",
+  NORMAL: "normal",
+  HIGH: "high",
+  URGENT: "urgent",
+} as const;
+
+export const agencyCasePriorityTuple = Object.values(AGENCY_CASE_PRIORITY) as [string, ...string[]];
+
+export const CLIENT_REPORT_STATUS = {
+  NOT_STARTED: "not_started",
+  DRAFT: "draft",
+  READY: "ready",
+  SENT: "sent",
+} as const;
+
+export const clientReportStatusTuple = Object.values(CLIENT_REPORT_STATUS) as [string, ...string[]];
 
 // Visa application table
 export const visaApplicationTable = sqliteTable("visa_application", {
@@ -73,23 +97,34 @@ export const visaApplicationTable = sqliteTable("visa_application", {
   actualOutcome: text({ enum: visaOutcomeTuple }),
   outcomeDate: integer({ mode: "timestamp" }),
   outcomeNotes: text({ length: 1000 }),
-  // Payment tracking
-  paymentStatus: text({ enum: paymentStatusTuple }).default(PAYMENT_STATUS.UNPAID).notNull(),
-  stripePaymentIntentId: text({ length: 255 }),
-  /** Which plan was purchased: 'solo' or 'family' */
-  plan: text({ length: 20 }),
-  /** How many applicants have been paid for so far */
-  paidApplicantCount: integer().default(0).notNull(),
-  /** Whether this is the user's free trial application */
-  isFreeTrialApp: integer({ mode: "boolean" }).default(false).notNull(),
-  /** Whether the single free evaluation has been used */
-  freeEvaluationUsed: integer({ mode: "boolean" }).default(false).notNull(),
+  // Agency workflow fields. The database table name is retained for backward
+  // compatibility, but authenticated agency surfaces treat this row as a client case.
+  caseNumber: text({ length: 40 }).unique(),
+  clientId: text({ length: 255 }),
+  clientName: text({ length: 255 }),
+  clientEmail: text({ length: 255 }),
+  clientPhone: text({ length: 100 }),
+  agencyStatus: text({ enum: agencyCaseStatusTuple }).default(AGENCY_CASE_STATUS.INTAKE).notNull(),
+  priority: text({ enum: agencyCasePriorityTuple }).default(AGENCY_CASE_PRIORITY.NORMAL).notNull(),
+  assignedReviewerId: text().references(() => userTable.id, { onDelete: "set null" }),
+  intakeSource: text({ length: 80 }).default("manual").notNull(),
+  submittedAt: integer({ mode: "timestamp" }),
+  dueAt: integer({ mode: "timestamp" }),
+  reviewCompletedAt: integer({ mode: "timestamp" }),
+  finalSubmissionAt: integer({ mode: "timestamp" }),
+  clientReportStatus: text({ enum: clientReportStatusTuple }).default(CLIENT_REPORT_STATUS.NOT_STARTED).notNull(),
 }, (table) => ([
   index('visa_app_user_id_idx').on(table.userId),
   index('visa_app_status_idx').on(table.status),
+  index('visa_app_agency_status_idx').on(table.agencyStatus),
+  index('visa_app_case_number_idx').on(table.caseNumber),
+  index('visa_app_client_id_idx').on(table.clientId),
+  index('visa_app_assigned_reviewer_idx').on(table.assignedReviewerId),
+  index('visa_app_priority_idx').on(table.priority),
   index('visa_app_created_at_idx').on(table.createdAt),
   index('visa_app_user_created_idx').on(table.userId, table.createdAt),
   index('visa_app_user_trashed_created_idx').on(table.userId, table.trashedAt, table.createdAt),
+  index('visa_app_status_created_idx').on(table.agencyStatus, table.createdAt),
 ]));
 
 export type VisaApplication = InferSelectModel<typeof visaApplicationTable>;

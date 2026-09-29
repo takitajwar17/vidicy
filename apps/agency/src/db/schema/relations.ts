@@ -1,7 +1,6 @@
 import { relations } from "drizzle-orm";
 import { userTable } from "./user";
 import { visaApplicationTable } from "./visa-application";
-import { paymentEventTable } from "./payment-event";
 import {
   marketingContactTable,
   marketingEmailSendTable,
@@ -14,20 +13,26 @@ import { uploadedDocumentTable, documentEvaluationTable } from "./document";
 import { chatMessageTable, chatConversationTable } from "./chat";
 import { applicationMembershipTable, applicationRoleTable, applicationInvitationTable } from "./collaboration";
 import { supportTicketTable, supportMessageTable } from "./support";
+import {
+  agencyClientTable,
+  agencyTeamMemberTable,
+  clientReportTable,
+  reviewIssueTable,
+} from "./agency";
 
 export const userRelations = relations(userTable, ({ many }) => ({
   supportTickets: many(supportTicketTable),
   marketingContacts: many(marketingContactTable),
   marketingEnrollments: many(marketingSequenceEnrollmentTable),
   marketingEvents: many(marketingEventTable),
+  agencyTeamMemberships: many(agencyTeamMemberTable),
 }));
 
 export const visaApplicationRelations = relations(visaApplicationTable, ({ one, many }) => ({
   user: one(userTable, {
-    fields: [visaApplicationTable.userId],
-    references: [userTable.id],
-  }),
-  paymentEvents: many(paymentEventTable),
+	  fields: [visaApplicationTable.userId],
+	  references: [userTable.id],
+	}),
   applicants: many(applicantTable),
   checklistItems: many(checklistItemTable),
   uploadedDocuments: many(uploadedDocumentTable),
@@ -39,6 +44,21 @@ export const visaApplicationRelations = relations(visaApplicationTable, ({ one, 
   roles: many(applicationRoleTable),
   marketingEnrollments: many(marketingSequenceEnrollmentTable),
   marketingEvents: many(marketingEventTable),
+  reviewIssues: many(reviewIssueTable),
+  clientReports: many(clientReportTable),
+}));
+
+export const agencyClientRelations = relations(agencyClientTable, () => ({}));
+
+export const agencyTeamMemberRelations = relations(agencyTeamMemberTable, ({ one }) => ({
+  user: one(userTable, {
+    fields: [agencyTeamMemberTable.userId],
+    references: [userTable.id],
+  }),
+  invitedByUser: one(userTable, {
+    fields: [agencyTeamMemberTable.invitedBy],
+    references: [userTable.id],
+  }),
 }));
 
 export const marketingContactRelations = relations(marketingContactTable, ({ one }) => ({
@@ -92,17 +112,6 @@ export const applicantRelations = relations(applicantTable, ({ one, many }) => (
   evaluations: many(documentEvaluationTable),
 }));
 
-export const paymentEventRelations = relations(paymentEventTable, ({ one }) => ({
-  application: one(visaApplicationTable, {
-    fields: [paymentEventTable.applicationId],
-    references: [visaApplicationTable.id],
-  }),
-  user: one(userTable, {
-    fields: [paymentEventTable.userId],
-    references: [userTable.id],
-  }),
-}));
-
 export const checklistItemRelations = relations(checklistItemTable, ({ one, many }) => ({
   application: one(visaApplicationTable, {
     fields: [checklistItemTable.applicationId],
@@ -123,6 +132,44 @@ export const uploadedDocumentRelations = relations(uploadedDocumentTable, ({ one
   checklistItem: one(checklistItemTable, {
     fields: [uploadedDocumentTable.checklistItemId],
     references: [checklistItemTable.id],
+  }),
+}));
+
+export const reviewIssueRelations = relations(reviewIssueTable, ({ one }) => ({
+  application: one(visaApplicationTable, {
+    fields: [reviewIssueTable.applicationId],
+    references: [visaApplicationTable.id],
+  }),
+  applicant: one(applicantTable, {
+    fields: [reviewIssueTable.applicantId],
+    references: [applicantTable.id],
+  }),
+  checklistItem: one(checklistItemTable, {
+    fields: [reviewIssueTable.checklistItemId],
+    references: [checklistItemTable.id],
+  }),
+  document: one(uploadedDocumentTable, {
+    fields: [reviewIssueTable.documentId],
+    references: [uploadedDocumentTable.id],
+  }),
+  assignedTo: one(userTable, {
+    fields: [reviewIssueTable.assignedToId],
+    references: [userTable.id],
+  }),
+  createdBy: one(userTable, {
+    fields: [reviewIssueTable.createdById],
+    references: [userTable.id],
+  }),
+}));
+
+export const clientReportRelations = relations(clientReportTable, ({ one }) => ({
+  application: one(visaApplicationTable, {
+    fields: [clientReportTable.applicationId],
+    references: [visaApplicationTable.id],
+  }),
+  createdBy: one(userTable, {
+    fields: [clientReportTable.createdById],
+    references: [userTable.id],
   }),
 }));
 

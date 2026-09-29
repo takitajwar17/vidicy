@@ -1,7 +1,6 @@
 export * from "./user";
 export * from "./permissions";
 export * from "./visa-application";
-export * from "./payment-event";
 export * from "./marketing";
 export * from "./applicant";
 export * from "./checklist";
@@ -11,4 +10,5 @@ export * from "./collaboration";
 export * from "./support";
 export * from "./enterprise";
 export * from "./announcement";
+export * from "./agency";
 export * from "./relations";

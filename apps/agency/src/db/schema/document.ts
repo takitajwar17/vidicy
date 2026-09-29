@@ -91,8 +91,7 @@ export const uploadedDocumentTable = sqliteTable(
     pageCount: integer(),
     imageDescription: text({ length: 2000 }),
     extractionPayload: text({ mode: "json" }).$type<DocumentExtractionPayload | null>(),
-    // Normalized extracted text from the file (truncated to ~50k chars). Used to give
-    // Atlas persistent memory of document contents across follow-up chat messages.
+    // Normalized extracted text from the file (truncated to ~50k chars).
     textContent: text({ length: 50000 }),
   },
   (table) => [
@@ -106,7 +105,7 @@ export const uploadedDocumentTable = sqliteTable(
     index("uploaded_doc_app_applicant_idx").on(table.applicationId, table.applicantId),
     // Composite: document deletion checks whether another file exists for the checklist item
     index("uploaded_doc_app_checklist_item_idx").on(table.applicationId, table.checklistItemId),
-    // Composite: app-wide chat/Atlas reads order documents by newest upload within an application
+    // Composite: app-wide document reads ordered by newest upload within an application
     index("uploaded_doc_app_uploaded_idx").on(table.applicationId, table.uploadedAt),
     index("uploaded_doc_app_applicant_uploaded_idx").on(
       table.applicationId,
@@ -185,8 +184,7 @@ export const documentEvaluationTable = sqliteTable(
      */
     ensembleDivergence: integer(),
     /**
-     * AI-generated preview Q&A for the Atlas teaser page.
-     * Generated in the background after evaluation using a small model.
+     * Legacy AI-generated preview Q&A retained for older evaluations.
      * JSON: { question: string, answer: string }
      */
     atlasPreview: text({ mode: "json" }).$type<{ question: string; answer: string }>(),
@@ -200,7 +198,7 @@ export const documentEvaluationTable = sqliteTable(
     index("doc_eval_created_at_idx").on(table.createdAt),
     // Composite: evaluation queries filter by (applicationId, applicantId) ordered by createdAt
     index("doc_eval_app_applicant_idx").on(table.applicationId, table.applicantId),
-    // Composite: app-wide Atlas/chat reads order by the newest evaluation for an application
+    // Composite: app-wide reads ordered by the newest evaluation for an application
     index("doc_eval_app_created_idx").on(table.applicationId, table.createdAt),
     index("doc_eval_app_applicant_created_idx").on(
       table.applicationId,
@@ -220,7 +218,7 @@ export interface DocumentPipelineStateInput {
 
 export interface DocumentPipelineState {
   isReadableByAI: boolean;
-  isIndexedForAtlas: boolean;
+  isIndexedForSearch: boolean;
 }
 
 export function getDocumentPipelineState({
@@ -231,6 +229,6 @@ export function getDocumentPipelineState({
     isReadableByAI:
       extractionStatus === DOCUMENT_EXTRACTION_STATUS.COMPLETED ||
       extractionStatus === DOCUMENT_EXTRACTION_STATUS.PARTIAL,
-    isIndexedForAtlas: indexingStatus === DOCUMENT_INDEXING_STATUS.COMPLETED,
+    isIndexedForSearch: indexingStatus === DOCUMENT_INDEXING_STATUS.COMPLETED,
   };
 }

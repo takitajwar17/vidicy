@@ -28,7 +28,6 @@ export const MARKETING_EVENT_TYPE = {
   APPLICATION_CREATED: "application_created",
   DOCUMENT_UPLOADED: "document_uploaded",
   EVALUATION_COMPLETED: "evaluation_completed",
-  PAYMENT_COMPLETED: "payment_completed",
   ONBOARDING_COMPLETED: "onboarding_completed",
 } as const;
 

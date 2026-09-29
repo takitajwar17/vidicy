@@ -36,9 +36,6 @@ export const userTable = sqliteTable("user", {
   googleAccountId: text({
     length: 255,
   }),
-  stripeCustomerId: text({
-    length: 255,
-  }).unique(),
   /**
    * This can either be an absolute or relative path to an image
    */

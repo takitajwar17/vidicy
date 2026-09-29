@@ -92,6 +92,20 @@
       "when": 1791126168377,
       "tag": "0012_drop-passkey-credential-table",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "6",
+      "when": 1792285451795,
+      "tag": "0013_agency_workflow",
+      "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "6",
+      "when": 1792288023614,
+      "tag": "0014_remove_stripe_and_staff_access",
+      "breakpoints": true
     }
   ]
 }
