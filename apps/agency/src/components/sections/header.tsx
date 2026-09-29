@@ -81,18 +81,16 @@ export default function Header() {
       Skip to main content
     </a>
     <header
+      data-scrolled={addBorder ? "true" : "false"}
       className={cn(
-        "fixed top-0 inset-x-0 z-50 h-16 bg-[#f3f4f2]/90 text-gray-900 backdrop-blur-xl transition-all duration-300 ease-out sm:h-20",
-        addBorder
-          ? "border-b border-gray-950/10 shadow-[0_10px_30px_rgba(15,23,42,0.08)]"
-          : "border-b border-transparent"
+        "public-topbar fixed top-0 inset-x-0 z-50 border-b border-transparent backdrop-blur-xl transition-all duration-300 ease-out"
       )}
     >
-      <div className="mx-auto flex h-full max-w-[1400px] items-center justify-between px-4 sm:px-6 md:px-12 lg:px-20">
+      <div className="flex items-center justify-between px-4 py-4 sm:px-6 md:px-12 lg:px-20">
         <Link
           href="/"
           aria-label="Vidicy Agency home"
-          className="flex items-center text-gray-900"
+          className="public-landing-ink flex items-center"
         >
           <Logo
             alt="Vidicy"
@@ -103,34 +101,39 @@ export default function Header() {
         </Link>
 
         <nav aria-label="Primary" className="hidden items-center gap-7 lg:flex">
-          {marketingTopBarLinks.map((item) => (
-            <Link
-              key={item.href}
-              href={item.href as Route}
-              className={cn(
-                "text-sm font-semibold text-gray-700 transition-colors hover:text-gray-950",
-                isActiveTopBarLink({
-                  href: item.href,
-                  pathname,
-                  hash: currentHash,
-                }) && "font-bold text-gray-950",
-              )}
-            >
-              {item.label}
-            </Link>
-          ))}
+          {marketingTopBarLinks.map((item) => {
+            const isActive = isActiveTopBarLink({
+              href: item.href,
+              pathname,
+              hash: currentHash,
+            });
+
+            return (
+              <Link
+                key={item.href}
+                href={item.href as Route}
+                className={cn(
+                  "public-nav-link text-sm font-semibold transition-colors",
+                  isActive && "font-bold",
+                )}
+                data-active={isActive}
+              >
+                {item.label}
+              </Link>
+            );
+          })}
         </nav>
 
         <div className="flex items-center gap-2 sm:gap-3">
           <Link
-            className="px-1 text-sm font-semibold text-gray-800 transition-colors hover:text-gray-950 sm:px-2"
+            className="public-auth-link px-1 text-sm font-semibold transition-colors sm:px-2"
             href="/sign-in"
           >
             Log in
           </Link>
           {hidePrimaryCta ? null : (
             <Link
-              className="rounded-2xl bg-gray-900 px-3.5 py-2 text-sm font-semibold text-white shadow-[0_10px_24px_rgba(15,23,42,0.18)] transition-colors hover:bg-gray-950 sm:px-4 sm:py-2.5"
+              className="public-button-primary rounded-2xl px-3.5 py-2 text-sm font-semibold transition-colors sm:px-4 sm:py-2.5"
               href="/sign-up"
             >
               Sign up

@@ -10,19 +10,19 @@ const buttonVariants = cva(
     variants: {
       variant: {
         default:
-          "bg-primary text-primary-foreground shadow-[0_18px_38px_rgba(15,23,42,0.28)] ring-1 ring-primary/10 hover:bg-primary-hover hover:shadow-[0_18px_38px_rgba(15,23,42,0.34)] active:bg-primary-strong",
+          "bg-primary text-primary-foreground shadow-[var(--shadow-button-primary)] ring-1 ring-primary/10 hover:bg-primary-hover hover:shadow-[var(--shadow-button-primary-hover)] active:bg-primary-strong",
         destructive:
-          "bg-destructive text-destructive-foreground shadow-[0_14px_30px_rgba(127,29,29,0.22)] ring-1 ring-destructive/10 hover:bg-destructive-hover hover:shadow-[0_16px_34px_rgba(127,29,29,0.28)] active:bg-destructive-strong",
+          "bg-destructive text-destructive-foreground shadow-[var(--shadow-button-destructive)] ring-1 ring-destructive/10 hover:bg-destructive-hover hover:shadow-[var(--shadow-button-destructive-hover)] active:bg-destructive-strong",
         outline:
-          "border border-primary/10 bg-primary text-primary-foreground shadow-[0_18px_38px_rgba(15,23,42,0.28)] ring-1 ring-primary/10 hover:bg-primary-hover hover:shadow-[0_18px_38px_rgba(15,23,42,0.34)] active:bg-primary-strong",
+          "border border-primary/10 bg-primary text-primary-foreground shadow-[var(--shadow-button-primary)] ring-1 ring-primary/10 hover:bg-primary-hover hover:shadow-[var(--shadow-button-primary-hover)] active:bg-primary-strong",
         secondary:
-          "border border-primary/10 bg-primary text-primary-foreground shadow-[0_18px_38px_rgba(15,23,42,0.28)] ring-1 ring-primary/10 hover:bg-primary-hover hover:shadow-[0_18px_38px_rgba(15,23,42,0.34)] active:bg-primary-strong",
+          "border border-primary/10 bg-primary text-primary-foreground shadow-[var(--shadow-button-primary)] ring-1 ring-primary/10 hover:bg-primary-hover hover:shadow-[var(--shadow-button-primary-hover)] active:bg-primary-strong",
         ghost: "text-primary hover:bg-primary hover:text-primary-foreground active:bg-primary-strong",
         link: "text-primary underline-offset-4 hover:underline",
         hero:
-          "bg-primary text-lg font-bold text-primary-foreground shadow-[0_18px_38px_rgba(15,23,42,0.28)] ring-1 ring-primary/10 hover:bg-primary-hover hover:shadow-[0_18px_38px_rgba(15,23,42,0.34)] active:bg-primary-strong",
+          "bg-primary text-lg font-bold text-primary-foreground shadow-[var(--shadow-button-primary)] ring-1 ring-primary/10 hover:bg-primary-hover hover:shadow-[var(--shadow-button-primary-hover)] active:bg-primary-strong",
         "hero-outline":
-          "border border-primary/10 bg-primary text-lg font-bold text-primary-foreground shadow-[0_18px_38px_rgba(15,23,42,0.28)] ring-1 ring-primary/10 hover:bg-primary-hover hover:shadow-[0_18px_38px_rgba(15,23,42,0.34)] active:bg-primary-strong",
+          "border border-primary/10 bg-primary text-lg font-bold text-primary-foreground shadow-[var(--shadow-button-primary)] ring-1 ring-primary/10 hover:bg-primary-hover hover:shadow-[var(--shadow-button-primary-hover)] active:bg-primary-strong",
       },
       size: {
         default: "h-11 px-5 py-2",

@@ -74,10 +74,10 @@ export default function Footer({ className }: { className?: string }) {
 
             <div className="space-y-5">
               <div
-                className="inline-flex w-fit items-center gap-2.5 rounded-[1rem] bg-background/66 px-4 py-2.5 text-[1rem] font-medium tracking-tight text-foreground/78 shadow-[inset_0_1px_0_rgba(255,255,255,0.28),0_8px_24px_-20px_rgba(0,0,0,0.16)] backdrop-blur-sm"
+                className="public-footer-status inline-flex w-fit items-center gap-2.5 rounded-[1rem] bg-background/66 px-4 py-2.5 text-base font-medium tracking-tight text-foreground/78 backdrop-blur-sm"
                 role="status"
               >
-                <span className="h-2.5 w-2.5 shrink-0 rounded-full bg-[#34c759]" aria-hidden="true" />
+                <span className="public-footer-status-dot h-2.5 w-2.5 shrink-0 rounded-full" aria-hidden="true" />
                 <span>All systems operational</span>
               </div>
 
@@ -111,7 +111,7 @@ export default function Footer({ className }: { className?: string }) {
                   return (
                     <div
                       key={item.iconSrc}
-                      className="flex h-14 w-auto items-center justify-center px-1 shadow-[0_10px_30px_-26px_rgba(0,0,0,0.22)]"
+                      className="public-footer-badge flex h-14 w-auto items-center justify-center px-1"
                     >
                       {item.href ? (
                         <a
@@ -142,14 +142,14 @@ export default function Footer({ className }: { className?: string }) {
           <div className="grid grid-cols-1 gap-8 sm:grid-cols-2 xl:grid-cols-4">
             {footerSections.map((section) => (
               <nav key={section.title} aria-label={section.title}>
-                <p className="text-[1rem] font-semibold tracking-tight text-foreground">
+                <p className="text-base font-semibold tracking-tight text-foreground">
                   {section.title}
                 </p>
                 <ul className="mt-4 space-y-3">
                   {section.links.map((link) => {
                     const href = link.href.trim();
                     const commonClasses =
-                      "text-[0.98rem] leading-none text-foreground/72 transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 focus-visible:ring-offset-2 focus-visible:ring-offset-background rounded-sm";
+                      "public-footer-link text-base leading-none transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 focus-visible:ring-offset-2 focus-visible:ring-offset-background rounded-sm";
 
                     return (
                       <li key={link.text}>

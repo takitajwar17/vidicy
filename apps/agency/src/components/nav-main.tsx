@@ -44,7 +44,7 @@ export function NavMain({
             <SidebarMenuButton
               asChild
               tooltip="New Application"
-              className="min-w-8 rounded-full border border-[oklch(0.8842_0.0501_265.38)] bg-[oklch(0.9390_0.0275_265.45)] text-[oklch(0.2123_0.0713_263.65)] duration-200 ease-linear hover:bg-[oklch(0.9202_0.0382_264.37)] hover:text-[oklch(0.2123_0.0713_263.65)] active:bg-[oklch(0.9059_0.0452_266.16)]"
+              className="min-w-8 rounded-full border border-[var(--sidebar-action-border)] bg-[var(--sidebar-action)] text-[var(--sidebar-action-foreground)] duration-200 ease-linear hover:bg-[var(--sidebar-action-hover)] hover:text-[var(--sidebar-action-foreground)] active:bg-[var(--sidebar-action-active)]"
             >
               <Link href={"/dashboard/applications/new" as Route} onClick={() => setOpenMobile(false)}>
                 <PlusCircleIcon />
@@ -55,7 +55,7 @@ export function NavMain({
               size="icon"
               type="button"
               variant="outline"
-              className="h-9 w-9 shrink-0 rounded-full border-[oklch(0.8842_0.0501_265.38)] bg-[oklch(0.9390_0.0275_265.45)] text-[oklch(0.2123_0.0713_263.65)] transition-colors hover:bg-[oklch(0.9202_0.0382_264.37)] hover:text-[oklch(0.2123_0.0713_263.65)] group-data-[collapsible=icon]:opacity-0"
+              className="h-9 w-9 shrink-0 rounded-full border-[var(--sidebar-action-border)] bg-[var(--sidebar-action)] text-[var(--sidebar-action-foreground)] transition-colors hover:bg-[var(--sidebar-action-hover)] hover:text-[var(--sidebar-action-foreground)] group-data-[collapsible=icon]:opacity-0"
             >
               <MailIcon />
               <span className="sr-only">Inbox</span>
