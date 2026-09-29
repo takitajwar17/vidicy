@@ -337,6 +337,11 @@
   --sidebar-accent-foreground: #ffffff;
   --sidebar-border: #43504d;
   --sidebar-ring: #9caaa6;
+  --sidebar-action: oklch(0.9390 0.0275 265.45);
+  --sidebar-action-hover: oklch(0.9202 0.0382 264.37);
+  --sidebar-action-active: oklch(0.9059 0.0452 266.16);
+  --sidebar-action-border: oklch(0.8842 0.0501 265.38);
+  --sidebar-action-foreground: oklch(0.2123 0.0713 263.65);
   --status-info: #3a5863;
   --status-warning: #b7862f;
   --status-success: #3d8b62;
@@ -368,6 +373,33 @@
   --shadow-2xl: 0 38px 74px -30px hsl(174 14% 18% / 0.34);
   --tracking-normal: -0.01em;
   --spacing: 0.25rem;
+  --public-page-surface: #f3f4f2;
+  --public-landing-bg: #2b3534;
+  --public-landing-panel: #24302e;
+  --public-landing-ink: #030712;
+  --public-landing-muted: #4b5563;
+  --public-landing-nav: #374151;
+  --public-landing-nav-hover: #030712;
+  --public-landing-button: #111827;
+  --public-landing-button-hover: #030712;
+  --public-landing-button-hover-strong: #000000;
+  --public-landing-button-foreground: #ffffff;
+  --public-on-dark: #ffffff;
+  --public-on-dark-muted: rgb(255 255 255 / 0.7);
+  --public-on-dark-subtle: rgb(255 255 255 / 0.55);
+  --public-landing-border: #e5e7eb;
+  --public-success: #34c759;
+  --shadow-public-header: 0 10px 30px rgb(15 23 42 / 0.08);
+  --shadow-public-button: 0 10px 24px rgb(15 23 42 / 0.18);
+  --shadow-public-button-strong: 0 18px 38px rgb(15 23 42 / 0.28);
+  --shadow-public-button-soft: 0 14px 30px rgb(15 23 42 / 0.14);
+  --shadow-public-media: 0 24px 70px rgb(15 23 42 / 0.18);
+  --shadow-public-chip: inset 0 1px 0 rgb(255 255 255 / 0.28), 0 8px 24px -20px rgb(0 0 0 / 0.16);
+  --shadow-public-badge: 0 10px 30px -26px rgb(0 0 0 / 0.22);
+  --shadow-button-primary: var(--shadow-public-button-strong);
+  --shadow-button-primary-hover: 0 18px 38px rgb(15 23 42 / 0.34);
+  --shadow-button-destructive: 0 14px 30px rgb(127 29 29 / 0.22);
+  --shadow-button-destructive-hover: 0 16px 34px rgb(127 29 29 / 0.28);
 }
 
 .dark {
@@ -407,6 +439,11 @@
   --sidebar-accent-foreground: #ffffff;
   --sidebar-border: #3b4946;
   --sidebar-ring: #dfe6e1;
+  --sidebar-action: oklch(0.9390 0.0275 265.45);
+  --sidebar-action-hover: oklch(0.9202 0.0382 264.37);
+  --sidebar-action-active: oklch(0.9059 0.0452 266.16);
+  --sidebar-action-border: oklch(0.8842 0.0501 265.38);
+  --sidebar-action-foreground: oklch(0.2123 0.0713 263.65);
   --status-info: #8fb3bd;
   --status-warning: #d3a653;
   --status-success: #86c69e;
@@ -581,6 +618,127 @@ body {
   font-family: var(--font-display);
   font-weight: 400;
   letter-spacing: -0.07em;
+}
+
+.public-display-tight {
+  font-family: var(--font-display);
+  letter-spacing: -0.07em;
+}
+
+.public-topbar {
+  background: color-mix(in oklab, var(--public-page-surface) 90%, transparent);
+  color: var(--public-landing-button);
+}
+
+.public-topbar[data-scrolled="true"] {
+  border-bottom-color: color-mix(in oklab, var(--public-landing-ink) 10%, transparent);
+  box-shadow: var(--shadow-public-header);
+}
+
+.public-nav-link {
+  color: var(--public-landing-nav);
+}
+
+.public-nav-link:hover,
+.public-nav-link[data-active="true"] {
+  color: var(--public-landing-nav-hover);
+}
+
+.public-auth-link {
+  color: var(--public-landing-button);
+}
+
+.public-auth-link:hover {
+  color: var(--public-landing-button-hover);
+}
+
+.public-button-primary {
+  background: var(--public-landing-button);
+  color: var(--public-landing-button-foreground);
+  box-shadow: var(--shadow-public-button);
+}
+
+.public-button-primary:hover {
+  background: var(--public-landing-button-hover);
+}
+
+.public-button-primary-strong {
+  background: var(--public-landing-button-hover);
+  color: var(--public-landing-button-foreground);
+  box-shadow: var(--shadow-public-button-strong);
+}
+
+.public-button-primary-strong:hover {
+  background: var(--public-landing-button-hover-strong);
+}
+
+.public-button-secondary {
+  background: var(--card);
+  color: var(--public-landing-ink);
+  border-color: color-mix(in oklab, var(--public-landing-ink) 20%, transparent);
+  box-shadow: var(--shadow-public-button-soft);
+}
+
+.public-button-secondary:hover {
+  background: color-mix(in oklab, var(--card) 96%, var(--public-landing-border) 4%);
+}
+
+.public-landing-surface {
+  background: var(--public-landing-bg);
+}
+
+.public-landing-ink {
+  color: var(--public-landing-ink);
+}
+
+.public-landing-muted {
+  color: var(--public-landing-muted);
+}
+
+.public-on-dark {
+  color: var(--public-on-dark);
+}
+
+.public-on-dark-muted {
+  color: var(--public-on-dark-muted);
+}
+
+.public-on-dark-subtle {
+  color: var(--public-on-dark-subtle);
+}
+
+.public-landing-media-fade {
+  background: linear-gradient(to bottom, transparent, var(--public-landing-bg));
+}
+
+.public-landing-panel {
+  background: var(--public-landing-panel);
+}
+
+.public-landing-media-frame {
+  background: var(--card);
+  border-color: var(--public-landing-border);
+  box-shadow: var(--shadow-public-media);
+}
+
+.public-footer-status {
+  box-shadow: var(--shadow-public-chip);
+}
+
+.public-footer-status-dot {
+  background: var(--public-success);
+}
+
+.public-footer-badge {
+  box-shadow: var(--shadow-public-badge);
+}
+
+.public-footer-link {
+  color: color-mix(in oklab, var(--foreground) 72%, transparent);
+}
+
+.public-footer-link:hover {
+  color: var(--foreground);
 }
 
 .ui-overlay-readable {
