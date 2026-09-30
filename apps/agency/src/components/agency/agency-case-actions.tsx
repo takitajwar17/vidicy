@@ -10,10 +10,7 @@ import {
   CheckCircle2Icon,
   FileTextIcon,
   Loader2Icon,
-  MoreHorizontalIcon,
   PlusIcon,
-  SendIcon,
-  Share2Icon,
 } from "lucide-react";
 
 import {
@@ -30,13 +27,6 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import {
   AGENCY_CASE_STATUS,
   REVIEW_ISSUE_SEVERITY,
@@ -223,95 +213,6 @@ export function AgencyCaseStatusSelect({
         ))}
       </SelectContent>
     </Select>
-  );
-}
-
-export function AgencyCaseHeaderActions({
-  applicationId,
-  hasEvaluation,
-  hasReport,
-}: {
-  applicationId: string;
-  hasEvaluation: boolean;
-  hasReport: boolean;
-}) {
-  const router = useRouter();
-  const { execute: syncIssues, isPending: syncing } = useServerAction(syncReviewIssuesFromEvaluationAction);
-  const { execute: generateReport, isPending: reporting } = useServerAction(generateClientReportAction);
-  const { execute: finalize, isPending: finalizing } = useServerAction(finalizeReviewAction);
-
-  async function handleShare() {
-    if (!hasReport) {
-      toast.error("Generate a client-ready report before sharing.");
-      return;
-    }
-    toast.success("Client report is ready to share.");
-  }
-
-  async function handleSyncIssues() {
-    const [result, error] = await syncIssues({ applicationId });
-    if (error) {
-      toast.error(error.message ?? "Run AI review before syncing issues.");
-      return;
-    }
-    toast.success(`${result?.createdCount ?? 0} issue${result?.createdCount === 1 ? "" : "s"} synced.`);
-    router.refresh();
-  }
-
-  async function handleGenerateReport() {
-    const [, error] = await generateReport({ applicationId });
-    if (error) {
-      toast.error("Could not generate client report.");
-      return;
-    }
-    toast.success("Client report is ready.");
-    router.refresh();
-  }
-
-  async function handleFinalize() {
-    const [, error] = await finalize({ applicationId });
-    if (error) {
-      toast.error("Could not finalize review.");
-      return;
-    }
-    toast.success("Case marked ready to submit.");
-    router.refresh();
-  }
-
-  return (
-    <div className="flex flex-wrap items-center gap-2">
-      <Button type="button" variant="outline" className="h-10 rounded-xl bg-card px-4" onClick={handleShare}>
-        <Share2Icon className="h-4 w-4" />
-        Share with Client
-      </Button>
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <Button type="button" variant="outline" className="h-10 rounded-xl bg-card px-4">
-            <MoreHorizontalIcon className="h-4 w-4" />
-            More Actions
-          </Button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" className="w-56">
-          <DropdownMenuItem onClick={handleSyncIssues} disabled={!hasEvaluation || syncing}>
-            {syncing ? <Loader2Icon className="h-4 w-4 animate-spin" /> : <BrainCircuitIcon className="h-4 w-4" />}
-            Sync AI flags
-          </DropdownMenuItem>
-          <DropdownMenuItem onClick={handleGenerateReport} disabled={!hasEvaluation || reporting}>
-            {reporting ? <Loader2Icon className="h-4 w-4 animate-spin" /> : <FileTextIcon className="h-4 w-4" />}
-            Generate client report
-          </DropdownMenuItem>
-          <DropdownMenuSeparator />
-          <DropdownMenuItem onClick={handleFinalize} disabled={finalizing}>
-            {finalizing ? <Loader2Icon className="h-4 w-4 animate-spin" /> : <CheckCircle2Icon className="h-4 w-4" />}
-            Mark ready to submit
-          </DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
-      <Button type="button" className="h-10 rounded-xl px-5" onClick={handleFinalize} disabled={finalizing}>
-        {finalizing ? <Loader2Icon className="h-4 w-4 animate-spin" /> : <SendIcon className="h-4 w-4" />}
-        Finalize Review
-      </Button>
-    </div>
   );
 }
 

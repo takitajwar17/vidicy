@@ -34,25 +34,25 @@ export function formatBytes(bytes: number | null | undefined) {
   return `${value >= 10 || unitIndex === 0 ? Math.round(value) : value.toFixed(1)} ${units[unitIndex]}`;
 }
 
-export function CaseStatusBadge({ status }: { status: string }) {
+export function CaseStatusBadge({ status, className }: { status: string; className?: string }) {
   return (
-    <Badge variant="outline" className={cn("rounded-full px-2.5 py-1 text-2xs font-bold", getStatusBadgeClass(status))}>
+    <Badge variant="outline" className={cn("rounded-full px-2.5 py-1 text-2xs font-bold", getStatusBadgeClass(status), className)}>
       {CASE_STATUS_META[status as keyof typeof CASE_STATUS_META]?.label ?? status.replaceAll("_", " ")}
     </Badge>
   );
 }
 
-export function PriorityBadge({ priority }: { priority: string }) {
+export function PriorityBadge({ priority, className }: { priority: string; className?: string }) {
   return (
-    <span className={cn("text-xs font-bold", CASE_PRIORITY_META[priority as keyof typeof CASE_PRIORITY_META]?.className)}>
+    <span className={cn("text-xs font-bold", CASE_PRIORITY_META[priority as keyof typeof CASE_PRIORITY_META]?.className, className)}>
       {CASE_PRIORITY_META[priority as keyof typeof CASE_PRIORITY_META]?.label ?? priority}
     </span>
   );
 }
 
-export function RiskBadge({ riskLevel }: { riskLevel?: string | null }) {
+export function RiskBadge({ riskLevel, className }: { riskLevel?: string | null; className?: string }) {
   return (
-    <Badge variant="outline" className={cn("rounded-full px-2.5 py-1 text-2xs font-bold capitalize", getRiskBadgeClass(riskLevel))}>
+    <Badge variant="outline" className={cn("rounded-full px-2.5 py-1 text-2xs font-bold capitalize", getRiskBadgeClass(riskLevel), className)}>
       {riskLevel ?? "Unscored"}
     </Badge>
   );
@@ -72,11 +72,15 @@ export function ReviewerAvatar({
   email,
   avatar,
   className,
+  avatarClassName,
+  labelClassName,
 }: {
   name?: string | null;
   email?: string | null;
   avatar?: string | null;
   className?: string;
+  avatarClassName?: string;
+  labelClassName?: string;
 }) {
   const displayName = name || email || "Unassigned";
   const initials = displayName
@@ -90,13 +94,13 @@ export function ReviewerAvatar({
     <span className={cn("inline-flex items-center gap-2", className)}>
       {avatar ? (
         // eslint-disable-next-line @next/next/no-img-element
-        <img src={avatar} alt="" className="h-7 w-7 rounded-full object-cover" />
+        <img src={avatar} alt="" className={cn("h-7 w-7 rounded-full object-cover", avatarClassName)} />
       ) : (
-        <span className="flex h-7 w-7 items-center justify-center rounded-full bg-primary text-2xs font-bold text-primary-foreground">
+        <span className={cn("flex h-7 w-7 items-center justify-center rounded-full bg-primary text-2xs font-bold text-primary-foreground", avatarClassName)}>
           {initials}
         </span>
       )}
-      <span className="min-w-0 truncate text-sm font-medium">{displayName}</span>
+      <span className={cn("min-w-0 truncate text-sm font-medium", labelClassName)}>{displayName}</span>
     </span>
   );
 }

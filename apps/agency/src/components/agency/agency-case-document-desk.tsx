@@ -1,13 +1,15 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
+  AlertCircleIcon,
   CheckCircle2Icon,
   ChevronRightIcon,
   CircleAlertIcon,
   DownloadIcon,
   FileIcon,
   FileTextIcon,
+  Loader2Icon,
   Maximize2Icon,
   MoreVerticalIcon,
   ShieldCheckIcon,
@@ -80,6 +82,10 @@ function getDocumentMeta(mimeType: string) {
   return "Document";
 }
 
+function isPdfDocument(document: AgencyCaseDocument | null) {
+  return document?.mimeType === "application/pdf";
+}
+
 function getInitialDocumentId(documents: AgencyCaseDocument[]) {
   const passportDocument = documents.find((document) => /passport/i.test(document.fileName) && document.mimeType.startsWith("image/"));
   if (passportDocument) return passportDocument.id;
@@ -88,6 +94,181 @@ function getInitialDocumentId(documents: AgencyCaseDocument[]) {
   if (imageDocument) return imageDocument.id;
 
   return documents[0]?.id ?? null;
+}
+
+function PdfCanvasPreview({ blobUrl }: { blobUrl: string }) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [renderError, setRenderError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+
+    let cancelled = false;
+    let destroyLoadingTask: (() => void) | null = null;
+
+    container.replaceChildren();
+    setRenderError(null);
+
+    import("pdfjs-dist")
+      .then(async (pdfjsLib) => {
+        pdfjsLib.GlobalWorkerOptions.workerSrc =
+          `https://unpkg.com/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.min.mjs`;
+
+        const loadingTask = pdfjsLib.getDocument(blobUrl);
+        destroyLoadingTask = () => {
+          void loadingTask.destroy();
+        };
+        const pdf = await loadingTask.promise;
+        if (cancelled) return;
+
+        for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber += 1) {
+          if (cancelled) return;
+
+          const page = await pdf.getPage(pageNumber);
+          const containerWidth = Math.max(container.clientWidth, 320);
+          const baseViewport = page.getViewport({ scale: 1 });
+          const scale = containerWidth / baseViewport.width;
+          const viewport = page.getViewport({ scale });
+          const outputScale = Math.min(window.devicePixelRatio || 1, 3);
+          const canvas = document.createElement("canvas");
+
+          canvas.width = Math.floor(viewport.width * outputScale);
+          canvas.height = Math.floor(viewport.height * outputScale);
+          canvas.style.width = `${Math.floor(viewport.width)}px`;
+          canvas.style.height = `${Math.floor(viewport.height)}px`;
+          canvas.style.maxWidth = "100%";
+          canvas.style.display = "block";
+          canvas.style.backgroundColor = "white";
+
+          if (pageNumber > 1) {
+            const spacer = document.createElement("div");
+            spacer.style.height = "16px";
+            container.appendChild(spacer);
+          }
+
+          container.appendChild(canvas);
+          await page.render({
+            canvas,
+            viewport,
+            transform: outputScale === 1 ? undefined : [outputScale, 0, 0, outputScale, 0, 0],
+          }).promise;
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setRenderError("Could not render the PDF preview.");
+        }
+      });
+
+    return () => {
+      cancelled = true;
+      container.replaceChildren();
+      destroyLoadingTask?.();
+    };
+  }, [blobUrl]);
+
+  if (renderError) {
+    return (
+      <div className="flex max-w-sm flex-col items-center justify-center gap-3 text-center text-muted-foreground">
+        <AlertCircleIcon className="h-9 w-9 text-destructive" />
+        <div>
+          <p className="text-sm font-semibold text-foreground">Preview unavailable</p>
+          <p className="mt-1 text-xs">{renderError}</p>
+        </div>
+      </div>
+    );
+  }
+
+  return <div ref={containerRef} className="h-full w-full overflow-y-auto" />;
+}
+
+function PdfThumbnail({ documentId, fileName }: { documentId: string; fileName: string }) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [failed, setFailed] = useState(false);
+
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+
+    const abortController = new AbortController();
+    let cancelled = false;
+    let destroyLoadingTask: (() => void) | null = null;
+
+    container.replaceChildren();
+    setFailed(false);
+
+    fetch(`/api/document-preview/${documentId}`, { signal: abortController.signal })
+      .then(async (response) => {
+        if (!response.ok) {
+          throw new Error(`Thumbnail failed with status ${response.status}`);
+        }
+
+        return response.arrayBuffer();
+      })
+      .then(async (buffer) => {
+        const pdfjsLib = await import("pdfjs-dist");
+        pdfjsLib.GlobalWorkerOptions.workerSrc =
+          `https://unpkg.com/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.min.mjs`;
+
+        const loadingTask = pdfjsLib.getDocument({ data: new Uint8Array(buffer) });
+        destroyLoadingTask = () => {
+          void loadingTask.destroy();
+        };
+        const pdf = await loadingTask.promise;
+        if (cancelled) return;
+
+        const page = await pdf.getPage(1);
+        const containerWidth = Math.max(container.clientWidth, 1);
+        const baseViewport = page.getViewport({ scale: 1 });
+        const scale = containerWidth / baseViewport.width;
+        const viewport = page.getViewport({ scale });
+        const outputScale = Math.min(window.devicePixelRatio || 1, 3);
+        const canvas = document.createElement("canvas");
+
+        canvas.width = Math.floor(viewport.width * outputScale);
+        canvas.height = Math.floor(viewport.height * outputScale);
+        canvas.style.width = `${Math.floor(viewport.width)}px`;
+        canvas.style.height = `${Math.floor(viewport.height)}px`;
+        canvas.style.display = "block";
+        canvas.style.backgroundColor = "white";
+
+        container.appendChild(canvas);
+        await page.render({
+          canvas,
+          viewport,
+          transform: outputScale === 1 ? undefined : [outputScale, 0, 0, outputScale, 0, 0],
+        }).promise;
+      })
+      .catch(() => {
+        if (!abortController.signal.aborted && !cancelled) {
+          setFailed(true);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+      abortController.abort();
+      container.replaceChildren();
+      destroyLoadingTask?.();
+    };
+  }, [documentId]);
+
+  if (failed) {
+    return (
+      <span className="flex h-14 w-full items-center justify-center rounded bg-muted/40">
+        <FileTextIcon className="h-5 w-5" />
+      </span>
+    );
+  }
+
+  return (
+    <span
+      ref={containerRef}
+      aria-label={`${fileName} thumbnail`}
+      className="block h-14 w-full overflow-hidden rounded bg-white"
+    />
+  );
 }
 
 export function AgencyCaseDocumentDesk({
@@ -99,6 +280,9 @@ export function AgencyCaseDocumentDesk({
   totalStorage,
 }: AgencyCaseDocumentDeskProps) {
   const [activeDocumentId, setActiveDocumentId] = useState<string | null>(() => getInitialDocumentId(documents));
+  const [pdfPreviewUrl, setPdfPreviewUrl] = useState<string | null>(null);
+  const [pdfPreviewLoading, setPdfPreviewLoading] = useState(false);
+  const [pdfPreviewError, setPdfPreviewError] = useState<string | null>(null);
   const checklistById = useMemo(() => new Map(checklistItems.map((item) => [item.id, item])), [checklistItems]);
 
   useEffect(() => {
@@ -114,6 +298,57 @@ export function AgencyCaseDocumentDesk({
   const previewDocuments = activeDocument
     ? [activeDocument, ...documents.filter((document) => document.id !== activeDocument.id)].slice(0, 8)
     : documents.slice(0, 8);
+
+  useEffect(() => {
+    if (!isPdfDocument(activeDocument)) {
+      setPdfPreviewLoading(false);
+      setPdfPreviewError(null);
+      setPdfPreviewUrl((previousUrl) => {
+        if (previousUrl) URL.revokeObjectURL(previousUrl);
+        return null;
+      });
+      return;
+    }
+
+    const abortController = new AbortController();
+    let objectUrl: string | null = null;
+
+    setPdfPreviewLoading(true);
+    setPdfPreviewError(null);
+    setPdfPreviewUrl((previousUrl) => {
+      if (previousUrl) URL.revokeObjectURL(previousUrl);
+      return null;
+    });
+
+    fetch(`/api/document-preview/${activeDocument.id}`, { signal: abortController.signal })
+      .then(async (response) => {
+        if (!response.ok) {
+          throw new Error(`Preview failed with status ${response.status}`);
+        }
+
+        return response.blob();
+      })
+      .then((blob) => {
+        objectUrl = URL.createObjectURL(blob);
+        setPdfPreviewUrl(objectUrl);
+      })
+      .catch((error: unknown) => {
+        if (abortController.signal.aborted) return;
+        setPdfPreviewError(error instanceof Error ? error.message : "Could not load the PDF preview.");
+      })
+      .finally(() => {
+        if (!abortController.signal.aborted) {
+          setPdfPreviewLoading(false);
+        }
+      });
+
+    return () => {
+      abortController.abort();
+      if (objectUrl) {
+        URL.revokeObjectURL(objectUrl);
+      }
+    };
+  }, [activeDocument]);
 
   const groupedDocuments = useMemo(() => {
     return documents.reduce<Record<string, AgencyCaseDocument[]>>((groups, document) => {
@@ -247,7 +482,12 @@ export function AgencyCaseDocumentDesk({
           </div>
         </div>
 
-        <div className="flex min-h-0 flex-1 items-center justify-center bg-muted/20 p-4">
+        <div
+          className={cn(
+            "flex min-h-0 flex-1 items-center justify-center bg-muted/20",
+            isPdfDocument(activeDocument) ? "p-0" : "p-4",
+          )}
+        >
           {activeDocument ? (
             activeDocument.mimeType.startsWith("image/") ? (
               // eslint-disable-next-line @next/next/no-img-element
@@ -256,6 +496,27 @@ export function AgencyCaseDocumentDesk({
                 alt={activeDocument.fileName}
                 className="max-h-full max-w-full rounded-lg border border-border/70 bg-background object-contain shadow-sm"
               />
+            ) : isPdfDocument(activeDocument) ? (
+              <>
+                {pdfPreviewLoading ? (
+                  <div className="flex flex-col items-center justify-center gap-3 text-sm font-semibold text-muted-foreground">
+                    <Loader2Icon className="h-8 w-8 animate-spin" />
+                    Loading PDF preview
+                  </div>
+                ) : null}
+                {pdfPreviewError ? (
+                  <div className="flex max-w-sm flex-col items-center justify-center gap-3 text-center text-muted-foreground">
+                    <AlertCircleIcon className="h-9 w-9 text-destructive" />
+                    <div>
+                      <p className="text-sm font-semibold text-foreground">Preview unavailable</p>
+                      <p className="mt-1 text-xs">{pdfPreviewError}</p>
+                    </div>
+                  </div>
+                ) : null}
+                {pdfPreviewUrl ? (
+                  <PdfCanvasPreview blobUrl={pdfPreviewUrl} />
+                ) : null}
+              </>
             ) : (
               <iframe
                 title={activeDocument.fileName}
@@ -296,6 +557,8 @@ export function AgencyCaseDocumentDesk({
                   {document.mimeType.startsWith("image/") ? (
                     // eslint-disable-next-line @next/next/no-img-element
                     <img src={`/api/document-preview/${document.id}`} alt="" className="h-14 w-full rounded object-cover" />
+                  ) : isPdfDocument(document) ? (
+                    <PdfThumbnail documentId={document.id} fileName={document.fileName} />
                   ) : (
                     <span className="flex h-14 w-full items-center justify-center rounded bg-muted/40">
                       <FileTextIcon className="h-5 w-5" />
