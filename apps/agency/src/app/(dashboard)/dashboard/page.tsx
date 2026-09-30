@@ -1,147 +1,280 @@
 import type { Metadata } from "next";
-import { requireVerifiedPageSession } from "@/utils/auth-page";
+import Link from "next/link";
+import type { Route } from "next";
+import {
+  CheckCircle2Icon,
+  Clock3Icon,
+  FileWarningIcon,
+  FilesIcon,
+  LineChartIcon,
+  PlusIcon,
+} from "lucide-react";
+
+import { AgencyPageShell } from "@/components/agency/agency-page-shell";
+import {
+  CaseStatusBadge,
+  EmptyState,
+  MetricCard,
+  ReviewerAvatar,
+  RiskBadge,
+  formatShortDate,
+} from "@/components/agency/agency-ui";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { AGENCY_CASE_STATUS } from "@/db/schema";
+import { getAgencyDashboardData } from "@/server/agency-data";
+import { getDisplayCaseNumber } from "@/lib/agency-workflow";
 
 export const metadata: Metadata = {
-  title: "Applications",
+  title: "Dashboard",
 };
-import { getDB } from "@/db";
-import { visaApplicationTable, applicantTable, applicationMembershipTable } from "@/db/schema";
-import { eq, desc, isNull, and, inArray } from "drizzle-orm";
-import { redirect } from "next/navigation";
-import { cookies } from "next/headers";
-import Link from "next/link";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
-import {
-  PlusIcon,
-  FolderOpenIcon,
-  LayoutListIcon,
-  ScanTextIcon,
-  RefreshCwIcon,
-} from "lucide-react";
-import type { Route } from "next";
 
-const FEATURE_CARDS = [
-  {
-    icon: LayoutListIcon,
-    title: "Smart Checklist",
-    desc: "Embassy-specific documents tailored to your case",
-  },
-  {
-    icon: ScanTextIcon,
-    title: "AI Evaluation",
-    desc: "Identify risks and improve before submission",
-  },
-  {
-    icon: RefreshCwIcon,
-    title: "Iterative Loop",
-    desc: "Re-upload and track progress to a strong application",
-  },
-] as const;
+function getDailyMovement(cases: Awaited<ReturnType<typeof getAgencyDashboardData>>["cases"]) {
+  const today = new Date();
+  const days = Array.from({ length: 7 }, (_, index) => {
+    const date = new Date(today);
+    date.setDate(today.getDate() - (6 - index));
+    date.setHours(0, 0, 0, 0);
+    return date;
+  });
+
+  return days.map((date) => {
+    const nextDate = new Date(date);
+    nextDate.setDate(date.getDate() + 1);
+    const submitted = cases.filter(
+      ({ application }) => application.createdAt >= date && application.createdAt < nextDate,
+    ).length;
+    const completed = cases.filter(
+      ({ application }) =>
+        application.reviewCompletedAt &&
+        application.reviewCompletedAt >= date &&
+        application.reviewCompletedAt < nextDate,
+    ).length;
+    const flagged = cases.filter(
+      ({ application, highIssueCount }) =>
+        highIssueCount > 0 &&
+        application.createdAt >= date &&
+        application.createdAt < nextDate,
+    ).length;
+
+    return {
+      label: new Intl.DateTimeFormat("en", { month: "short", day: "numeric" }).format(date),
+      submitted,
+      completed,
+      flagged,
+      max: Math.max(submitted, completed, flagged, 1),
+    };
+  });
+}
 
 export default async function DashboardPage() {
-  const session = await requireVerifiedPageSession();
+  const data = await getAgencyDashboardData();
+  const movement = getDailyMovement(data.cases);
 
-  const db = getDB();
-
-  // Fetch apps owned by user + apps where user is a linked applicant/member
-  const [ownedApps, linkedApplicantRows, membershipRows] = await Promise.all([
-    db
-      .select({ id: visaApplicationTable.id })
-      .from(visaApplicationTable)
-      .where(
-        and(
-          eq(visaApplicationTable.userId, session.user.id),
-          isNull(visaApplicationTable.trashedAt),
-        ),
-      )
-      .orderBy(desc(visaApplicationTable.createdAt))
-      .limit(20),
-    db
-      .select({ applicationId: applicantTable.applicationId })
-      .from(applicantTable)
-      .where(eq(applicantTable.userId, session.user.id)),
-    db
-      .select({ applicationId: applicationMembershipTable.applicationId })
-      .from(applicationMembershipTable)
-      .where(
-        and(
-          eq(applicationMembershipTable.userId, session.user.id),
-          eq(applicationMembershipTable.isActive, 1),
-        ),
-      ),
-  ]);
-
-  const ownedIds = new Set(ownedApps.map((a) => a.id));
-  const extraIds = Array.from(
-    new Set(
-      [...linkedApplicantRows, ...membershipRows]
-        .map((r) => r.applicationId)
-        .filter((id) => !ownedIds.has(id)),
-    ),
-  );
-
-  let applications = ownedApps;
-  if (extraIds.length > 0) {
-    const extraApps = await db
-      .select({ id: visaApplicationTable.id })
-      .from(visaApplicationTable)
-      .where(
-        and(inArray(visaApplicationTable.id, extraIds), isNull(visaApplicationTable.trashedAt)),
-      )
-      .orderBy(desc(visaApplicationTable.createdAt));
-    applications = [...ownedApps, ...extraApps];
-  }
-
-  // Redirect to last active workspace first
-  const cookieStore = await cookies();
-  const lastActiveApp = cookieStore.get("lastActiveApp")?.value;
-  if (lastActiveApp && applications.some((a) => a.id === lastActiveApp)) {
-    redirect(`/dashboard/${lastActiveApp}` as string as never);
-  }
-
-  // Fall back to most recent application
-  if (applications.length > 0) {
-    redirect(`/dashboard/${applications[0].id}` as string as never);
-  }
-
-  // No applications — show create CTA
   return (
-    <div className="flex flex-1 flex-col items-center justify-center gap-10 px-4 py-16 md:py-20">
-      <div className="relative flex h-24 w-24 items-center justify-center rounded-3xl border border-primary/25 bg-gradient-to-br from-primary/15 to-primary/5 shadow-sm">
-        <div className="absolute inset-0 rounded-3xl bg-primary/20 blur-2xl opacity-30" />
-        <FolderOpenIcon className="relative z-10 h-10 w-10 text-primary" />
-      </div>
-      <div className="max-w-md space-y-2 text-center">
-        <h2 className="text-3xl font-semibold tracking-tight">No applications yet</h2>
-        <p className="text-sm leading-relaxed text-muted-foreground">
-          Get a personalised document checklist, AI-powered evaluation, and an expert chatbot to
-          prepare the strongest possible visa application.
-        </p>
-      </div>
-      <div className="grid w-full max-w-3xl gap-4 sm:grid-cols-3">
-        {FEATURE_CARDS.map(({ icon: Icon, title, desc }) => (
-          <Card
-            key={title}
-            data-interactive
-            className="text-center"
-          >
-            <CardContent className="flex flex-col items-center gap-3 pt-6">
-              <span className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-primary/20 bg-primary/10">
-                <Icon className="h-5 w-5 text-primary" />
-              </span>
-              <p className="text-sm font-semibold tracking-tight">{title}</p>
-              <p className="text-xs leading-relaxed text-muted-foreground">{desc}</p>
+    <AgencyPageShell
+      breadcrumbs={[{ href: "/dashboard", label: "Dashboard" }]}
+      title="Dashboard"
+      description="Overview of the agency review pipeline, reviewer workload, and client files that need attention."
+      actions={
+        <Button asChild>
+          <Link href={"/dashboard/applications/new" as Route}>
+            <PlusIcon className="h-4 w-4" />
+            New Application
+          </Link>
+        </Button>
+      }
+    >
+      {data.stats.totalApplications === 0 ? (
+        <EmptyState
+          title="No agency cases yet"
+          description="Create the first client application to initialize the agency review workflow."
+          href="/dashboard/applications/new"
+          actionLabel="Create application"
+        />
+      ) : (
+        <>
+          <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+            <MetricCard
+              icon={FilesIcon}
+              label="Total Applications"
+              value={data.stats.totalApplications}
+              detail="Across all clients"
+              tone="info"
+            />
+            <MetricCard
+              icon={CheckCircle2Icon}
+              label="Completed"
+              value={data.stats.completed}
+              detail="Ready, submitted, or closed"
+              tone="success"
+            />
+            <MetricCard
+              icon={Clock3Icon}
+              label="In Review"
+              value={data.stats.inReview}
+              detail="Currently moving through review"
+              tone="warning"
+            />
+            <MetricCard
+              icon={FileWarningIcon}
+              label="Flagged"
+              value={data.stats.flagged}
+              detail="Needs reviewer or client action"
+              tone="danger"
+            />
+            <MetricCard
+              icon={LineChartIcon}
+              label="Ready Rate"
+              value={`${data.stats.approvalReadyRate}%`}
+              detail={`${data.stats.scoredCases} scored by AI`}
+              tone="default"
+            />
+          </section>
+
+          <section className="grid gap-4 xl:grid-cols-[1.45fr_0.95fr_0.95fr]">
+            <Card className="rounded-xl shadow-[var(--shadow-dashboard)]">
+              <CardHeader className="flex-row items-center justify-between gap-3">
+                <CardTitle className="text-base">Application Throughput</CardTitle>
+                <span className="text-xs font-medium text-muted-foreground">Last 7 days</span>
+              </CardHeader>
+              <CardContent>
+                <div className="grid h-56 grid-cols-7 items-end gap-3 border-b border-border/80 pb-4">
+                  {movement.map((day) => (
+                    <div key={day.label} className="flex h-full flex-col justify-end gap-1.5">
+                      <div
+                        className="rounded-t bg-primary/80"
+                        style={{ height: `${Math.max((day.submitted / day.max) * 100, day.submitted ? 10 : 0)}%` }}
+                        title={`${day.submitted} submitted`}
+                      />
+                      <div
+                        className="rounded-t bg-status-success/80"
+                        style={{ height: `${Math.max((day.completed / day.max) * 76, day.completed ? 8 : 0)}%` }}
+                        title={`${day.completed} completed`}
+                      />
+                      <div
+                        className="rounded-t bg-destructive/75"
+                        style={{ height: `${Math.max((day.flagged / day.max) * 52, day.flagged ? 6 : 0)}%` }}
+                        title={`${day.flagged} flagged`}
+                      />
+                    </div>
+                  ))}
+                </div>
+                <div className="mt-3 grid grid-cols-7 gap-3 text-center text-2xs font-semibold text-muted-foreground">
+                  {movement.map((day) => (
+                    <span key={day.label}>{day.label}</span>
+                  ))}
+                </div>
+                <div className="mt-4 flex flex-wrap gap-4 text-xs text-muted-foreground">
+                  <span className="inline-flex items-center gap-2"><span className="h-2 w-2 rounded-full bg-primary" /> Submitted</span>
+                  <span className="inline-flex items-center gap-2"><span className="h-2 w-2 rounded-full bg-status-success" /> Completed</span>
+                  <span className="inline-flex items-center gap-2"><span className="h-2 w-2 rounded-full bg-destructive" /> Flagged</span>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="rounded-xl shadow-[var(--shadow-dashboard)]">
+              <CardHeader className="flex-row items-center justify-between gap-3">
+                <CardTitle className="text-base">Top Flagged Issues</CardTitle>
+                <Link href={"/dashboard/review" as Route} className="text-xs font-bold text-primary">
+                  View all
+                </Link>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {data.topFlaggedIssues.length > 0 ? (
+                  data.topFlaggedIssues.map((issue) => (
+                    <div key={issue.label} className="flex items-center justify-between gap-4 border-b border-border/70 pb-3 last:border-b-0 last:pb-0">
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-bold">{issue.label}</p>
+                        <p className="text-xs text-muted-foreground">{issue.high} high priority</p>
+                      </div>
+                      <span className="rounded-full bg-destructive/10 px-2.5 py-1 text-xs font-bold text-destructive">
+                        {issue.count}
+                      </span>
+                    </div>
+                  ))
+                ) : (
+                  <p className="text-sm text-muted-foreground">No active issue clusters yet.</p>
+                )}
+              </CardContent>
+            </Card>
+
+            <Card className="rounded-xl shadow-[var(--shadow-dashboard)]">
+              <CardHeader className="flex-row items-center justify-between gap-3">
+                <CardTitle className="text-base">Reviewer Workload</CardTitle>
+                <Link href={"/dashboard/team" as Route} className="text-xs font-bold text-primary">
+                  View team
+                </Link>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                {data.workload.length > 0 ? (
+                  data.workload.slice(0, 5).map((member) => (
+	                    <div key={member.userId ?? member.id} className="grid grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-3 border-b border-border/70 pb-3 last:border-b-0 last:pb-0">
+	                      <ReviewerAvatar name={member.displayName} email={member.user?.email ?? member.email} avatar={member.user?.avatar ?? null} />
+                      <span className="text-sm font-bold">{member.inReview}</span>
+                      <span className={member.sla === "On track" ? "text-xs font-bold text-status-success" : "text-xs font-bold text-status-warning"}>
+                        {member.sla}
+                      </span>
+                    </div>
+                  ))
+                ) : (
+                  <p className="text-sm text-muted-foreground">No reviewers have been added yet.</p>
+                )}
+              </CardContent>
+            </Card>
+          </section>
+
+          <Card className="rounded-xl shadow-[var(--shadow-dashboard)]">
+            <CardHeader className="flex-row items-center justify-between gap-3">
+              <CardTitle className="text-base">Recent Client Activity</CardTitle>
+              <Link href={"/dashboard/applications" as Route} className="text-xs font-bold text-primary">
+                View all applications
+              </Link>
+            </CardHeader>
+            <CardContent className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Application</TableHead>
+                    <TableHead>Client</TableHead>
+                    <TableHead>Applicant</TableHead>
+                    <TableHead>Visa Type</TableHead>
+                    <TableHead>Submitted</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>AI Risk</TableHead>
+                    <TableHead>Reviewer</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {data.recentCases.map((row) => (
+                    <TableRow key={row.application.id}>
+                      <TableCell>
+                        <Link href={`/dashboard/${row.application.id}` as Route} className="font-bold text-primary">
+                          {getDisplayCaseNumber(row.application.caseNumber, row.application.id)}
+                        </Link>
+                      </TableCell>
+                      <TableCell>{row.application.clientName ?? "Unassigned"}</TableCell>
+                      <TableCell>{row.primaryApplicant?.name ?? "Applicant pending"}</TableCell>
+                      <TableCell>{row.application.destinationCountry} {row.application.visaType}</TableCell>
+                      <TableCell>{formatShortDate(row.application.submittedAt ?? row.application.createdAt)}</TableCell>
+                      <TableCell><CaseStatusBadge status={row.application.agencyStatus ?? AGENCY_CASE_STATUS.INTAKE} /></TableCell>
+                      <TableCell><RiskBadge riskLevel={row.latestEvaluation?.riskLevel ?? row.application.riskLevel} /></TableCell>
+                      <TableCell>
+                        <ReviewerAvatar
+                          name={row.reviewer ? `${row.reviewer.firstName ?? ""} ${row.reviewer.lastName ?? ""}`.trim() : null}
+                          email={row.reviewer?.email ?? null}
+                          avatar={row.reviewer?.avatar ?? null}
+                        />
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
             </CardContent>
           </Card>
-        ))}
-      </div>
-      <Link href={"/dashboard/applications/new" as Route}>
-        <Button size="lg" className="gap-2 shadow-sm">
-          <PlusIcon className="h-4 w-4" />
-          Start Your First Application
-        </Button>
-      </Link>
-    </div>
+        </>
+      )}
+    </AgencyPageShell>
   );
 }
