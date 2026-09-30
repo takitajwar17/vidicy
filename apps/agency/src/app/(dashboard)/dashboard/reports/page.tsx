@@ -74,7 +74,7 @@ export default async function ReportsPage() {
                       <TableCell>{report.actionItems.length}</TableCell>
                       <TableCell>{formatShortDate(report.createdAt)}</TableCell>
                       <TableCell className="max-w-[520px] pr-5">
-                        <p className="line-clamp-2 text-sm text-muted-foreground">{report.summary}</p>
+                        <p className="truncate text-sm text-muted-foreground" title={report.summary}>{report.summary}</p>
                       </TableCell>
                     </TableRow>
                   ))}

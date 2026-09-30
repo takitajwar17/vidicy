@@ -2,22 +2,36 @@ import type { Metadata } from "next";
 
 import { AgencyPageShell } from "@/components/agency/agency-page-shell";
 import { ReviewerAvatar, formatShortDate } from "@/components/agency/agency-ui";
-import { AddStaffForm, DisableStaffButton, StaffRoleSelect } from "@/components/agency/agency-team-actions";
+import { AddStaffDialog, DisableStaffButton, StaffRoleSelect } from "@/components/agency/agency-team-actions";
+import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { getActiveAgencyStaffRows } from "@/server/agency-data";
+import { AGENCY_STAFF_ROLE } from "@/db/schema";
+import { cn } from "@/lib/utils";
+import { getActiveAgencyStaffRows, getAgencyTeamWorkloadRows } from "@/server/agency-data";
 import { requireAgencyStaff } from "@/server/agency-team";
 
 export const metadata: Metadata = {
   title: "Team",
 };
 
+function formatRoleLabel(role?: string | null) {
+  if (role === AGENCY_STAFF_ROLE.ADMIN) return "Admin";
+  if (role === AGENCY_STAFF_ROLE.MEMBER) return "Member";
+  return "Unassigned";
+}
+
 export default async function TeamPage() {
-  const [{ staff: agencyStaff, session }, staff] = await Promise.all([
+  const [{ staff: agencyStaff, session }, staff, workload] = await Promise.all([
     requireAgencyStaff(),
     getActiveAgencyStaffRows(),
+    getAgencyTeamWorkloadRows(),
   ]);
   const isAdmin = agencyStaff.isAdmin;
+  const adminCount = staff.filter((member) => member.role === AGENCY_STAFF_ROLE.ADMIN).length;
+  const memberCount = staff.filter((member) => member.role === AGENCY_STAFF_ROLE.MEMBER).length;
+  const totalActiveCases = workload.reduce((sum, row) => sum + row.activeCases, 0);
+  const totalOpenIssues = workload.reduce((sum, row) => sum + row.openIssues, 0);
 
   return (
     <AgencyPageShell
@@ -28,22 +42,130 @@ export default async function TeamPage() {
       title="Team"
       description="Staff access and roles."
     >
-      <Card className="rounded-xl shadow-[var(--shadow-dashboard)]">
-        <CardHeader>
-          <CardTitle className="text-base">Add staff</CardTitle>
+      <section>
+        <Card className="overflow-hidden rounded-xl border-border/80 shadow-[var(--shadow-dashboard)]">
+          <CardHeader className="flex flex-col gap-4 border-b border-border/70 bg-muted/20 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+              <CardTitle className="text-base">Team capacity</CardTitle>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Active staff, reviewer access, and current queue pressure in one place.
+              </p>
+            </div>
+            {isAdmin ? (
+              <AddStaffDialog />
+            ) : (
+              <Badge variant="outline" className="w-fit rounded-full px-3 py-1 text-2xs font-bold">
+                Admins manage staff
+              </Badge>
+            )}
+          </CardHeader>
+          <CardContent className="grid grid-cols-2 divide-x divide-y divide-border/70 p-0 lg:grid-cols-4 lg:divide-y-0">
+            <div className="p-5">
+              <p className="text-xs font-semibold text-muted-foreground">Active staff</p>
+              <p className="mt-2 text-2xl font-bold tracking-tight">{staff.length}</p>
+            </div>
+            <div className="p-5">
+              <p className="text-xs font-semibold text-muted-foreground">Admins</p>
+              <p className="mt-2 text-2xl font-bold tracking-tight">{adminCount}</p>
+            </div>
+            <div className="p-5">
+              <p className="text-xs font-semibold text-muted-foreground">Active cases</p>
+              <p className="mt-2 text-2xl font-bold tracking-tight">{totalActiveCases}</p>
+            </div>
+            <div className="p-5">
+              <p className="text-xs font-semibold text-muted-foreground">Open issues</p>
+              <p className="mt-2 text-2xl font-bold tracking-tight">{totalOpenIssues}</p>
+            </div>
+          </CardContent>
+        </Card>
+      </section>
+
+      <Card className="overflow-hidden rounded-xl border-border/80 shadow-[var(--shadow-dashboard)]">
+        <CardHeader className="flex flex-col gap-3 border-b border-border/70 bg-muted/20 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <CardTitle className="text-base">Reviewer workload</CardTitle>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Live queue ownership across active cases, unresolved issues, and uploaded files.
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Badge variant="outline" className="rounded-full px-3 py-1 text-2xs font-bold">
+              {memberCount} members
+            </Badge>
+            <Badge variant="outline" className="rounded-full px-3 py-1 text-2xs font-bold">
+              {totalActiveCases} active cases
+            </Badge>
+          </div>
         </CardHeader>
-        <CardContent>
-          {isAdmin ? (
-            <AddStaffForm />
-          ) : (
-            <p className="text-sm text-muted-foreground">Only agency admins can add or change staff access.</p>
-          )}
+        <CardContent className="overflow-x-auto p-0">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead className="pl-5">Reviewer</TableHead>
+                <TableHead>Role</TableHead>
+                <TableHead className="text-right">Assigned</TableHead>
+                <TableHead className="text-right">Intake</TableHead>
+                <TableHead className="text-right">Needs Client</TableHead>
+                <TableHead className="text-right">Ready</TableHead>
+                <TableHead className="text-right">Open Issues</TableHead>
+                <TableHead className="text-right">High Issues</TableHead>
+                <TableHead className="text-right">Documents</TableHead>
+                <TableHead className="pr-5 text-right">Last Activity</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {workload.length > 0 ? (
+                workload.map((row) => (
+                  <TableRow key={row.rowId}>
+                    <TableCell className="pl-5">
+                      <ReviewerAvatar
+                        name={row.displayName}
+                        email={row.staff?.user?.email ?? row.staff?.email}
+                        avatar={row.staff?.user?.avatar ?? null}
+                        labelClassName="max-w-[180px]"
+                      />
+                    </TableCell>
+                    <TableCell>
+                      <Badge
+                        variant="outline"
+                        className={cn(
+                          "rounded-full px-2.5 py-1 text-2xs font-bold",
+                          row.staff?.role === AGENCY_STAFF_ROLE.ADMIN && "border-primary/25 bg-primary/[0.08] text-primary",
+                        )}
+                      >
+                        {formatRoleLabel(row.staff?.role)}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="text-right font-bold">{row.assignedCases}</TableCell>
+                    <TableCell className="text-right">{row.intakeCases}</TableCell>
+                    <TableCell className="text-right">{row.needsClientCases}</TableCell>
+                    <TableCell className="text-right">{row.readyCases}</TableCell>
+                    <TableCell className="text-right font-bold">{row.openIssues}</TableCell>
+                    <TableCell className="text-right">
+                      <span className={row.highIssues > 0 ? "font-bold text-destructive" : "text-muted-foreground"}>
+                        {row.highIssues}
+                      </span>
+                    </TableCell>
+                    <TableCell className="text-right">{row.documents}</TableCell>
+                    <TableCell className="pr-5 text-right">{formatShortDate(row.lastActivityAt)}</TableCell>
+                  </TableRow>
+                ))
+              ) : (
+                <TableRow>
+                  <TableCell colSpan={10} className="h-20 pl-5 text-muted-foreground">
+                    No active reviewers yet.
+                  </TableCell>
+                </TableRow>
+              )}
+            </TableBody>
+          </Table>
         </CardContent>
       </Card>
 
-      <Card className="rounded-xl shadow-[var(--shadow-dashboard)]">
-        <CardHeader>
+      <Card className="overflow-hidden rounded-xl border-border/80 shadow-[var(--shadow-dashboard)]">
+        <CardHeader className="border-b border-border/70 bg-muted/20">
           <CardTitle className="text-base">Staff directory</CardTitle>
+          <p className="text-sm text-muted-foreground">Role and access controls for the active agency team.</p>
         </CardHeader>
         <CardContent className="overflow-x-auto p-0">
           <Table>
@@ -56,31 +178,35 @@ export default async function TeamPage() {
                 <TableHead className="pr-5 text-right">Access</TableHead>
               </TableRow>
             </TableHeader>
-	            <TableBody>
-	              {staff.map((member) => {
-	                const displayName =
-	                  `${member.user?.firstName ?? ""} ${member.user?.lastName ?? ""}`.trim() ||
-	                  member.user?.email ||
-	                  member.email ||
-	                  "Staff member";
-	                const isSelf = member.userId === session.userId;
-	                return (
-	                  <TableRow key={member.id}>
-	                    <TableCell className="pl-5">
-	                      <ReviewerAvatar name={displayName} email={member.user?.email ?? member.email} avatar={member.user?.avatar ?? null} />
-	                    </TableCell>
-	                    <TableCell>{member.user?.email ?? member.email ?? "—"}</TableCell>
-	                    <TableCell className="w-[180px]">
-	                      <StaffRoleSelect staffMemberId={member.id} role={member.role} disabled={!isAdmin || isSelf} />
-	                    </TableCell>
-	                    <TableCell>{formatShortDate(member.joinedAt ?? member.invitedAt)}</TableCell>
-	                    <TableCell className="pr-5 text-right">
-	                      <DisableStaffButton staffMemberId={member.id} disabled={!isAdmin || isSelf} />
-	                    </TableCell>
-	                  </TableRow>
-	                );
-	              })}
-	            </TableBody>
+            <TableBody>
+              {staff.map((member) => {
+                const displayName =
+                  `${member.user?.firstName ?? ""} ${member.user?.lastName ?? ""}`.trim() ||
+                  member.user?.email ||
+                  member.email ||
+                  "Staff member";
+                const isSelf = member.userId === session.userId;
+                return (
+                  <TableRow key={member.id}>
+                    <TableCell className="pl-5">
+                      <ReviewerAvatar
+                        name={displayName}
+                        email={member.user?.email ?? member.email}
+                        avatar={member.user?.avatar ?? null}
+                      />
+                    </TableCell>
+                    <TableCell>{member.user?.email ?? member.email ?? "—"}</TableCell>
+                    <TableCell className="w-[180px]">
+                      <StaffRoleSelect staffMemberId={member.id} role={member.role} disabled={!isAdmin || isSelf} />
+                    </TableCell>
+                    <TableCell>{formatShortDate(member.joinedAt ?? member.invitedAt)}</TableCell>
+                    <TableCell className="pr-5 text-right">
+                      <DisableStaffButton staffMemberId={member.id} disabled={!isAdmin || isSelf} />
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
+            </TableBody>
           </Table>
         </CardContent>
       </Card>

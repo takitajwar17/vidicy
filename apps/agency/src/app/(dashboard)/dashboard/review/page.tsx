@@ -57,8 +57,9 @@ export default async function IssuesPage() {
                   {rows.map(({ issue, application, applicant }) => (
                     <TableRow key={issue.id}>
                       <TableCell className="max-w-[360px] pl-5">
-                        <p className="font-bold">{issue.title}</p>
-                        <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">{issue.description}</p>
+                        <p className="truncate font-bold" title={`${issue.title}: ${issue.description}`}>
+                          {issue.title}
+                        </p>
                       </TableCell>
                       <TableCell>
                         {application ? (
