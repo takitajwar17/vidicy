@@ -17,11 +17,10 @@ describe("Subprocessors page", () => {
     expect(markup).toContain("Purpose");
     expect(markup).toContain("Location");
     expect(markup).toContain("Website");
-    expect(markup).toContain("OpenAI");
-    expect(markup).toContain("Perplexity");
-    expect(markup).toContain("Cloudflare");
-    expect(markup).toContain("Stripe");
-    expect(markup).toContain("Resend");
+	    expect(markup).toContain("OpenAI");
+	    expect(markup).toContain("Perplexity");
+	    expect(markup).toContain("Cloudflare");
+	    expect(markup).toContain("Resend");
     expect(markup).toContain("Google");
     expect(markup).toContain("Sentry");
     expect(markup).toContain("Debounce");

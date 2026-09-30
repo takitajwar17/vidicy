@@ -1,53 +1,28 @@
 import { describe, expect, it } from "vitest";
 
-import { getWorkflowStepStates } from "@/app/(workspace)/dashboard/[appId]/_workspace-types";
+import { AGENCY_CASE_STATUS, REVIEW_ISSUE_SEVERITY } from "@/db/schema";
+import {
+  CASE_STATUS_META,
+  ISSUE_SEVERITY_META,
+  getDisplayCaseNumber,
+  getStatusBadgeClass,
+} from "@/lib/agency-workflow";
 
-describe("getWorkflowStepStates", () => {
-  it("blocks evaluation and Atlas until checklist prerequisites are met", () => {
-    expect(
-      getWorkflowStepStates({
-        currentStep: "checklist",
-        hasChecklist: false,
-        missingRequiredCount: 0,
-        hasEvaluation: false,
-        isTrialLocked: false,
-      }),
-    ).toEqual({
-      checklist: "current",
-      evaluation: "blocked",
-      chat: "blocked",
-    });
+describe("agency workflow metadata", () => {
+  it("labels the agency-first case statuses", () => {
+    expect(CASE_STATUS_META[AGENCY_CASE_STATUS.INTAKE].label).toBe("Intake");
+    expect(CASE_STATUS_META[AGENCY_CASE_STATUS.NEEDS_CLIENT].label).toBe("Needs client");
+    expect(CASE_STATUS_META[AGENCY_CASE_STATUS.READY_TO_SUBMIT].label).toBe("Ready to submit");
   });
 
-  it("marks evaluation as ready once required documents are uploaded", () => {
-    expect(
-      getWorkflowStepStates({
-        currentStep: "checklist",
-        hasChecklist: true,
-        missingRequiredCount: 0,
-        hasEvaluation: false,
-        isTrialLocked: false,
-      }),
-    ).toEqual({
-      checklist: "current",
-      evaluation: "ready",
-      chat: "blocked",
-    });
+  it("maps important states to operational badge styles", () => {
+    expect(getStatusBadgeClass(AGENCY_CASE_STATUS.READY_TO_SUBMIT)).toContain("status-success");
+    expect(getStatusBadgeClass(AGENCY_CASE_STATUS.NEEDS_CLIENT)).toContain("status-warning");
+    expect(ISSUE_SEVERITY_META[REVIEW_ISSUE_SEVERITY.HIGH].badgeClassName).toContain("destructive");
   });
 
-  it("locks Atlas for unpaid trial applications even after evaluation", () => {
-    expect(
-      getWorkflowStepStates({
-        currentStep: "evaluation",
-        hasChecklist: true,
-        missingRequiredCount: 0,
-        hasEvaluation: true,
-        isTrialLocked: true,
-      }),
-    ).toEqual({
-      checklist: "done",
-      evaluation: "current",
-      chat: "locked",
-    });
+  it("generates a stable fallback case number", () => {
+    expect(getDisplayCaseNumber(null, "vapp_abcdef123456789")).toBe("CASE-ABCDEF123");
+    expect(getDisplayCaseNumber("VA-2026-ABC123", "vapp_unused")).toBe("VA-2026-ABC123");
   });
 });

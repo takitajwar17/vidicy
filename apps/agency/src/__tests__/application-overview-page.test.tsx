@@ -2,86 +2,146 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 
 const {
-  mockRequireVerifiedPageSession,
   mockRequireApplicationPagePermission,
-  mockGetDB,
-  mockCookies,
-  mockRedirect,
+  mockGetAgencyDashboardData,
+  mockGetAgencyCaseDetail,
   mockNotFound,
 } = vi.hoisted(() => ({
-  mockRequireVerifiedPageSession: vi.fn(),
   mockRequireApplicationPagePermission: vi.fn(),
-  mockGetDB: vi.fn(),
-  mockCookies: vi.fn(),
-  mockRedirect: vi.fn((href: string) => {
-    throw new Error(`REDIRECT:${href}`);
-  }),
+  mockGetAgencyDashboardData: vi.fn(),
+  mockGetAgencyCaseDetail: vi.fn(),
   mockNotFound: vi.fn(() => {
     throw new Error("NOT_FOUND");
   }),
 }));
 
 vi.mock("next/navigation", () => ({
-  redirect: mockRedirect,
   notFound: mockNotFound,
-}));
-
-vi.mock("next/headers", () => ({
-  cookies: mockCookies,
-}));
-
-vi.mock("@/utils/auth-page", () => ({
-  requireVerifiedPageSession: mockRequireVerifiedPageSession,
 }));
 
 vi.mock("@/utils/application-page-auth", () => ({
   requireApplicationPagePermission: mockRequireApplicationPagePermission,
 }));
 
-vi.mock("@/db", () => ({
-  getDB: mockGetDB,
+vi.mock("@/server/agency-data", () => ({
+  getAgencyDashboardData: mockGetAgencyDashboardData,
+  getAgencyCaseDetail: mockGetAgencyCaseDetail,
 }));
 
 vi.mock("@/components/page-header", () => ({
   PageHeader: () => null,
 }));
 
+vi.mock("@/components/agency/agency-case-actions", () => ({
+  AgencyCaseToolbar: () => <div>Agency toolbar</div>,
+  ReviewIssueStatusSelect: () => <div>Issue status select</div>,
+  AddReviewIssueForm: () => <div>Add issue form</div>,
+}));
+
+vi.mock("@/components/visa/checklist-generator", () => ({
+  ChecklistGenerator: () => <div>Generate checklist</div>,
+}));
+
+vi.mock("@/components/visa/document-upload", () => ({
+  DocumentUpload: () => <button>Upload</button>,
+}));
+
+vi.mock("@/components/visa/evaluation-trigger", () => ({
+  EvaluationTrigger: () => <button>Run AI Review</button>,
+}));
+
+vi.mock("@/components/visa/document-preview-drawer", () => ({
+  DocumentPreviewDrawer: ({ children, fileName }: { children?: React.ReactNode; fileName: string }) => (
+    <div>{fileName}{children}</div>
+  ),
+}));
+
+vi.mock("@/components/visa/delete-document-button", () => ({
+  DeleteDocumentButton: () => <button>Delete</button>,
+}));
+
+vi.mock("@/components/visa/set-document-active-button", () => ({
+  SetDocumentActiveButton: () => <button>Set active</button>,
+}));
+
 import DashboardPage from "@/app/(dashboard)/dashboard/page";
 import ApplicationDetailPage from "@/app/(workspace)/dashboard/[appId]/page";
 
-function makeSelectChain<T>(
-  result: T,
-  options: { orderBy?: boolean; limit?: boolean } = {},
-) {
-  const limitChain = {
-    limit: vi.fn(async () => result),
-  };
+const application = {
+  id: "vapp_123",
+  userId: "user_123",
+  caseNumber: "VA-2026-ABC123",
+  clientId: "acl_1",
+  clientName: "Global Visa Co.",
+  clientEmail: "client@example.com",
+  clientPhone: null,
+  destinationCountry: "United States",
+  visaType: "B1/B2 Visitor",
+  embassy: "US Embassy Dhaka",
+  homeCountry: "Bangladesh",
+  currentCountry: "Bangladesh",
+  status: "in_progress",
+  agencyStatus: "ai_reviewed",
+  priority: "high",
+  assignedReviewerId: "user_reviewer",
+  intakeSource: "manual",
+  submittedAt: new Date("2026-10-16T00:00:00.000Z"),
+  dueAt: new Date("2026-10-18T00:00:00.000Z"),
+  reviewCompletedAt: null,
+  finalSubmissionAt: null,
+  clientReportStatus: "ready",
+  readinessScore: 82,
+  riskLevel: "low",
+  trashedAt: null,
+  name: "Rahul Mehta - United States B1/B2 Visitor",
+  settings: "{}",
+  checklistSource: null,
+  checklistGeneratedAt: null,
+  checklistCitations: null,
+  actualOutcome: null,
+  outcomeDate: null,
+  outcomeNotes: null,
+  createdAt: new Date("2026-10-16T00:00:00.000Z"),
+  updatedAt: new Date("2026-10-16T00:00:00.000Z"),
+  updateCounter: 0,
+};
 
-  const orderByChain = {
-    orderBy: vi.fn(() => (options.limit ? limitChain : Promise.resolve(result))),
-  };
+const primaryApplicant = {
+  id: "appl_1",
+  applicationId: "vapp_123",
+  name: "Rahul Mehta",
+  relationship: "primary",
+  role: "owner",
+  dateOfBirth: null,
+  passportNumber: null,
+  nationality: "Bangladesh",
+  readinessScore: 82,
+  riskLevel: "low",
+  email: "rahul@example.com",
+  userId: null,
+  approvedBefore: null,
+  approvedVisaType: null,
+  approvedYear: null,
+  rejectedBefore: null,
+  rejectedVisaType: null,
+  rejectedYear: null,
+  rejectedReason: null,
+  createdAt: new Date("2026-10-16T00:00:00.000Z"),
+  updatedAt: new Date("2026-10-16T00:00:00.000Z"),
+  updateCounter: 0,
+};
 
-  const chain = {
-    from: vi.fn(() => chain),
-    where: vi.fn(() => (options.orderBy ? orderByChain : Promise.resolve(result))),
-  };
+const reviewer = {
+  id: "user_reviewer",
+  firstName: "Maya",
+  lastName: "Singh",
+  email: "maya@example.com",
+  avatar: null,
+};
 
-  return chain;
-}
-
-describe("application overview routing", () => {
+describe("agency application pages", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-
-    mockRequireVerifiedPageSession.mockResolvedValue({
-      userId: "user_123",
-      user: {
-        id: "user_123",
-        email: "owner@example.com",
-        emailVerified: new Date(),
-      },
-    });
-
     mockRequireApplicationPagePermission.mockResolvedValue({
       userId: "user_123",
       user: {
@@ -91,101 +151,176 @@ describe("application overview routing", () => {
       },
     });
 
-    mockCookies.mockResolvedValue({
-      get: vi.fn(() => undefined),
-    });
-  });
-
-  it("redirects the dashboard root to the application overview instead of checklist", async () => {
-    mockGetDB.mockReturnValue({
-      select: vi
-        .fn()
-        .mockImplementationOnce(() =>
-          makeSelectChain([{ id: "vapp_123" }], { orderBy: true, limit: true }),
-        )
-        .mockImplementationOnce(() => makeSelectChain([], {}))
-        .mockImplementationOnce(() => makeSelectChain([], {})),
-    });
-
-    await expect(DashboardPage()).rejects.toMatchObject({
-      message: "REDIRECT:/dashboard/vapp_123",
-    });
-  });
-
-  it("renders an application overview at the application root route", async () => {
-    mockGetDB.mockReturnValue({
-      query: {
-        visaApplicationTable: {
-          findFirst: vi.fn().mockResolvedValue({
-            id: "vapp_123",
-            userId: "user_123",
-            destinationCountry: "United States",
-            visaType: "Tourist",
-            embassy: "US Embassy Dhaka",
-            homeCountry: "Bangladesh",
-            currentCountry: "Bangladesh",
-            status: "in_progress",
-            paymentStatus: "paid",
-            isFreeTrialApp: false,
-            paidApplicantCount: 1,
-            readinessScore: 82,
-            riskLevel: "low",
-            trashedAt: null,
-          }),
+    mockGetAgencyDashboardData.mockResolvedValue({
+      cases: [
+        {
+          application,
+          primaryApplicant,
+          reviewer,
+          latestEvaluation: { overallScore: 82, riskLevel: "low" },
+          documentCount: 2,
+          openIssueCount: 1,
+          highIssueCount: 1,
         },
-        applicantTable: {
-          findMany: vi.fn().mockResolvedValue([
-            {
-              id: "appl_1",
-              name: "Taki Tajwar",
-              relationship: "primary",
-              readinessScore: 82,
-              riskLevel: "low",
-            },
-          ]),
+      ],
+      recentCases: [
+        {
+          application,
+          primaryApplicant,
+          reviewer,
+          latestEvaluation: { overallScore: 82, riskLevel: "low" },
+          documentCount: 2,
+          openIssueCount: 1,
+          highIssueCount: 1,
         },
-        checklistItemTable: {
-          findMany: vi.fn().mockResolvedValue([
-            { id: "c1", isRequired: true, status: "uploaded" },
-            { id: "c2", isRequired: true, status: "pending" },
-          ]),
-        },
-        documentEvaluationTable: {
-          findFirst: vi.fn().mockResolvedValue({
-            id: "deval_1",
-            overallScore: 82,
-            riskLevel: "low",
-            summary: "Strong file overall.",
-            createdAt: new Date("2026-10-01T08:00:00.000Z"),
-          }),
-        },
+      ],
+      staff: [],
+      workload: [],
+      topFlaggedIssues: [{ label: "High-priority file issues", count: 1, high: 1 }],
+      stats: {
+        totalApplications: 1,
+        completed: 0,
+        inReview: 1,
+        flagged: 1,
+        approvalReadyRate: 0,
+        scoredCases: 1,
       },
     });
 
+    mockGetAgencyCaseDetail.mockResolvedValue({
+      application,
+      applicants: [primaryApplicant],
+      primaryApplicant,
+      checklistItems: [
+        {
+          id: "c1",
+          applicationId: "vapp_123",
+          applicantId: "appl_1",
+          documentName: "Passport",
+          description: "Readable passport scan",
+          commonMistakes: null,
+          isRequired: true,
+          status: "uploaded",
+          sortOrder: 1,
+          createdAt: new Date("2026-10-16T00:00:00.000Z"),
+          updatedAt: new Date("2026-10-16T00:00:00.000Z"),
+          updateCounter: 0,
+        },
+      ],
+      documents: [
+        {
+          id: "udoc_1",
+          applicationId: "vapp_123",
+          applicantId: "appl_1",
+          checklistItemId: "c1",
+          fileName: "passport.pdf",
+          fileKey: "passport.pdf",
+          fileSize: 1024,
+          mimeType: "application/pdf",
+          uploadedAt: new Date("2026-10-16T00:00:00.000Z"),
+          chunkCount: 1,
+          extractionStatus: "completed",
+          indexingStatus: "completed",
+          extractionMethod: null,
+          extractedAt: null,
+          indexingAttemptedAt: null,
+          pageCount: 1,
+          imageDescription: null,
+          extractionPayload: null,
+          textContent: null,
+        },
+      ],
+      latestEvaluation: {
+        id: "deval_1",
+        applicationId: "vapp_123",
+        applicantId: "appl_1",
+        overallScore: 82,
+        riskLevel: "low",
+        summary: "Strong file overall.",
+        redFlags: ["Bank statement needs review"],
+        strengths: ["Clear passport scan"],
+        recommendations: ["Ask for updated bank statement"],
+        itemFeedback: {},
+        docSnapshots: {},
+        scoreConfidence: null,
+        ensembleDivergence: null,
+        atlasPreview: null,
+        createdAt: new Date("2026-10-16T00:00:00.000Z"),
+      },
+      issues: [
+        {
+          id: "rissue_1",
+          applicationId: "vapp_123",
+          applicantId: "appl_1",
+          checklistItemId: "c1",
+          documentId: "udoc_1",
+          title: "Bank statement needs review",
+          description: "Statement is older than the agency threshold.",
+          recommendation: "Ask client for a fresh statement.",
+          category: "document_quality",
+          severity: "high",
+          status: "open",
+          source: "ai",
+          confidence: 90,
+          clientVisible: true,
+          assignedToId: "user_reviewer",
+          createdById: "user_reviewer",
+          resolvedAt: null,
+          createdAt: new Date("2026-10-16T00:00:00.000Z"),
+          updatedAt: new Date("2026-10-16T00:00:00.000Z"),
+          updateCounter: 0,
+        },
+      ],
+      latestReport: {
+        id: "crep_1",
+        applicationId: "vapp_123",
+        status: "ready",
+        summary: "Client needs one updated statement.",
+        actionItems: [{ title: "Bank statement", detail: "Upload a fresh statement.", severity: "high" }],
+        createdById: "user_reviewer",
+        sentAt: null,
+        createdAt: new Date("2026-10-16T00:00:00.000Z"),
+        updatedAt: new Date("2026-10-16T00:00:00.000Z"),
+        updateCounter: 0,
+      },
+      staff: [
+        {
+          id: "atm_1",
+          userId: "user_reviewer",
+          role: "member",
+          status: "active",
+          joinedAt: new Date("2026-10-16T00:00:00.000Z"),
+          invitedAt: null,
+          user: reviewer,
+        },
+      ],
+    });
+  });
+
+  it("renders the dashboard root as an agency operations dashboard", async () => {
+    const markup = renderToStaticMarkup(await DashboardPage());
+
+    expect(markup).toContain("Overview of the agency review pipeline");
+    expect(markup).toContain("Application Throughput");
+    expect(markup).toContain("Recent Client Activity");
+    expect(markup).toContain("VA-2026-ABC123");
+    expect(markup).not.toContain("Start Your First Application");
+  });
+
+  it("renders an agency case review desk at the application root route", async () => {
     const page = await ApplicationDetailPage({
       params: Promise.resolve({ appId: "vapp_123" }),
     });
 
     const markup = renderToStaticMarkup(page);
 
-    expect(markup).toContain("Overview");
-    expect(markup).toContain("United States");
-    expect(markup).toContain("United States Tourist Application");
-    expect(markup).toContain("Next step");
-    expect(markup).toContain("Workflow map");
-    expect(markup).toContain("Upload 1 Doc");
-    expect(markup).toContain("Manage Applicants");
-    expect(markup).toContain("lucide-layout-list");
-    expect(markup).toContain("lucide-aperture");
-    expect(markup).toContain("lucide-scan-text");
-    expect(markup).not.toContain("lucide-upload");
-    expect(markup).not.toContain("lucide-sparkles");
-    expect(markup).not.toContain("lucide-settings-2");
-    expect(markup).toContain("Taki Tajwar");
-    expect(markup).not.toContain("Paid");
-    expect(markup).not.toContain("Full workspace unlocked");
-    expect(markup).not.toContain(
-      "Checklist, evaluation reruns, Atlas chat, and applicant management are all available.",
-    );
+    expect(markup).toContain("Application #VA-2026-ABC123");
+    expect(markup).toContain("Review summary");
+    expect(markup).toContain("AI review summary");
+    expect(markup).toContain("Client-ready report");
+    expect(markup).toContain("AI and reviewer flags");
+    expect(markup).toContain("Bank statement needs review");
+    expect(markup).not.toContain("Atlas");
+    expect(markup).not.toContain("Checkout");
   });
 });

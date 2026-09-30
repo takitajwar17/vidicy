@@ -3,15 +3,11 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const {
   mockRequireVerifiedEmail,
   mockFindApplication,
-  mockFindApplicant,
-  mockFindMembership,
-  mockFindRole,
+  mockEnsureAgencyTeamMembership,
 } = vi.hoisted(() => ({
   mockRequireVerifiedEmail: vi.fn(),
   mockFindApplication: vi.fn(),
-  mockFindApplicant: vi.fn(),
-  mockFindMembership: vi.fn(),
-  mockFindRole: vi.fn(),
+  mockEnsureAgencyTeamMembership: vi.fn(),
 }));
 
 vi.mock("react", () => ({
@@ -29,15 +25,6 @@ vi.mock("@/db", () => ({
       visaApplicationTable: {
         findFirst: mockFindApplication,
       },
-      applicantTable: {
-        findFirst: mockFindApplicant,
-      },
-      applicationMembershipTable: {
-        findFirst: mockFindMembership,
-      },
-      applicationRoleTable: {
-        findFirst: mockFindRole,
-      },
     },
   }),
 }));
@@ -45,22 +32,8 @@ vi.mock("@/db", () => ({
 vi.mock("@/db/schema", () => ({
   visaApplicationTable: {
     id: "visa_application.id",
-    userId: "visa_application.userId",
-  },
-  applicantTable: {
-    applicationId: "applicant.applicationId",
-    userId: "applicant.userId",
-  },
-  applicationMembershipTable: {
-    applicationId: "application_membership.applicationId",
-    userId: "application_membership.userId",
-    isActive: "application_membership.isActive",
-    roleId: "application_membership.roleId",
-  },
-  applicationRoleTable: {
-    id: "application_role.id",
-    applicationId: "application_role.applicationId",
-    permissions: "application_role.permissions",
+    trashedAt: "visa_application.trashedAt",
+    clientId: "visa_application.clientId",
   },
   APPLICATION_PERMISSIONS: {
     ACCESS_APPLICATION: "access_application",
@@ -69,33 +42,30 @@ vi.mock("@/db/schema", () => ({
     CHANGE_MEMBER_ROLES: "change_member_roles",
     EDIT_APPLICATION_SETTINGS: "edit_application_settings",
     DELETE_APPLICATION: "delete_application",
-    CREATE_ROLES: "create_roles",
-    EDIT_ROLES: "edit_roles",
-    DELETE_ROLES: "delete_roles",
-    ASSIGN_ROLES: "assign_roles",
     CREATE_COMPONENTS: "create_components",
     EDIT_COMPONENTS: "edit_components",
     DELETE_COMPONENTS: "delete_components",
   },
-  APPLICANT_ROLE: {
-    OWNER: "owner",
-    ADMIN: "admin",
-    MEMBER: "member",
-    GUEST: "guest",
-  },
-  PAYMENT_STATUS: {
-    PAID: "paid",
-  },
+	  AGENCY_STAFF_ROLE: {
+	    ADMIN: "admin",
+	    MEMBER: "member",
+	  },
+	}));
+
+vi.mock("@/server/agency-team", () => ({
+  ensureAgencyTeamMembership: mockEnsureAgencyTeamMembership,
 }));
 
 vi.mock("drizzle-orm", () => ({
-  and: (...args: unknown[]) => ({ type: "and", args }),
+  and: (...conditions: unknown[]) => ({ type: "and", conditions }),
   eq: (left: unknown, right: unknown) => ({ type: "eq", left, right }),
+  isNotNull: (column: unknown) => ({ type: "isNotNull", column }),
+  isNull: (column: unknown) => ({ type: "isNull", column }),
 }));
 
 import { hasApplicationPermission } from "@/utils/application-auth";
 
-describe("application auth with linked applicants", () => {
+describe("application auth with agency staff", () => {
   beforeEach(() => {
     vi.clearAllMocks();
 
@@ -108,25 +78,41 @@ describe("application auth with linked applicants", () => {
     });
 
     mockFindApplication.mockResolvedValue({
-      userId: "usr_owner",
+      id: "vapp_123",
     });
-    mockFindMembership.mockResolvedValue(null);
-    mockFindRole.mockResolvedValue(null);
   });
 
-  it("grants application access to a linked applicant with member role", async () => {
-    mockFindApplicant.mockResolvedValue({
-      role: "member",
-    });
+  it("grants agency members access to application cases", async () => {
+    mockEnsureAgencyTeamMembership.mockResolvedValue({ role: "member", isAdmin: false });
 
     await expect(hasApplicationPermission("vapp_123", "access_application")).resolves.toBe(true);
   });
 
-  it("grants admin permissions to a linked applicant with admin role", async () => {
-    mockFindApplicant.mockResolvedValue({
-      role: "admin",
-    });
+  it("does not grant staff management permissions to agency members", async () => {
+    mockEnsureAgencyTeamMembership.mockResolvedValue({ role: "member", isAdmin: false });
+
+    await expect(hasApplicationPermission("vapp_123", "invite_members")).resolves.toBe(false);
+  });
+
+  it("grants staff management permissions to agency admins", async () => {
+    mockEnsureAgencyTeamMembership.mockResolvedValue({ role: "admin", isAdmin: true });
 
     await expect(hasApplicationPermission("vapp_123", "invite_members")).resolves.toBe(true);
+  });
+
+  it("does not grant access through the creator row alone", async () => {
+    mockRequireVerifiedEmail.mockResolvedValue({
+      userId: "usr_owner",
+      user: {
+        id: "usr_owner",
+        emailVerified: new Date(),
+      },
+    });
+    mockEnsureAgencyTeamMembership.mockResolvedValue(null);
+    mockFindApplication.mockResolvedValue({
+      id: "vapp_123",
+    });
+
+    await expect(hasApplicationPermission("vapp_123", "access_application")).resolves.toBe(false);
   });
 });

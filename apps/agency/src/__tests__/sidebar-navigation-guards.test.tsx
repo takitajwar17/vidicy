@@ -62,11 +62,10 @@ vi.mock("next/link", () => ({
 }));
 
 vi.mock("next/navigation", () => ({
-  useRouter: () => ({ prefetch: vi.fn() }),
+  usePathname: () => "/dashboard",
 }));
 
 import { AppSidebar } from "@/components/app-sidebar";
-import { WorkspaceSidebar } from "@/components/workspace-sidebar";
 
 function getSection(markup: string, startMarker: string, endMarker: string) {
   const start = markup.indexOf(startMarker);
@@ -104,19 +103,21 @@ describe("sidebar navigation guards", () => {
     expect(footerSection).not.toContain("Announcements");
   });
 
-  it("keeps admin, support, help, and announcements together in WorkspaceSidebar content", () => {
+  it("renders the agency navigation in AppSidebar content", () => {
     const markup = renderToStaticMarkup(
-      <WorkspaceSidebar
-        appId="vapp_abc123"
-        isAdmin
-        announcementsUnreadCount={3}
-        user={{ name: "Taki Khan", email: "taki@example.com", avatar: "" }}
-      />,
+      <AppSidebar user={{ name: "Taki Khan", email: "taki@example.com", avatar: "" }} />,
     );
     const contentSection = getSection(markup, '<section data-sidebar-content="true">', "</section>");
-    const footerSection = getSection(markup, '<footer data-sidebar-footer="true">', "</footer>");
 
-    expectOrderedTitles(contentSection, ["Admin", "Support Inbox", "Get Help", "Announcements"]);
-    expect(footerSection).not.toContain("Announcements");
+    expectOrderedTitles(contentSection, [
+      "Dashboard",
+      "Applications",
+      "AI Review",
+      "Clients",
+      "Documents",
+      "Team",
+      "Reports",
+      "Settings",
+    ]);
   });
 });

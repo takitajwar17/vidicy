@@ -22,10 +22,9 @@ function getLatestSnapshotPath() {
 }
 
 describe("database composite indexes", () => {
-  it("declares the expected composite indexes in the schema", () => {
-    const chatSchema = readRepoFile("src/db/schema/chat.ts");
-    const paymentEventSchema = readRepoFile("src/db/schema/payment-event.ts");
-    const applicantSchema = readRepoFile("src/db/schema/applicant.ts");
+	  it("declares the expected composite indexes in the schema", () => {
+	    const chatSchema = readRepoFile("src/db/schema/chat.ts");
+	    const applicantSchema = readRepoFile("src/db/schema/applicant.ts");
     const visaApplicationSchema = readRepoFile("src/db/schema/visa-application.ts");
     const checklistSchema = readRepoFile("src/db/schema/checklist.ts");
     const documentSchema = readRepoFile("src/db/schema/document.ts");
@@ -33,13 +32,9 @@ describe("database composite indexes", () => {
 
     expect(normalize(chatSchema)).toContain("chat_conv_app_updated_idx");
     expect(normalize(chatSchema)).toContain("table.applicationId, table.updatedAt");
-    expect(normalize(chatSchema)).toContain("chat_msg_conv_created_idx");
-    expect(normalize(chatSchema)).toContain("table.conversationId, table.createdAt");
-    expect(normalize(paymentEventSchema)).toContain("payment_event_app_type_status_created_idx");
-    expect(normalize(paymentEventSchema)).toContain(
-      "table.applicationId, table.type, table.status, table.createdAt",
-    );
-    expect(normalize(applicantSchema)).toContain("applicant_app_created_idx");
+	    expect(normalize(chatSchema)).toContain("chat_msg_conv_created_idx");
+	    expect(normalize(chatSchema)).toContain("table.conversationId, table.createdAt");
+	    expect(normalize(applicantSchema)).toContain("applicant_app_created_idx");
     expect(normalize(applicantSchema)).toContain("table.applicationId, table.createdAt");
     expect(normalize(visaApplicationSchema)).toContain("visa_app_user_created_idx");
     expect(normalize(visaApplicationSchema)).toContain("table.userId, table.createdAt");
@@ -78,11 +73,8 @@ describe("database composite indexes", () => {
       tables: Record<string, { indexes?: Record<string, { isUnique?: boolean }> }>;
     };
 
-    expect(existingCompositeIndexMigration).toContain(
-      "CREATE INDEX `payment_event_app_type_status_created_idx` ON `payment_event` (`applicationId`,`type`,`status`,`createdAt`);",
-    );
-    expect(existingCompositeIndexMigration).toContain(
-      "CREATE INDEX `chat_conv_app_updated_idx` ON `chat_conversation` (`applicationId`,`updatedAt`);",
+	    expect(existingCompositeIndexMigration).toContain(
+	      "CREATE INDEX `chat_conv_app_updated_idx` ON `chat_conversation` (`applicationId`,`updatedAt`);",
     );
     expect(existingCompositeIndexMigration).toContain(
       "CREATE INDEX `chat_msg_conv_created_idx` ON `chat_message` (`conversationId`,`createdAt`);",
@@ -114,12 +106,8 @@ describe("database composite indexes", () => {
     expect(journal.entries.some((entry) => entry.tag === "0006_add_document_hot_indexes")).toBe(
       true,
     );
-    expect(
-      latestSnapshot.tables.payment_event.indexes?.payment_event_app_type_status_created_idx
-        ?.isUnique,
-    ).toBe(false);
-    expect(
-      latestSnapshot.tables.chat_conversation.indexes?.chat_conv_app_updated_idx?.isUnique,
+	    expect(
+	      latestSnapshot.tables.chat_conversation.indexes?.chat_conv_app_updated_idx?.isUnique,
     ).toBe(false);
     expect(latestSnapshot.tables.chat_message.indexes?.chat_msg_conv_created_idx?.isUnique).toBe(
       false,

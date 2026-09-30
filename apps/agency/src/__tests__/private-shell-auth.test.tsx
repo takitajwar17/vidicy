@@ -8,6 +8,7 @@ const {
   mockGetUserSupportTicketSummaries,
   mockGetSupportTicketById,
   mockMarkTicketAsViewed,
+  mockEnsureAgencyTeamMembership,
   mockRedirect,
   mockNotFound,
 } = vi.hoisted(() => ({
@@ -20,6 +21,7 @@ const {
   mockGetUserSupportTicketSummaries: vi.fn(),
   mockGetSupportTicketById: vi.fn(),
   mockMarkTicketAsViewed: vi.fn(),
+  mockEnsureAgencyTeamMembership: vi.fn(),
   mockRedirect: vi.fn((href: string) => {
     throw new Error(`REDIRECT:${href}`);
   }),
@@ -59,12 +61,8 @@ vi.mock("@/components/site-sidebar", () => ({
   SiteSidebar: () => null,
 }));
 
-vi.mock("@/components/workspace-sidebar", () => ({
-  WorkspaceSidebar: () => null,
-}));
-
-vi.mock("@/components/set-last-active-app-cookie", () => ({
-  SetLastActiveAppCookie: () => null,
+vi.mock("@/server/agency-team", () => ({
+  ensureAgencyTeamMembership: mockEnsureAgencyTeamMembership,
 }));
 
 vi.mock("@/server/support", () => ({
@@ -101,6 +99,7 @@ describe("private shell auth boundaries", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockGetCsrfToken.mockResolvedValue("csrf-token");
+    mockEnsureAgencyTeamMembership.mockResolvedValue({ role: "admin", isAdmin: true });
     mockRequirePageSession.mockResolvedValue({
       userId: "user_1",
       user: {
@@ -155,6 +154,7 @@ describe("private shell auth boundaries", () => {
   it("uses the shared verified-page helper in the dashboard shell", async () => {
     await expect(DashboardLayout({ children: <div /> })).resolves.toBeDefined();
     expect(mockRequireVerifiedPageSession).toHaveBeenCalledTimes(1);
+    expect(mockEnsureAgencyTeamMembership).toHaveBeenCalledTimes(1);
   });
 
   it("uses the shared verified-page helper in the workspace shell", async () => {
@@ -165,6 +165,28 @@ describe("private shell auth boundaries", () => {
       }),
     ).resolves.toBeDefined();
     expect(mockRequireVerifiedPageSession).toHaveBeenCalledWith("/dashboard/vapp_123");
+    expect(mockEnsureAgencyTeamMembership).toHaveBeenCalledTimes(1);
+  });
+
+  it("redirects the dashboard shell when the verified user is not agency staff", async () => {
+    mockEnsureAgencyTeamMembership.mockResolvedValueOnce(null);
+
+    await expect(DashboardLayout({ children: <div /> })).rejects.toThrow(
+      "REDIRECT:/pilot-access",
+    );
+    expect(mockRedirect).toHaveBeenCalledWith("/pilot-access");
+  });
+
+  it("redirects the workspace shell when the verified user is not agency staff", async () => {
+    mockEnsureAgencyTeamMembership.mockResolvedValueOnce(null);
+
+    await expect(
+      WorkspaceLayout({
+        children: <div />,
+        params: Promise.resolve({ appId: "vapp_123" }),
+      }),
+    ).rejects.toThrow("REDIRECT:/pilot-access");
+    expect(mockRedirect).toHaveBeenCalledWith("/pilot-access");
   });
 
   it("uses the shared session-only helper in the support shell", async () => {

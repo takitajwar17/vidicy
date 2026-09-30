@@ -4,7 +4,6 @@ import { describe, expect, it } from "vitest";
 import MarketingFaqPage from "@/app/(marketing)/faq/page";
 import EnterprisePage from "@/app/(marketing)/enterprise/page";
 import AboutPage from "@/app/(marketing)/about/page";
-import FundingPage from "@/app/funding/page";
 import MarketingLayout from "@/app/(marketing)/layout";
 import LegalLayout from "@/app/(legal)/layout";
 import PrivacyPage from "@/app/(legal)/privacy/page";
@@ -36,7 +35,6 @@ describe("shared public site shell", () => {
       renderToStaticMarkup(<MarketingFaqPage />),
       renderToStaticMarkup(<EnterprisePage />),
       renderToStaticMarkup(<AboutPage />),
-      renderToStaticMarkup(<FundingPage />),
       renderToStaticMarkup(<TermsPage />),
       renderToStaticMarkup(<PrivacyPage />),
       renderToStaticMarkup(<SubprocessorsPage />),

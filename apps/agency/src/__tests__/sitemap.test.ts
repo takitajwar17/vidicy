@@ -9,8 +9,6 @@ const expectedPublicStaticUrls = [
   `${CANONICAL_SITE_URL}/enterprise`,
   `${CANONICAL_SITE_URL}/about`,
   `${CANONICAL_SITE_URL}/pilot-access`,
-  `${CANONICAL_SITE_URL}/pitch-deck`,
-  `${CANONICAL_SITE_URL}/funding`,
   `${CANONICAL_SITE_URL}/privacy`,
   `${CANONICAL_SITE_URL}/terms`,
   `${CANONICAL_SITE_URL}/subprocessors`,

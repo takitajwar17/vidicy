@@ -50,11 +50,11 @@ describe('Database Schema Constants Consistency', () => {
       expect(MARKETING_SEND_STATUS.FAILED).toBe('failed')
     })
 
-    it('should export the expected marketing event types', () => {
-      expect(MARKETING_EVENT_TYPE.USER_VERIFIED_EMAIL).toBe('user_verified_email')
-      expect(MARKETING_EVENT_TYPE.PAYMENT_COMPLETED).toBe('payment_completed')
-      expect(MARKETING_EVENT_TYPE.ONBOARDING_COMPLETED).toBe('onboarding_completed')
-    })
+	    it('should export the expected marketing event types', () => {
+	      expect(MARKETING_EVENT_TYPE.USER_VERIFIED_EMAIL).toBe('user_verified_email')
+	      expect(MARKETING_EVENT_TYPE.EVALUATION_COMPLETED).toBe('evaluation_completed')
+	      expect(MARKETING_EVENT_TYPE.ONBOARDING_COMPLETED).toBe('onboarding_completed')
+	    })
 
     it('should expose the marketing tables', () => {
       expect(getTableName(marketingContactTable)).toBe('marketing_contact')

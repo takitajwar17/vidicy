@@ -110,7 +110,7 @@ describe("getDocumentPipelineState", () => {
       }),
     ).toEqual({
       isReadableByAI: false,
-      isIndexedForAtlas: false,
+      isIndexedForSearch: false,
     })
   })
 
@@ -122,7 +122,7 @@ describe("getDocumentPipelineState", () => {
       }),
     ).toEqual({
       isReadableByAI: true,
-      isIndexedForAtlas: true,
+      isIndexedForSearch: true,
     })
   })
 
@@ -134,7 +134,7 @@ describe("getDocumentPipelineState", () => {
       }),
     ).toEqual({
       isReadableByAI: true,
-      isIndexedForAtlas: false,
+      isIndexedForSearch: false,
     })
   })
 
@@ -146,7 +146,7 @@ describe("getDocumentPipelineState", () => {
       }),
     ).toEqual({
       isReadableByAI: false,
-      isIndexedForAtlas: false,
+      isIndexedForSearch: false,
     })
   })
 })
