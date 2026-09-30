@@ -31,7 +31,7 @@ export const siteConfig = {
     "Visa Application",
     "Visa Rejection",
     "Document Review",
-    "AI Visa Assistant",
+    "Visa Review Software",
     "Schengen Visa",
     "US Visa",
     "UK Visa",
@@ -47,7 +47,7 @@ export const siteConfig = {
       question: "What is Vidicy?",
       answer: (
         <span>
-          Vidicy is AI-powered visa application review software for visa and travel agencies. It
+          Vidicy is visa application review software for visa and travel agencies. It
           helps teams check client files in bulk, catch missing documents and inconsistencies, and
           turn review notes into clear client follow-ups.
         </span>
@@ -88,7 +88,7 @@ export const siteConfig = {
         <span>
           Client documents are handled through protected infrastructure with access controls,
           encrypted transport, and vendor-limited processing. We do not use client files to train
-          public AI models.
+          public models.
         </span>
       ),
     },

@@ -141,7 +141,7 @@ export function DangerZoneCard() {
                     <br />
                     • All uploaded files from cloud storage
                     <br />
-                    • All chat history and AI-generated content
+                    • All chat history and generated review content
                     <br />
                     • All support tickets
                     <br />

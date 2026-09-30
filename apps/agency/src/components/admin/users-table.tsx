@@ -312,7 +312,7 @@ export function UsersTable() {
                   <Trash2 className="h-4 w-4 mt-0.5 text-destructive shrink-0" />
                   <div className="text-sm">
                     <span className="font-medium">{deleteDialog.preview.appsToDelete} application{deleteDialog.preview.appsToDelete === 1 ? "" : "s"}</span>
-                    {" "}with no remaining active staff owner will be permanently deleted (including documents and AI data).
+                    {" "}with no remaining active staff owner will be permanently deleted, including documents and review data.
                   </div>
                 </div>
               )}

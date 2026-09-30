@@ -10,13 +10,13 @@ export const SUBPROCESSORS_LAST_UPDATED = "October 7, 2026";
 export const SUBPROCESSORS: SubprocessorEntry[] = [
   {
     name: "OpenAI",
-    purpose: "AI processing services",
+    purpose: "Automated document processing services",
     location: "United States",
     website: "https://openai.com",
   },
   {
     name: "Perplexity",
-    purpose: "AI processing services",
+    purpose: "Automated requirement lookup services",
     location: "United States",
     website: "https://www.perplexity.ai/",
   },
