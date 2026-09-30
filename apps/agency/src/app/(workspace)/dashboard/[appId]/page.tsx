@@ -1,8 +1,8 @@
 import type { Metadata } from "next";
-import { ApplicationOverviewContent } from "./_overview-content";
+import { AgencyCaseContent } from "./_agency-case-content";
 
 export const metadata: Metadata = {
-  title: "Application overview",
+  title: "Application review",
 };
 
 export default async function ApplicationDetailPage({
@@ -11,5 +11,5 @@ export default async function ApplicationDetailPage({
   params: Promise<{ appId: string }>
 }) {
   const { appId } = await params
-  return await ApplicationOverviewContent({ appId })
+  return await AgencyCaseContent({ appId })
 }
