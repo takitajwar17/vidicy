@@ -27,12 +27,6 @@ export const SUBPROCESSORS: SubprocessorEntry[] = [
     website: "https://www.cloudflare.com/",
   },
   {
-    name: "Stripe",
-    purpose: "Payment and billing services",
-    location: "United States",
-    website: "https://stripe.com",
-  },
-  {
     name: "Resend",
     purpose: "Email delivery services",
     location: "United States",

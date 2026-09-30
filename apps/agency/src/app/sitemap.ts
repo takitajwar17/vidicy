@@ -41,18 +41,6 @@ const STATIC_SITEMAP_ENTRIES: StaticSitemapEntry[] = [
     priority: 0.45,
   },
   {
-    path: "/pitch-deck",
-    lastModified: "2026-10-18",
-    changeFrequency: "monthly",
-    priority: 0.2,
-  },
-  {
-    path: "/funding",
-    lastModified: "2026-10-18",
-    changeFrequency: "monthly",
-    priority: 0.2,
-  },
-  {
     path: "/privacy",
     lastModified: "2026-10-02",
     changeFrequency: "yearly",

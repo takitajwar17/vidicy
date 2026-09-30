@@ -896,7 +896,7 @@ function TableCellViewer({ item }: { item: MockupData }) {
           {!isMobile && (
             <>
               <ChartContainer config={chartConfig}>
-                <AreaChart
+                <AreaChartComponent
                   accessibilityLayer
                   data={chartData}
                   margin={{
@@ -905,19 +905,19 @@ function TableCellViewer({ item }: { item: MockupData }) {
                   }}
                 >
                   <CartesianGrid vertical={false} />
-                  <XAxis
+                  <XAxisComponent
                     dataKey="month"
                     tickLine={false}
                     axisLine={false}
                     tickMargin={8}
-                    tickFormatter={(value) => value.slice(0, 3)}
+                    tickFormatter={(value: string) => value.slice(0, 3)}
                     hide
                   />
                   <ChartTooltip
                     cursor={false}
                     content={<ChartTooltipContent indicator="dot" />}
                   />
-                  <Area
+                  <AreaComponent
                     dataKey="mobile"
                     type="natural"
                     fill="var(--color-mobile)"
@@ -925,7 +925,7 @@ function TableCellViewer({ item }: { item: MockupData }) {
                     stroke="var(--color-mobile)"
                     stackId="a"
                   />
-                  <Area
+                  <AreaComponent
                     dataKey="desktop"
                     type="natural"
                     fill="var(--color-desktop)"
@@ -933,7 +933,7 @@ function TableCellViewer({ item }: { item: MockupData }) {
                     stroke="var(--color-desktop)"
                     stackId="a"
                   />
-                </AreaChart>
+                </AreaChartComponent>
               </ChartContainer>
               <Separator />
               <div className="grid gap-2">
@@ -1037,3 +1037,7 @@ function TableCellViewer({ item }: { item: MockupData }) {
 }
 
 import { cn } from "@/lib/utils"
+
+const AreaChartComponent = AreaChart as unknown as React.ComponentType<Record<string, unknown>>
+const AreaComponent = Area as unknown as React.ComponentType<Record<string, unknown>>
+const XAxisComponent = XAxis as unknown as React.ComponentType<Record<string, unknown>>

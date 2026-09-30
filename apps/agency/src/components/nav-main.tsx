@@ -1,10 +1,8 @@
 "use client"
 
-import { MailIcon, PlusCircleIcon } from "lucide-react"
+import { PlusCircleIcon } from "lucide-react"
 import Link from "next/link"
 import type { Route } from "next"
-import { useSearchParams } from "next/navigation"
-import { Button } from "@/components/ui/button"
 import {
   SidebarGroup,
   SidebarGroupContent,
@@ -28,19 +26,12 @@ export function NavMain({
   label?: string
 }) {
   const { setOpenMobile } = useSidebar()
-  const searchParams = useSearchParams()
-  const applicantId = searchParams.get("applicant")
-
-  function withApplicant(url: string): Route {
-    if (!applicantId) return url as Route
-    return `${url}?applicant=${applicantId}` as Route
-  }
 
   return (
     <SidebarGroup>
       <SidebarGroupContent className="flex flex-col gap-2">
         <SidebarMenu>
-          <SidebarMenuItem className="flex items-center gap-2">
+          <SidebarMenuItem>
             <SidebarMenuButton
               asChild
               tooltip="New Application"
@@ -51,15 +42,6 @@ export function NavMain({
                 <span>New Application</span>
               </Link>
             </SidebarMenuButton>
-            <Button
-              size="icon"
-              type="button"
-              variant="outline"
-              className="h-9 w-9 shrink-0 rounded-full border-[var(--sidebar-action-border)] bg-[var(--sidebar-action)] text-[var(--sidebar-action-foreground)] transition-colors hover:bg-[var(--sidebar-action-hover)] hover:text-[var(--sidebar-action-foreground)] group-data-[collapsible=icon]:opacity-0"
-            >
-              <MailIcon />
-              <span className="sr-only">Inbox</span>
-            </Button>
           </SidebarMenuItem>
         </SidebarMenu>
         {label && <SidebarGroupLabel>{label}</SidebarGroupLabel>}
@@ -67,7 +49,7 @@ export function NavMain({
           {items.map((item) => (
             <SidebarMenuItem key={item.title}>
               <SidebarMenuButton asChild tooltip={item.title}>
-                <Link href={withApplicant(item.url)} onClick={() => setOpenMobile(false)}>
+                <Link href={item.url as Route} onClick={() => setOpenMobile(false)}>
                   {item.icon ? <item.icon /> : null}
                   <span>{item.title}</span>
                   {item.badge ? (

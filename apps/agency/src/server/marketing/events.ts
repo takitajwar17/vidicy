@@ -22,7 +22,6 @@ function shouldDedupeByType(type: RecordMarketingEventParams["type"]) {
     case MARKETING_EVENT_TYPE.APPLICATION_CREATED:
     case MARKETING_EVENT_TYPE.DOCUMENT_UPLOADED:
     case MARKETING_EVENT_TYPE.EVALUATION_COMPLETED:
-    case MARKETING_EVENT_TYPE.PAYMENT_COMPLETED:
     case MARKETING_EVENT_TYPE.ONBOARDING_COMPLETED:
       return true;
     default:

@@ -103,3 +103,4 @@ backups/
 .playwright/.auth/
 test-results/
 playwright-report/
+apps/agency/output

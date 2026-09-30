@@ -3,12 +3,19 @@
 import * as React from "react";
 import DashboardLogo from "@/components/dashboard-logo";
 import {
+  BotIcon,
+  BriefcaseBusinessIcon,
+  FileTextIcon,
   HelpCircleIcon,
   LifeBuoyIcon,
   LayoutDashboardIcon,
+  LibraryBigIcon,
+  LineChartIcon,
   ShieldIcon,
   ActivityIcon,
   MegaphoneIcon,
+  SettingsIcon,
+  UsersIcon,
 } from "lucide-react";
 
 import { NavMain } from "@/components/nav-main";
@@ -26,6 +33,7 @@ import {
 import Link from "next/link";
 import type { Route } from "next";
 import { useSessionStore } from "@/state/session";
+import { AGENCY_NAV_ITEMS } from "@/lib/agency-workflow";
 
 const defaultUser = {
   name: "User",
@@ -47,13 +55,21 @@ export function AppSidebar({
   const unreadSupportCount = useSessionStore((s) => s.session?.unreadSupportTicketsCount);
   const adminUnreadSupportCount = useSessionStore((s) => s.session?.adminUnreadSupportTicketsCount);
 
-  const navMain: { title: string; url: string; icon: typeof LayoutDashboardIcon }[] = [
-    {
-      title: "Dashboard",
-      url: "/dashboard",
-      icon: LayoutDashboardIcon,
-    },
-  ];
+  const iconByTitle = {
+    Dashboard: LayoutDashboardIcon,
+    Applications: BriefcaseBusinessIcon,
+    "AI Review": BotIcon,
+    Clients: UsersIcon,
+    Documents: LibraryBigIcon,
+    Team: ShieldIcon,
+    Reports: LineChartIcon,
+    Settings: SettingsIcon,
+  } as const;
+
+  const navMain = AGENCY_NAV_ITEMS.map((item) => ({
+    ...item,
+    icon: iconByTitle[item.title] ?? FileTextIcon,
+  }));
 
   const secondaryItems: {
     title: string;

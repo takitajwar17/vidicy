@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import type { ComponentType, ReactNode } from "react";
 import { Instrument_Serif } from "next/font/google";
 import { Inria_Serif } from "next/font/google";
 import { Manrope } from "next/font/google";
@@ -19,6 +20,12 @@ import {
   SITE_NAME,
 } from "@/constants";
 import { siteFaviconIcons } from "@/lib/site-icons";
+
+const ExternalScript = Script as unknown as ComponentType<{
+  src: string;
+  strategy?: "lazyOnload" | "afterInteractive" | "worker";
+  "data-key"?: string;
+}>;
 
 const instrumentSerif = Instrument_Serif({
   subsets: ["latin"],
@@ -105,7 +112,7 @@ export const metadata: Metadata = {
 export default function BaseLayout({
   children,
 }: Readonly<{
-  children: React.ReactNode;
+  children: ReactNode;
 }>) {
   return (
     <html
@@ -129,12 +136,12 @@ export default function BaseLayout({
           </TooltipProvider>
         </ThemeProvider>
         <Toaster closeButton position="top-right" expand duration={7000} />
-        <Script
+        <ExternalScript
           src="https://analytics.ahrefs.com/analytics.js"
           data-key="oZe+17dcsEEpe8y02wK7mA"
           strategy="lazyOnload"
         />
-        <Script
+        <ExternalScript
           src="https://aromatic-caribou-889.convex.site/api/a/am_rLALT9FXrq74hEOQ"
           strategy="lazyOnload"
         />

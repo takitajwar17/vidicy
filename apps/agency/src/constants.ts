@@ -101,14 +101,6 @@ export const RETENTION_EMAIL_VERIFICATION_TOKEN_HOURS = 24;
 // Business rules
 export const MODIFICATION_GAP_DAYS_THRESHOLD = 365;
 
-// Stripe pricing (in cents)
-export const SOLO_PRICE_CENTS = 7900; // $79 — 1 applicant
-export const FAMILY_PRICE_CENTS = 16900; // $169 — family bundle (4 applicants)
-export const ADDITIONAL_APPLICANT_PRICE_CENTS = 4000; // $40 each extra (post-purchase)
-export const CUSTOM_APPLICANT_PRICE_CENTS = 3500; // $35 each extra (upfront at checkout)
-export const FAMILY_BASE_APPLICANT_COUNT = 4;
-export const PLAN_LIMIT_ERROR = "PLAN_LIMIT_REACHED";
-
 /** Text colour classes keyed by risk level */
 export const RISK_TEXT_COLORS: Record<string, string> = {
   low: "text-status-success",

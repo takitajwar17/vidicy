@@ -1,5 +1,4 @@
 import { CANONICAL_SITE_URL, SITE_NAME, SITE_DESCRIPTION } from "@/constants";
-import { pricingPlans } from "@/config/pricing";
 import { FaTwitter } from "react-icons/fa";
 
 export const BLUR_FADE_DELAY = 0.15;
@@ -20,7 +19,7 @@ export const marketingTopBarLinks = [
 ] as const;
 
 /**
- * Global site configuration — navigation, pricing plans, FAQs, footer links.
+ * Global site configuration — navigation, FAQs, and footer links.
  * All content is tailored to the Vidicy product.
  */
 export const siteConfig = {
@@ -43,7 +42,6 @@ export const siteConfig = {
     twitter: "https://twitter.com/takitajwar17",
   },
   header: [...marketingTopBarLinks],
-  pricing: pricingPlans,
   faqs: [
     {
       question: "What is Vidicy?",

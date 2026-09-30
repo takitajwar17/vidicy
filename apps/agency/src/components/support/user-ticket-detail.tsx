@@ -289,7 +289,7 @@ export function UserTicketDetail({ ticket, onBack, backHref }: UserTicketDetailP
             )
           }
 
-          // Admin messages (left-aligned, Atlas pattern)
+          // Admin messages stay left-aligned to separate support replies from user replies.
           const adminUser = (msg as any).user as { firstName?: string | null; lastName?: string | null } | undefined
           const adminInitials = adminUser
             ? `${adminUser.firstName?.[0] ?? ""}${adminUser.lastName?.[0] ?? ""}`.toUpperCase() || "ST"

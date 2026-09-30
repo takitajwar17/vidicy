@@ -4,6 +4,9 @@ import { cn } from "@/lib/utils";
 import Link from "next/link";
 import type { Route } from "next";
 import { FaXTwitter } from "react-icons/fa6";
+import type { ComponentType } from "react";
+
+const XIcon = FaXTwitter as unknown as ComponentType<{ className?: string }>;
 
 function isExternalHref(href: string) {
   return /^(https?:\/\/|mailto:)/i.test(href);
@@ -55,7 +58,7 @@ const footerSections = [
 ] as const;
 
 const socialLinks = [
-  { href: siteConfig.links.twitter, label: "X", icon: FaXTwitter },
+  { href: siteConfig.links.twitter, label: "X", icon: XIcon },
 ] as const;
 
 export default function Footer({ className }: { className?: string }) {

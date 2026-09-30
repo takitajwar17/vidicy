@@ -109,7 +109,6 @@ export default function PrivacyPage() {
             <ListItem><strong className="text-foreground">Client and applicant details:</strong> Passport number, date of birth, nationality, visa history, travel dates, and related information entered or uploaded by an agency user.</ListItem>
             <ListItem><strong className="text-foreground">Visa documents:</strong> Documents, images, and forms uploaded for review, which may include passports, bank statements, invitation letters, employment records, bookings, and other supporting materials.</ListItem>
             <ListItem><strong className="text-foreground">Usage data:</strong> Information about how agency users interact with queues, reviews, reports, document checks, and support workflows.</ListItem>
-            <ListItem><strong className="text-foreground">Payment Information:</strong> We use Stripe to process payments. We do not store your complete credit card information on our servers.</ListItem>
             <ListItem><strong className="text-foreground">Technical Data:</strong> IP address (stored with your session for security purposes), browser type, and device information collected automatically.</ListItem>
           </ul>
         </section>
@@ -171,7 +170,7 @@ export default function PrivacyPage() {
             <ListItem>Personal data may be processed by OpenAI in the United States.</ListItem>
             <ListItem>Personal data may be processed by Perplexity AI in the United States.</ListItem>
             <ListItem>Data may be stored and served through Cloudflare&apos;s globally distributed infrastructure.</ListItem>
-            <ListItem>Payment-related data is processed by Stripe in the United States.</ListItem>
+            <ListItem>Email notifications may be processed by Resend in the United States.</ListItem>
           </ul>
           <p className="text-sm text-muted-foreground leading-relaxed mt-4">
             These transfers are protected by Data Processing Agreements with each provider, which include Standard Contractual Clauses (SCCs) as approved by the European Commission where applicable.
@@ -228,7 +227,6 @@ export default function PrivacyPage() {
           <ul className="space-y-3">
             <ListItem><strong className="text-foreground">session</strong> — Authentication session cookie (httpOnly, secure, 30-day expiry).</ListItem>
             <ListItem><strong className="text-foreground">csrf-token</strong> — Cross-site request forgery protection (httpOnly, secure, 24-hour expiry).</ListItem>
-            <ListItem><strong className="text-foreground">lastActiveApp</strong> — Remembers the last active review workspace for convenience (30-day expiry).</ListItem>
           </ul>
           <p className="text-sm text-muted-foreground leading-relaxed mt-4">
             We use Cloudflare Web Analytics for anonymous, aggregated performance metrics. This does not use cookies and does not track individual users.

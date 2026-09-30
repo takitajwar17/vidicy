@@ -54,10 +54,7 @@
     "SENTRY_DSN": "https://2205a26662a98553c00ff1af4b639432@o4509695829540864.ingest.us.sentry.io/4510965026390016",
     "GOOGLE_CLIENT_ID": "600776052247-u1vjvu7ccd1rso27c5h81estus9mbodi.apps.googleusercontent.com",
     "NEXT_PUBLIC_SITE_URL": "https://agency.vidicy.com",
-    "NEXT_PUBLIC_TURNSTILE_SITE_KEY": "0x4AAAAAACY3QEqdhpl26JyY",
-    // Stripe publishable key (safe to expose — starts with pk_)
-    // Set STRIPE_SECRET_KEY and STRIPE_WEBHOOK_SECRET via: wrangler secret put <NAME>
-    "NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY": "pk_live_51SqJeqKGVpVdLkT0jTAL0nbuoX7DzpLqgbCTUnJMPWEf2OOdDprwmXnBPpPHR8OJRA4u2aSI5GGAHG80xmLmiIAU005qm4QNnx"
+    "NEXT_PUBLIC_TURNSTILE_SITE_KEY": "0x4AAAAAACY3QEqdhpl26JyY"
   },
   /**
    * Note: Use secrets to store sensitive data.

@@ -13,6 +13,9 @@ import { marketingTopBarLinks, siteConfig } from "@/lib/config";
 import { cn } from "@/lib/utils";
 import Link from "next/link";
 import { IoMenuSharp } from "react-icons/io5";
+import type { ComponentType } from "react";
+
+const MenuIcon = IoMenuSharp as unknown as ComponentType<{ className?: string }>;
 
 export default function drawerDemo({
   hideAuthActions = false,
@@ -24,7 +27,7 @@ export default function drawerDemo({
   return (
     <Drawer>
       <DrawerTrigger aria-label="Open menu">
-        <IoMenuSharp className="text-2xl" />
+        <MenuIcon className="text-2xl" />
       </DrawerTrigger>
       <DrawerContent className="rounded-t-[28px] border-border/70 bg-background/95 pb-2 backdrop-blur-xl">
         <DrawerHeader className="px-6 pb-3 pt-2">

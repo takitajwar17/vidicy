@@ -4,7 +4,6 @@ import Link from "next/link";
 import { requireVerifiedPageSession } from "@/utils/auth-page";
 import { getDB } from "@/db";
 import { visaApplicationTable } from "@/db/schema";
-import { isTrialLocked } from "@/utils/application-auth";
 import { eq, desc, isNull, and } from "drizzle-orm";
 import {
   Card,
@@ -18,6 +17,7 @@ import { Button } from "@/components/ui/button";
 import { ApertureIcon, PlusIcon } from "lucide-react";
 import type { Route } from "next";
 import { RISK_BADGE_COLORS } from "@/constants";
+import { getDisplayCaseNumber } from "@/lib/agency-workflow";
 
 export default async function ApplicationsSettingsPage() {
   const session = await requireVerifiedPageSession();
@@ -31,12 +31,13 @@ export default async function ApplicationsSettingsPage() {
       homeCountry: visaApplicationTable.homeCountry,
       currentCountry: visaApplicationTable.currentCountry,
       embassy: visaApplicationTable.embassy,
+      caseNumber: visaApplicationTable.caseNumber,
+      clientName: visaApplicationTable.clientName,
+      agencyStatus: visaApplicationTable.agencyStatus,
       status: visaApplicationTable.status,
       readinessScore: visaApplicationTable.readinessScore,
       riskLevel: visaApplicationTable.riskLevel,
       createdAt: visaApplicationTable.createdAt,
-      isFreeTrialApp: visaApplicationTable.isFreeTrialApp,
-      paymentStatus: visaApplicationTable.paymentStatus,
     })
     .from(visaApplicationTable)
     .where(
@@ -53,7 +54,7 @@ export default async function ApplicationsSettingsPage() {
         <div className="flex items-center justify-between">
           <div>
             <CardTitle>Applications</CardTitle>
-            <CardDescription>All your visa applications</CardDescription>
+            <CardDescription>Client cases created by your account</CardDescription>
           </div>
           <Button asChild size="sm" variant="outline">
             <Link href={"/dashboard/applications/new" as Route}>
@@ -73,8 +74,7 @@ export default async function ApplicationsSettingsPage() {
             <div className="space-y-2 max-w-sm">
               <p className="text-lg font-semibold">No applications yet</p>
               <p className="text-sm text-muted-foreground leading-relaxed">
-                Start your first visa application to get a personalized
-                checklist, AI evaluation, and expert guidance.
+                Create the first client case to start the agency intake and review queue.
               </p>
             </div>
             <Button
@@ -83,7 +83,7 @@ export default async function ApplicationsSettingsPage() {
             >
               <Link href={"/dashboard/applications/new" as Route}>
                 <PlusIcon className="h-4 w-4" />
-                Create your first application
+                Create application
               </Link>
             </Button>
           </div>
@@ -92,28 +92,23 @@ export default async function ApplicationsSettingsPage() {
             {apps.map((app) => (
               <Link
                 key={app.id}
-                href={`/dashboard/${app.id}/checklist` as Route}
+                href={`/dashboard/${app.id}` as Route}
                 className="flex items-center justify-between rounded-lg border px-3 py-3 hover:bg-muted/40 transition-colors"
               >
                 <div className="min-w-0 flex-1">
                   <p className="text-sm font-medium truncate">
-                    {app.destinationCountry} — {app.visaType} Visa
+                    {getDisplayCaseNumber(app.caseNumber, app.id)} · {app.clientName ?? "Client"} · {app.destinationCountry} {app.visaType}
                   </p>
                   <p className="text-xs text-muted-foreground truncate">
                     {app.homeCountry} → {app.currentCountry} · {app.embassy}
                   </p>
                 </div>
                 <div className="ml-3 flex items-center gap-2 shrink-0">
-                  {isTrialLocked(app) && (
-                    <Badge className="text-xs bg-primary/10 text-primary border-primary/20 hover:bg-primary/10">
-                      Free Trial
-                    </Badge>
-                  )}
                   <Badge
                     variant="outline"
                     className="capitalize text-xs hidden sm:inline-flex"
                   >
-                    {app.status.replace("_", " ")}
+                    {app.agencyStatus.replaceAll("_", " ")}
                   </Badge>
                   {app.readinessScore !== null &&
                   app.readinessScore !== undefined ? (

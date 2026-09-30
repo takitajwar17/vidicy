@@ -5,13 +5,20 @@ import { ThemeProvider as NextThemesProvider } from "next-themes"
 import { HeroUIProvider } from "@heroui/react"
 import type { SessionValidationResult } from "@/types"
 import { useSessionStore } from "@/state/session"
-import { Suspense, useEffect, useRef, RefObject, useCallback } from "react"
+import { Suspense, useEffect, useRef, useCallback } from "react"
+import type { ComponentProps, ComponentType, ReactNode, RefObject } from "react"
 import { useConfigStore } from "@/state/config"
 import type { getConfig } from "@/flags"
 import { EmailVerificationDialog } from "./email-verification-dialog"
 import { useTopLoader } from 'nextjs-toploader'
 import { usePathname, useRouter } from "next/navigation"
 import { useEventListener, useDebounceCallback } from 'usehooks-ts';
+
+type NextThemesProviderProps = Omit<ComponentProps<typeof NextThemesProvider>, "children"> & {
+  children: ReactNode;
+};
+
+const TypedNextThemesProvider = NextThemesProvider as unknown as ComponentType<NextThemesProviderProps>;
 
 function RouterChecker() {
   const { start, done } = useTopLoader()
@@ -61,7 +68,7 @@ function RouterChecker() {
 export function ThemeProvider({
   children,
   ...props
-}: React.ComponentProps<typeof NextThemesProvider>) {
+}: NextThemesProviderProps) {
   const setSession = useSessionStore((store) => store.setSession)
   const setConfig = useConfigStore((store) => store.setConfig)
   const refetchSession = useSessionStore((store) => store.refetchSession)
@@ -111,10 +118,9 @@ export function ThemeProvider({
     }
   }, documentRef as RefObject<Document>)
 
-  useEventListener('focus', () => {
-    fetchSession()
-    // @ts-expect-error window is not defined in the server
-  }, windowRef)
+	  useEventListener('focus', () => {
+	    fetchSession()
+	  }, windowRef as RefObject<Window>)
 
   // Add fetchSession to the session store (wrap debounced version to match store type)
   useEffect(() => {
@@ -126,10 +132,10 @@ export function ThemeProvider({
       <Suspense>
         <RouterChecker />
       </Suspense>
-      <NextThemesProvider {...props} attribute="class">
-        {children}
-        <EmailVerificationDialog />
-      </NextThemesProvider>
+	      <TypedNextThemesProvider {...props} attribute="class">
+	        {children}
+	        <EmailVerificationDialog />
+	      </TypedNextThemesProvider>
     </HeroUIProvider>
   )
 }

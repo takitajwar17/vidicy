@@ -135,17 +135,16 @@ export default function TermsPage() {
           </p>
         </section>
 
-        {/* 3. Payments and Refunds */}
+        {/* 3. Commercial Terms */}
         <section>
-          <SectionHeading icon={CreditCardIcon} title="3. Payments and Refunds" />
+          <SectionHeading icon={CreditCardIcon} title="3. Commercial Terms" />
           <p className="text-sm text-muted-foreground leading-relaxed mb-4">
             Our agency product is offered through pilot, subscription, usage-based, or enterprise
-            commercial terms depending on the scope of the workflow. Payments are securely
-            processed via Stripe where applicable.
+            commercial terms depending on the scope of the workflow.
           </p>
           <p className="text-sm text-muted-foreground leading-relaxed">
             Because document review can incur compute, storage, and support costs immediately,
-            refunds, credits, cancellations, and pilot terms are handled according to the applicable
+            credits, cancellations, and pilot terms are handled according to the applicable
             written agreement or order form.
           </p>
         </section>
