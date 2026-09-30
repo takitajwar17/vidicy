@@ -7,6 +7,7 @@ import { supportTicketAdminText } from "@/react-email/support-ticket-admin";
 import { supportTicketReplyText } from "@/react-email/support-ticket-reply";
 import { supportTicketUserReplyText } from "@/react-email/support-ticket-user-reply";
 import { applicantInvitationText, applicantAddedNotificationText } from "@/react-email/applicant-invitation";
+import { agencyTeamAccessText } from "@/react-email/agency-team-access";
 import isProd from "./is-prod";
 import { logger } from "@/infra/logger";
 
@@ -258,6 +259,30 @@ export async function sendApplicantAddedNotificationEmail({
     subject: `You've been added to a visa application on ${SITE_DOMAIN}`,
     text,
     tags: [{ name: "type", value: "applicant-added-notification" }],
+  });
+}
+
+export async function sendAgencyTeamAccessEmail({
+  email,
+  addedByName,
+  role,
+}: {
+  email: string;
+  addedByName: string;
+  role: string;
+}) {
+  if (!isProd) {
+    logger.warn("Agency team access email skipped in dev", { email, addedByName, role });
+    return;
+  }
+
+  const text = agencyTeamAccessText({ addedByName, role });
+
+  await sendEmail({
+    to: [email],
+    subject: `You've been added to the ${SITE_DOMAIN} agency workspace`,
+    text,
+    tags: [{ name: "type", value: "agency-team-access" }],
   });
 }
 
