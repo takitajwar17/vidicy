@@ -1,14 +1,12 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import type { Route } from "next";
-import { DatabaseIcon, FileCheck2Icon, FilesIcon, SearchCheckIcon } from "lucide-react";
 
 import { AgencyPageShell } from "@/components/agency/agency-page-shell";
-import { EmptyState, MetricCard, formatBytes, formatShortDate } from "@/components/agency/agency-ui";
-import { Badge } from "@/components/ui/badge";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { EmptyState, formatBytes, formatShortDate } from "@/components/agency/agency-ui";
+import { DocumentPreviewDrawer } from "@/components/visa/document-preview-drawer";
+import { Card, CardContent } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { DOCUMENT_EXTRACTION_STATUS, DOCUMENT_INDEXING_STATUS } from "@/db/schema";
 import { getDisplayCaseNumber } from "@/lib/agency-workflow";
 import { getAgencyDocuments } from "@/server/agency-data";
 
@@ -18,13 +16,6 @@ export const metadata: Metadata = {
 
 export default async function DocumentsPage() {
   const rows = await getAgencyDocuments();
-  const totalStorage = rows.reduce((sum, row) => sum + row.document.fileSize, 0);
-  const extracted = rows.filter(
-    (row) =>
-      row.document.extractionStatus === DOCUMENT_EXTRACTION_STATUS.COMPLETED ||
-      row.document.extractionStatus === DOCUMENT_EXTRACTION_STATUS.PARTIAL,
-  ).length;
-  const indexed = rows.filter((row) => row.document.indexingStatus === DOCUMENT_INDEXING_STATUS.COMPLETED).length;
 
   return (
     <AgencyPageShell
@@ -33,7 +24,7 @@ export default async function DocumentsPage() {
         { href: "/dashboard/documents", label: "Documents" },
       ]}
       title="Documents"
-      description="Inspect recently uploaded client files, extraction status, indexing state, and linked applications."
+      description="Uploaded client files."
     >
       {rows.length === 0 ? (
         <EmptyState
@@ -44,17 +35,7 @@ export default async function DocumentsPage() {
         />
       ) : (
         <>
-          <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-            <MetricCard icon={FilesIcon} label="Documents" value={rows.length} detail="Recently uploaded" tone="info" />
-            <MetricCard icon={DatabaseIcon} label="Storage Used" value={formatBytes(totalStorage)} detail="Across visible files" tone="default" />
-            <MetricCard icon={FileCheck2Icon} label="Extracted" value={extracted} detail="Readable by AI review" tone="success" />
-            <MetricCard icon={SearchCheckIcon} label="Indexed" value={indexed} detail="Available to document search" tone="warning" />
-          </section>
-
           <Card className="rounded-xl shadow-[var(--shadow-dashboard)]">
-            <CardHeader>
-              <CardTitle className="text-base">Document inventory</CardTitle>
-            </CardHeader>
             <CardContent className="overflow-x-auto p-0">
               <Table>
                 <TableHeader>
@@ -64,17 +45,15 @@ export default async function DocumentsPage() {
                     <TableHead>Client</TableHead>
                     <TableHead>Applicant</TableHead>
                     <TableHead>Size</TableHead>
-                    <TableHead>Extraction</TableHead>
-                    <TableHead>Indexing</TableHead>
-                    <TableHead className="pr-5">Uploaded</TableHead>
+                    <TableHead>Uploaded</TableHead>
+                    <TableHead className="pr-5 text-right">View</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {rows.map(({ document, application, applicant }) => (
                     <TableRow key={document.id}>
                       <TableCell className="max-w-[320px] pl-5">
-                        <p className="truncate font-bold">{document.fileName}</p>
-                        <p className="text-xs text-muted-foreground">{document.mimeType}</p>
+                        <p className="truncate font-bold" title={document.fileName}>{document.fileName}</p>
                       </TableCell>
                       <TableCell>
                         {application ? (
@@ -88,17 +67,22 @@ export default async function DocumentsPage() {
                       <TableCell>{application?.clientName ?? "—"}</TableCell>
                       <TableCell>{applicant?.name ?? "—"}</TableCell>
                       <TableCell>{formatBytes(document.fileSize)}</TableCell>
-                      <TableCell>
-                        <Badge variant="outline" className="rounded-full text-2xs font-bold capitalize">
-                          {document.extractionStatus}
-                        </Badge>
+                      <TableCell>{formatShortDate(document.uploadedAt)}</TableCell>
+                      <TableCell className="pr-5 text-right">
+                        <DocumentPreviewDrawer
+                          documentId={document.id}
+                          fileName={document.fileName}
+                          fileSize={document.fileSize}
+                          mimeType={document.mimeType}
+                          uploadedAt={document.uploadedAt}
+                          isActive
+                          hasMultipleVersions={false}
+                          sectionLabel={application ? getDisplayCaseNumber(application.caseNumber, application.id) : "Document"}
+                          side="right"
+                          triggerVariant="button"
+                          triggerLabel="View"
+                        />
                       </TableCell>
-                      <TableCell>
-                        <Badge variant="outline" className="rounded-full text-2xs font-bold capitalize">
-                          {document.indexingStatus}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="pr-5">{formatShortDate(document.uploadedAt)}</TableCell>
                     </TableRow>
                   ))}
                 </TableBody>

@@ -1,12 +1,11 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import type { Route } from "next";
-import { BriefcaseBusinessIcon, Clock3Icon, MailIcon, UsersIcon } from "lucide-react";
 
 import { AgencyPageShell } from "@/components/agency/agency-page-shell";
-import { EmptyState, MetricCard, formatShortDate } from "@/components/agency/agency-ui";
+import { EmptyState, formatShortDate } from "@/components/agency/agency-ui";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { getAgencyClientsWithCounts } from "@/server/agency-data";
 
@@ -16,9 +15,6 @@ export const metadata: Metadata = {
 
 export default async function ClientsPage() {
   const rows = await getAgencyClientsWithCounts();
-  const activeClients = rows.filter((row) => row.openCaseCount > 0).length;
-  const totalCases = rows.reduce((sum, row) => sum + row.caseCount, 0);
-  const openCases = rows.reduce((sum, row) => sum + row.openCaseCount, 0);
 
   return (
     <AgencyPageShell
@@ -27,7 +23,7 @@ export default async function ClientsPage() {
         { href: "/dashboard/clients", label: "Clients" },
       ]}
       title="Clients"
-      description="Track agency clients and the applications currently moving through review."
+      description="Agency client directory."
       actions={
         <Button asChild>
           <Link href={"/dashboard/applications/new" as Route}>Create application</Link>
@@ -43,17 +39,7 @@ export default async function ClientsPage() {
         />
       ) : (
         <>
-          <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-            <MetricCard icon={UsersIcon} label="Clients" value={rows.length} detail="In the agency system" tone="info" />
-            <MetricCard icon={BriefcaseBusinessIcon} label="Active Clients" value={activeClients} detail="With open cases" tone="success" />
-            <MetricCard icon={Clock3Icon} label="Open Cases" value={openCases} detail="Across all clients" tone="warning" />
-            <MetricCard icon={MailIcon} label="Total Cases" value={totalCases} detail="Created to date" tone="default" />
-          </section>
-
           <Card className="rounded-xl shadow-[var(--shadow-dashboard)]">
-            <CardHeader>
-              <CardTitle className="text-base">Client directory</CardTitle>
-            </CardHeader>
             <CardContent className="overflow-x-auto p-0">
               <Table>
                 <TableHeader>

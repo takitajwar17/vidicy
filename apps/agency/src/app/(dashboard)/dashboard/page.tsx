@@ -76,7 +76,7 @@ export default async function DashboardPage() {
     <AgencyPageShell
       breadcrumbs={[{ href: "/dashboard", label: "Dashboard" }]}
       title="Dashboard"
-      description="Overview of the agency review pipeline, reviewer workload, and client files that need attention."
+      description="Agency review pipeline at a glance."
       actions={
         <Button asChild>
           <Link href={"/dashboard/applications/new" as Route}>
@@ -105,9 +105,9 @@ export default async function DashboardPage() {
             />
             <MetricCard
               icon={CheckCircle2Icon}
-              label="Completed"
+              label="Ready to submit"
               value={data.stats.completed}
-              detail="Ready, submitted, or closed"
+              detail="Review-complete cases"
               tone="success"
             />
             <MetricCard
@@ -227,14 +227,14 @@ export default async function DashboardPage() {
 
           <Card className="rounded-xl shadow-[var(--shadow-dashboard)]">
             <CardHeader className="flex-row items-center justify-between gap-3">
-              <CardTitle className="text-base">Recent Client Activity</CardTitle>
+              <CardTitle className="text-base">Recent Applications</CardTitle>
               <Link href={"/dashboard/applications" as Route} className="text-xs font-bold text-primary">
                 View all applications
               </Link>
             </CardHeader>
             <CardContent className="overflow-x-auto">
-              <Table>
-                <TableHeader>
+              <Table className="text-xs">
+                <TableHeader className="[&_th]:text-xs">
                   <TableRow>
                     <TableHead>Application</TableHead>
                     <TableHead>Client</TableHead>

@@ -1,12 +1,10 @@
 import type { Metadata } from "next";
-import { ShieldCheckIcon, UserCheckIcon, UsersIcon } from "lucide-react";
 
 import { AgencyPageShell } from "@/components/agency/agency-page-shell";
-import { MetricCard, ReviewerAvatar, formatShortDate } from "@/components/agency/agency-ui";
+import { ReviewerAvatar, formatShortDate } from "@/components/agency/agency-ui";
 import { AddStaffForm, DisableStaffButton, StaffRoleSelect } from "@/components/agency/agency-team-actions";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { AGENCY_STAFF_ROLE } from "@/db/schema";
 import { getActiveAgencyStaffRows } from "@/server/agency-data";
 import { requireAgencyStaff } from "@/server/agency-team";
 
@@ -20,9 +18,6 @@ export default async function TeamPage() {
     getActiveAgencyStaffRows(),
   ]);
   const isAdmin = agencyStaff.isAdmin;
-  const adminCount = staff.filter((member) => member.role === AGENCY_STAFF_ROLE.ADMIN).length;
-  const memberCount = staff.filter((member) => member.role === AGENCY_STAFF_ROLE.MEMBER).length;
-  const linkedStaffCount = staff.filter((member) => member.userId).length;
 
   return (
     <AgencyPageShell
@@ -31,14 +26,8 @@ export default async function TeamPage() {
         { href: "/dashboard/team", label: "Team" },
       ]}
       title="Team"
-      description="Manage the single agency review team. Admins can add staff, promote admins, and disable access."
+      description="Staff access and roles."
     >
-      <section className="grid gap-3 md:grid-cols-3">
-        <MetricCard icon={UsersIcon} label="Active Staff" value={staff.length} detail="Can access all agency cases" tone="info" />
-        <MetricCard icon={ShieldCheckIcon} label="Admins" value={adminCount} detail="Can manage staff" tone="success" />
-        <MetricCard icon={UserCheckIcon} label="Signed-in Staff" value={linkedStaffCount} detail={`${memberCount} reviewer members`} tone="default" />
-      </section>
-
       <Card className="rounded-xl shadow-[var(--shadow-dashboard)]">
         <CardHeader>
           <CardTitle className="text-base">Add staff</CardTitle>

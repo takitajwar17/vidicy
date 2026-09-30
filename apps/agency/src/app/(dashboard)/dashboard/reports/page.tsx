@@ -1,14 +1,13 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import type { Route } from "next";
-import { CheckCircle2Icon, FileTextIcon, SendIcon, TimerIcon } from "lucide-react";
 
 import { AgencyPageShell } from "@/components/agency/agency-page-shell";
-import { CaseStatusBadge, EmptyState, MetricCard, formatShortDate } from "@/components/agency/agency-ui";
+import { CaseStatusBadge, EmptyState, formatShortDate } from "@/components/agency/agency-ui";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { getDisplayCaseNumber } from "@/lib/agency-workflow";
+import { CLIENT_REPORT_DELIVERY_STATUS_META, getDisplayCaseNumber } from "@/lib/agency-workflow";
 import { getAgencyReports } from "@/server/agency-data";
 
 export const metadata: Metadata = {
@@ -25,7 +24,7 @@ export default async function ReportsPage() {
         { href: "/dashboard/reports", label: "Reports" },
       ]}
       title="Reports"
-      description="Track client-ready issue summaries and which cases still need a follow-up report."
+      description="Client-ready issue summaries."
     >
       {data.reports.length === 0 && data.casesWithoutReports.length === 0 ? (
         <EmptyState
@@ -36,13 +35,6 @@ export default async function ReportsPage() {
         />
       ) : (
         <>
-          <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-            <MetricCard icon={FileTextIcon} label="Reports" value={data.stats.total} detail="Generated to date" tone="info" />
-            <MetricCard icon={CheckCircle2Icon} label="Ready" value={data.stats.ready} detail="Prepared for client follow-up" tone="success" />
-            <MetricCard icon={SendIcon} label="Sent" value={data.stats.sent} detail="Marked delivered" tone="default" />
-            <MetricCard icon={TimerIcon} label="Needs Report" value={data.casesWithoutReports.length} detail="Cases without a report" tone="warning" />
-          </section>
-
           <Card className="rounded-xl shadow-[var(--shadow-dashboard)]">
             <CardHeader>
               <CardTitle className="text-base">Client reports</CardTitle>
@@ -73,8 +65,10 @@ export default async function ReportsPage() {
                       </TableCell>
                       <TableCell>{caseRow?.application.clientName ?? "—"}</TableCell>
                       <TableCell>
-                        <Badge variant="outline" className="rounded-full text-2xs font-bold capitalize">
-                          {report.status}
+                        <Badge variant="outline" className="rounded-full text-2xs font-bold">
+                          {CLIENT_REPORT_DELIVERY_STATUS_META[
+                            report.status as keyof typeof CLIENT_REPORT_DELIVERY_STATUS_META
+                          ]?.label ?? "Draft"}
                         </Badge>
                       </TableCell>
                       <TableCell>{report.actionItems.length}</TableCell>

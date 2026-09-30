@@ -29,8 +29,12 @@ import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { PageHeader } from "@/components/page-header";
-import { CHECKLIST_ITEM_STATUS, REVIEW_ISSUE_STATUS } from "@/db/schema";
-import { getDisplayCaseNumber } from "@/lib/agency-workflow";
+import { CHECKLIST_ITEM_STATUS } from "@/db/schema";
+import {
+  CLIENT_REPORT_STATUS_META,
+  getDisplayCaseNumber,
+  isOpenReviewIssueStatus,
+} from "@/lib/agency-workflow";
 import { getAgencyCaseDetail } from "@/server/agency-data";
 import { requireApplicationPagePermission } from "@/utils/application-page-auth";
 
@@ -69,11 +73,7 @@ export async function AgencyCaseContent({ appId }: { appId: string }) {
   const completionPercent =
     requiredItems.length > 0 ? Math.round((uploadedRequiredCount / requiredItems.length) * 100) : 0;
   const missingRequiredItems = requiredItems.filter((item) => !docsByChecklistItem.has(item.id));
-  const openIssues = data.issues.filter(
-    (issue) =>
-      issue.status !== REVIEW_ISSUE_STATUS.RESOLVED &&
-      issue.status !== REVIEW_ISSUE_STATUS.DISMISSED,
-  );
+  const openIssues = data.issues.filter((issue) => isOpenReviewIssueStatus(issue.status));
   const highIssues = openIssues.filter((issue) => issue.severity === "high");
   const mediumIssues = openIssues.filter((issue) => issue.severity === "medium");
   const totalStorage = data.documents.reduce((sum, document) => sum + document.fileSize, 0);
@@ -245,8 +245,10 @@ export async function AgencyCaseContent({ appId }: { appId: string }) {
                         {hasReport ? "A report draft is available." : "Generate after AI review or reviewer issues."}
                       </p>
                     </div>
-                    <Badge variant="outline" className="rounded-full capitalize">
-                      {app.clientReportStatus.replaceAll("_", " ")}
+                    <Badge variant="outline" className="rounded-full">
+                      {CLIENT_REPORT_STATUS_META[
+                        app.clientReportStatus as keyof typeof CLIENT_REPORT_STATUS_META
+                      ]?.label ?? "Not Started"}
                     </Badge>
                   </div>
                   {primaryApplicant ? (

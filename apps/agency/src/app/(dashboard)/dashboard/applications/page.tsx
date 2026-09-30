@@ -1,19 +1,12 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import type { Route } from "next";
-import {
-  CheckCircle2Icon,
-  Clock3Icon,
-  FileWarningIcon,
-  FilesIcon,
-  PlusIcon,
-} from "lucide-react";
+import { PlusIcon } from "lucide-react";
 
 import { AgencyPageShell } from "@/components/agency/agency-page-shell";
 import {
   CaseStatusBadge,
   EmptyState,
-  MetricCard,
   PriorityBadge,
   ReviewerAvatar,
   RiskBadge,
@@ -23,8 +16,12 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { AGENCY_CASE_STATUS } from "@/db/schema";
-import { getDisplayCaseNumber } from "@/lib/agency-workflow";
+import {
+  AGENCY_CASE_STATUS_OPTIONS,
+  CASE_STATUS_META,
+  getDisplayCaseNumber,
+  normalizeAgencyCaseStatus,
+} from "@/lib/agency-workflow";
 import { getAgencyCaseRows } from "@/server/agency-data";
 
 export const metadata: Metadata = {
@@ -32,8 +29,11 @@ export const metadata: Metadata = {
 };
 
 const APPLICATIONS_TABLE_TEXT_CLASS = "text-[11px] leading-4";
-const APPLICATIONS_TABLE_BADGE_CLASS = "text-[10px] leading-4";
-const APPLICATIONS_TABLE_AVATAR_CLASS = "h-5 w-5 text-[9px]";
+const APPLICATIONS_TABLE_CELL_CLASS = "max-w-[170px] truncate whitespace-nowrap";
+const APPLICATIONS_TABLE_BADGE_CLASS = "whitespace-nowrap text-[10px] leading-4";
+const APPLICATIONS_TABLE_AVATAR_CLASS = "h-5 w-5 shrink-0 text-[9px]";
+const APPLICATIONS_TABLE_REVIEWER_CLASS = "max-w-[150px] whitespace-nowrap";
+const APPLICATIONS_TABLE_REVIEWER_LABEL_CLASS = "max-w-[116px] truncate whitespace-nowrap";
 
 function normalize(value: string | null | undefined) {
   return (value ?? "").toLowerCase().trim();
@@ -61,24 +61,9 @@ export default async function ApplicationsPage({
       ].join(" "),
     );
     const matchesQuery = !query || searchable.includes(query);
-    const matchesStatus = !statusFilter || row.application.agencyStatus === statusFilter;
+    const matchesStatus = !statusFilter || normalizeAgencyCaseStatus(row.application.agencyStatus) === statusFilter;
     return matchesQuery && matchesStatus;
   });
-
-  const needsReview = rows.filter((row) =>
-    [
-      AGENCY_CASE_STATUS.READY_FOR_REVIEW,
-      AGENCY_CASE_STATUS.AI_REVIEWED,
-      AGENCY_CASE_STATUS.IN_REVIEW,
-      AGENCY_CASE_STATUS.NEEDS_CLIENT,
-    ].includes(row.application.agencyStatus as never),
-  ).length;
-  const flagged = rows.filter((row) => row.highIssueCount > 0).length;
-  const completedToday = rows.filter((row) => {
-    if (!row.application.reviewCompletedAt) return false;
-    const today = new Date();
-    return row.application.reviewCompletedAt.toDateString() === today.toDateString();
-  }).length;
 
   return (
     <AgencyPageShell
@@ -87,7 +72,7 @@ export default async function ApplicationsPage({
         { href: "/dashboard/applications", label: "Applications" },
       ]}
       title="Applications"
-      description="Manage and track every client application across intake, AI review, reviewer checks, client follow-up, and final readiness."
+      description="Client cases across intake, review, follow-up, and final readiness."
       actions={
         <Button asChild>
           <Link href={"/dashboard/applications/new" as Route}>
@@ -106,13 +91,6 @@ export default async function ApplicationsPage({
         />
       ) : (
         <>
-          <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-            <MetricCard icon={FilesIcon} label="Total Applications" value={rows.length} detail="All active client files" tone="info" />
-            <MetricCard icon={Clock3Icon} label="Needs Review" value={needsReview} detail="Requiring attention" tone="warning" />
-            <MetricCard icon={FileWarningIcon} label="Flagged" value={flagged} detail="High-risk issues detected" tone="danger" />
-            <MetricCard icon={CheckCircle2Icon} label="Completed Today" value={completedToday} detail="Marked ready today" tone="success" />
-          </section>
-
           <Card className="rounded-xl shadow-[var(--shadow-dashboard)]">
             <CardContent className="grid gap-3 p-4 lg:grid-cols-[minmax(280px,1fr)_180px_180px_180px]">
               <form className="contents">
@@ -128,9 +106,9 @@ export default async function ApplicationsPage({
                   className="h-11 rounded-xl border border-input bg-card px-3 text-sm font-medium"
                 >
                   <option value="">All statuses</option>
-                  {Object.values(AGENCY_CASE_STATUS).map((status) => (
+                  {AGENCY_CASE_STATUS_OPTIONS.map((status) => (
                     <option key={status} value={status}>
-                      {status.replaceAll("_", " ")}
+                      {CASE_STATUS_META[status].label}
                     </option>
                   ))}
                 </select>
@@ -144,8 +122,8 @@ export default async function ApplicationsPage({
 
           <Card className="rounded-xl shadow-[var(--shadow-dashboard)]">
             <CardContent className="overflow-x-auto p-0">
-              <Table className={APPLICATIONS_TABLE_TEXT_CLASS}>
-                <TableHeader className="[&_th]:text-[11px] [&_th]:leading-4">
+              <Table className={`${APPLICATIONS_TABLE_TEXT_CLASS} min-w-max whitespace-nowrap`}>
+                <TableHeader className="[&_th]:whitespace-nowrap [&_th]:text-[11px] [&_th]:leading-4">
                   <TableRow>
                     <TableHead className="pl-5">Application ID</TableHead>
                     <TableHead>Client</TableHead>
@@ -160,7 +138,7 @@ export default async function ApplicationsPage({
                     <TableHead className="pr-5 text-right">Issues</TableHead>
                   </TableRow>
                 </TableHeader>
-                <TableBody>
+                <TableBody className="[&_td]:whitespace-nowrap">
                   {filteredRows.map((row) => (
                     <TableRow key={row.application.id}>
                       <TableCell className="pl-5">
@@ -168,10 +146,10 @@ export default async function ApplicationsPage({
                           {getDisplayCaseNumber(row.application.caseNumber, row.application.id)}
                         </Link>
                       </TableCell>
-                      <TableCell>{row.application.clientName ?? "Unassigned"}</TableCell>
-                      <TableCell>{row.primaryApplicant?.name ?? "Pending"}</TableCell>
-                      <TableCell>{row.application.visaType}</TableCell>
-                      <TableCell>{row.application.destinationCountry}</TableCell>
+                      <TableCell className={APPLICATIONS_TABLE_CELL_CLASS}>{row.application.clientName ?? "Unassigned"}</TableCell>
+                      <TableCell className={APPLICATIONS_TABLE_CELL_CLASS}>{row.primaryApplicant?.name ?? "Pending"}</TableCell>
+                      <TableCell className={APPLICATIONS_TABLE_CELL_CLASS}>{row.application.visaType}</TableCell>
+                      <TableCell className={APPLICATIONS_TABLE_CELL_CLASS}>{row.application.destinationCountry}</TableCell>
                       <TableCell>{formatShortDate(row.application.submittedAt ?? row.application.createdAt)}</TableCell>
                       <TableCell><CaseStatusBadge status={row.application.agencyStatus} className={APPLICATIONS_TABLE_BADGE_CLASS} /></TableCell>
                       <TableCell><RiskBadge riskLevel={row.latestEvaluation?.riskLevel ?? row.application.riskLevel} className={APPLICATIONS_TABLE_BADGE_CLASS} /></TableCell>
@@ -181,9 +159,9 @@ export default async function ApplicationsPage({
                           name={row.reviewer ? `${row.reviewer.firstName ?? ""} ${row.reviewer.lastName ?? ""}`.trim() : null}
                           email={row.reviewer?.email ?? null}
                           avatar={row.reviewer?.avatar ?? null}
-                          className={APPLICATIONS_TABLE_TEXT_CLASS}
+                          className={`${APPLICATIONS_TABLE_TEXT_CLASS} ${APPLICATIONS_TABLE_REVIEWER_CLASS}`}
                           avatarClassName={APPLICATIONS_TABLE_AVATAR_CLASS}
-                          labelClassName={APPLICATIONS_TABLE_TEXT_CLASS}
+                          labelClassName={`${APPLICATIONS_TABLE_TEXT_CLASS} ${APPLICATIONS_TABLE_REVIEWER_LABEL_CLASS}`}
                         />
                       </TableCell>
                       <TableCell className="pr-5 text-right">

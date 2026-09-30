@@ -34,6 +34,7 @@ vi.mock("@/components/page-header", () => ({
 
 vi.mock("@/components/agency/agency-case-actions", () => ({
   AgencyCaseToolbar: () => <div>Agency toolbar</div>,
+  AgencyCaseStatusSelect: () => <div>Case status select</div>,
   ReviewIssueStatusSelect: () => <div>Issue status select</div>,
   AddReviewIssueForm: () => <div>Add issue form</div>,
 }));
@@ -81,7 +82,7 @@ const application = {
   homeCountry: "Bangladesh",
   currentCountry: "Bangladesh",
   status: "in_progress",
-  agencyStatus: "ai_reviewed",
+  agencyStatus: "in_review",
   priority: "high",
   assignedReviewerId: "user_reviewer",
   intakeSource: "manual",
@@ -315,10 +316,10 @@ describe("agency application pages", () => {
     const markup = renderToStaticMarkup(page);
 
     expect(markup).toContain("Application #VA-2026-ABC123");
-    expect(markup).toContain("Review summary");
-    expect(markup).toContain("AI review summary");
-    expect(markup).toContain("Client-ready report");
-    expect(markup).toContain("AI and reviewer flags");
+    expect(markup).toContain("AI Analysis");
+    expect(markup).toContain("Overall review score");
+    expect(markup).toContain("Client-ready issue summary");
+    expect(markup).toContain("AI-detected issues");
     expect(markup).toContain("Bank statement needs review");
     expect(markup).not.toContain("Atlas");
     expect(markup).not.toContain("Checkout");

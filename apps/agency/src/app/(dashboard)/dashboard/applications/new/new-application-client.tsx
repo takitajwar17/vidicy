@@ -20,6 +20,7 @@ import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { AGENCY_CASE_PRIORITY } from "@/db/schema";
 import { COUNTRIES } from "@/constants";
+import { CASE_PRIORITY_META } from "@/lib/agency-workflow";
 import { cn } from "@/lib/utils";
 import { DESTINATION_COUNTRIES, YEAR_OPTIONS, getEmbassies, getVisaTypes } from "./new-application-constants";
 
@@ -218,7 +219,7 @@ export function NewApplicationClient({ staff }: NewApplicationClientProps) {
         { href: "/dashboard/applications/new", label: "New Application" },
       ]}
       title="New Application"
-      description="Create a client case for the agency review queue. This initializes the applicant, route, reviewer assignment, and enterprise workflow state."
+      description="Create a client case for the agency review queue."
     >
       <form onSubmit={handleSubmit} className="grid gap-4 xl:grid-cols-[1fr_360px]">
         <div className="space-y-4">
@@ -316,7 +317,7 @@ export function NewApplicationClient({ staff }: NewApplicationClientProps) {
                   <SelectContent>
                     {Object.values(AGENCY_CASE_PRIORITY).map((priority) => (
                       <SelectItem key={priority} value={priority}>
-                        {priority.replaceAll("_", " ")}
+                        {CASE_PRIORITY_META[priority].label}
                       </SelectItem>
                     ))}
                   </SelectContent>
