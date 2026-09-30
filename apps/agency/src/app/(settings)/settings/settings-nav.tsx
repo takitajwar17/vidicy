@@ -9,7 +9,6 @@ import {
   Smartphone,
   Lock,
   KeyRound,
-  LayoutListIcon,
   LogOut
 } from "lucide-react";
 import { useMediaQuery } from "@/hooks/useMediaQuery";
@@ -39,11 +38,6 @@ const settingsNavItems: SettingsNavItem[] = [
     title: "Profile",
     href: "/settings",
     icon: User,
-  },
-  {
-    title: "Applications",
-    href: "/settings/applications" as Route,
-    icon: LayoutListIcon,
   },
   {
     title: "Security",

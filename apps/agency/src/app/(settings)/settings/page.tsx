@@ -9,7 +9,6 @@ import { Suspense } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import ThemeSwitch from "@/components/theme-switch";
-import { ProfileHeader } from "@/components/settings/profile-header";
 import { AccountDetailsCard } from "@/components/settings/account-details-card";
 import { DangerZoneCard } from "@/components/settings/danger-zone-card";
 
@@ -50,23 +49,6 @@ function SettingsFormSkeleton() {
   );
 }
 
-function ProfileHeaderSkeleton() {
-  return (
-    <Card>
-      <CardContent className="pt-6 pb-6">
-        <div className="flex items-center gap-4">
-          <Skeleton className="h-16 w-16 rounded-full" />
-          <div className="space-y-2">
-            <Skeleton className="h-6 w-40" />
-            <Skeleton className="h-4 w-56" />
-            <Skeleton className="h-3 w-32" />
-          </div>
-        </div>
-      </CardContent>
-    </Card>
-  );
-}
-
 function AccountDetailsSkeleton() {
   return (
     <Card>
@@ -90,11 +72,6 @@ export default async function SettingsPage() {
 
   return (
     <div className="flex flex-col gap-4 md:gap-6">
-      {/* Profile Header */}
-      <Suspense fallback={<ProfileHeaderSkeleton />}>
-        <ProfileHeader />
-      </Suspense>
-
       {/* Personal Info + Account Details side by side */}
       <div className="grid gap-4 md:gap-6 md:grid-cols-2">
         <Suspense fallback={<SettingsFormSkeleton />}>
