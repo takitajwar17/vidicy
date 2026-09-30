@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect, useRef } from "react"
-import { FileIcon, DownloadIcon, Loader2Icon, AlertCircleIcon } from "lucide-react"
+import { FileIcon, DownloadIcon, Loader2Icon, AlertCircleIcon, EyeIcon } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import {
@@ -108,7 +108,10 @@ interface DocumentPreviewDrawerProps {
   isActive: boolean
   hasMultipleVersions: boolean
   sectionLabel: string
-  children: React.ReactNode
+  children?: React.ReactNode
+  side?: "left" | "right"
+  triggerLabel?: string
+  triggerVariant?: "button" | "document-row"
 }
 
 export function DocumentPreviewDrawer({
@@ -121,6 +124,9 @@ export function DocumentPreviewDrawer({
   hasMultipleVersions,
   sectionLabel,
   children,
+  side = "right",
+  triggerLabel = "View",
+  triggerVariant = "document-row",
 }: DocumentPreviewDrawerProps) {
   const [open, setOpen] = useState<boolean>(false)
   const [pdfBlobUrl, setPdfBlobUrl] = useState<string | null>(null)
@@ -171,46 +177,60 @@ export function DocumentPreviewDrawer({
 
   return (
     <>
-      {/* Using div[role=button] instead of <button> to allow nested interactive elements
-          (e.g. delete button) without violating HTML spec / causing hydration errors. */}
-      <div
-        role="button"
-        tabIndex={0}
-        className={`group rounded-lg border px-3 py-2.5 cursor-pointer transition-colors w-full text-left ${
-          isActive ? "border-primary/20 bg-primary/5" : "bg-muted/20 hover:bg-muted/35"
-        }`}
-        onClick={() => setOpen(true)}
-        onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setOpen(true); } }}
-        aria-label={`Preview document: ${fileName}`}
-      >
-        <div className="flex items-center gap-3">
-          <FileIcon className="h-4 w-4 text-muted-foreground shrink-0" />
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2">
-              <p className="text-sm font-medium truncate">{fileName}</p>
-              {isActive && hasMultipleVersions && (
-                <Badge className="text-2xs h-4 px-1.5 font-normal bg-primary/10 text-primary border-primary/20 hover:bg-primary/10 shrink-0">
-                  In use
-                </Badge>
-              )}
-              {!isActive && (
-                <Badge variant="outline" className="text-2xs h-4 px-1.5 font-normal text-muted-foreground shrink-0">
-                  Older
-                </Badge>
-              )}
+      {triggerVariant === "button" ? (
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className="h-8 rounded-lg px-3 text-xs font-bold"
+          onClick={() => setOpen(true)}
+          aria-label={`Preview document: ${fileName}`}
+        >
+          <EyeIcon className="mr-1.5 h-3.5 w-3.5" />
+          {triggerLabel}
+        </Button>
+      ) : (
+        /* Using div[role=button] instead of <button> to allow nested interactive elements
+            (e.g. delete button) without violating HTML spec / causing hydration errors. */
+        <div
+          role="button"
+          tabIndex={0}
+          className={`group rounded-lg border px-3 py-2.5 cursor-pointer transition-colors w-full text-left ${
+            isActive ? "border-primary/20 bg-primary/5" : "bg-muted/20 hover:bg-muted/35"
+          }`}
+          onClick={() => setOpen(true)}
+          onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setOpen(true); } }}
+          aria-label={`Preview document: ${fileName}`}
+        >
+          <div className="flex items-center gap-3">
+            <FileIcon className="h-4 w-4 text-muted-foreground shrink-0" />
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2">
+                <p className="text-sm font-medium truncate">{fileName}</p>
+                {isActive && hasMultipleVersions && (
+                  <Badge className="text-2xs h-4 px-1.5 font-normal bg-primary/10 text-primary border-primary/20 hover:bg-primary/10 shrink-0">
+                    In use
+                  </Badge>
+                )}
+                {!isActive && (
+                  <Badge variant="outline" className="text-2xs h-4 px-1.5 font-normal text-muted-foreground shrink-0">
+                    Older
+                  </Badge>
+                )}
+              </div>
+              <p className="text-xs text-muted-foreground tabular-nums">
+                {formatBytes(fileSize)} · {uploadedAt.toLocaleDateString()}
+              </p>
             </div>
-            <p className="text-xs text-muted-foreground tabular-nums">
-              {formatBytes(fileSize)} · {uploadedAt.toLocaleDateString()}
-            </p>
-          </div>
-          <div onClick={(e) => e.stopPropagation()} className="flex items-center shrink-0">
-            {children}
+            <div onClick={(e) => e.stopPropagation()} className="flex items-center shrink-0">
+              {children}
+            </div>
           </div>
         </div>
-      </div>
+      )}
 
       <Sheet open={open} onOpenChange={setOpen}>
-        <SheetContent side="right" className="sm:max-w-xl flex flex-col p-0 gap-0">
+        <SheetContent side={side} className="flex w-[min(92vw,44rem)] flex-col gap-0 p-0 sm:max-w-2xl">
           <SheetHeader className="px-6 pt-6 pb-4 border-b shrink-0">
             <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{sectionLabel}</p>
             <SheetTitle className="truncate text-base">{fileName}</SheetTitle>

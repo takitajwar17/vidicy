@@ -9,8 +9,10 @@ import {
   CASE_PRIORITY_META,
   CASE_STATUS_META,
   ISSUE_SEVERITY_META,
+  RISK_LEVEL_META,
   getRiskBadgeClass,
   getStatusBadgeClass,
+  normalizeAgencyCaseStatus,
 } from "@/lib/agency-workflow";
 
 export function formatShortDate(date: Date | null | undefined) {
@@ -35,9 +37,11 @@ export function formatBytes(bytes: number | null | undefined) {
 }
 
 export function CaseStatusBadge({ status, className }: { status: string; className?: string }) {
+  const normalizedStatus = normalizeAgencyCaseStatus(status);
+
   return (
     <Badge variant="outline" className={cn("rounded-full px-2.5 py-1 text-2xs font-bold", getStatusBadgeClass(status), className)}>
-      {CASE_STATUS_META[status as keyof typeof CASE_STATUS_META]?.label ?? status.replaceAll("_", " ")}
+      {CASE_STATUS_META[normalizedStatus].label}
     </Badge>
   );
 }
@@ -52,8 +56,8 @@ export function PriorityBadge({ priority, className }: { priority: string; class
 
 export function RiskBadge({ riskLevel, className }: { riskLevel?: string | null; className?: string }) {
   return (
-    <Badge variant="outline" className={cn("rounded-full px-2.5 py-1 text-2xs font-bold capitalize", getRiskBadgeClass(riskLevel), className)}>
-      {riskLevel ?? "Unscored"}
+    <Badge variant="outline" className={cn("rounded-full px-2.5 py-1 text-2xs font-bold", getRiskBadgeClass(riskLevel), className)}>
+      {riskLevel ? (RISK_LEVEL_META[riskLevel as keyof typeof RISK_LEVEL_META]?.label ?? "Unscored") : "Unscored"}
     </Badge>
   );
 }

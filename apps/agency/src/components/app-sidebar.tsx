@@ -3,8 +3,8 @@
 import * as React from "react";
 import DashboardLogo from "@/components/dashboard-logo";
 import {
-  BotIcon,
   BriefcaseBusinessIcon,
+  CircleAlertIcon,
   FileTextIcon,
   HelpCircleIcon,
   LifeBuoyIcon,
@@ -58,7 +58,7 @@ export function AppSidebar({
   const iconByTitle = {
     Dashboard: LayoutDashboardIcon,
     Applications: BriefcaseBusinessIcon,
-    "AI Review": BotIcon,
+    Issues: CircleAlertIcon,
     Clients: UsersIcon,
     Documents: LibraryBigIcon,
     Team: ShieldIcon,

@@ -28,9 +28,17 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import {
-  AGENCY_CASE_STATUS,
+  AGENCY_CASE_STATUS_OPTIONS,
+  CASE_STATUS_META,
+  ISSUE_STATUS_META,
+  ISSUE_SEVERITY_META,
+  normalizeAgencyCaseStatus,
+  normalizeReviewIssueStatus,
+} from "@/lib/agency-workflow";
+import {
   REVIEW_ISSUE_SEVERITY,
-  REVIEW_ISSUE_STATUS,
+  REVIEW_ISSUE_STATUS_OPTIONS,
+  type ReviewIssueStatusValue,
 } from "@/db/schema";
 
 interface StaffOption {
@@ -52,7 +60,7 @@ export function AgencyCaseToolbar({
   hasEvaluation: boolean;
 }) {
   const router = useRouter();
-  const [statusValue, setStatusValue] = useState(status);
+  const [statusValue, setStatusValue] = useState(normalizeAgencyCaseStatus(status));
   const [reviewerValue, setReviewerValue] = useState(assignedReviewerId ?? "unassigned");
   const { execute: updateStatus, isPending: updatingStatus } = useServerAction(updateAgencyCaseStatusAction);
   const { execute: assignCase, isPending: assigning } = useServerAction(assignAgencyCaseAction);
@@ -61,7 +69,7 @@ export function AgencyCaseToolbar({
   const { execute: finalize, isPending: finalizing } = useServerAction(finalizeReviewAction);
 
   useEffect(() => {
-    setStatusValue(status);
+    setStatusValue(normalizeAgencyCaseStatus(status));
   }, [status]);
 
   useEffect(() => {
@@ -69,14 +77,15 @@ export function AgencyCaseToolbar({
   }, [assignedReviewerId]);
 
   async function handleStatusChange(nextStatus: string) {
-    setStatusValue(nextStatus);
+    const normalizedStatus = normalizeAgencyCaseStatus(nextStatus);
+    setStatusValue(normalizedStatus);
     const [, error] = await updateStatus({
       applicationId,
-      status: nextStatus as (typeof AGENCY_CASE_STATUS)[keyof typeof AGENCY_CASE_STATUS],
+      status: normalizedStatus,
     });
     if (error) {
       toast.error("Could not update case status.");
-      setStatusValue(status);
+      setStatusValue(normalizeAgencyCaseStatus(status));
       return;
     }
     toast.success("Case status updated.");
@@ -135,9 +144,9 @@ export function AgencyCaseToolbar({
           <SelectValue />
         </SelectTrigger>
         <SelectContent>
-          {Object.values(AGENCY_CASE_STATUS).map((caseStatus) => (
+          {AGENCY_CASE_STATUS_OPTIONS.map((caseStatus) => (
             <SelectItem key={caseStatus} value={caseStatus}>
-              {caseStatus.replaceAll("_", " ")}
+              {CASE_STATUS_META[caseStatus].label}
             </SelectItem>
           ))}
         </SelectContent>
@@ -179,22 +188,23 @@ export function AgencyCaseStatusSelect({
   status: string;
 }) {
   const router = useRouter();
-  const [statusValue, setStatusValue] = useState(status);
+  const [statusValue, setStatusValue] = useState(normalizeAgencyCaseStatus(status));
   const { execute: updateStatus, isPending } = useServerAction(updateAgencyCaseStatusAction);
 
   useEffect(() => {
-    setStatusValue(status);
+    setStatusValue(normalizeAgencyCaseStatus(status));
   }, [status]);
 
   async function handleStatusChange(nextStatus: string) {
-    setStatusValue(nextStatus);
+    const normalizedStatus = normalizeAgencyCaseStatus(nextStatus);
+    setStatusValue(normalizedStatus);
     const [, error] = await updateStatus({
       applicationId,
-      status: nextStatus as (typeof AGENCY_CASE_STATUS)[keyof typeof AGENCY_CASE_STATUS],
+      status: normalizedStatus,
     });
     if (error) {
       toast.error("Could not update case status.");
-      setStatusValue(status);
+      setStatusValue(normalizeAgencyCaseStatus(status));
       return;
     }
     router.refresh();
@@ -206,9 +216,9 @@ export function AgencyCaseStatusSelect({
         <SelectValue />
       </SelectTrigger>
       <SelectContent>
-        {Object.values(AGENCY_CASE_STATUS).map((caseStatus) => (
+        {AGENCY_CASE_STATUS_OPTIONS.map((caseStatus) => (
           <SelectItem key={caseStatus} value={caseStatus}>
-            {caseStatus.replaceAll("_", " ")}
+            {CASE_STATUS_META[caseStatus].label}
           </SelectItem>
         ))}
       </SelectContent>
@@ -224,23 +234,24 @@ export function ReviewIssueStatusSelect({
   status: string;
 }) {
   const router = useRouter();
-  const [value, setValue] = useState(status);
+  const [value, setValue] = useState(normalizeReviewIssueStatus(status));
   const { execute, isPending } = useServerAction(updateReviewIssueStatusAction);
 
   useEffect(() => {
-    setValue(status);
+    setValue(normalizeReviewIssueStatus(status));
   }, [status]);
 
   async function handleChange(nextStatus: string) {
-    setValue(nextStatus);
+    const normalizedStatus = normalizeReviewIssueStatus(nextStatus);
+    setValue(normalizedStatus);
     const [, error] = await execute({
       issueId,
-      status: nextStatus as (typeof REVIEW_ISSUE_STATUS)[keyof typeof REVIEW_ISSUE_STATUS],
+      status: normalizedStatus as ReviewIssueStatusValue,
     });
 
     if (error) {
       toast.error("Could not update issue.");
-      setValue(status);
+      setValue(normalizeReviewIssueStatus(status));
       return;
     }
 
@@ -253,9 +264,9 @@ export function ReviewIssueStatusSelect({
         <SelectValue />
       </SelectTrigger>
       <SelectContent>
-        {Object.values(REVIEW_ISSUE_STATUS).map((issueStatus) => (
+        {REVIEW_ISSUE_STATUS_OPTIONS.map((issueStatus) => (
           <SelectItem key={issueStatus} value={issueStatus}>
-            {issueStatus.replaceAll("_", " ")}
+            {ISSUE_STATUS_META[issueStatus].label}
           </SelectItem>
         ))}
       </SelectContent>
@@ -318,7 +329,7 @@ export function AddReviewIssueForm({ applicationId }: { applicationId: string })
           <SelectContent>
             {Object.values(REVIEW_ISSUE_SEVERITY).map((issueSeverity) => (
               <SelectItem key={issueSeverity} value={issueSeverity}>
-                {issueSeverity}
+                {ISSUE_SEVERITY_META[issueSeverity].label}
               </SelectItem>
             ))}
           </SelectContent>
