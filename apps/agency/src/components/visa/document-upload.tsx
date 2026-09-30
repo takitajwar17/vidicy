@@ -11,6 +11,7 @@ interface DocumentUploadProps {
   applicantId?: string
   checklistItemId: string
   onSuccess?: (result: { documentId: string; fileName: string; fileSize: number }) => void
+  label?: string
 }
 
 import { MAX_DOCUMENT_FILE_SIZE } from "@/constants"
@@ -21,7 +22,7 @@ const ALLOWED_TYPES = new Set([
   "image/png",
 ])
 
-export function DocumentUpload({ applicationId, applicantId, checklistItemId, onSuccess }: DocumentUploadProps) {
+export function DocumentUpload({ applicationId, applicantId, checklistItemId, onSuccess, label = "Upload" }: DocumentUploadProps) {
   const [uploading, setUploading] = useState(false)
   const fileRef = useRef<HTMLInputElement>(null)
   const router = useRouter()
@@ -105,7 +106,7 @@ export function DocumentUpload({ applicationId, applicantId, checklistItemId, on
         ) : (
           <>
             <UploadIcon className="h-4 w-4" />
-            Upload
+            {label}
           </>
         )}
       </Button>
