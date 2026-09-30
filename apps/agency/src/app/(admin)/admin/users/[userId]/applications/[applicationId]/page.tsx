@@ -109,14 +109,11 @@ export default async function AdminApplicationDetailPage({
                   <CardHeader>
                     <CardTitle className="flex items-center justify-between gap-4">
                       <span>{data.application.name || "Untitled application"}</span>
-                      <div className="flex flex-wrap items-center gap-2">
-                        <Badge variant="outline" className="capitalize">
-                          {normalizeText(data.application.status)}
-                        </Badge>
-                        <Badge variant="outline" className="capitalize">
-                          {normalizeText(data.application.paymentStatus)}
-                        </Badge>
-                        {data.application.trashedAt ? (
+	                      <div className="flex flex-wrap items-center gap-2">
+	                        <Badge variant="outline" className="capitalize">
+	                          {normalizeText(data.application.status)}
+	                        </Badge>
+	                        {data.application.trashedAt ? (
                           <Badge variant="secondary">Trashed</Badge>
                         ) : null}
                       </div>
@@ -185,18 +182,12 @@ export default async function AdminApplicationDetailPage({
                   <ReadOnlyDetailsCard
                     title="Application Details"
                     description="Core fields from `visa_application`."
-                    items={[
-                      { label: "Application ID", value: data.application.id },
-                      { label: "Name", value: data.application.name || "—" },
-                      { label: "Status", value: normalizeText(data.application.status) },
-                      { label: "Payment status", value: normalizeText(data.application.paymentStatus) },
-                      { label: "Plan", value: data.application.plan ?? "—" },
-                      { label: "Paid applicant count", value: data.application.paidApplicantCount ?? "—" },
-                      { label: "Free trial app", value: formatBoolean(data.application.isFreeTrialApp) },
-                      { label: "Free evaluation used", value: formatBoolean(data.application.freeEvaluationUsed) },
-                      { label: "Stripe payment intent", value: data.application.stripePaymentIntentId ?? "—" },
-                      { label: "Outcome date", value: formatDateTime(data.application.outcomeDate) },
-                    ]}
+	                    items={[
+	                      { label: "Application ID", value: data.application.id },
+	                      { label: "Name", value: data.application.name || "—" },
+	                      { label: "Status", value: normalizeText(data.application.status) },
+	                      { label: "Outcome date", value: formatDateTime(data.application.outcomeDate) },
+	                    ]}
                   />
                   <ReadOnlyDetailsCard
                     title="Owner Details"
@@ -426,37 +417,11 @@ export default async function AdminApplicationDetailPage({
                   />
                 </div>
 
-                <div className="grid gap-6 lg:grid-cols-2">
-                  <ReadOnlyTableCard
-                    title="Payment Events"
-                    count={data.paymentEvents.length}
-                    description="Checkout/payment lifecycle records."
-                    rows={data.paymentEvents}
-                    columns={[
-                      {
-                        header: "Event",
-                        render: (row) => (
-                          <div>
-                            <div className="font-mono text-xs text-muted-foreground">{row.id}</div>
-                            <div className="font-medium">{normalizeText(row.type)}</div>
-                          </div>
-                        ),
-                      },
-                      {
-                        header: "Status",
-                        render: (row) => <Badge variant="outline">{normalizeText(row.status)}</Badge>,
-                        className: "capitalize",
-                      },
-                      { header: "User", render: (row) => formatUserReference(row.userId) },
-                      { header: "Amount", render: (row) => `${row.amount} ${row.currency}`, className: "tabular-nums" },
-                      { header: "Seats +", render: (row) => row.seatDelta, className: "tabular-nums" },
-                      { header: "Created", render: (row) => formatDateTime(row.createdAt), className: "tabular-nums" },
-                    ]}
-                  />
-                  <ReadOnlyTableCard
-                    title="Related User Lookup"
-                    count={data.relatedUsers.length}
-                    description="User records referenced by applicants, memberships, invitations, and payment events."
+	                <div className="grid gap-6 lg:grid-cols-2">
+	                  <ReadOnlyTableCard
+	                    title="Related User Lookup"
+	                    count={data.relatedUsers.length}
+	                    description="User records referenced by applicants, memberships, and invitations."
                     rows={data.relatedUsers}
                     columns={[
                       {

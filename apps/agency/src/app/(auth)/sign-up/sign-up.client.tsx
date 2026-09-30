@@ -309,7 +309,7 @@ const SignUpPage = ({ redirectPath, isGoogleSSOEnabled }: SignUpClientProps) => 
                   render={() => (
                     <FormItem className="flex flex-col items-center">
                       <FormControl>
-                        <Captcha onSuccess={(token) => form.setValue("captchaToken", token)} />
+                        <Captcha onSuccess={(token: string) => form.setValue("captchaToken", token)} />
                       </FormControl>
                       <FormMessage />
                     </FormItem>

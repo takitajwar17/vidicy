@@ -34,7 +34,6 @@ export const getUserData = async (userId: string) => {
       visaType: true,
       embassy: true,
       status: true,
-      paymentStatus: true,
       trashedAt: true,
       createdAt: true,
       updatedAt: true,

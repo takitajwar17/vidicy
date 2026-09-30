@@ -303,7 +303,7 @@ export function UsersTable() {
                   <ArrowRightLeft className="h-4 w-4 mt-0.5 text-blue-500 shrink-0" />
                   <div className="text-sm">
                     <span className="font-medium">{deleteDialog.preview.appsToTransfer} application{deleteDialog.preview.appsToTransfer === 1 ? "" : "s"}</span>
-                    {" "}will be transferred to the next highest-role member.
+                    {" "}will be transferred to another active agency staff member.
                   </div>
                 </div>
               )}
@@ -312,7 +312,7 @@ export function UsersTable() {
                   <Trash2 className="h-4 w-4 mt-0.5 text-destructive shrink-0" />
                   <div className="text-sm">
                     <span className="font-medium">{deleteDialog.preview.appsToDelete} application{deleteDialog.preview.appsToDelete === 1 ? "" : "s"}</span>
-                    {" "}with no other members will be permanently deleted (including documents and AI data).
+                    {" "}with no remaining active staff owner will be permanently deleted (including documents and AI data).
                   </div>
                 </div>
               )}

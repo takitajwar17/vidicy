@@ -197,8 +197,8 @@ export async function setSessionTokenCookie({ token, userId, expiresAt }: SetSes
   const cookieStore = await cookies();
   cookieStore.set(SESSION_COOKIE_NAME, encodeSessionCookie(userId, token), {
     httpOnly: true,
-    // `lax` is required for top-level cross-site navigations (e.g. returning from
-    // Stripe Checkout) so authenticated users keep their session after redirect.
+    // `lax` is required for top-level cross-site navigations so authenticated
+    // users keep their session after external auth redirects.
     sameSite: "lax",
     secure: isProd,
     expires: expiresAt,
@@ -208,8 +208,8 @@ export async function setSessionTokenCookie({ token, userId, expiresAt }: SetSes
 
 /**
  * Re-sets the existing session cookie with `SameSite=Lax`.
- * Useful before cross-site redirects (e.g. Stripe Checkout) to migrate
- * legacy Strict cookies without forcing users to sign out/in.
+ * Useful before cross-site redirects to migrate legacy Strict cookies without
+ * forcing users to sign out/in.
  */
 export async function refreshSessionCookieForCrossSiteRedirect(): Promise<boolean> {
   const cookieStore = await cookies();

@@ -1,270 +1,23 @@
 import "server-only";
 import { getDB } from "@/db";
 import {
+  AGENCY_STAFF_ROLE,
+  AGENCY_STAFF_STATUS,
   APPLICATION_PERMISSIONS,
-  visaApplicationTable,
-  uploadedDocumentTable,
-  documentEvaluationTable,
-  applicantTable,
-  applicationMembershipTable,
   applicationInvitationTable,
+  applicationMembershipTable,
+  agencyTeamMemberTable,
   supportTicketTable,
   supportMessageTable,
+  uploadedDocumentTable,
   userTable,
+  visaApplicationTable,
 } from "@/db/schema";
-import { requireVerifiedEmail } from "@/utils/auth";
 import { ZSAError } from "zsa";
-import { eq, desc, inArray, count, and, asc, isNull } from "drizzle-orm";
+import { and, eq, inArray, isNotNull, ne } from "drizzle-orm";
 import { updateAllSessionsOfUser, deleteAllSessionsOfUser } from "@/infra/kv-session";
 import { logger } from "@/infra/logger";
 import { requireApplicationPermission } from "@/utils/application-auth";
-import { MARKETING_EVENT_TYPE } from "@/db/schema";
-import { recordMarketingEvent } from "@/server/marketing/events";
-
-export async function createVisaApplicationWorkspace({
-  userId,
-  homeCountry,
-  currentCountry,
-  destinationCountry,
-  visaType,
-  embassy,
-}: {
-  userId: string;
-  homeCountry: string;
-  currentCountry: string;
-  destinationCountry: string;
-  visaType: string;
-  embassy: string;
-}) {
-  const db = getDB();
-
-  // Check limit — count applications this user has created
-  const [countResult] = await db
-    .select({ total: count() })
-    .from(visaApplicationTable)
-    .where(eq(visaApplicationTable.userId, userId));
-
-  const existingCount = countResult?.total ?? 0;
-
-  // First application ever → free trial
-  const isFreeTrialApp = existingCount === 0;
-
-  // Build application name
-  const baseName = `${destinationCountry} — ${visaType} Visa`;
-
-  // Insert the application
-  const [newApp] = await db
-    .insert(visaApplicationTable)
-    .values({
-      userId,
-      homeCountry,
-      currentCountry,
-      destinationCountry,
-      visaType,
-      embassy,
-      name: baseName,
-      isFreeTrialApp: isFreeTrialApp,
-    })
-    .returning();
-
-  if (!newApp) throw new ZSAError("INTERNAL_SERVER_ERROR", "Could not create application");
-
-  await recordMarketingEvent({
-    db,
-    type: MARKETING_EVENT_TYPE.APPLICATION_CREATED,
-    userId,
-    applicationId: newApp.id,
-  });
-
-  return { applicationId: newApp.id, name: baseName, isFreeTrialApp: isFreeTrialApp };
-}
-
-export async function getUserApplications() {
-  const session = await requireVerifiedEmail();
-  if (!session) throw new ZSAError("NOT_AUTHORIZED", "Not authenticated");
-
-  const db = getDB();
-
-  // Fetch apps owned by user + apps where user is a linked applicant/member
-  const [ownedApps, linkedApplicantRows, membershipRows] = await Promise.all([
-    db
-      .select()
-      .from(visaApplicationTable)
-      .where(eq(visaApplicationTable.userId, session.userId))
-      .orderBy(desc(visaApplicationTable.createdAt)),
-    db
-      .select({ applicationId: applicantTable.applicationId })
-      .from(applicantTable)
-      .where(eq(applicantTable.userId, session.userId)),
-    db
-      .select({ applicationId: applicationMembershipTable.applicationId })
-      .from(applicationMembershipTable)
-      .where(
-        and(
-          eq(applicationMembershipTable.userId, session.userId),
-          eq(applicationMembershipTable.isActive, 1),
-        ),
-      ),
-  ]);
-
-  // Find linked app IDs that aren't already in owned apps
-  const ownedIds = new Set(ownedApps.map((a) => a.id));
-  const extraIds = Array.from(
-    new Set(
-      [...linkedApplicantRows, ...membershipRows]
-        .map((r) => r.applicationId)
-        .filter((id) => !ownedIds.has(id)),
-    ),
-  );
-
-  let applications = ownedApps;
-
-  if (extraIds.length > 0) {
-    const extraApps = await db
-      .select()
-      .from(visaApplicationTable)
-      .where(inArray(visaApplicationTable.id, extraIds))
-      .orderBy(desc(visaApplicationTable.createdAt));
-    applications = [...ownedApps, ...extraApps];
-  }
-
-  if (applications.length === 0) return [];
-
-  // Single query for all evaluations — avoids N+1 on dashboard load
-  const appIds = applications.map((a) => a.id);
-  const allEvaluations = await db
-    .select({
-      id: documentEvaluationTable.id,
-      applicationId: documentEvaluationTable.applicationId,
-      applicantId: documentEvaluationTable.applicantId,
-      overallScore: documentEvaluationTable.overallScore,
-      riskLevel: documentEvaluationTable.riskLevel,
-      summary: documentEvaluationTable.summary,
-      redFlags: documentEvaluationTable.redFlags,
-      strengths: documentEvaluationTable.strengths,
-      recommendations: documentEvaluationTable.recommendations,
-      scoreConfidence: documentEvaluationTable.scoreConfidence,
-      ensembleDivergence: documentEvaluationTable.ensembleDivergence,
-      createdAt: documentEvaluationTable.createdAt,
-    })
-    .from(documentEvaluationTable)
-    .where(inArray(documentEvaluationTable.applicationId, appIds))
-    .orderBy(desc(documentEvaluationTable.createdAt));
-
-  // Evaluations are already ordered desc; first hit per applicationId is the latest
-  const latestByApp = new Map<string, (typeof allEvaluations)[0]>();
-  for (const ev of allEvaluations) {
-    if (!latestByApp.has(ev.applicationId)) {
-      latestByApp.set(ev.applicationId, ev);
-    }
-  }
-
-  return applications.map((app) => ({
-    ...app,
-    latestEvaluation: latestByApp.get(app.id) ?? null,
-  }));
-}
-
-/**
- * Lightweight application list optimized for nav/app switcher.
- * Avoids loading evaluation payloads to keep route transitions snappy.
- */
-export async function getUserApplicationsLite() {
-  const session = await requireVerifiedEmail();
-  if (!session) throw new ZSAError("NOT_AUTHORIZED", "Not authenticated");
-
-  const db = getDB();
-
-  // Fetch apps owned by user + apps where user is a linked applicant/member
-  const [ownedApps, linkedApplicantRows, membershipRows] = await Promise.all([
-    db
-      .select({
-        id: visaApplicationTable.id,
-        name: visaApplicationTable.name,
-        destinationCountry: visaApplicationTable.destinationCountry,
-        visaType: visaApplicationTable.visaType,
-        createdAt: visaApplicationTable.createdAt,
-      })
-      .from(visaApplicationTable)
-      .where(
-        and(
-          eq(visaApplicationTable.userId, session.userId),
-          isNull(visaApplicationTable.trashedAt),
-        ),
-      )
-      .orderBy(desc(visaApplicationTable.createdAt)),
-    db
-      .select({ applicationId: applicantTable.applicationId })
-      .from(applicantTable)
-      .where(eq(applicantTable.userId, session.userId)),
-    db
-      .select({ applicationId: applicationMembershipTable.applicationId })
-      .from(applicationMembershipTable)
-      .where(
-        and(
-          eq(applicationMembershipTable.userId, session.userId),
-          eq(applicationMembershipTable.isActive, 1),
-        ),
-      ),
-  ]);
-
-  const ownedIds = new Set(ownedApps.map((a) => a.id));
-  const extraIds = Array.from(
-    new Set(
-      [...linkedApplicantRows, ...membershipRows]
-        .map((r) => r.applicationId)
-        .filter((id) => !ownedIds.has(id)),
-    ),
-  );
-
-  let applications = ownedApps;
-
-  if (extraIds.length > 0) {
-    const extraApps = await db
-      .select({
-        id: visaApplicationTable.id,
-        name: visaApplicationTable.name,
-        destinationCountry: visaApplicationTable.destinationCountry,
-        visaType: visaApplicationTable.visaType,
-        createdAt: visaApplicationTable.createdAt,
-      })
-      .from(visaApplicationTable)
-      .where(
-        and(inArray(visaApplicationTable.id, extraIds), isNull(visaApplicationTable.trashedAt)),
-      )
-      .orderBy(desc(visaApplicationTable.createdAt));
-
-    applications = [...ownedApps, ...extraApps];
-  }
-
-  return applications;
-}
-
-export async function updateApplicationSettings({
-  applicationId,
-  name,
-}: {
-  applicationId: string;
-  name: string;
-}) {
-  await requireApplicationPermission(
-    applicationId,
-    APPLICATION_PERMISSIONS.EDIT_APPLICATION_SETTINGS,
-  );
-  const db = getDB();
-  const [updated] = await db
-    .update(visaApplicationTable)
-    .set({ name, updatedAt: new Date() })
-    .where(eq(visaApplicationTable.id, applicationId))
-    .returning();
-  if (!updated) throw new ZSAError("NOT_FOUND", "Application not found");
-
-  // Refresh all sessions so the updated name propagates
-  const session = await requireVerifiedEmail();
-  if (session) await updateAllSessionsOfUser(session.userId);
-
-  return updated;
-}
 
 export async function deleteApplication({ applicationId }: { applicationId: string }) {
   const session = await requireApplicationPermission(
@@ -326,17 +79,6 @@ export async function deleteApplication({ applicationId }: { applicationId: stri
   await updateAllSessionsOfUser(session.userId);
   logger.info("Application deleted", { applicationId, userId: session.userId });
 
-  // Clear the lastActiveApp cookie if it pointed to the deleted application
-  try {
-    const { cookies } = await import("next/headers");
-    const cookieStore = await cookies();
-    if (cookieStore.get("lastActiveApp")?.value === applicationId) {
-      cookieStore.delete("lastActiveApp");
-    }
-  } catch {
-    // cookie operations are only available inside a request context
-  }
-
   return { success: true };
 }
 
@@ -386,101 +128,98 @@ export async function deleteApplicationAsAdmin({ applicationId }: { applicationI
   logger.info("Application deleted by admin", { applicationId });
 }
 
-/** Numeric rank for ownership-transfer precedence. */
-const SYSTEM_ROLE_RANK: Record<string, number> = { admin: 3, editor: 2, viewer: 1 };
+async function getReplacementAgencyOwner({ userId }: { userId: string }) {
+  const db = getDB();
+  const activeStaff = await db
+    .select({
+      userId: agencyTeamMemberTable.userId,
+      role: agencyTeamMemberTable.role,
+      joinedAt: agencyTeamMemberTable.joinedAt,
+      createdAt: agencyTeamMemberTable.createdAt,
+    })
+    .from(agencyTeamMemberTable)
+	    .where(
+	      and(
+	        isNotNull(agencyTeamMemberTable.userId),
+	        ne(agencyTeamMemberTable.userId, userId),
+	        eq(agencyTeamMemberTable.status, AGENCY_STAFF_STATUS.ACTIVE),
+	      ),
+    );
 
-/**
- * Delete a user from the admin panel with proper cascading:
- *  - Owned apps with other members → transfer ownership to highest-role member
- *  - Owned apps with no members → delete entirely (R2/Vectorize cleanup)
- *  - Memberships in other apps, invitations, support data, sessions → cleaned up
- */
-export async function adminDeleteUser({ userId }: { userId: string }) {
+  activeStaff.sort((a, b) => {
+    const rankA = a.role === AGENCY_STAFF_ROLE.ADMIN ? 1 : 0;
+    const rankB = b.role === AGENCY_STAFF_ROLE.ADMIN ? 1 : 0;
+    if (rankA !== rankB) return rankB - rankA;
+    const dateA = a.joinedAt ?? a.createdAt;
+    const dateB = b.joinedAt ?? b.createdAt;
+    if (dateA && dateB) return dateA.getTime() - dateB.getTime();
+    return 0;
+  });
+
+  return activeStaff[0] ?? null;
+}
+
+export async function transferOrDeleteOwnedApplicationsForUser({ userId }: { userId: string }) {
   const db = getDB();
 
-  let appsTransferred = 0;
-  let appsDeleted = 0;
-
-  // 1. Handle all applications owned by this user
   const ownedApps = await db
     .select({ id: visaApplicationTable.id })
     .from(visaApplicationTable)
     .where(eq(visaApplicationTable.userId, userId));
 
+  if (ownedApps.length === 0) {
+    return { appsTransferred: 0, appsDeleted: 0 };
+  }
+
+  const replacement = await getReplacementAgencyOwner({ userId });
+
+  if (replacement) {
+    await db
+      .update(visaApplicationTable)
+	      .set({ userId: replacement.userId!, updatedAt: new Date() })
+      .where(eq(visaApplicationTable.userId, userId));
+
+    logger.info("Agency case ownership transferred before user deletion", {
+      fromUserId: userId,
+	      toUserId: replacement.userId,
+      applicationCount: ownedApps.length,
+    });
+
+    return { appsTransferred: ownedApps.length, appsDeleted: 0 };
+  }
+
+  let appsDeleted = 0;
   for (const app of ownedApps) {
-    // Find active members (excluding the user being deleted)
-    const members = await db
-      .select({
-        id: applicationMembershipTable.id,
-        userId: applicationMembershipTable.userId,
-        roleId: applicationMembershipTable.roleId,
-        isSystemRole: applicationMembershipTable.isSystemRole,
-        joinedAt: applicationMembershipTable.joinedAt,
-        createdAt: applicationMembershipTable.createdAt,
-      })
-      .from(applicationMembershipTable)
-      .where(
-        and(
-          eq(applicationMembershipTable.applicationId, app.id),
-          eq(applicationMembershipTable.isActive, 1),
-        ),
-      )
-      .orderBy(asc(applicationMembershipTable.createdAt));
-
-    // Filter out the user being deleted (they might also be a member)
-    const candidates = members.filter((m) => m.userId !== userId);
-
-    if (candidates.length > 0) {
-      // Transfer ownership to best candidate
-      candidates.sort((a, b) => {
-        const rankA = a.isSystemRole ? (SYSTEM_ROLE_RANK[a.roleId] ?? 0) : 0;
-        const rankB = b.isSystemRole ? (SYSTEM_ROLE_RANK[b.roleId] ?? 0) : 0;
-        if (rankB !== rankA) return rankB - rankA; // higher rank first
-        // Tiebreak: earliest joiner
-        const dateA = a.joinedAt ?? a.createdAt;
-        const dateB = b.joinedAt ?? b.createdAt;
-        if (dateA && dateB) return dateA.getTime() - dateB.getTime();
-        return 0;
-      });
-
-      const newOwner = candidates[0];
-
-      // Transfer ownership
-      await db
-        .update(visaApplicationTable)
-        .set({ userId: newOwner.userId, updatedAt: new Date() })
-        .where(eq(visaApplicationTable.id, app.id));
-
-      // Remove new owner's membership row (owners don't need one)
-      await db
-        .delete(applicationMembershipTable)
-        .where(eq(applicationMembershipTable.id, newOwner.id));
-
-      appsTransferred++;
-      logger.info("Application ownership transferred", {
+    try {
+      await deleteApplicationAsAdmin({ applicationId: app.id });
+      appsDeleted++;
+    } catch (error) {
+      logger.warn("Failed to delete application during user deletion", {
         applicationId: app.id,
-        fromUserId: userId,
-        toUserId: newOwner.userId,
+        userId,
+        error,
       });
-    } else {
-      // No other members — delete the application entirely
-      try {
-        await deleteApplicationAsAdmin({ applicationId: app.id });
-        appsDeleted++;
-      } catch (error) {
-        logger.warn("Failed to delete application during admin user deletion", {
-          applicationId: app.id,
-          userId,
-          error,
-        });
-      }
     }
   }
+
+  return { appsTransferred: 0, appsDeleted };
+}
+
+/**
+ * Delete a user from the admin panel with proper cascading:
+ *  - Agency cases created by the user → transferred to another active staff member when possible
+ *  - Agency cases with no remaining staff → deleted with R2/Vectorize cleanup
+ *  - Legacy memberships, application invitations, support data, sessions → cleaned up
+ */
+export async function adminDeleteUser({ userId }: { userId: string }) {
+  const db = getDB();
+
+  const { appsTransferred, appsDeleted } = await transferOrDeleteOwnedApplicationsForUser({ userId });
 
   // 2. Remove memberships in other users' applications
   await db.delete(applicationMembershipTable).where(eq(applicationMembershipTable.userId, userId));
 
-  // 3. Clean up invitations
+  // 3. Clean up legacy application invitations and agency team access
   await db
     .delete(applicationInvitationTable)
     .where(eq(applicationInvitationTable.invitedBy, userId));
@@ -488,6 +227,7 @@ export async function adminDeleteUser({ userId }: { userId: string }) {
     .update(applicationInvitationTable)
     .set({ acceptedBy: null })
     .where(eq(applicationInvitationTable.acceptedBy, userId));
+  await db.delete(agencyTeamMemberTable).where(eq(agencyTeamMemberTable.userId, userId));
 
   // 4. Clean up support data (screenshots from R2, then messages, then tickets)
   const tickets = await db

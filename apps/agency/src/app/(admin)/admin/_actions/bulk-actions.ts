@@ -4,8 +4,14 @@ import { createServerAction } from "zsa"
 import { getDB } from "@/db"
 import { requireAdmin } from "@/utils/auth"
 import { z } from "zod"
-import { inArray, and, ne, eq, count } from "drizzle-orm"
-import { userTable, ROLES_ENUM, visaApplicationTable, applicationMembershipTable } from "@/db/schema"
+import { inArray, and, ne, eq } from "drizzle-orm"
+import {
+  AGENCY_STAFF_STATUS,
+  ROLES_ENUM,
+  agencyTeamMemberTable,
+  userTable,
+  visaApplicationTable,
+} from "@/db/schema"
 import { revalidatePath } from "next/cache"
 import { validateCsrfToken } from "@/infra/csrf"
 import { ZSAError } from "zsa"
@@ -23,8 +29,8 @@ const bulkUpdateRoleSchema = bulkActionSchema.extend({
 
 /**
  * Bulk delete users with proper cascading:
- *  - Owned apps with other members → transfer ownership
- *  - Owned apps without members → delete (R2/Vectorize cleanup)
+ *  - Agency cases → transfer to another active staff member when possible
+ *  - Agency cases with no remaining staff → delete (R2/Vectorize cleanup)
  *  - All related data cleaned up
  * Prevents the current admin from deleting themselves.
  */
@@ -137,7 +143,7 @@ export const bulkVerifyUserEmailAction = createServerAction()
 
 /**
  * Preview the impact of deleting users before confirming.
- * Returns counts of apps that would be transferred vs deleted.
+ * Returns counts of agency cases that would be transferred vs deleted.
  */
 export const previewDeleteUsersAction = createServerAction()
   .input(bulkActionSchema)
@@ -155,28 +161,26 @@ export const previewDeleteUsersAction = createServerAction()
     let appsToDelete = 0
 
     for (const userId of filteredUserIds) {
-      const ownedApps = await db
-        .select({ id: visaApplicationTable.id })
-        .from(visaApplicationTable)
-        .where(eq(visaApplicationTable.userId, userId))
-
-      for (const app of ownedApps) {
-        const [memberCount] = await db
-          .select({ total: count() })
-          .from(applicationMembershipTable)
+      const [ownedApps, replacementStaff] = await Promise.all([
+        db
+          .select({ id: visaApplicationTable.id })
+          .from(visaApplicationTable)
+          .where(eq(visaApplicationTable.userId, userId)),
+        db
+          .select({ userId: agencyTeamMemberTable.userId })
+          .from(agencyTeamMemberTable)
           .where(
             and(
-              eq(applicationMembershipTable.applicationId, app.id),
-              eq(applicationMembershipTable.isActive, 1),
-              ne(applicationMembershipTable.userId, userId)
-            )
-          )
+              ne(agencyTeamMemberTable.userId, userId),
+              eq(agencyTeamMemberTable.status, AGENCY_STAFF_STATUS.ACTIVE),
+            ),
+          ),
+      ])
 
-        if ((memberCount?.total ?? 0) > 0) {
-          appsToTransfer++
-        } else {
-          appsToDelete++
-        }
+      if (replacementStaff.length > 0) {
+        appsToTransfer += ownedApps.length
+      } else {
+        appsToDelete += ownedApps.length
       }
     }
 

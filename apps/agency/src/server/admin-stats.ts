@@ -10,8 +10,8 @@ import {
   checklistItemTable,
   supportTicketTable,
   applicantTable,
-  applicationMembershipTable,
-  applicationInvitationTable,
+  agencyTeamMemberTable,
+  AGENCY_STAFF_STATUS,
   enterpriseInquiryTable,
   SUPPORT_TICKET_STATUS,
 } from "@/db/schema";
@@ -91,13 +91,11 @@ export interface PlatformStats {
     byPriority: Record<string, number>;
     avgResolutionHours: number | null;
   };
-  collaboration: {
-    totalMemberships: number;
-    activeMemberships: number;
-    totalInvitations: number;
-    acceptedInvitations: number;
-    pendingInvitations: number;
-  };
+	  agencyTeam: {
+	    totalStaff: number;
+	    activeStaff: number;
+	    linkedStaff: number;
+	  };
   enterprise: {
     total: number;
     byStatus: Record<string, number>;
@@ -147,7 +145,7 @@ export async function getPlatformStats(): Promise<PlatformStats> {
     totalChecklist, requiredChecklist, checklistByStatus,
     totalTickets, openTickets, inProgressTickets, resolvedTickets, closedTickets,
     ticketsByCategory, ticketsByPriority, avgResolution,
-    totalMemberships, activeMemberships, totalInvitations, acceptedInvitations,
+	    totalStaff, activeStaff, linkedStaff,
     totalEnterprise, enterpriseByStatus,
     userGrowth, appGrowth,
   ] = await Promise.all([
@@ -237,11 +235,16 @@ export async function getPlatformStats(): Promise<PlatformStats> {
       avg: sql<number>`avg((julianday(${supportTicketTable.resolvedAt}, 'unixepoch') - julianday(${supportTicketTable.createdAt}, 'unixepoch')) * 24)`,
     }).from(supportTicketTable).where(isNotNull(supportTicketTable.resolvedAt)),
 
-    // Collaboration
-    db.$count(applicationMembershipTable),
-    db.$count(applicationMembershipTable, eq(applicationMembershipTable.isActive, 1)),
-    db.$count(applicationInvitationTable),
-    db.$count(applicationInvitationTable, isNotNull(applicationInvitationTable.acceptedAt)),
+	    // Agency team
+	    db.$count(agencyTeamMemberTable),
+	    db.$count(agencyTeamMemberTable, eq(agencyTeamMemberTable.status, AGENCY_STAFF_STATUS.ACTIVE)),
+	    db.$count(
+	      agencyTeamMemberTable,
+	      and(
+	        eq(agencyTeamMemberTable.status, AGENCY_STAFF_STATUS.ACTIVE),
+	        isNotNull(agencyTeamMemberTable.userId),
+	      ),
+	    ),
 
     // Enterprise
     db.$count(enterpriseInquiryTable),
@@ -325,10 +328,11 @@ export async function getPlatformStats(): Promise<PlatformStats> {
       byPriority: toRecord(ticketsByPriority, (r) => r.priority ?? "unknown"),
       avgResolutionHours: avgResolution[0]?.avg != null ? Math.round(Number(avgResolution[0].avg) * 10) / 10 : null,
     },
-    collaboration: {
-      totalMemberships, activeMemberships, totalInvitations, acceptedInvitations,
-      pendingInvitations: totalInvitations - acceptedInvitations,
-    },
+	    agencyTeam: {
+	      totalStaff,
+	      activeStaff,
+	      linkedStaff,
+	    },
     enterprise: {
       total: totalEnterprise,
       byStatus: toRecord(enterpriseByStatus, (r) => r.status),

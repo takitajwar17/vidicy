@@ -5,8 +5,9 @@ import { z } from "zod";
 import { eq, inArray } from "drizzle-orm";
 import { getDB } from "@/db";
 import { requireVerifiedEmail } from "@/utils/auth";
-import { deleteApplication } from "@/server/application-server";
+import { transferOrDeleteOwnedApplicationsForUser } from "@/server/application-server";
 import {
+  agencyTeamMemberTable,
   userTable,
   visaApplicationTable,
   supportTicketTable,
@@ -43,31 +44,16 @@ export const deleteAccountAction = createServerAction()
     const userId = session.userId;
     const db = getDB();
 
-    // 1. Delete all visa applications owned by this user (cascades to
-    //    applicants, checklist items, documents, evaluations, chat messages,
-    //    memberships, roles, invitations) and cleans up R2 + Vectorize
-    const applications = await db
-      .select({ id: visaApplicationTable.id })
-      .from(visaApplicationTable)
-      .where(eq(visaApplicationTable.userId, userId));
+    // 1. Agency cases are shared workspace records. Transfer creator ownership
+    //    to another active staff member when possible; only delete cases when
+    //    this is the last staff account.
+    await transferOrDeleteOwnedApplicationsForUser({ userId });
 
-    for (const app of applications) {
-      try {
-        await deleteApplication({ applicationId: app.id });
-      } catch (error) {
-        logger.warn("Failed to delete application during account deletion", {
-          applicationId: app.id,
-          userId,
-          error,
-        });
-      }
-    }
-
-    // 2. Remove memberships in other users' applications (FK has no cascade on userId)
+    // 2. Remove legacy application memberships and agency team access.
     await db.delete(applicationMembershipTable).where(eq(applicationMembershipTable.userId, userId));
+    await db.delete(agencyTeamMemberTable).where(eq(agencyTeamMemberTable.userId, userId));
 
-    // 3. Nullify invitation references where this user invited or accepted
-    //    invitedBy is NOT NULL so we must delete those rows; acceptedBy is nullable so we nullify
+    // 3. Nullify legacy application invitation references where this user invited or accepted.
     await db.delete(applicationInvitationTable).where(eq(applicationInvitationTable.invitedBy, userId));
     await db
       .update(applicationInvitationTable)
@@ -128,7 +114,6 @@ export const deleteAccountAction = createServerAction()
     try {
       const cookieStore = await cookies();
       cookieStore.delete(SESSION_COOKIE_NAME);
-      cookieStore.delete("lastActiveApp");
     } catch {
       // Cookie operations only available inside request context
     }
@@ -250,6 +235,11 @@ export const exportUserDataAction = createServerAction()
       .from(supportTicketTable)
       .where(eq(supportTicketTable.userId, userId));
 
+    const agencyStaffMembership = await db
+      .select()
+      .from(agencyTeamMemberTable)
+      .where(eq(agencyTeamMemberTable.userId, userId));
+
     const exportData = {
       exportedAt: new Date().toISOString(),
       dataSubject: user,
@@ -276,9 +266,10 @@ export const exportUserDataAction = createServerAction()
         invitations: invitations.filter(
           (i) => i.applicationId === app.id
         ),
-      })),
-      supportTickets,
-      _notice:
+	      })),
+	      supportTickets,
+	      agencyStaffMembership,
+	      _notice:
         "This export contains all personal data held by Vidicy. " +
         "Uploaded document files (PDFs) are not included in this JSON export due to size constraints. " +
         "To request document file copies, contact support.",

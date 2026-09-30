@@ -223,11 +223,10 @@ export default async function UserDetailPage({ params }: UserDetailPageProps) {
                         <table className="w-full text-sm">
                           <thead>
                             <tr className="border-b text-left text-muted-foreground">
-                              <th className="pb-2 font-medium">Application</th>
-                              <th className="pb-2 font-medium">Route</th>
-                              <th className="pb-2 font-medium">Status</th>
-                              <th className="pb-2 font-medium">Payment</th>
-                              <th className="pb-2 font-medium text-right">Created</th>
+	                              <th className="pb-2 font-medium">Application</th>
+	                              <th className="pb-2 font-medium">Route</th>
+	                              <th className="pb-2 font-medium">Status</th>
+	                              <th className="pb-2 font-medium text-right">Created</th>
                             </tr>
                           </thead>
                           <tbody>
@@ -266,12 +265,7 @@ export default async function UserDetailPage({ params }: UserDetailPageProps) {
                                       ) : null}
                                     </div>
                                   </td>
-                                  <td className="py-2 align-top">
-                                    <Badge variant="outline" className="text-xs capitalize">
-                                      {application.paymentStatus}
-                                    </Badge>
-                                  </td>
-                                  <td className="py-2 align-top text-right tabular-nums text-muted-foreground">
+	                                  <td className="py-2 align-top text-right tabular-nums text-muted-foreground">
                                     {format(application.createdAt, "PP")}
                                   </td>
                                 </tr>

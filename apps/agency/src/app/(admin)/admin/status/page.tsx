@@ -546,12 +546,12 @@ export default async function StatusPage() {
                 </div>
               </section>
 
-              {/* ======== COLLABORATION & ENTERPRISE ======== */}
+              {/* ======== AGENCY TEAM & ENTERPRISE ======== */}
               <section>
-                <SectionHeader icon={UsersRoundIcon} title="Collaboration & Enterprise" />
+                <SectionHeader icon={UsersRoundIcon} title="Agency Team & Enterprise" />
                 <div className="grid gap-4 grid-cols-2 sm:grid-cols-3 lg:grid-cols-5">
-                  <StatCard icon={UsersRoundIcon} label="Memberships" value={stats.collaboration.totalMemberships} sub={`${stats.collaboration.activeMemberships} active`} />
-                  <StatCard icon={MailIcon} label="Invitations" value={stats.collaboration.totalInvitations} sub={`${stats.collaboration.acceptedInvitations} accepted · ${stats.collaboration.pendingInvitations} pending`} />
+                  <StatCard icon={UsersRoundIcon} label="Staff" value={stats.agencyTeam.totalStaff} sub={`${stats.agencyTeam.activeStaff} active`} />
+	                  <StatCard icon={UsersRoundIcon} label="Linked Staff" value={stats.agencyTeam.linkedStaff} sub="Signed in at least once" />
                   <StatCard icon={BuildingIcon} label="Enterprise Inquiries" value={stats.enterprise.total} />
                   {Object.entries(stats.enterprise.byStatus).map(([status, count]) => (
                     <StatCard key={status} icon={BuildingIcon} label={`Enterprise: ${status}`} value={count} />

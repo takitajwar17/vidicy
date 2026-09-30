@@ -13,7 +13,6 @@ import {
   chatConversationTable,
   chatMessageTable,
   documentEvaluationTable,
-  paymentEventTable,
   uploadedDocumentTable,
   userTable,
   visaApplicationTable,
@@ -60,7 +59,6 @@ export const getAdminApplicationDebugData = cache(
       memberships,
       roles,
       invitations,
-      paymentEvents,
     ] = await Promise.all([
       db.query.applicantTable.findMany({
         where: eq(applicantTable.applicationId, applicationId),
@@ -99,10 +97,6 @@ export const getAdminApplicationDebugData = cache(
         where: eq(applicationInvitationTable.applicationId, applicationId),
         orderBy: [desc(applicationInvitationTable.createdAt)],
       }),
-      db.query.paymentEventTable.findMany({
-        where: eq(paymentEventTable.applicationId, applicationId),
-        orderBy: [desc(paymentEventTable.createdAt)],
-      }),
     ])
 
     const relatedUserIds = Array.from(
@@ -113,7 +107,6 @@ export const getAdminApplicationDebugData = cache(
           ...memberships.map((record) => record.invitedBy),
           ...invitations.map((record) => record.invitedBy),
           ...invitations.map((record) => record.acceptedBy),
-          ...paymentEvents.map((record) => record.userId),
         ].filter((value): value is string => Boolean(value)),
       ),
     )
@@ -145,7 +138,6 @@ export const getAdminApplicationDebugData = cache(
       memberships,
       roles,
       invitations,
-      paymentEvents,
       relatedUsers,
     }
   },
