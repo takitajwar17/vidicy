@@ -31,6 +31,10 @@ export const metadata: Metadata = {
   title: "Applications",
 };
 
+const APPLICATIONS_TABLE_TEXT_CLASS = "text-[11px] leading-4";
+const APPLICATIONS_TABLE_BADGE_CLASS = "text-[10px] leading-4";
+const APPLICATIONS_TABLE_AVATAR_CLASS = "h-5 w-5 text-[9px]";
+
 function normalize(value: string | null | undefined) {
   return (value ?? "").toLowerCase().trim();
 }
@@ -140,8 +144,8 @@ export default async function ApplicationsPage({
 
           <Card className="rounded-xl shadow-[var(--shadow-dashboard)]">
             <CardContent className="overflow-x-auto p-0">
-              <Table>
-                <TableHeader>
+              <Table className={APPLICATIONS_TABLE_TEXT_CLASS}>
+                <TableHeader className="[&_th]:text-[11px] [&_th]:leading-4">
                   <TableRow>
                     <TableHead className="pl-5">Application ID</TableHead>
                     <TableHead>Client</TableHead>
@@ -169,14 +173,17 @@ export default async function ApplicationsPage({
                       <TableCell>{row.application.visaType}</TableCell>
                       <TableCell>{row.application.destinationCountry}</TableCell>
                       <TableCell>{formatShortDate(row.application.submittedAt ?? row.application.createdAt)}</TableCell>
-                      <TableCell><CaseStatusBadge status={row.application.agencyStatus} /></TableCell>
-                      <TableCell><RiskBadge riskLevel={row.latestEvaluation?.riskLevel ?? row.application.riskLevel} /></TableCell>
-                      <TableCell><PriorityBadge priority={row.application.priority} /></TableCell>
+                      <TableCell><CaseStatusBadge status={row.application.agencyStatus} className={APPLICATIONS_TABLE_BADGE_CLASS} /></TableCell>
+                      <TableCell><RiskBadge riskLevel={row.latestEvaluation?.riskLevel ?? row.application.riskLevel} className={APPLICATIONS_TABLE_BADGE_CLASS} /></TableCell>
+                      <TableCell><PriorityBadge priority={row.application.priority} className={APPLICATIONS_TABLE_TEXT_CLASS} /></TableCell>
                       <TableCell>
                         <ReviewerAvatar
                           name={row.reviewer ? `${row.reviewer.firstName ?? ""} ${row.reviewer.lastName ?? ""}`.trim() : null}
                           email={row.reviewer?.email ?? null}
                           avatar={row.reviewer?.avatar ?? null}
+                          className={APPLICATIONS_TABLE_TEXT_CLASS}
+                          avatarClassName={APPLICATIONS_TABLE_AVATAR_CLASS}
+                          labelClassName={APPLICATIONS_TABLE_TEXT_CLASS}
                         />
                       </TableCell>
                       <TableCell className="pr-5 text-right">

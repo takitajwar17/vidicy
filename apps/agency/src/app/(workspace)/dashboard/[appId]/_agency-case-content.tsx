@@ -12,7 +12,6 @@ import {
 
 import {
   AddReviewIssueForm,
-  AgencyCaseHeaderActions,
   AgencyCaseStatusSelect,
   ReviewIssueStatusSelect,
 } from "@/components/agency/agency-case-actions";
@@ -128,11 +127,6 @@ export async function AgencyCaseContent({ appId }: { appId: string }) {
             </div>
           </div>
 
-          <AgencyCaseHeaderActions
-            applicationId={app.id}
-            hasEvaluation={hasEvaluation}
-            hasReport={hasReport}
-          />
         </section>
 
         <section className="grid min-h-0 flex-1 gap-4 xl:grid-cols-[340px_minmax(0,1fr)_430px]">
