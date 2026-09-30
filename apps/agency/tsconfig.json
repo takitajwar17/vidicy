@@ -6,7 +6,7 @@
       "dom.iterable",
       "esnext"
     ],
-    "allowJs": true,
+    "allowJs": false,
     "skipLibCheck": true,
     "strict": true,
     "noEmit": true,
@@ -46,7 +46,9 @@
     "node_modules",
     ".next-dev",
     ".open-next",
+    ".open-next/**/*",
     ".open-next-deploy-backup",
+    ".open-next-deploy-backup/**/*",
     "worker.ts"
   ]
 }

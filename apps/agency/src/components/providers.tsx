@@ -6,13 +6,13 @@ import { HeroUIProvider } from "@heroui/react"
 import type { SessionValidationResult } from "@/types"
 import { useSessionStore } from "@/state/session"
 import { Suspense, useEffect, useRef, useCallback } from "react"
-import type { ComponentProps, ComponentType, ReactNode, RefObject } from "react"
+import type { ComponentProps, ComponentType, ReactNode } from "react"
 import { useConfigStore } from "@/state/config"
 import type { getConfig } from "@/flags"
 import { EmailVerificationDialog } from "./email-verification-dialog"
 import { useTopLoader } from 'nextjs-toploader'
 import { usePathname, useRouter } from "next/navigation"
-import { useEventListener, useDebounceCallback } from 'usehooks-ts';
+import { useDebounceCallback } from 'usehooks-ts';
 
 type NextThemesProviderProps = Omit<ComponentProps<typeof NextThemesProvider>, "children"> & {
   children: ReactNode;
@@ -73,8 +73,6 @@ export function ThemeProvider({
   const setConfig = useConfigStore((store) => store.setConfig)
   const refetchSession = useSessionStore((store) => store.refetchSession)
   const clearSession = useSessionStore((store) => store.clearSession)
-  const documentRef = useRef(typeof window === 'undefined' ? null : document)
-  const windowRef = useRef(typeof window === 'undefined' ? null : window)
 
   const doFetchSession = useCallback(async () => {
     try {
@@ -111,16 +109,26 @@ export function ThemeProvider({
     fetchSession()
   }, [fetchSession])
 
-  // Handle refetches
-  useEventListener('visibilitychange', () => {
-    if (document.visibilityState === 'visible') {
+  // Handle refetches when the browser tab becomes active again.
+  useEffect(() => {
+    function handleVisibilityChange() {
+      if (document.visibilityState === "visible") {
+        fetchSession()
+      }
+    }
+
+    function handleFocus() {
       fetchSession()
     }
-  }, documentRef as RefObject<Document>)
 
-	  useEventListener('focus', () => {
-	    fetchSession()
-	  }, windowRef as RefObject<Window>)
+    document.addEventListener("visibilitychange", handleVisibilityChange)
+    window.addEventListener("focus", handleFocus)
+
+    return () => {
+      document.removeEventListener("visibilitychange", handleVisibilityChange)
+      window.removeEventListener("focus", handleFocus)
+    }
+  }, [fetchSession])
 
   // Add fetchSession to the session store (wrap debounced version to match store type)
   useEffect(() => {

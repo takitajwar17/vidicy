@@ -1,38 +1,35 @@
 import { notFound } from "next/navigation";
 import {
   AlertTriangleIcon,
-  BrainCircuitIcon,
   CheckCircle2Icon,
+  CircleAlertIcon,
+  CircleIcon,
   Clock3Icon,
-  FilesIcon,
-  UploadIcon,
+  FileIcon,
+  FileTextIcon,
+  PlusIcon,
 } from "lucide-react";
 
-import { AgencyPageShell } from "@/components/agency/agency-page-shell";
 import {
   AddReviewIssueForm,
-  AgencyCaseToolbar,
+  AgencyCaseHeaderActions,
+  AgencyCaseStatusSelect,
   ReviewIssueStatusSelect,
 } from "@/components/agency/agency-case-actions";
 import {
-  CaseStatusBadge,
   IssueSeverityBadge,
-  MetricCard,
   PriorityBadge,
   ReviewerAvatar,
   RiskBadge,
-  formatBytes,
   formatShortDate,
 } from "@/components/agency/agency-ui";
-import { ChecklistGenerator } from "@/components/visa/checklist-generator";
-import { DeleteDocumentButton } from "@/components/visa/delete-document-button";
-import { DocumentPreviewDrawer } from "@/components/visa/document-preview-drawer";
+import { AgencyCaseDocumentDesk } from "@/components/agency/agency-case-document-desk";
 import { DocumentUpload } from "@/components/visa/document-upload";
 import { EvaluationTrigger } from "@/components/visa/evaluation-trigger";
-import { SetDocumentActiveButton } from "@/components/visa/set-document-active-button";
 import { Badge } from "@/components/ui/badge";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { PageHeader } from "@/components/page-header";
 import { CHECKLIST_ITEM_STATUS, REVIEW_ISSUE_STATUS } from "@/db/schema";
 import { getDisplayCaseNumber } from "@/lib/agency-workflow";
 import { getAgencyCaseDetail } from "@/server/agency-data";
@@ -59,305 +56,328 @@ export async function AgencyCaseContent({ appId }: { appId: string }) {
 
   const primaryApplicant = data.primaryApplicant;
   const assignedReviewer = data.staff.find((member) => member.userId === app.assignedReviewerId && member.user) ?? null;
-  const requiredItems = data.checklistItems.filter((item) => item.isRequired);
-  const optionalItems = data.checklistItems.filter((item) => !item.isRequired);
-  const uploadedRequiredCount = requiredItems.filter((item) => isUploadedStatus(item.status)).length;
-  const completionPercent =
-    requiredItems.length > 0 ? Math.round((uploadedRequiredCount / requiredItems.length) * 100) : 0;
-  const hasChecklist = data.checklistItems.length > 0;
-  const hasDocuments = data.documents.length > 0;
-  const openIssues = data.issues.filter(
-    (issue) =>
-      issue.status !== REVIEW_ISSUE_STATUS.RESOLVED &&
-      issue.status !== REVIEW_ISSUE_STATUS.DISMISSED,
-  );
-  const highIssues = openIssues.filter((issue) => issue.severity === "high");
-  const totalStorage = data.documents.reduce((sum, document) => sum + document.fileSize, 0);
   const docsByChecklistItem = new Map<string, typeof data.documents>();
+
   for (const document of data.documents) {
     if (!document.checklistItemId) continue;
     const existing = docsByChecklistItem.get(document.checklistItemId) ?? [];
     existing.push(document);
     docsByChecklistItem.set(document.checklistItemId, existing);
   }
-  const staffOptions = data.staff
-    .filter((member) => member.userId && member.user)
-	    .map((member) => ({
-	      userId: member.userId!,
-	      label: getPersonName(member.user) ?? member.email ?? "Reviewer",
-	    }));
+
+  const requiredItems = data.checklistItems.filter((item) => item.isRequired);
+  const uploadedRequiredCount = requiredItems.filter((item) => isUploadedStatus(item.status)).length;
+  const completionPercent =
+    requiredItems.length > 0 ? Math.round((uploadedRequiredCount / requiredItems.length) * 100) : 0;
+  const missingRequiredItems = requiredItems.filter((item) => !docsByChecklistItem.has(item.id));
+  const openIssues = data.issues.filter(
+    (issue) =>
+      issue.status !== REVIEW_ISSUE_STATUS.RESOLVED &&
+      issue.status !== REVIEW_ISSUE_STATUS.DISMISSED,
+  );
+  const highIssues = openIssues.filter((issue) => issue.severity === "high");
+  const mediumIssues = openIssues.filter((issue) => issue.severity === "medium");
+  const totalStorage = data.documents.reduce((sum, document) => sum + document.fileSize, 0);
   const caseNumber = getDisplayCaseNumber(app.caseNumber, app.id);
+  const firstChecklistItem = data.checklistItems[0] ?? null;
+  const hasDocuments = data.documents.length > 0;
+  const hasEvaluation = Boolean(data.latestEvaluation);
+  const hasReport = Boolean(data.latestReport);
+  const reviewerName = getPersonName(assignedReviewer?.user ?? null);
+
+  const documentRows = data.documents.map((document) => ({
+    id: document.id,
+    checklistItemId: document.checklistItemId,
+    fileName: document.fileName,
+    fileSize: document.fileSize,
+    mimeType: document.mimeType,
+    pageCount: document.pageCount,
+    extractionStatus: document.extractionStatus,
+  }));
+  const checklistRows = data.checklistItems.map((item) => ({
+    id: item.id,
+    documentName: item.documentName,
+    status: item.status,
+  }));
 
   return (
-    <AgencyPageShell
-      breadcrumbs={[
-        { href: "/dashboard", label: "Dashboard" },
-        { href: "/dashboard/applications", label: "Applications" },
-        { href: `/dashboard/${app.id}`, label: caseNumber },
-      ]}
-      title={`Application #${caseNumber}`}
-      description={[
-        app.clientName ? `Client: ${app.clientName}` : null,
-        primaryApplicant?.name ? `Applicant: ${primaryApplicant.name}` : null,
-        `${app.destinationCountry} ${app.visaType}`,
-        app.submittedAt ? `Received ${formatShortDate(app.submittedAt)}` : null,
-      ].filter(Boolean).join(" · ")}
-      actions={
-        <AgencyCaseToolbar
-          applicationId={app.id}
-          status={app.agencyStatus}
-          assignedReviewerId={app.assignedReviewerId}
-          staff={staffOptions}
-          hasEvaluation={Boolean(data.latestEvaluation)}
-        />
-      }
-    >
-      <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
-        <MetricCard icon={FilesIcon} label="Documents" value={data.documents.length} detail={`${formatBytes(totalStorage)} uploaded`} tone="info" />
-        <MetricCard icon={CheckCircle2Icon} label="Checklist" value={`${completionPercent}%`} detail={`${uploadedRequiredCount}/${requiredItems.length || 0} required`} tone="success" />
-        <MetricCard icon={AlertTriangleIcon} label="Open Issues" value={openIssues.length} detail={`${highIssues.length} high priority`} tone={highIssues.length > 0 ? "danger" : "warning"} />
-        <MetricCard icon={BrainCircuitIcon} label="AI Score" value={data.latestEvaluation?.overallScore ?? "—"} detail={data.latestEvaluation ? "Latest review score" : "Not reviewed"} tone="default" />
-        <MetricCard icon={Clock3Icon} label="Due Date" value={app.dueAt ? formatShortDate(app.dueAt) : "Not set"} detail="Internal SLA" tone="warning" />
-      </section>
+    <>
+      <PageHeader
+        items={[
+          { href: "/dashboard", label: "Dashboard" },
+          { href: "/dashboard/applications", label: "Applications" },
+          { href: `/dashboard/${app.id}`, label: caseNumber },
+        ]}
+      />
 
-      <section className="grid gap-4 xl:grid-cols-[340px_minmax(0,1fr)_420px]">
-        <Card className="rounded-xl shadow-[var(--shadow-dashboard)]">
-          <CardHeader className="flex-row items-center justify-between gap-3">
-            <CardTitle className="text-base">Documents</CardTitle>
-            <Badge variant="outline" className="rounded-full text-2xs font-bold">
-              {data.documents.length} file{data.documents.length === 1 ? "" : "s"}
-            </Badge>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {!primaryApplicant ? (
-              <p className="text-sm text-muted-foreground">Add an applicant before generating the review checklist.</p>
-            ) : !hasChecklist ? (
-              <ChecklistGenerator
-                applicationId={app.id}
-                applicantId={primaryApplicant.id}
-                applicantName={primaryApplicant.name}
-              />
-            ) : (
-              <div className="space-y-3">
-                {[...requiredItems, ...optionalItems].map((item) => {
-                  const itemDocs = docsByChecklistItem.get(item.id) ?? [];
-                  return (
-                    <div key={item.id} className="rounded-xl border border-border/80 bg-card p-3">
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="min-w-0">
-                          <div className="flex items-center gap-2">
-                            <p className="truncate text-sm font-bold">{item.documentName}</p>
-                            <Badge variant={item.isRequired ? "default" : "outline"} className="rounded-full text-2xs">
-                              {item.isRequired ? "Required" : "Optional"}
-                            </Badge>
-                          </div>
-                          <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">{item.description}</p>
-                        </div>
-                        <DocumentUpload applicationId={app.id} applicantId={primaryApplicant.id} checklistItemId={item.id} />
-                      </div>
-                      {itemDocs.length > 0 ? (
-                        <div className="mt-3 space-y-2 rounded-lg bg-muted/35 p-2">
-                          {itemDocs.map((document, index) => (
-                            <DocumentPreviewDrawer
-                              key={document.id}
-                              documentId={document.id}
-                              fileName={document.fileName}
-                              fileSize={document.fileSize}
-                              mimeType={document.mimeType}
-                              uploadedAt={document.uploadedAt}
-                              isActive={index === 0}
-                              hasMultipleVersions={itemDocs.length > 1}
-                              sectionLabel={item.documentName}
-                            >
-                              {index !== 0 ? <SetDocumentActiveButton documentId={document.id} applicationId={app.id} /> : null}
-                              <DeleteDocumentButton documentId={document.id} applicationId={app.id} fileName={document.fileName} />
-                            </DocumentPreviewDrawer>
-                          ))}
-                        </div>
-                      ) : null}
+      <main className="mx-auto flex w-full max-w-[1680px] flex-1 flex-col gap-4 px-4 py-5 md:px-6 xl:h-[calc(100vh-4rem)]">
+        <section className="flex flex-col gap-4 border-b border-border/70 pb-4 2xl:flex-row 2xl:items-center 2xl:justify-between">
+          <div className="min-w-0 space-y-3">
+            <div className="flex flex-wrap items-center gap-3">
+              <h1 className="text-2xl font-bold tracking-tight text-foreground md:text-3xl">
+                Application #{caseNumber}
+              </h1>
+              <AgencyCaseStatusSelect applicationId={app.id} status={app.agencyStatus} />
+            </div>
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-muted-foreground">
+              {app.clientName ? <span><span className="font-semibold text-foreground">Client:</span> {app.clientName}</span> : null}
+              {primaryApplicant?.name ? <span><span className="font-semibold text-foreground">Applicant:</span> {primaryApplicant.name}</span> : null}
+              <span><span className="font-semibold text-foreground">Visa Type:</span> {app.visaType}</span>
+              <span><span className="font-semibold text-foreground">Destination:</span> {app.destinationCountry}</span>
+              {app.submittedAt ? <span><span className="font-semibold text-foreground">Submitted:</span> {formatShortDate(app.submittedAt)}</span> : null}
+            </div>
+          </div>
+
+          <AgencyCaseHeaderActions
+            applicationId={app.id}
+            hasEvaluation={hasEvaluation}
+            hasReport={hasReport}
+          />
+        </section>
+
+        <section className="grid min-h-0 flex-1 gap-4 xl:grid-cols-[340px_minmax(0,1fr)_430px]">
+          <AgencyCaseDocumentDesk
+            applicationId={app.id}
+            applicantId={primaryApplicant?.id ?? null}
+            firstChecklistItemId={firstChecklistItem?.id ?? null}
+            documents={documentRows}
+            checklistItems={checklistRows}
+            totalStorage={totalStorage}
+          />
+
+          <aside className="flex min-h-[620px] flex-col overflow-hidden rounded-xl border border-border/80 bg-card shadow-[var(--shadow-dashboard)] xl:min-h-0">
+            <Tabs defaultValue="ai" className="flex min-h-0 flex-1 flex-col">
+              <TabsList className="grid h-14 w-full grid-cols-4 rounded-none border-0 border-b border-border/70 bg-card p-0">
+                <TabsTrigger value="ai" className="h-14 rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:shadow-none">
+                  AI Analysis
+                </TabsTrigger>
+                <TabsTrigger value="checklist" className="h-14 rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:shadow-none">
+                  Checklist
+                </TabsTrigger>
+                <TabsTrigger value="notes" className="h-14 rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:shadow-none">
+                  Notes
+                </TabsTrigger>
+                <TabsTrigger value="activity" className="h-14 rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:shadow-none">
+                  Activity
+                </TabsTrigger>
+              </TabsList>
+
+              <TabsContent value="ai" className="min-h-0 flex-1 overflow-y-auto p-4">
+                <div className="grid grid-cols-3 gap-3">
+                  <div className="rounded-xl border border-border/80 bg-background p-3">
+                    <div className="mb-2 flex items-center gap-2 text-destructive">
+                      <AlertTriangleIcon className="h-4 w-4" />
+                      <span className="text-xs font-bold">Issues</span>
                     </div>
-                  );
-                })}
-              </div>
-            )}
-          </CardContent>
-        </Card>
+                    <p className="text-3xl font-bold">{openIssues.length}</p>
+                    <p className="text-xs font-semibold text-destructive">{highIssues.length} high priority</p>
+                  </div>
+                  <div className="rounded-xl border border-border/80 bg-background p-3">
+                    <div className="mb-2 flex items-center gap-2 text-status-warning">
+                      <CircleAlertIcon className="h-4 w-4" />
+                      <span className="text-xs font-bold">Inconsistencies</span>
+                    </div>
+                    <p className="text-3xl font-bold">{mediumIssues.length}</p>
+                    <p className="text-xs font-semibold text-muted-foreground">Medium priority</p>
+                  </div>
+                  <div className="rounded-xl border border-border/80 bg-background p-3">
+                    <div className="mb-2 flex items-center gap-2 text-primary">
+                      <FileIcon className="h-4 w-4" />
+                      <span className="text-xs font-bold">Missing Items</span>
+                    </div>
+                    <p className="text-3xl font-bold">{missingRequiredItems.length}</p>
+                    <p className="text-xs font-semibold text-muted-foreground">To be provided</p>
+                  </div>
+                </div>
 
-        <div className="space-y-4">
-          <Card className="rounded-xl shadow-[var(--shadow-dashboard)]">
-            <CardHeader className="flex-row items-center justify-between gap-3">
-              <CardTitle className="text-base">Review summary</CardTitle>
-              <div className="flex flex-wrap items-center gap-2">
-                <CaseStatusBadge status={app.agencyStatus} />
-                <RiskBadge riskLevel={data.latestEvaluation?.riskLevel ?? app.riskLevel} />
-              </div>
-            </CardHeader>
-            <CardContent className="space-y-5">
-              <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-                <div>
-                  <p className="text-xs font-bold text-muted-foreground">Priority</p>
-                  <PriorityBadge priority={app.priority} />
+                <div className="mt-5">
+                  <div className="mb-2 flex items-center justify-between text-sm">
+                    <span className="font-bold">Overall review score</span>
+                    <span className="font-bold">{data.latestEvaluation?.overallScore ?? "Pending"}</span>
+                  </div>
+                  <Progress value={data.latestEvaluation?.overallScore ?? 0} className="h-2" />
                 </div>
-                <div>
-                  <p className="text-xs font-bold text-muted-foreground">Reviewer</p>
-	                  <ReviewerAvatar
-	                    name={getPersonName(assignedReviewer?.user ?? null)}
-	                    email={assignedReviewer?.user?.email ?? null}
-	                    avatar={assignedReviewer?.user?.avatar ?? null}
-	                    className="mt-1"
-	                  />
-                </div>
-                <div>
-                  <p className="text-xs font-bold text-muted-foreground">Client report</p>
-                  <p className="mt-1 text-sm font-bold capitalize">{app.clientReportStatus.replaceAll("_", " ")}</p>
-                </div>
-                <div>
-                  <p className="text-xs font-bold text-muted-foreground">Final submission</p>
-                  <p className="mt-1 text-sm font-bold">{formatShortDate(app.finalSubmissionAt)}</p>
-                </div>
-              </div>
 
-              <div className="rounded-xl border border-border/80 bg-muted/30 p-4">
-                <div className="mb-2 flex items-center justify-between gap-3">
-                  <p className="text-sm font-bold">Required document readiness</p>
-                  <span className="text-xs font-bold text-muted-foreground">{completionPercent}%</span>
+                <div className="mt-5 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-sm font-bold">AI-detected issues</h3>
+                    <RiskBadge riskLevel={data.latestEvaluation?.riskLevel ?? app.riskLevel} />
+                  </div>
+                  {data.latestEvaluation ? (
+                    <div className="space-y-2">
+                      {data.latestEvaluation.redFlags.slice(0, 5).map((issue, index) => (
+                        <div key={`${issue}-${index}`} className="rounded-xl border border-border/80 bg-background p-3">
+                          <div className="flex items-start justify-between gap-3">
+                            <div>
+                              <p className="text-sm font-bold">{issue}</p>
+                              <p className="mt-1 text-xs text-muted-foreground">Generated from the latest AI document review.</p>
+                            </div>
+                            <IssueSeverityBadge severity={index < 2 ? "high" : "medium"} />
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="rounded-xl border border-dashed border-border p-5 text-sm text-muted-foreground">
+                      Run AI review after the document set is ready. Seeded files are readable, but no AI outcome has been populated.
+                    </div>
+                  )}
                 </div>
-                <Progress value={completionPercent} className="h-2" />
-              </div>
 
-              {primaryApplicant ? (
-                <div className="flex flex-wrap gap-2">
-                  <EvaluationTrigger
-                    applicationId={app.id}
-                    applicantId={primaryApplicant.id}
-                    hasDocuments={hasDocuments}
-                    rerun={Boolean(data.latestEvaluation)}
-                  />
-                  {!hasDocuments && hasChecklist ? (
-                    <span className="inline-flex items-center gap-2 rounded-full border border-border bg-muted/40 px-3 text-xs font-bold text-muted-foreground">
-                      <UploadIcon className="h-3.5 w-3.5" />
-                      Upload at least one document first
-                    </span>
+                <div className="mt-5 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-sm font-bold">Missing items</h3>
+                    <span className="text-xs font-bold text-primary">View all</span>
+                  </div>
+                  {missingRequiredItems.length > 0 ? (
+                    missingRequiredItems.slice(0, 4).map((item) => (
+                      <div key={item.id} className="flex items-start gap-2 text-sm text-muted-foreground">
+                        <CircleIcon className="mt-0.5 h-4 w-4 text-primary" />
+                        <span>{item.documentName}</span>
+                      </div>
+                    ))
+                  ) : (
+                    <p className="rounded-xl border border-border/80 bg-background p-3 text-sm text-muted-foreground">
+                      All required checklist items have at least one uploaded file.
+                    </p>
+                  )}
+                </div>
+
+                <div className="mt-5 rounded-xl border border-border/80 bg-background p-4">
+                  <div className="mb-3 flex items-center justify-between gap-3">
+                    <div>
+                      <h3 className="text-sm font-bold">Client-ready issue summary</h3>
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        {hasReport ? "A report draft is available." : "Generate after AI review or reviewer issues."}
+                      </p>
+                    </div>
+                    <Badge variant="outline" className="rounded-full capitalize">
+                      {app.clientReportStatus.replaceAll("_", " ")}
+                    </Badge>
+                  </div>
+                  {primaryApplicant ? (
+                    <EvaluationTrigger
+                      applicationId={app.id}
+                      applicantId={primaryApplicant.id}
+                      hasDocuments={hasDocuments}
+                      rerun={hasEvaluation}
+                    />
                   ) : null}
                 </div>
-              ) : null}
+              </TabsContent>
 
-              {data.latestEvaluation ? (
-                <div className="space-y-4">
-                  <div>
-                    <p className="text-sm font-bold">AI review summary</p>
-                    <p className="mt-1 text-sm leading-relaxed text-muted-foreground">{data.latestEvaluation.summary}</p>
+              <TabsContent value="checklist" className="min-h-0 flex-1 overflow-y-auto p-4">
+                <div className="mb-4 rounded-xl border border-border/80 bg-background p-4">
+                  <div className="mb-2 flex items-center justify-between gap-3">
+                    <p className="text-sm font-bold">Required document readiness</p>
+                    <span className="text-sm font-bold">{completionPercent}%</span>
                   </div>
-                  <div className="grid gap-3 lg:grid-cols-3">
-                    <div className="rounded-xl border border-border/70 bg-card p-3">
-                      <p className="text-xs font-bold text-muted-foreground">Red flags</p>
-                      <ul className="mt-2 space-y-1 text-sm">
-                        {data.latestEvaluation.redFlags.slice(0, 3).map((item) => <li key={item}>{item}</li>)}
-                      </ul>
-                    </div>
-                    <div className="rounded-xl border border-border/70 bg-card p-3">
-                      <p className="text-xs font-bold text-muted-foreground">Strengths</p>
-                      <ul className="mt-2 space-y-1 text-sm">
-                        {data.latestEvaluation.strengths.slice(0, 3).map((item) => <li key={item}>{item}</li>)}
-                      </ul>
-                    </div>
-                    <div className="rounded-xl border border-border/70 bg-card p-3">
-                      <p className="text-xs font-bold text-muted-foreground">Reviewer actions</p>
-                      <ul className="mt-2 space-y-1 text-sm">
-                        {data.latestEvaluation.recommendations.slice(0, 3).map((item) => <li key={item}>{item}</li>)}
-                      </ul>
-                    </div>
-                  </div>
+                  <Progress value={completionPercent} className="h-2" />
+                  <p className="mt-2 text-xs text-muted-foreground">{uploadedRequiredCount}/{requiredItems.length || 0} required documents uploaded.</p>
                 </div>
-              ) : (
-                <div className="rounded-xl border border-border/80 bg-card p-5 text-sm text-muted-foreground">
-                  Run AI review after documents are uploaded. Reviewer flags and client report drafts can be generated from that result.
-                </div>
-              )}
-            </CardContent>
-          </Card>
 
-          <Card className="rounded-xl shadow-[var(--shadow-dashboard)]">
-            <CardHeader>
-              <CardTitle className="text-base">Client-ready report</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              {data.latestReport ? (
-                <>
-                  <div className="flex items-center justify-between gap-3">
-                    <Badge variant="outline" className="rounded-full text-2xs font-bold capitalize">
-                      {data.latestReport.status}
-                    </Badge>
-                    <span className="text-xs text-muted-foreground">{formatShortDate(data.latestReport.createdAt)}</span>
-                  </div>
-                  <p className="text-sm leading-relaxed text-muted-foreground">{data.latestReport.summary}</p>
-                  <div className="space-y-2">
-                    {data.latestReport.actionItems.slice(0, 5).map((item) => (
-                      <div key={`${item.title}-${item.detail}`} className="rounded-lg border border-border/70 bg-muted/30 p-3">
-                        <div className="flex items-center justify-between gap-3">
-                          <p className="text-sm font-bold">{item.title}</p>
-                          <IssueSeverityBadge severity={item.severity} />
+                <div className="space-y-2">
+                  {data.checklistItems.map((item) => {
+                    const itemDocs = docsByChecklistItem.get(item.id) ?? [];
+                    return (
+                      <div key={item.id} className="rounded-xl border border-border/80 bg-background p-3">
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <p className="text-sm font-bold">{item.documentName}</p>
+                            <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">{item.description}</p>
+                            <p className="mt-2 text-xs font-semibold text-muted-foreground">{itemDocs.length} file{itemDocs.length === 1 ? "" : "s"}</p>
+                          </div>
+                          {primaryApplicant ? (
+                            <DocumentUpload
+                              applicationId={app.id}
+                              applicantId={primaryApplicant.id}
+                              checklistItemId={item.id}
+                              label={itemDocs.length ? "Add" : "Upload"}
+                            />
+                          ) : null}
                         </div>
-                        <p className="mt-1 text-xs text-muted-foreground">{item.detail}</p>
                       </div>
-                    ))}
-                  </div>
-                </>
-              ) : (
-                <div className="rounded-xl border border-dashed border-border p-5 text-sm text-muted-foreground">
-                  Generate a client report after AI flags or reviewer issues are added.
+                    );
+                  })}
                 </div>
-              )}
-            </CardContent>
-          </Card>
-        </div>
+              </TabsContent>
 
-        <aside className="space-y-4">
-          <Card className="rounded-xl shadow-[var(--shadow-dashboard)]">
-            <CardHeader className="flex-row items-center justify-between gap-3">
-              <CardTitle className="text-base">AI and reviewer flags</CardTitle>
-              <Badge variant="outline" className="rounded-full text-2xs font-bold">
-                {openIssues.length} open
-              </Badge>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              {data.issues.length > 0 ? (
-                data.issues.map((issue) => (
-                  <div key={issue.id} className="rounded-xl border border-border/80 bg-card p-3">
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0">
-                        <p className="text-sm font-bold">{issue.title}</p>
-                        <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{issue.description}</p>
-                      </div>
-                      <IssueSeverityBadge severity={issue.severity} />
-                    </div>
-                    {issue.recommendation ? (
-                      <p className="mt-2 rounded-lg bg-muted/40 p-2 text-xs text-muted-foreground">{issue.recommendation}</p>
-                    ) : null}
-                    <div className="mt-3 grid grid-cols-[1fr_auto] items-center gap-3">
-                      <ReviewIssueStatusSelect issueId={issue.id} status={issue.status} />
-                      <span className="text-2xs font-bold uppercase tracking-wider text-muted-foreground">{issue.source}</span>
+              <TabsContent value="notes" className="min-h-0 flex-1 overflow-y-auto p-4">
+                <div className="space-y-4">
+                  <div className="rounded-xl border border-border/80 bg-background p-4">
+                    <h3 className="text-sm font-bold">Applicant</h3>
+                    <div className="mt-3 grid gap-3 text-sm text-muted-foreground">
+                      <p><span className="font-semibold text-foreground">Name:</span> {primaryApplicant?.name ?? "Not set"}</p>
+                      <p><span className="font-semibold text-foreground">Nationality:</span> {primaryApplicant?.nationality ?? "Not set"}</p>
+                      <p><span className="font-semibold text-foreground">Passport:</span> {primaryApplicant?.passportNumber ?? "Not set"}</p>
+                      <p><span className="font-semibold text-foreground">Previous approvals:</span> {primaryApplicant?.approvedBefore ? `${primaryApplicant.approvedVisaType ?? "Visa"} (${primaryApplicant.approvedYear ?? "year not set"})` : "None recorded"}</p>
+                      <p><span className="font-semibold text-foreground">Previous rejections:</span> {primaryApplicant?.rejectedBefore ? `${primaryApplicant.rejectedVisaType ?? "Visa"} (${primaryApplicant.rejectedYear ?? "year not set"})` : "None recorded"}</p>
                     </div>
                   </div>
-                ))
-              ) : (
-                <p className="rounded-xl border border-dashed border-border p-5 text-sm text-muted-foreground">
-                  No issues yet. Run AI review, sync AI flags, or add a reviewer issue.
-                </p>
-              )}
-            </CardContent>
-          </Card>
 
-          <Card className="rounded-xl shadow-[var(--shadow-dashboard)]">
-            <CardHeader>
-              <CardTitle className="text-base">Add reviewer issue</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <AddReviewIssueForm applicationId={app.id} />
-            </CardContent>
-          </Card>
-        </aside>
-      </section>
-    </AgencyPageShell>
+                  <div className="rounded-xl border border-border/80 bg-background p-4">
+                    <h3 className="text-sm font-bold">Reviewer</h3>
+                    <div className="mt-3 flex items-center justify-between gap-3">
+                      <ReviewerAvatar
+                        name={reviewerName}
+                        email={assignedReviewer?.user?.email ?? null}
+                        avatar={assignedReviewer?.user?.avatar ?? null}
+                      />
+                      <PriorityBadge priority={app.priority} />
+                    </div>
+                  </div>
+
+                  <div className="rounded-xl border border-border/80 bg-background p-4">
+                    <h3 className="text-sm font-bold">Add reviewer issue</h3>
+                    <div className="mt-3">
+                      <AddReviewIssueForm applicationId={app.id} />
+                    </div>
+                  </div>
+                </div>
+              </TabsContent>
+
+              <TabsContent value="activity" className="min-h-0 flex-1 overflow-y-auto p-4">
+                <div className="space-y-3">
+                  {[
+                    { label: "Case created", date: app.createdAt, icon: PlusIcon },
+                    { label: "Client submitted files", date: app.submittedAt, icon: FileTextIcon },
+                    { label: "Review completed", date: app.reviewCompletedAt, icon: CheckCircle2Icon },
+                    { label: "Final submission", date: app.finalSubmissionAt, icon: Clock3Icon },
+                  ].map((event) => (
+                    <div key={event.label} className="flex gap-3 rounded-xl border border-border/80 bg-background p-3">
+                      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/8 text-primary">
+                        <event.icon className="h-4 w-4" />
+                      </span>
+                      <div>
+                        <p className="text-sm font-bold">{event.label}</p>
+                        <p className="text-xs text-muted-foreground">{formatShortDate(event.date)}</p>
+                      </div>
+                    </div>
+                  ))}
+
+                  {data.issues.length > 0 ? (
+                    <div className="space-y-2 pt-2">
+                      <h3 className="text-sm font-bold">Reviewer issues</h3>
+                      {data.issues.map((issue) => (
+                        <div key={issue.id} className="rounded-xl border border-border/80 bg-background p-3">
+                          <div className="mb-2 flex items-start justify-between gap-3">
+                            <div>
+                              <p className="text-sm font-bold">{issue.title}</p>
+                              <p className="mt-1 text-xs text-muted-foreground">{issue.description}</p>
+                            </div>
+                            <IssueSeverityBadge severity={issue.severity} />
+                          </div>
+                          <ReviewIssueStatusSelect issueId={issue.id} status={issue.status} />
+                        </div>
+                      ))}
+                    </div>
+                  ) : null}
+                </div>
+              </TabsContent>
+            </Tabs>
+          </aside>
+        </section>
+      </main>
+    </>
   );
 }
