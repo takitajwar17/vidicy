@@ -52,8 +52,8 @@ export function ChecklistGenerator({
           No checklist for {applicantName} yet
         </p>
         <p className="text-sm text-muted-foreground leading-relaxed">
-          Generate a personalized document checklist based on your visa type,
-          embassy, and application details.
+          Generate the route-specific document list your review team will use
+          for intake, uploads, AI review, and client follow-up.
         </p>
       </div>
       <Button
@@ -69,7 +69,7 @@ export function ChecklistGenerator({
         ) : (
           <>
             <LayoutListIcon className="h-4 w-4" />
-            Generate Checklist
+            Generate checklist
           </>
         )}
       </Button>

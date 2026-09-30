@@ -48,8 +48,8 @@ export function EvaluationTrigger({
   const IdleIcon = !hasDocuments ? UploadIcon : rerun ? RefreshCwIcon : BrainCircuitIcon
   const idleLabel = hasDocuments
     ? rerun
-      ? "Re-run Evaluation"
-      : "Run AI Evaluation"
+      ? "Re-run AI Review"
+      : "Run AI Review"
     : "Upload Documents First"
 
   if (!hasDocuments && checklistHref) {

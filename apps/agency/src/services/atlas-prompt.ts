@@ -1,8 +1,4 @@
 import "server-only"
-import { getOpenAIClient } from "@/lib/openai"
-import { getDB } from "@/db"
-import { documentEvaluationTable } from "@/db/schema"
-import { eq } from "drizzle-orm"
 
 // ---------------------------------------------------------------------------
 // Shared Atlas system-prompt builder
@@ -317,76 +313,4 @@ STRICT RULES YOU MUST FOLLOW:
 3. When a user asks what's wrong with a document, refer directly to the issues listed in DOCUMENT STATUS above.
 ${rule4}
 5. If the user asks about ANYTHING unrelated to visas, immigration, or this application, politely decline and redirect them back.${rule6Extra}${antiInjectionRule}${conciseRule}${officialSourcesRule}${uncertaintyRule}${disclaimerRule}${exampleRedirect}`
-}
-
-// ---------------------------------------------------------------------------
-// Atlas preview Q&A generator
-// Shared by evaluateDocumentsAction (fire-and-forget after eval) and
-// atlas/page.tsx (on-the-fly generation for pre-existing evaluations).
-// ---------------------------------------------------------------------------
-
-export interface AtlasPreviewInput {
-  evaluationId: string;
-  summary: string;
-  overallScore: number;
-  riskLevel: string;
-  redFlags: string[];
-  strengths: string[];
-  recommendations: string[];
-  visaType: string;
-  destinationCountry: string;
-}
-
-/**
- * Generates a sample Atlas Q&A pair from evaluation results and persists it
- * to documentEvaluationTable.atlasPreview. Returns the pair, or undefined on failure.
- */
-export async function generateAtlasPreview(
-  input: AtlasPreviewInput,
-): Promise<{ question: string; answer: string } | undefined> {
-  const openai = getOpenAIClient();
-
-  const response = await openai.chat.completions.create(
-    {
-      model: "gpt-4.1",
-      temperature: 0.7,
-      max_tokens: 500,
-      response_format: { type: "json_object" },
-      messages: [
-        {
-          role: "system",
-          content: `You are Atlas, an AI visa application assistant. Based on the evaluation results below, generate ONE realistic question-and-answer exchange that demonstrates your ability to give personalized, specific advice.
-
-The question should be something a real ${input.visaType} (${input.destinationCountry}) applicant would naturally ask after seeing their evaluation.
-The answer should reference SPECIFIC findings — mention actual document issues, scores, or risks from the evaluation. Be concise but insightful (2-3 short paragraphs).
-
-Return JSON: { "question": "...", "answer": "..." }`,
-        },
-        {
-          role: "user",
-          content: `Evaluation results:
-- Score: ${input.overallScore}/100 (${input.riskLevel} risk)
-- Summary: ${input.summary}
-- Red flags: ${input.redFlags.join("; ") || "None"}
-- Strengths: ${input.strengths.join("; ") || "None"}
-- Top recommendations: ${input.recommendations.slice(0, 3).join("; ") || "None"}`,
-        },
-      ],
-    },
-    { signal: AbortSignal.timeout(15_000) },
-  );
-
-  const content = response.choices[0]?.message?.content;
-  if (!content) return undefined;
-
-  const parsed = JSON.parse(content) as { question: string; answer: string };
-  if (!parsed.question || !parsed.answer) return undefined;
-
-  const db = getDB();
-  await db
-    .update(documentEvaluationTable)
-    .set({ atlasPreview: parsed })
-    .where(eq(documentEvaluationTable.id, input.evaluationId));
-
-  return parsed;
 }
