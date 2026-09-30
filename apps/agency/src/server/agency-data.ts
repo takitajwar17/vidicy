@@ -91,9 +91,9 @@ export async function getActiveAgencyStaffRows(): Promise<AgencyStaffRow[]> {
       },
     })
     .from(agencyTeamMemberTable)
-	    .leftJoin(userTable, eq(agencyTeamMemberTable.userId, userTable.id))
-	    .where(eq(agencyTeamMemberTable.status, AGENCY_STAFF_STATUS.ACTIVE))
-	    .orderBy(desc(agencyTeamMemberTable.joinedAt));
+    .leftJoin(userTable, eq(agencyTeamMemberTable.userId, userTable.id))
+    .where(eq(agencyTeamMemberTable.status, AGENCY_STAFF_STATUS.ACTIVE))
+    .orderBy(desc(agencyTeamMemberTable.joinedAt));
 
   return rows.map((row) => ({
     ...row,
@@ -107,6 +107,21 @@ export async function getActiveAgencyStaffRows(): Promise<AgencyStaffRow[]> {
         }
       : null,
   }));
+}
+
+export interface AgencyTeamWorkloadRow {
+  rowId: string;
+  staff: AgencyStaffRow | null;
+  displayName: string;
+  assignedCases: number;
+  activeCases: number;
+  intakeCases: number;
+  needsClientCases: number;
+  readyCases: number;
+  openIssues: number;
+  highIssues: number;
+  documents: number;
+  lastActivityAt: Date | null;
 }
 
 export async function getAgencyCaseRows({
@@ -229,6 +244,90 @@ export async function getAgencyCaseRows({
     openIssueCount: openIssueCountByApp.get(application.id) ?? 0,
     highIssueCount: highIssueCountByApp.get(application.id) ?? 0,
   }));
+}
+
+export async function getAgencyTeamWorkloadRows(): Promise<AgencyTeamWorkloadRow[]> {
+  const [staff, cases] = await Promise.all([
+    getActiveAgencyStaffRows(),
+    getAgencyCaseRows({ limit: 1000 }),
+  ]);
+
+  function buildWorkloadRow({
+    rowId,
+    staffMember,
+    displayName,
+    assignedCases,
+  }: {
+    rowId: string;
+    staffMember: AgencyStaffRow | null;
+    displayName: string;
+    assignedCases: AgencyCaseRow[];
+  }): AgencyTeamWorkloadRow {
+    const statusCounts = assignedCases.reduce(
+      (counts, row) => {
+        const status = normalizeAgencyCaseStatus(row.application.agencyStatus);
+        if (status === AGENCY_CASE_STATUS.INTAKE) counts.intake += 1;
+        if (status === AGENCY_CASE_STATUS.IN_REVIEW) counts.inReview += 1;
+        if (status === AGENCY_CASE_STATUS.NEEDS_CLIENT) counts.needsClient += 1;
+        if (status === AGENCY_CASE_STATUS.READY_TO_SUBMIT) counts.ready += 1;
+        return counts;
+      },
+      { intake: 0, inReview: 0, needsClient: 0, ready: 0 },
+    );
+    const lastActivityAt = assignedCases.reduce<Date | null>((latest, row) => {
+      const activityDate = row.application.updatedAt ?? row.application.createdAt;
+      if (!latest || activityDate > latest) return activityDate;
+      return latest;
+    }, null);
+
+    return {
+      rowId,
+      staff: staffMember,
+      displayName,
+      assignedCases: assignedCases.length,
+      activeCases: statusCounts.intake + statusCounts.inReview + statusCounts.needsClient,
+      intakeCases: statusCounts.intake,
+      needsClientCases: statusCounts.needsClient,
+      readyCases: statusCounts.ready,
+      openIssues: assignedCases.reduce((sum, row) => sum + row.openIssueCount, 0),
+      highIssues: assignedCases.reduce((sum, row) => sum + row.highIssueCount, 0),
+      documents: assignedCases.reduce((sum, row) => sum + row.documentCount, 0),
+      lastActivityAt,
+    };
+  }
+
+  const staffRows = staff.map((member) => {
+    const assignedCases = member.userId
+      ? cases.filter((row) => row.application.assignedReviewerId === member.userId)
+      : [];
+    return buildWorkloadRow({
+      rowId: member.id,
+      staffMember: member,
+      displayName: getDisplayName(member.user) ?? member.email ?? "Reviewer",
+      assignedCases,
+    });
+  });
+  const unassignedCases = cases.filter((row) => !row.application.assignedReviewerId);
+  const workloadRows =
+    unassignedCases.length > 0
+      ? [
+          buildWorkloadRow({
+            rowId: "unassigned",
+            staffMember: null,
+            displayName: "Unassigned",
+            assignedCases: unassignedCases,
+          }),
+          ...staffRows,
+        ]
+      : staffRows;
+
+  return workloadRows.sort(
+    (a, b) =>
+      b.activeCases - a.activeCases ||
+      b.openIssues - a.openIssues ||
+      b.assignedCases - a.assignedCases ||
+      a.displayName.localeCompare(b.displayName),
+  );
 }
 
 export async function getAgencyDashboardData() {

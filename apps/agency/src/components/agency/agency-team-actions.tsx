@@ -5,7 +5,7 @@ import type { FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { useServerAction } from "zsa-react";
 import { toast } from "sonner";
-import { Loader2Icon, SendIcon, UserMinusIcon } from "lucide-react";
+import { Loader2Icon, SendIcon, UserMinusIcon, UserPlusIcon } from "lucide-react";
 
 import {
   addAgencyStaffAction,
@@ -13,12 +13,50 @@ import {
   updateAgencyStaffRoleAction,
 } from "@/actions/agency-case.action";
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { AGENCY_STAFF_ROLE } from "@/db/schema";
 
-export function AddStaffForm({ disabled = false }: { disabled?: boolean }) {
+export function AddStaffDialog({ disabled = false }: { disabled?: boolean }) {
+  const [open, setOpen] = useState(false);
+
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        <Button type="button" disabled={disabled}>
+          <UserPlusIcon className="h-4 w-4" />
+          Add staff
+        </Button>
+      </DialogTrigger>
+      <DialogContent className="sm:max-w-lg">
+        <DialogHeader className="pr-8">
+          <DialogTitle>Add staff</DialogTitle>
+          <DialogDescription>
+            Add a reviewer or admin to the agency team. They can sign in immediately with this email.
+          </DialogDescription>
+        </DialogHeader>
+        <AddStaffForm onSuccess={() => setOpen(false)} />
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function AddStaffForm({
+  disabled = false,
+  onSuccess,
+}: {
+  disabled?: boolean;
+  onSuccess?: () => void;
+}) {
   const router = useRouter();
   const [email, setEmail] = useState("");
   const [role, setRole] = useState<string>(AGENCY_STAFF_ROLE.MEMBER);
@@ -31,27 +69,36 @@ export function AddStaffForm({ disabled = false }: { disabled?: boolean }) {
       role: role as (typeof AGENCY_STAFF_ROLE)[keyof typeof AGENCY_STAFF_ROLE],
     });
 
-	    if (error) {
-	      toast.error(error.message ?? "Could not add staff member.");
-	      return;
-	    }
+    if (error) {
+      toast.error(error.message ?? "Could not add staff member.");
+      return;
+    }
 
-	    toast.success(result?.emailSent === false ? "Staff member added. Email notification failed." : "Staff member added.");
+    toast.success(result?.emailSent === false ? "Staff member added. Email notification failed." : "Staff member added.");
     setEmail("");
     setRole(AGENCY_STAFF_ROLE.MEMBER);
+    onSuccess?.();
     router.refresh();
   }
 
   return (
-    <form onSubmit={handleSubmit} className="grid gap-3 md:grid-cols-[1fr_180px_auto] md:items-end">
-      <div className="space-y-2">
-        <Label className="text-xs font-bold text-muted-foreground">Work email</Label>
-        <Input value={email} onChange={(event) => setEmail(event.target.value)} type="email" placeholder="reviewer@agency.com" disabled={disabled} required />
+    <form onSubmit={handleSubmit} className="grid gap-4">
+      <div className="grid gap-2">
+        <Label className="flex h-5 items-end text-xs font-bold text-muted-foreground">Work email</Label>
+        <Input
+          className="h-10"
+          value={email}
+          onChange={(event) => setEmail(event.target.value)}
+          type="email"
+          placeholder="reviewer@agency.com"
+          disabled={disabled}
+          required
+        />
       </div>
-      <div className="space-y-2">
-        <Label className="text-xs font-bold text-muted-foreground">Role</Label>
+      <div className="grid gap-2">
+        <Label className="flex h-5 items-end text-xs font-bold text-muted-foreground">Role</Label>
         <Select value={role} onValueChange={setRole} disabled={disabled}>
-          <SelectTrigger>
+          <SelectTrigger className="h-10 w-full">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -60,7 +107,7 @@ export function AddStaffForm({ disabled = false }: { disabled?: boolean }) {
           </SelectContent>
         </Select>
       </div>
-      <Button type="submit" disabled={disabled || isPending}>
+      <Button type="submit" className="h-10 justify-center" disabled={disabled || isPending}>
         {isPending ? <Loader2Icon className="h-4 w-4 animate-spin" /> : <SendIcon className="h-4 w-4" />}
         Add staff
       </Button>
