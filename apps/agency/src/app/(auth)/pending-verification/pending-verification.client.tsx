@@ -65,7 +65,7 @@ export default function PendingVerificationClient({
     <AuthShell
       testimonial={{
         quote:
-          "The AI evaluation found inconsistencies I never would have caught. My Schengen visa was approved on the first try.",
+          "The review caught inconsistencies I never would have found manually. My Schengen visa was approved on the first try.",
         author: "Ali Hassan, Schengen Business Visa",
       }}
     >

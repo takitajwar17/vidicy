@@ -22,7 +22,7 @@ import {
 } from "lucide-react";
 
 const termsDescription =
-  "Read the terms of service for Vidicy agency review workflows, including acceptable use, AI limits, data processing, and service boundaries.";
+  "Read the terms of service for Vidicy agency review workflows, including acceptable use, automated review limits, data processing, and service boundaries.";
 
 export const metadata: Metadata = constructMetadata({
   title: "Terms of service",
@@ -98,7 +98,7 @@ export default function TermsPage() {
         eyebrow="Legal"
         title="Terms of Service"
         meta="Last updated: October 2, 2026"
-        description="The terms that govern Vidicy for agency review workflows, including acceptable use, AI limitations, data processing, and liability boundaries."
+        description="The terms that govern Vidicy for agency review workflows, including acceptable use, automated review limitations, data processing, and liability boundaries."
       />
 
       <PublicPageContent className="space-y-16">
@@ -108,7 +108,7 @@ export default function TermsPage() {
           <p className="text-sm text-muted-foreground leading-relaxed mb-4">
             By accessing {siteConfig.name}, creating an account, joining a pilot, or purchasing a subscription, you
             accept and agree to be bound by the terms and provisions of this agreement. Our platform
-            uses artificial intelligence to help agencies review visa application files for missing
+            uses automated document processing to help agencies review visa application files for missing
             documents, weak evidence, and cross-file inconsistencies.
           </p>
           <div className="rounded-xl border border-status-warning/40 bg-status-warning/10 p-4 flex items-start gap-3">
@@ -130,7 +130,7 @@ export default function TermsPage() {
             authorized party. You must not upload fraudulent documents.
           </p>
           <p className="text-sm text-muted-foreground leading-relaxed">
-            You agree not to reverse-engineer our service, spam our AI chatbot, or attempt to
+            You agree not to reverse-engineer our service, abuse automated review endpoints, or attempt to
             compromise our security.
           </p>
         </section>
@@ -159,22 +159,22 @@ export default function TermsPage() {
           </p>
         </section>
 
-        {/* 5. AI-Generated Content Disclaimer — highlighted card */}
+        {/* 5. Automated review output disclaimer — highlighted card */}
         <section className="rounded-2xl border bg-muted/30 p-6 sm:p-8">
           <div className="flex items-center gap-3 mb-6">
             <SectionIcon icon={BrainCircuitIcon} />
             <h2 className="text-2xl font-semibold text-foreground">
-              5. AI-Generated Content Disclaimer
+              5. Automated Review Output Disclaimer
             </h2>
           </div>
           <p className="text-sm text-muted-foreground leading-relaxed mb-4">
-            Our platform uses artificial intelligence to generate document checks, evaluate uploaded
+            Our platform uses automated processing to generate document checks, evaluate uploaded
             documents, flag review issues, and support reviewer workflows. You acknowledge and agree
             that:
           </p>
           <ul className="space-y-3">
             <ListItem>
-              AI-generated checks may not include every document required by a specific government,
+              Generated checks may not include every document required by a specific government,
               embassy, consulate, or visa application center. Requirements vary by route and
               applicant circumstances.
             </ListItem>
@@ -183,12 +183,12 @@ export default function TermsPage() {
               rejection, or agency quality control completion.
             </ListItem>
             <ListItem>
-              AI responses are informational workflow support and may contain inaccuracies. They do
+              Generated responses are informational workflow support and may contain inaccuracies. They do
               not constitute immigration advice.
             </ListItem>
             <ListItem>
               {siteConfig.name} shall not be liable for adverse outcomes arising from reliance on
-              AI-generated checks, flags, recommendations, or responses.
+              generated checks, flags, recommendations, or responses.
             </ListItem>
           </ul>
           <p className="text-sm text-foreground font-semibold mt-6">
@@ -219,13 +219,13 @@ export default function TermsPage() {
           <SectionHeading icon={DatabaseIcon} title="7. Data Processing" id="data-processing" />
           <p className="text-sm text-muted-foreground leading-relaxed">
             By using our service, you acknowledge that uploaded documents and personal data may be
-            processed by third-party AI providers (including OpenAI and Perplexity AI) as
+            processed by third-party review and requirement-processing providers as
             described in our{" "}
             <Link href="/privacy" className="text-primary hover:underline">
               Privacy Policy
             </Link>
             . Document text content is sent to these providers solely for the purpose of delivering
-            our evaluation and chat services. These providers operate under Data Processing
+            our evaluation and review-support services. These providers operate under Data Processing
             Agreements and do not use your data to train their models.
           </p>
         </section>

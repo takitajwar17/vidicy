@@ -4,7 +4,6 @@ import type { Route } from "next";
 
 import { AgencyPageShell } from "@/components/agency/agency-page-shell";
 import {
-  CaseStatusBadge,
   EmptyState,
   IssueSeverityBadge,
   formatShortDate,
@@ -34,7 +33,7 @@ export default async function IssuesPage() {
       {rows.length === 0 ? (
         <EmptyState
           title="No issues yet"
-          description="Run AI review inside a case, then sync AI flags to build this agency-wide issue queue."
+          description="Run document review inside a case, then sync review flags to build this agency-wide issue queue."
           href="/dashboard/applications"
           actionLabel="View applications"
         />
@@ -50,7 +49,6 @@ export default async function IssuesPage() {
                     <TableHead>Client</TableHead>
                     <TableHead>Applicant</TableHead>
                     <TableHead>Severity</TableHead>
-                    <TableHead>Case Status</TableHead>
                     <TableHead>Created</TableHead>
                     <TableHead className="pr-5">Issue Status</TableHead>
                   </TableRow>
@@ -74,7 +72,6 @@ export default async function IssuesPage() {
                       <TableCell>{application?.clientName ?? "Unassigned"}</TableCell>
                       <TableCell>{applicant?.name ?? "Primary applicant"}</TableCell>
                       <TableCell><IssueSeverityBadge severity={issue.severity} /></TableCell>
-                      <TableCell>{application ? <CaseStatusBadge status={application.agencyStatus} /> : null}</TableCell>
                       <TableCell>{formatShortDate(issue.createdAt)}</TableCell>
                       <TableCell className="pr-5"><ReviewIssueStatusSelect issueId={issue.id} status={issue.status} /></TableCell>
                     </TableRow>

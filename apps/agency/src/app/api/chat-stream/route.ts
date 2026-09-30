@@ -245,9 +245,9 @@ function getFriendlyAIErrorMessage({
   error: unknown;
 }): string {
   if (isTimeoutLikeAIError({ error })) {
-    return "The AI service is taking too long to respond. Please try again in a moment.";
+    return "The review support service is taking too long to respond. Please try again in a moment.";
   }
-  return "The AI service is temporarily unavailable. Please try again shortly.";
+  return "The review support service is temporarily unavailable. Please try again shortly.";
 }
 
 export async function POST(request: Request) {

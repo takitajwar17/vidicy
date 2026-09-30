@@ -132,7 +132,7 @@ export default async function ApplicationsPage({
                     <TableHead>Destination</TableHead>
                     <TableHead>Submitted</TableHead>
                     <TableHead>Status</TableHead>
-                    <TableHead>AI Risk</TableHead>
+                    <TableHead>Risk</TableHead>
                     <TableHead>Priority</TableHead>
                     <TableHead>Reviewer</TableHead>
                     <TableHead className="pr-5 text-right">Issues</TableHead>

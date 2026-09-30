@@ -128,7 +128,7 @@ export default async function DashboardPage() {
               icon={LineChartIcon}
               label="Ready Rate"
               value={`${data.stats.approvalReadyRate}%`}
-              detail={`${data.stats.scoredCases} scored by AI`}
+              detail={`${data.stats.scoredCases} reviewed cases`}
               tone="default"
             />
           </section>
@@ -210,12 +210,16 @@ export default async function DashboardPage() {
               <CardContent className="space-y-3">
                 {data.workload.length > 0 ? (
                   data.workload.slice(0, 5).map((member) => (
-	                    <div key={member.userId ?? member.id} className="grid grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-3 border-b border-border/70 pb-3 last:border-b-0 last:pb-0">
-	                      <ReviewerAvatar name={member.displayName} email={member.user?.email ?? member.email} avatar={member.user?.avatar ?? null} />
-                      <span className="text-sm font-bold">{member.inReview}</span>
-                      <span className={member.sla === "On track" ? "text-xs font-bold text-status-success" : "text-xs font-bold text-status-warning"}>
-                        {member.sla}
-                      </span>
+                    <div key={member.userId ?? member.id} className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 border-b border-border/70 pb-3 last:border-b-0 last:pb-0">
+                      <ReviewerAvatar name={member.displayName} email={member.user?.email ?? member.email} avatar={member.user?.avatar ?? null} />
+                      <div className="text-right">
+                        <p className="text-sm font-bold">
+                          {member.inReview === 0 ? "No active cases" : `${member.inReview} active`}
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          {member.completed} ready
+                        </p>
+                      </div>
                     </div>
                   ))
                 ) : (
@@ -242,7 +246,7 @@ export default async function DashboardPage() {
                     <TableHead>Visa Type</TableHead>
                     <TableHead>Submitted</TableHead>
                     <TableHead>Status</TableHead>
-                    <TableHead>AI Risk</TableHead>
+                    <TableHead>Risk</TableHead>
                     <TableHead>Reviewer</TableHead>
                   </TableRow>
                 </TableHeader>

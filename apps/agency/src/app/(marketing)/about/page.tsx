@@ -13,7 +13,7 @@ import { constructMetadata } from "@/lib/utils";
 export const metadata: Metadata = constructMetadata({
   title: "About Vidicy",
   description:
-    "Vidicy builds AI-powered visa application review software for visa and travel agencies that process client files at scale.",
+    "Vidicy builds visa application review software for visa and travel agencies that process client files at scale.",
   alternates: {
     canonical: "/about",
   },
@@ -24,7 +24,7 @@ const aboutPageSchema = {
   "@type": "AboutPage",
   name: "About Vidicy",
   description:
-    "Vidicy builds AI-powered visa application review software for visa and travel agencies that process client files at scale.",
+    "Vidicy builds visa application review software for visa and travel agencies that process client files at scale.",
   url: `${CANONICAL_SITE_URL}/about`,
   isPartOf: {
     "@type": "WebSite",
@@ -61,7 +61,7 @@ export default function AboutPage() {
           </p>
           <p>
             Vidicy is built for that operational layer. The product gives agencies bulk intake,
-            review queues, AI-assisted document checks, issue tracking, and client-ready reports so
+            review queues, document checks, issue tracking, and client-ready reports so
             teams can review more applications without adding review headcount at the same pace.
           </p>
           <p>

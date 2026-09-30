@@ -333,12 +333,12 @@ export async function POST(request: Request) {
           });
           if (isPrimaryTimeoutLike || isFallbackTimeoutLike) {
             return NextResponse.json(
-              { error: "The AI service is taking too long to respond. Please try again in a moment." },
+              { error: "The review support service is taking too long to respond. Please try again in a moment." },
               { status: 504 },
             );
           }
           return NextResponse.json(
-            { error: "The AI service is temporarily unavailable. Please try again shortly." },
+            { error: "The review support service is temporarily unavailable. Please try again shortly." },
             { status: 503 },
           );
         }
@@ -348,7 +348,7 @@ export async function POST(request: Request) {
           error: aiErr,
         });
         return NextResponse.json(
-          { error: "The AI service is temporarily unavailable. Please try again shortly." },
+          { error: "The review support service is temporarily unavailable. Please try again shortly." },
           { status: 503 },
         );
       }

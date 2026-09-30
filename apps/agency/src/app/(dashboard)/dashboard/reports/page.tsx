@@ -29,7 +29,7 @@ export default async function ReportsPage() {
       {data.reports.length === 0 && data.casesWithoutReports.length === 0 ? (
         <EmptyState
           title="No reports yet"
-          description="Generate a client report inside an application after AI or reviewer issues have been added."
+          description="Generate a client report inside an application after document or reviewer issues have been added."
           href="/dashboard/applications"
           actionLabel="View applications"
         />

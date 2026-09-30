@@ -458,9 +458,9 @@ export default async function StatusPage() {
                 </Card>
               </section>
 
-              {/* ======== AI EVALUATIONS ======== */}
+              {/* ======== REVIEW EVALUATIONS ======== */}
               <section>
-                <SectionHeader icon={BrainCircuitIcon} title="AI Evaluations" />
+                <SectionHeader icon={BrainCircuitIcon} title="Review Evaluations" />
                 <div className="grid gap-4 grid-cols-2 sm:grid-cols-4">
                   <StatCard icon={BrainCircuitIcon} label="Total Evaluations" value={stats.evaluations.total} />
                   <StatCard icon={ScaleIcon} label="Avg Score" value={stats.evaluations.avgScore != null ? `${stats.evaluations.avgScore}/100` : "—"} />

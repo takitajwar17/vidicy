@@ -15,7 +15,7 @@ export const faqSections = [
       {
         question: "What is Vidicy?",
         answer:
-          "Vidicy is AI-powered visa application review software for visa and travel agencies. It helps review teams check client files in bulk, flag missing documents and inconsistencies, and produce client-ready issue lists.",
+          "Vidicy is visa application review software for visa and travel agencies. It helps review teams check client files in bulk, flag missing documents and inconsistencies, and produce client-ready issue lists.",
       },
       {
         question: "Who is this for?",
@@ -65,7 +65,7 @@ export const faqSections = [
       {
         question: "Can reviewers edit the final output?",
         answer:
-          "Yes. The AI output is a starting point for the review desk. Reviewers can keep, revise, or remove notes before anything is sent to a client.",
+          "Yes. The first review output is a starting point for the review desk. Reviewers can keep, revise, or remove notes before anything is sent to a client.",
       },
       {
         question: "What does the client receive?",
@@ -148,9 +148,9 @@ export const faqSections = [
           "Client files often include passports, bank statements, and other sensitive records, so Vidicy is designed around protected storage, access control, and limited data processing.",
       },
       {
-        question: "Are documents used to train AI models?",
+        question: "Are documents used to train outside models?",
         answer:
-          "No. Client documents are processed to deliver the review workflow and are not used to train public AI models.",
+          "No. Client documents are processed to deliver the review workflow and are not used to train public models.",
       },
       {
         question: "Who can see client files?",

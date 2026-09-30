@@ -140,10 +140,10 @@ export async function AgencyCaseContent({ appId }: { appId: string }) {
           />
 
           <aside className="flex min-h-[620px] flex-col overflow-hidden rounded-xl border border-border/80 bg-card shadow-[var(--shadow-dashboard)] xl:min-h-0">
-            <Tabs defaultValue="ai" className="flex min-h-0 flex-1 flex-col">
+            <Tabs defaultValue="review" className="flex min-h-0 flex-1 flex-col">
               <TabsList className="grid h-14 w-full grid-cols-4 rounded-none border-0 border-b border-border/70 bg-card p-0">
-                <TabsTrigger value="ai" className="h-14 rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:shadow-none">
-                  AI Analysis
+                <TabsTrigger value="review" className="h-14 rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:shadow-none">
+                  Review
                 </TabsTrigger>
                 <TabsTrigger value="checklist" className="h-14 rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:shadow-none">
                   Checklist
@@ -156,7 +156,7 @@ export async function AgencyCaseContent({ appId }: { appId: string }) {
                 </TabsTrigger>
               </TabsList>
 
-              <TabsContent value="ai" className="min-h-0 flex-1 overflow-y-auto p-4">
+              <TabsContent value="review" className="min-h-0 flex-1 overflow-y-auto p-4">
                 <div className="grid grid-cols-3 gap-3">
                   <div className="rounded-xl border border-border/80 bg-background p-3">
                     <div className="mb-2 flex items-center gap-2 text-destructive">
@@ -194,7 +194,7 @@ export async function AgencyCaseContent({ appId }: { appId: string }) {
 
                 <div className="mt-5 space-y-3">
                   <div className="flex items-center justify-between">
-                    <h3 className="text-sm font-bold">AI-detected issues</h3>
+                    <h3 className="text-sm font-bold">Review issues</h3>
                     <RiskBadge riskLevel={data.latestEvaluation?.riskLevel ?? app.riskLevel} />
                   </div>
                   {data.latestEvaluation ? (
@@ -204,7 +204,7 @@ export async function AgencyCaseContent({ appId }: { appId: string }) {
                           <div className="flex items-start justify-between gap-3">
                             <div>
                               <p className="text-sm font-bold">{issue}</p>
-                              <p className="mt-1 text-xs text-muted-foreground">Generated from the latest AI document review.</p>
+                              <p className="mt-1 text-xs text-muted-foreground">Generated from the latest document review.</p>
                             </div>
                             <IssueSeverityBadge severity={index < 2 ? "high" : "medium"} />
                           </div>
@@ -213,7 +213,7 @@ export async function AgencyCaseContent({ appId }: { appId: string }) {
                     </div>
                   ) : (
                     <div className="rounded-xl border border-dashed border-border p-5 text-sm text-muted-foreground">
-                      Run AI review after the document set is ready. Seeded files are readable, but no AI outcome has been populated.
+                      Run document review after the file set is ready.
                     </div>
                   )}
                 </div>
@@ -242,7 +242,7 @@ export async function AgencyCaseContent({ appId }: { appId: string }) {
                     <div>
                       <h3 className="text-sm font-bold">Client-ready issue summary</h3>
                       <p className="mt-1 text-xs text-muted-foreground">
-                        {hasReport ? "A report draft is available." : "Generate after AI review or reviewer issues."}
+                        {hasReport ? "A report draft is available." : "Generate after document review or reviewer issues."}
                       </p>
                     </div>
                     <Badge variant="outline" className="rounded-full">

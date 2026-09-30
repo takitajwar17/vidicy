@@ -131,13 +131,13 @@ export default function PrivacyPage() {
           <ul className="space-y-3">
             <ListItem>To analyze uploaded client documents and detect missing items, weak evidence, and inconsistencies.</ListItem>
             <ListItem>To provide route-specific checklists, reviewer flags, and feedback for agency workflows.</ListItem>
-            <ListItem>To support AI-assisted review and question-answering using context from the relevant case files.</ListItem>
+            <ListItem>To support document review and question-answering using context from the relevant case files.</ListItem>
             <ListItem>To process transactions and send you related information, including confirmations and receipts.</ListItem>
             <ListItem>To send technical notices, updates, security alerts, and support messages.</ListItem>
           </ul>
           <div className="mt-6 rounded-xl border border-primary/20 bg-primary/5 p-4">
             <p className="text-sm text-foreground">
-              <strong>Important:</strong> We do <strong>not</strong> use agency client documents or data to train public AI models. Documents are processed solely to provide the review workflow.
+              <strong>Important:</strong> We do <strong>not</strong> use agency client documents or data to train public models. Documents are processed solely to provide the review workflow.
             </p>
           </div>
         </section>
@@ -146,7 +146,7 @@ export default function PrivacyPage() {
         <section>
           <SectionHeading icon={GlobeIcon} title="4. Third-Party Data Processors" id="data-processors" />
           <p className="text-sm text-muted-foreground leading-relaxed mb-4">
-            We rely on a small set of trusted third-party subprocessors to operate the product, including providers for AI processing, hosting, payments, email delivery, authentication, monitoring, and account-security checks.
+            We rely on a small set of trusted third-party subprocessors to operate the product, including providers for automated document processing, hosting, payments, email delivery, authentication, monitoring, and account-security checks.
           </p>
           <p className="text-sm text-muted-foreground leading-relaxed">
             For the current public registry of subprocessors, their role in the service, and their website, see our{" "}
@@ -167,8 +167,8 @@ export default function PrivacyPage() {
             Your data may be processed outside your country of residence. Specifically:
           </p>
           <ul className="space-y-3">
-            <ListItem>Personal data may be processed by OpenAI in the United States.</ListItem>
-            <ListItem>Personal data may be processed by Perplexity AI in the United States.</ListItem>
+            <ListItem>Personal data may be processed by automated document-processing providers in the United States.</ListItem>
+            <ListItem>Personal data may be processed by requirement lookup providers in the United States.</ListItem>
             <ListItem>Data may be stored and served through Cloudflare&apos;s globally distributed infrastructure.</ListItem>
             <ListItem>Email notifications may be processed by Resend in the United States.</ListItem>
           </ul>
@@ -184,7 +184,7 @@ export default function PrivacyPage() {
           <ul className="space-y-3">
             <ListItem><strong className="text-foreground">Account data:</strong> Retained until the account is deleted.</ListItem>
             <ListItem><strong className="text-foreground">Client applications and uploaded documents:</strong> Retained until the relevant case, workspace, or account is deleted, unless a legal or operational retention obligation applies.</ListItem>
-            <ListItem><strong className="text-foreground">AI review history:</strong> Retained as part of the relevant client case and deleted when the case is deleted.</ListItem>
+            <ListItem><strong className="text-foreground">Review history:</strong> Retained as part of the relevant client case and deleted when the case is deleted.</ListItem>
             <ListItem><strong className="text-foreground">Document embeddings (Vectorize):</strong> Deleted when the associated document or application is deleted.</ListItem>
             <ListItem><strong className="text-foreground">Session data:</strong> Automatically expires after 30 days of inactivity.</ListItem>
             <ListItem><strong className="text-foreground">Payment records:</strong> Retained as required by applicable tax and accounting laws.</ListItem>
@@ -245,7 +245,7 @@ export default function PrivacyPage() {
           <ul className="space-y-3">
             <ListItem><strong className="text-foreground">Right to Access:</strong> Request a copy of the personal data we hold about you.</ListItem>
             <ListItem><strong className="text-foreground">Right to Rectification:</strong> Request correction of inaccurate personal data.</ListItem>
-            <ListItem><strong className="text-foreground">Right to Erasure (&quot;Right to be Forgotten&quot;):</strong> Request deletion of your account and all associated data, including uploaded documents, AI evaluations, chat history, and document embeddings.</ListItem>
+            <ListItem><strong className="text-foreground">Right to Erasure (&quot;Right to be Forgotten&quot;):</strong> Request deletion of your account and all associated data, including uploaded documents, evaluations, chat history, and document embeddings.</ListItem>
             <ListItem><strong className="text-foreground">Right to Data Portability:</strong> Request your data in a structured, machine-readable format.</ListItem>
             <ListItem><strong className="text-foreground">Right to Object:</strong> Object to certain types of data processing.</ListItem>
             <ListItem><strong className="text-foreground">Right to Withdraw Consent:</strong> Withdraw your consent at any time by deleting your account.</ListItem>
