@@ -41,14 +41,9 @@ export const visaOutcomeTuple = Object.values(VISA_OUTCOME) as [string, ...strin
 
 export const AGENCY_CASE_STATUS = {
   INTAKE: "intake",
-  READY_FOR_REVIEW: "ready_for_review",
-  AI_REVIEWED: "ai_reviewed",
   NEEDS_CLIENT: "needs_client",
   IN_REVIEW: "in_review",
   READY_TO_SUBMIT: "ready_to_submit",
-  SUBMITTED: "submitted",
-  COMPLETED: "completed",
-  ARCHIVED: "archived",
 } as const;
 
 export const agencyCaseStatusTuple = Object.values(AGENCY_CASE_STATUS) as [string, ...string[]];

@@ -29,8 +29,10 @@ import {
   APPLICANT_RELATIONSHIP,
   APPLICANT_ROLE,
   VISA_APPLICATION_STATUS,
+  reviewIssueStatusTuple,
 } from "@/db/schema";
 import { sendEmailBestEffort } from "@/lib/best-effort-email";
+import { isOpenReviewIssueStatus, normalizeReviewIssueStatus } from "@/lib/agency-workflow";
 import { logger } from "@/infra/logger";
 import { sendAgencyTeamAccessEmail } from "@/utils/email";
 
@@ -245,14 +247,9 @@ export const updateAgencyCaseStatusAction = createServerAction()
       applicationId: z.string().min(1),
       status: z.enum([
         AGENCY_CASE_STATUS.INTAKE,
-        AGENCY_CASE_STATUS.READY_FOR_REVIEW,
-        AGENCY_CASE_STATUS.AI_REVIEWED,
-        AGENCY_CASE_STATUS.NEEDS_CLIENT,
         AGENCY_CASE_STATUS.IN_REVIEW,
+        AGENCY_CASE_STATUS.NEEDS_CLIENT,
         AGENCY_CASE_STATUS.READY_TO_SUBMIT,
-        AGENCY_CASE_STATUS.SUBMITTED,
-        AGENCY_CASE_STATUS.COMPLETED,
-        AGENCY_CASE_STATUS.ARCHIVED,
       ]),
     }),
   )
@@ -267,15 +264,7 @@ export const updateAgencyCaseStatusAction = createServerAction()
 
     if (input.status === AGENCY_CASE_STATUS.READY_TO_SUBMIT) {
       nextValues.reviewCompletedAt = new Date();
-    }
-
-    if (input.status === AGENCY_CASE_STATUS.SUBMITTED) {
-      nextValues.finalSubmissionAt = new Date();
-      nextValues.status = VISA_APPLICATION_STATUS.SUBMITTED;
-    }
-
-    if (input.status === AGENCY_CASE_STATUS.COMPLETED) {
-      nextValues.status = VISA_APPLICATION_STATUS.SUBMITTED;
+      nextValues.status = VISA_APPLICATION_STATUS.READY;
     }
 
     await db
@@ -417,7 +406,7 @@ export const syncReviewIssuesFromEvaluationAction = createServerAction()
     await db
       .update(visaApplicationTable)
       .set({
-        agencyStatus: AGENCY_CASE_STATUS.AI_REVIEWED,
+        agencyStatus: AGENCY_CASE_STATUS.IN_REVIEW,
         clientReportStatus: CLIENT_REPORT_STATUS.DRAFT,
       })
       .where(eq(visaApplicationTable.id, input.applicationId));
@@ -479,13 +468,7 @@ export const updateReviewIssueStatusAction = createServerAction()
   .input(
     z.object({
       issueId: z.string().min(1),
-      status: z.enum([
-        REVIEW_ISSUE_STATUS.OPEN,
-        REVIEW_ISSUE_STATUS.ACCEPTED,
-        REVIEW_ISSUE_STATUS.DISMISSED,
-        REVIEW_ISSUE_STATUS.RESOLVED,
-        REVIEW_ISSUE_STATUS.CLIENT_REQUESTED,
-      ]),
+      status: z.union([z.enum(reviewIssueStatusTuple), z.literal("accepted")]).transform(normalizeReviewIssueStatus),
     }),
   )
   .handler(async ({ input }) => {
@@ -548,11 +531,13 @@ export const generateClientReportAction = createServerAction()
       throw new ZSAError("NOT_FOUND", "Application not found");
     }
 
-    const actionItems = issues.map((issue) => ({
-      title: issue.title,
-      detail: issue.recommendation || issue.description,
-      severity: issue.severity as "high" | "medium" | "low",
-    }));
+    const actionItems = issues
+      .filter((issue) => isOpenReviewIssueStatus(issue.status))
+      .map((issue) => ({
+        title: issue.title,
+        detail: issue.recommendation || issue.description,
+        severity: issue.severity as "high" | "medium" | "low",
+      }));
 
     const summary =
       actionItems.length > 0

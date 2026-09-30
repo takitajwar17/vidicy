@@ -20,6 +20,11 @@ import {
   userTable,
   visaApplicationTable,
 } from "@/db/schema";
+import {
+  isOpenReviewIssueStatus,
+  normalizeAgencyCaseStatus,
+  normalizeReviewIssueStatus,
+} from "@/lib/agency-workflow";
 
 type VisaApplicationRow = typeof visaApplicationTable.$inferSelect;
 type ApplicantRow = typeof applicantTable.$inferSelect;
@@ -196,10 +201,10 @@ export async function getAgencyCaseRows({
   const openIssueCountByApp = new Map<string, number>();
   const highIssueCountByApp = new Map<string, number>();
   for (const issue of issues) {
-    if (issue.status !== REVIEW_ISSUE_STATUS.RESOLVED) {
+    if (isOpenReviewIssueStatus(issue.status)) {
       openIssueCountByApp.set(issue.applicationId, (openIssueCountByApp.get(issue.applicationId) ?? 0) + 1);
     }
-    if (issue.severity === "high" && issue.status !== REVIEW_ISSUE_STATUS.RESOLVED) {
+    if (issue.severity === "high" && isOpenReviewIssueStatus(issue.status)) {
       highIssueCountByApp.set(issue.applicationId, (highIssueCountByApp.get(issue.applicationId) ?? 0) + 1);
     }
   }
@@ -232,23 +237,19 @@ export async function getAgencyDashboardData() {
     getActiveAgencyStaffRows(),
   ]);
 
-  const completedStatuses = new Set<string>([
-    AGENCY_CASE_STATUS.READY_TO_SUBMIT,
-    AGENCY_CASE_STATUS.SUBMITTED,
-    AGENCY_CASE_STATUS.COMPLETED,
-  ]);
-
-  const inReviewStatuses = new Set<string>([
-    AGENCY_CASE_STATUS.READY_FOR_REVIEW,
-    AGENCY_CASE_STATUS.AI_REVIEWED,
-    AGENCY_CASE_STATUS.IN_REVIEW,
-    AGENCY_CASE_STATUS.NEEDS_CLIENT,
-  ]);
-
   const totalApplications = cases.length;
-  const completed = cases.filter(({ application }) => completedStatuses.has(application.agencyStatus)).length;
-  const inReview = cases.filter(({ application }) => inReviewStatuses.has(application.agencyStatus)).length;
-  const flagged = cases.filter((row) => row.highIssueCount > 0 || row.application.agencyStatus === AGENCY_CASE_STATUS.NEEDS_CLIENT).length;
+  const completed = cases.filter(
+    ({ application }) => normalizeAgencyCaseStatus(application.agencyStatus) === AGENCY_CASE_STATUS.READY_TO_SUBMIT,
+  ).length;
+  const inReview = cases.filter(({ application }) => {
+    const status = normalizeAgencyCaseStatus(application.agencyStatus);
+    return status === AGENCY_CASE_STATUS.IN_REVIEW || status === AGENCY_CASE_STATUS.NEEDS_CLIENT;
+  }).length;
+  const flagged = cases.filter(
+    (row) =>
+      row.highIssueCount > 0 ||
+      normalizeAgencyCaseStatus(row.application.agencyStatus) === AGENCY_CASE_STATUS.NEEDS_CLIENT,
+  ).length;
   const scoredCases = cases.filter((row) => row.latestEvaluation);
   const approvalReadyRate =
     totalApplications > 0 ? Math.round((completed / totalApplications) * 1000) / 10 : 0;
@@ -271,11 +272,12 @@ export async function getAgencyDashboardData() {
   const workload = staff.filter((member) => member.userId && member.user).map((member) => {
     const assigned = cases.filter((row) => row.application.assignedReviewerId === member.userId);
     const reviewerCompleted = assigned.filter(({ application }) =>
-      completedStatuses.has(application.agencyStatus),
+      normalizeAgencyCaseStatus(application.agencyStatus) === AGENCY_CASE_STATUS.READY_TO_SUBMIT,
     ).length;
-    const reviewerInReview = assigned.filter(({ application }) =>
-      inReviewStatuses.has(application.agencyStatus),
-    ).length;
+    const reviewerInReview = assigned.filter(({ application }) => {
+      const status = normalizeAgencyCaseStatus(application.agencyStatus);
+      return status === AGENCY_CASE_STATUS.IN_REVIEW || status === AGENCY_CASE_STATUS.NEEDS_CLIENT;
+    }).length;
 
     return {
 	      ...member,
@@ -360,7 +362,10 @@ export async function getAgencyCaseDetail(appId: string) {
     checklistItems,
     documents,
     latestEvaluation,
-    issues,
+    issues: issues.map((issue) => ({
+      ...issue,
+      status: normalizeReviewIssueStatus(issue.status),
+    })),
     latestReport: reports[0] ?? null,
     staff,
   };
@@ -390,8 +395,7 @@ export async function getAgencyClientsWithCounts() {
       caseCount: clientCases.length,
       openCaseCount: clientCases.filter(
         (application) =>
-          application.agencyStatus !== AGENCY_CASE_STATUS.COMPLETED &&
-          application.agencyStatus !== AGENCY_CASE_STATUS.ARCHIVED,
+          normalizeAgencyCaseStatus(application.agencyStatus) !== AGENCY_CASE_STATUS.READY_TO_SUBMIT,
       ).length,
       lastCaseAt: clientCases[0]?.createdAt ?? null,
     };
@@ -482,7 +486,10 @@ export async function getAgencyReviewIssueRows({ limit = 300 }: { limit?: number
   return issues
     .filter((issue) => agencyApplicationIds.has(issue.applicationId))
     .map((issue) => ({
-      issue,
+      issue: {
+        ...issue,
+        status: normalizeReviewIssueStatus(issue.status),
+      },
       application: applicationById.get(issue.applicationId) ?? null,
       applicant: issue.applicantId ? (applicantById.get(issue.applicantId) ?? null) : null,
       document: issue.documentId ? (documentById.get(issue.documentId) ?? null) : null,
@@ -500,22 +507,31 @@ export async function getAgencyReports() {
   const cases = await getAgencyCaseRows({ limit: 500 });
   const casesById = new Map(cases.map((row) => [row.application.id, row]));
   const agencyReports = reports.filter((report) => casesById.has(report.applicationId));
+  const latestReportByApplicationId = new Map<string, ClientReportRow>();
 
-  const reportRows = agencyReports.map((report) => ({
+  for (const report of agencyReports) {
+    if (!latestReportByApplicationId.has(report.applicationId)) {
+      latestReportByApplicationId.set(report.applicationId, report);
+    }
+  }
+
+  const latestReports = Array.from(latestReportByApplicationId.values());
+
+  const reportRows = latestReports.map((report) => ({
     report,
     caseRow: casesById.get(report.applicationId) ?? null,
   }));
 
-  const readyCount = agencyReports.filter((report) => report.status === CLIENT_REPORT_DELIVERY_STATUS.READY).length;
-  const sentCount = agencyReports.filter((report) => report.status === CLIENT_REPORT_DELIVERY_STATUS.SENT).length;
+  const readyCount = latestReports.filter((report) => report.status === CLIENT_REPORT_DELIVERY_STATUS.READY).length;
+  const sentCount = latestReports.filter((report) => report.status === CLIENT_REPORT_DELIVERY_STATUS.SENT).length;
 
   return {
     reports: reportRows,
     casesWithoutReports: cases.filter(
-      (row) => !agencyReports.some((report) => report.applicationId === row.application.id),
+      (row) => !latestReportByApplicationId.has(row.application.id),
     ),
     stats: {
-      total: agencyReports.length,
+      total: latestReports.length,
       ready: readyCount,
       sent: sentCount,
     },

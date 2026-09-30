@@ -32,13 +32,21 @@ export const reviewIssueSeverityTuple = Object.values(REVIEW_ISSUE_SEVERITY) as 
 
 export const REVIEW_ISSUE_STATUS = {
   OPEN: "open",
-  ACCEPTED: "accepted",
-  DISMISSED: "dismissed",
-  RESOLVED: "resolved",
   CLIENT_REQUESTED: "client_requested",
+  RESOLVED: "resolved",
+  DISMISSED: "dismissed",
 } as const;
 
-export const reviewIssueStatusTuple = Object.values(REVIEW_ISSUE_STATUS) as [string, ...string[]];
+export type ReviewIssueStatusValue = (typeof REVIEW_ISSUE_STATUS)[keyof typeof REVIEW_ISSUE_STATUS];
+
+export const reviewIssueStatusTuple = [
+  REVIEW_ISSUE_STATUS.OPEN,
+  REVIEW_ISSUE_STATUS.CLIENT_REQUESTED,
+  REVIEW_ISSUE_STATUS.RESOLVED,
+  REVIEW_ISSUE_STATUS.DISMISSED,
+] as [ReviewIssueStatusValue, ...ReviewIssueStatusValue[]];
+
+export const REVIEW_ISSUE_STATUS_OPTIONS = reviewIssueStatusTuple;
 
 export const REVIEW_ISSUE_SOURCE = {
   AI: "ai",

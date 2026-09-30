@@ -1370,7 +1370,7 @@ Return JSON with this exact structure:
 	          riskLevel: evaluationData.riskLevel,
 	          readinessScore: evaluationData.overallScore,
 	          status: newStatus,
-	          agencyStatus: AGENCY_CASE_STATUS.AI_REVIEWED,
+	          agencyStatus: AGENCY_CASE_STATUS.IN_REVIEW,
 	          clientReportStatus: CLIENT_REPORT_STATUS.DRAFT,
 	        })
         .where(eq(visaApplicationTable.id, application.id))
