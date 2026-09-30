@@ -53,7 +53,7 @@ export function ChecklistGenerator({
         </p>
         <p className="text-sm text-muted-foreground leading-relaxed">
           Generate the route-specific document list your review team will use
-          for intake, uploads, AI review, and client follow-up.
+          for intake, uploads, document review, and client follow-up.
         </p>
       </div>
       <Button

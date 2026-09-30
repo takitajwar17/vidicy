@@ -351,7 +351,7 @@ export const syncReviewIssuesFromEvaluationAction = createServerAction()
     ]);
 
     if (!evaluation?.itemFeedback) {
-      throw new ZSAError("PRECONDITION_FAILED", "Run AI review before syncing issues.");
+      throw new ZSAError("PRECONDITION_FAILED", "Run document review before syncing issues.");
     }
 
     let createdCount = 0;

@@ -32,7 +32,7 @@ export const CASE_STATUS_META = {
   [AGENCY_CASE_STATUS.IN_REVIEW]: {
     label: "In Review",
     tone: "info",
-    description: "AI or human review is underway.",
+    description: "Document review is underway.",
   },
   [AGENCY_CASE_STATUS.NEEDS_CLIENT]: {
     label: "Needs Client",

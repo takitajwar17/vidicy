@@ -13,7 +13,7 @@ interface EvaluationTriggerProps {
   applicationId: string
   applicantId: string
   hasDocuments: boolean
-  /** When true, renders as a re-run (refresh icon + "Re-run" label). Initial run uses the brain circuit icon. */
+  /** When true, renders as a re-run (refresh icon + "Re-run" label). */
   rerun?: boolean
   checklistHref?: string
 }
@@ -40,16 +40,11 @@ export function EvaluationTrigger({
     setLoading(false)
   }
 
-  /**
-   * Icon differs based on context:
-   * - Initial run: brain circuit icon signals AI analysis, not a refresh action
-   * - Re-run: refresh icon communicates updating an existing result
-   */
   const IdleIcon = !hasDocuments ? UploadIcon : rerun ? RefreshCwIcon : BrainCircuitIcon
   const idleLabel = hasDocuments
     ? rerun
-      ? "Re-run AI Review"
-      : "Run AI Review"
+      ? "Re-run Review"
+      : "Run Review"
     : "Upload Documents First"
 
   if (!hasDocuments && checklistHref) {

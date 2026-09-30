@@ -110,7 +110,7 @@ export function AgencyCaseToolbar({
   async function handleSyncIssues() {
     const [result, error] = await syncIssues({ applicationId });
     if (error) {
-      toast.error(error.message ?? "Run AI review before syncing issues.");
+      toast.error(error.message ?? "Run document review before syncing issues.");
       return;
     }
     toast.success(`${result?.createdCount ?? 0} issue${result?.createdCount === 1 ? "" : "s"} synced.`);
@@ -166,7 +166,7 @@ export function AgencyCaseToolbar({
       </Select>
       <Button type="button" variant="outline" onClick={handleSyncIssues} disabled={!hasEvaluation || syncing}>
         {syncing ? <Loader2Icon className="h-4 w-4 animate-spin" /> : <BrainCircuitIcon className="h-4 w-4" />}
-        Sync AI flags
+        Sync review flags
       </Button>
       <Button type="button" variant="outline" onClick={handleGenerateReport} disabled={reporting}>
         {reporting ? <Loader2Icon className="h-4 w-4 animate-spin" /> : <FileTextIcon className="h-4 w-4" />}

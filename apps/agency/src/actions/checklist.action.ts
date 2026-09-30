@@ -225,7 +225,7 @@ Rules:
 
     // Step 2: Use GPT-4o to structure the research into the required JSON format
     try {
-      const systemPrompt = `You are a senior visa agency review lead with deep experience preparing ${application.visaType} visa applications for ${application.destinationCountry}. Generate a checklist that an agency review desk can use for intake, uploads, AI review, and client follow-up. Return ONLY valid JSON in the exact schema requested. Do not add commentary outside the JSON.`;
+      const systemPrompt = `You are a senior visa agency review lead with deep experience preparing ${application.visaType} visa applications for ${application.destinationCountry}. Generate a checklist that an agency review desk can use for intake, uploads, document review, and client follow-up. Return ONLY valid JSON in the exact schema requested. Do not add commentary outside the JSON.`;
 
       const primaryAnchor = primaryChecklist.length > 0
         ? `\n\nCONSISTENCY REQUIREMENT — PRIMARY APPLICANT'S CHECKLIST (already generated):
@@ -332,7 +332,7 @@ Mark isRequired: false only for truly optional documents. Required items first i
         if (firstArrayValue && Array.isArray(firstArrayValue)) {
           checklistItems = firstArrayValue as typeof checklistItems;
         } else {
-          throw new ZSAError("INTERNAL_SERVER_ERROR", "Failed to generate checklist — the AI returned an unexpected format. Please try again.");
+          throw new ZSAError("INTERNAL_SERVER_ERROR", "Failed to generate checklist. Please try again.");
         }
       }
     } catch (error) {

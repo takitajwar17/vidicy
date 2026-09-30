@@ -269,24 +269,31 @@ export async function getAgencyDashboardData() {
     .sort((a, b) => b.count - a.count)
     .slice(0, 5);
 
-  const workload = staff.filter((member) => member.userId && member.user).map((member) => {
-    const assigned = cases.filter((row) => row.application.assignedReviewerId === member.userId);
-    const reviewerCompleted = assigned.filter(({ application }) =>
-      normalizeAgencyCaseStatus(application.agencyStatus) === AGENCY_CASE_STATUS.READY_TO_SUBMIT,
-    ).length;
-    const reviewerInReview = assigned.filter(({ application }) => {
-      const status = normalizeAgencyCaseStatus(application.agencyStatus);
-      return status === AGENCY_CASE_STATUS.IN_REVIEW || status === AGENCY_CASE_STATUS.NEEDS_CLIENT;
-    }).length;
+  const workload = staff
+    .filter((member) => member.userId && member.user)
+    .map((member) => {
+      const assigned = cases.filter((row) => row.application.assignedReviewerId === member.userId);
+      const reviewerCompleted = assigned.filter(({ application }) =>
+        normalizeAgencyCaseStatus(application.agencyStatus) === AGENCY_CASE_STATUS.READY_TO_SUBMIT,
+      ).length;
+      const reviewerInReview = assigned.filter(({ application }) => {
+        const status = normalizeAgencyCaseStatus(application.agencyStatus);
+        return status === AGENCY_CASE_STATUS.IN_REVIEW || status === AGENCY_CASE_STATUS.NEEDS_CLIENT;
+      }).length;
 
-    return {
-	      ...member,
-	      displayName: getDisplayName(member.user),
-      inReview: reviewerInReview,
-      completed: reviewerCompleted,
-      sla: reviewerInReview > 12 ? "At risk" : "On track",
-    };
-  });
+      return {
+        ...member,
+        displayName: getDisplayName(member.user),
+        inReview: reviewerInReview,
+        completed: reviewerCompleted,
+      };
+    })
+    .sort(
+      (a, b) =>
+        b.inReview - a.inReview ||
+        b.completed - a.completed ||
+        (a.displayName ?? "").localeCompare(b.displayName ?? ""),
+    );
 
   return {
     cases,
