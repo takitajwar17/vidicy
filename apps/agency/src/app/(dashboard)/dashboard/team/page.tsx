@@ -91,7 +91,7 @@ export default async function TeamPage() {
 
       <AgencyTableCard
         title="Reviewer workload"
-        description="Live queue ownership across active cases, unresolved issues, and uploaded files."
+        description="Live queue ownership across active cases and unresolved client follow-ups."
         actions={
           <>
             <Badge variant="outline" className="rounded-full px-3 py-1 text-2xs font-bold">
@@ -109,7 +109,6 @@ export default async function TeamPage() {
               <TableHead className="pl-5">Reviewer</TableHead>
               <TableHead>Role</TableHead>
               <TableHead className="text-right">Assigned</TableHead>
-              <TableHead className="text-right">Intake</TableHead>
               <TableHead className="text-right">Needs Client</TableHead>
               <TableHead className="text-right">Ready</TableHead>
               <TableHead className="text-right">Open Issues</TableHead>
@@ -141,7 +140,6 @@ export default async function TeamPage() {
                     </Badge>
                   </TableCell>
                   <TableCell className="text-right font-bold">{row.assignedCases}</TableCell>
-                  <TableCell className="text-right">{row.intakeCases}</TableCell>
                   <TableCell className="text-right">{row.needsClientCases}</TableCell>
                   <TableCell className="text-right">{row.readyCases}</TableCell>
                   <TableCell className="text-right font-bold">{row.openIssues}</TableCell>
@@ -152,7 +150,7 @@ export default async function TeamPage() {
               ))
             ) : (
               <TableRow>
-                <TableCell colSpan={8} className="h-20 pl-5 text-muted-foreground">
+                <TableCell colSpan={7} className="h-20 pl-5 text-muted-foreground">
                   No active reviewers yet.
                 </TableCell>
               </TableRow>

@@ -25,52 +25,21 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { AGENCY_CASE_STATUS } from "@/db/schema";
+import { getDashboardDailyMovement } from "@/lib/agency-dashboard";
 import { getAgencyDashboardData } from "@/server/agency-data";
-import { getDisplayCaseNumber } from "@/lib/agency-workflow";
+import {
+  formatAgencyVisaLabel,
+  formatReviewerDisplayName,
+  getDisplayCaseNumber,
+} from "@/lib/agency-workflow";
 
 export const metadata: Metadata = {
   title: "Dashboard",
 };
 
-function getDailyMovement(cases: Awaited<ReturnType<typeof getAgencyDashboardData>>["cases"]) {
-  const today = new Date();
-  const days = Array.from({ length: 7 }, (_, index) => {
-    const date = new Date(today);
-    date.setDate(today.getDate() - (6 - index));
-    date.setHours(0, 0, 0, 0);
-    return date;
-  });
-
-  return days.map((date) => {
-    const nextDate = new Date(date);
-    nextDate.setDate(date.getDate() + 1);
-    const submitted = cases.filter(
-      ({ application }) => application.createdAt >= date && application.createdAt < nextDate,
-    ).length;
-    const completed = cases.filter(
-      ({ application }) =>
-        application.reviewCompletedAt &&
-        application.reviewCompletedAt >= date &&
-        application.reviewCompletedAt < nextDate,
-    ).length;
-    const flagged = cases.filter(
-      ({ application, highIssueCount }) =>
-        highIssueCount > 0 && application.createdAt >= date && application.createdAt < nextDate,
-    ).length;
-
-    return {
-      label: new Intl.DateTimeFormat("en", { month: "short", day: "numeric" }).format(date),
-      submitted,
-      completed,
-      flagged,
-      max: Math.max(submitted, completed, flagged, 1),
-    };
-  });
-}
-
 export default async function DashboardPage() {
   const data = await getAgencyDashboardData();
-  const movement = getDailyMovement(data.cases);
+  const movement = getDashboardDailyMovement({ cases: data.cases });
 
   return (
     <AgencyPageShell
@@ -291,7 +260,10 @@ export default async function DashboardPage() {
                     <TableCell>{row.application.clientName ?? "Unassigned"}</TableCell>
                     <TableCell>{row.primaryApplicant?.name ?? "Applicant pending"}</TableCell>
                     <TableCell>
-                      {row.application.destinationCountry} {row.application.visaType}
+                      {formatAgencyVisaLabel({
+                        destinationCountry: row.application.destinationCountry,
+                        visaType: row.application.visaType,
+                      })}
                     </TableCell>
                     <TableCell>
                       {formatShortDate(row.application.submittedAt ?? row.application.createdAt)}
@@ -308,11 +280,7 @@ export default async function DashboardPage() {
                     </TableCell>
                     <TableCell>
                       <ReviewerAvatar
-                        name={
-                          row.reviewer
-                            ? `${row.reviewer.firstName ?? ""} ${row.reviewer.lastName ?? ""}`.trim()
-                            : null
-                        }
+                        name={row.reviewer ? formatReviewerDisplayName(row.reviewer) : null}
                         email={row.reviewer?.email ?? null}
                         avatar={row.reviewer?.avatar ?? null}
                       />

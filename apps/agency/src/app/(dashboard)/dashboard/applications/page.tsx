@@ -21,6 +21,8 @@ import { TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/compon
 import {
   AGENCY_CASE_STATUS_OPTIONS,
   CASE_STATUS_META,
+  formatAgencyVisaLabel,
+  formatReviewerDisplayName,
   getDisplayCaseNumber,
   normalizeAgencyCaseStatus,
 } from "@/lib/agency-workflow";
@@ -162,7 +164,10 @@ export default async function ApplicationsPage({
                       {row.primaryApplicant?.name ?? "Pending"}
                     </TableCell>
                     <TableCell>
-                      {row.application.destinationCountry} {row.application.visaType}
+                      {formatAgencyVisaLabel({
+                        destinationCountry: row.application.destinationCountry,
+                        visaType: row.application.visaType,
+                      })}
                     </TableCell>
                     <TableCell>
                       {formatShortDate(row.application.submittedAt ?? row.application.createdAt)}
@@ -187,11 +192,7 @@ export default async function ApplicationsPage({
                     </TableCell>
                     <TableCell>
                       <ReviewerAvatar
-                        name={
-                          row.reviewer
-                            ? `${row.reviewer.firstName ?? ""} ${row.reviewer.lastName ?? ""}`.trim()
-                            : null
-                        }
+                        name={row.reviewer ? formatReviewerDisplayName(row.reviewer) : null}
                         email={row.reviewer?.email ?? null}
                         avatar={row.reviewer?.avatar ?? null}
                         className={`${APPLICATIONS_TABLE_TEXT_CLASS} ${APPLICATIONS_TABLE_REVIEWER_CLASS}`}
