@@ -21,6 +21,7 @@ import {
   visaApplicationTable,
 } from "@/db/schema";
 import {
+  formatReviewerDisplayName,
   isOpenReviewIssueStatus,
   normalizeAgencyCaseStatus,
   normalizeReviewIssueStatus,
@@ -58,16 +59,8 @@ export interface AgencyCaseRow {
   highIssueCount: number;
 }
 
-function getDisplayName(user: AgencyStaffRow["user"] | null) {
-  if (!user) return null;
-  return `${user.firstName ?? ""} ${user.lastName ?? ""}`.trim() || user.email || "Reviewer";
-}
-
 function getAgencyCaseFilters() {
-  return [
-    isNull(visaApplicationTable.trashedAt),
-    isNotNull(visaApplicationTable.clientId),
-  ];
+  return [isNull(visaApplicationTable.trashedAt), isNotNull(visaApplicationTable.clientId)];
 }
 
 export async function getActiveAgencyStaffRows(): Promise<AgencyStaffRow[]> {
@@ -77,9 +70,9 @@ export async function getActiveAgencyStaffRows(): Promise<AgencyStaffRow[]> {
     .select({
       id: agencyTeamMemberTable.id,
       userId: agencyTeamMemberTable.userId,
-	      email: agencyTeamMemberTable.email,
-	      role: agencyTeamMemberTable.role,
-	      status: agencyTeamMemberTable.status,
+      email: agencyTeamMemberTable.email,
+      role: agencyTeamMemberTable.role,
+      status: agencyTeamMemberTable.status,
       joinedAt: agencyTeamMemberTable.joinedAt,
       invitedAt: agencyTeamMemberTable.invitedAt,
       user: {
@@ -115,12 +108,9 @@ export interface AgencyTeamWorkloadRow {
   displayName: string;
   assignedCases: number;
   activeCases: number;
-  intakeCases: number;
   needsClientCases: number;
   readyCases: number;
   openIssues: number;
-  highIssues: number;
-  documents: number;
   lastActivityAt: Date | null;
 }
 
@@ -151,13 +141,7 @@ export async function getAgencyCaseRows({
     new Set(applications.map((application) => application.assignedReviewerId).filter(Boolean)),
   ) as string[];
 
-  const [
-    applicants,
-    documents,
-    issues,
-    evaluations,
-    reviewers,
-  ] = await Promise.all([
+  const [applicants, documents, issues, evaluations, reviewers] = await Promise.all([
     db.query.applicantTable.findMany({
       where: inArray(applicantTable.applicationId, applicationIds),
       orderBy: [desc(applicantTable.createdAt)],
@@ -210,17 +194,26 @@ export async function getAgencyCaseRows({
 
   const documentCountByApp = new Map<string, number>();
   for (const document of documents) {
-    documentCountByApp.set(document.applicationId, (documentCountByApp.get(document.applicationId) ?? 0) + 1);
+    documentCountByApp.set(
+      document.applicationId,
+      (documentCountByApp.get(document.applicationId) ?? 0) + 1,
+    );
   }
 
   const openIssueCountByApp = new Map<string, number>();
   const highIssueCountByApp = new Map<string, number>();
   for (const issue of issues) {
     if (isOpenReviewIssueStatus(issue.status)) {
-      openIssueCountByApp.set(issue.applicationId, (openIssueCountByApp.get(issue.applicationId) ?? 0) + 1);
+      openIssueCountByApp.set(
+        issue.applicationId,
+        (openIssueCountByApp.get(issue.applicationId) ?? 0) + 1,
+      );
     }
     if (issue.severity === "high" && isOpenReviewIssueStatus(issue.status)) {
-      highIssueCountByApp.set(issue.applicationId, (highIssueCountByApp.get(issue.applicationId) ?? 0) + 1);
+      highIssueCountByApp.set(
+        issue.applicationId,
+        (highIssueCountByApp.get(issue.applicationId) ?? 0) + 1,
+      );
     }
   }
 
@@ -286,12 +279,9 @@ export async function getAgencyTeamWorkloadRows(): Promise<AgencyTeamWorkloadRow
       displayName,
       assignedCases: assignedCases.length,
       activeCases: statusCounts.intake + statusCounts.inReview + statusCounts.needsClient,
-      intakeCases: statusCounts.intake,
       needsClientCases: statusCounts.needsClient,
       readyCases: statusCounts.ready,
       openIssues: assignedCases.reduce((sum, row) => sum + row.openIssueCount, 0),
-      highIssues: assignedCases.reduce((sum, row) => sum + row.highIssueCount, 0),
-      documents: assignedCases.reduce((sum, row) => sum + row.documentCount, 0),
       lastActivityAt,
     };
   }
@@ -303,7 +293,9 @@ export async function getAgencyTeamWorkloadRows(): Promise<AgencyTeamWorkloadRow
     return buildWorkloadRow({
       rowId: member.id,
       staffMember: member,
-      displayName: getDisplayName(member.user) ?? member.email ?? "Reviewer",
+      displayName: member.user
+        ? formatReviewerDisplayName(member.user)
+        : (member.email ?? "Reviewer"),
       assignedCases,
     });
   });
@@ -338,7 +330,8 @@ export async function getAgencyDashboardData() {
 
   const totalApplications = cases.length;
   const completed = cases.filter(
-    ({ application }) => normalizeAgencyCaseStatus(application.agencyStatus) === AGENCY_CASE_STATUS.READY_TO_SUBMIT,
+    ({ application }) =>
+      normalizeAgencyCaseStatus(application.agencyStatus) === AGENCY_CASE_STATUS.READY_TO_SUBMIT,
   ).length;
   const inReview = cases.filter(({ application }) => {
     const status = normalizeAgencyCaseStatus(application.agencyStatus);
@@ -372,17 +365,21 @@ export async function getAgencyDashboardData() {
     .filter((member) => member.userId && member.user)
     .map((member) => {
       const assigned = cases.filter((row) => row.application.assignedReviewerId === member.userId);
-      const reviewerCompleted = assigned.filter(({ application }) =>
-        normalizeAgencyCaseStatus(application.agencyStatus) === AGENCY_CASE_STATUS.READY_TO_SUBMIT,
+      const reviewerCompleted = assigned.filter(
+        ({ application }) =>
+          normalizeAgencyCaseStatus(application.agencyStatus) ===
+          AGENCY_CASE_STATUS.READY_TO_SUBMIT,
       ).length;
       const reviewerInReview = assigned.filter(({ application }) => {
         const status = normalizeAgencyCaseStatus(application.agencyStatus);
-        return status === AGENCY_CASE_STATUS.IN_REVIEW || status === AGENCY_CASE_STATUS.NEEDS_CLIENT;
+        return (
+          status === AGENCY_CASE_STATUS.IN_REVIEW || status === AGENCY_CASE_STATUS.NEEDS_CLIENT
+        );
       }).length;
 
       return {
         ...member,
-        displayName: getDisplayName(member.user),
+        displayName: member.user ? formatReviewerDisplayName(member.user) : null,
         inReview: reviewerInReview,
         completed: reviewerCompleted,
       };
@@ -501,7 +498,8 @@ export async function getAgencyClientsWithCounts() {
       caseCount: clientCases.length,
       openCaseCount: clientCases.filter(
         (application) =>
-          normalizeAgencyCaseStatus(application.agencyStatus) !== AGENCY_CASE_STATUS.READY_TO_SUBMIT,
+          normalizeAgencyCaseStatus(application.agencyStatus) !==
+          AGENCY_CASE_STATUS.READY_TO_SUBMIT,
       ).length,
       lastCaseAt: clientCases[0]?.createdAt ?? null,
     };
@@ -562,7 +560,9 @@ export async function getAgencyReviewIssueRows({ limit = 300 }: { limit?: number
   const applicantIds = Array.from(
     new Set(issues.map((issue) => issue.applicantId).filter(Boolean)),
   ) as string[];
-  const documentIds = Array.from(new Set(issues.map((issue) => issue.documentId).filter(Boolean))) as string[];
+  const documentIds = Array.from(
+    new Set(issues.map((issue) => issue.documentId).filter(Boolean)),
+  ) as string[];
 
   const [applications, applicants, documents] = await Promise.all([
     db.query.visaApplicationTable.findMany({
@@ -628,8 +628,12 @@ export async function getAgencyReports() {
     caseRow: casesById.get(report.applicationId) ?? null,
   }));
 
-  const readyCount = latestReports.filter((report) => report.status === CLIENT_REPORT_DELIVERY_STATUS.READY).length;
-  const sentCount = latestReports.filter((report) => report.status === CLIENT_REPORT_DELIVERY_STATUS.SENT).length;
+  const readyCount = latestReports.filter(
+    (report) => report.status === CLIENT_REPORT_DELIVERY_STATUS.READY,
+  ).length;
+  const sentCount = latestReports.filter(
+    (report) => report.status === CLIENT_REPORT_DELIVERY_STATUS.SENT,
+  ).length;
 
   return {
     reports: reportRows,

@@ -4,8 +4,6 @@ import {
   AGENCY_CASE_STATUS,
   CLIENT_REPORT_DELIVERY_STATUS,
   CLIENT_REPORT_STATUS,
-  DOCUMENT_EXTRACTION_STATUS,
-  DOCUMENT_INDEXING_STATUS,
   RISK_LEVEL,
   REVIEW_ISSUE_SEVERITY,
   REVIEW_ISSUE_STATUS,
@@ -120,30 +118,14 @@ export const CLIENT_REPORT_DELIVERY_STATUS_META = {
   [CLIENT_REPORT_DELIVERY_STATUS.SENT]: { label: "Sent" },
 } as const;
 
-export const DOCUMENT_EXTRACTION_STATUS_META = {
-  [DOCUMENT_EXTRACTION_STATUS.QUEUED]: { label: "Queued" },
-  [DOCUMENT_EXTRACTION_STATUS.EXTRACTING]: { label: "Extracting" },
-  [DOCUMENT_EXTRACTION_STATUS.COMPLETED]: { label: "Completed" },
-  [DOCUMENT_EXTRACTION_STATUS.FAILED]: { label: "Failed" },
-  [DOCUMENT_EXTRACTION_STATUS.PARTIAL]: { label: "Partial" },
-  [DOCUMENT_EXTRACTION_STATUS.SKIPPED]: { label: "Skipped" },
-  [DOCUMENT_EXTRACTION_STATUS.UNSUPPORTED]: { label: "Unsupported" },
-} as const;
-
-export const DOCUMENT_INDEXING_STATUS_META = {
-  [DOCUMENT_INDEXING_STATUS.QUEUED]: { label: "Queued" },
-  [DOCUMENT_INDEXING_STATUS.INDEXING]: { label: "Indexing" },
-  [DOCUMENT_INDEXING_STATUS.COMPLETED]: { label: "Completed" },
-  [DOCUMENT_INDEXING_STATUS.FAILED]: { label: "Failed" },
-  [DOCUMENT_INDEXING_STATUS.SKIPPED]: { label: "Skipped" },
-} as const;
-
 export function normalizeReviewIssueStatus(status: string | null | undefined) {
   if (status === "accepted") {
     return REVIEW_ISSUE_STATUS.OPEN;
   }
 
-  if (REVIEW_ISSUE_STATUS_OPTIONS.includes(status as (typeof REVIEW_ISSUE_STATUS_OPTIONS)[number])) {
+  if (
+    REVIEW_ISSUE_STATUS_OPTIONS.includes(status as (typeof REVIEW_ISSUE_STATUS_OPTIONS)[number])
+  ) {
     return status as (typeof REVIEW_ISSUE_STATUS_OPTIONS)[number];
   }
 
@@ -161,19 +143,53 @@ export function isOpenReviewIssueStatus(status: string | null | undefined) {
 export function getStatusBadgeClass(status: string) {
   const normalizedStatus = normalizeAgencyCaseStatus(status);
   const tone = CASE_STATUS_META[normalizedStatus]?.tone;
-  if (tone === "success") return "border-status-success/25 bg-status-success/10 text-status-success";
-  if (tone === "warning") return "border-status-warning/25 bg-status-warning/10 text-status-warning";
+  if (tone === "success")
+    return "border-status-success/25 bg-status-success/10 text-status-success";
+  if (tone === "warning")
+    return "border-status-warning/25 bg-status-warning/10 text-status-warning";
   if (tone === "info") return "border-status-info/25 bg-status-info/10 text-status-info";
   return "border-border bg-muted/50 text-muted-foreground";
 }
 
 export function getRiskBadgeClass(riskLevel?: string | null) {
-  if (riskLevel === "low") return "border-status-success/25 bg-status-success/10 text-status-success";
-  if (riskLevel === "medium") return "border-status-warning/25 bg-status-warning/10 text-status-warning";
+  if (riskLevel === "low")
+    return "border-status-success/25 bg-status-success/10 text-status-success";
+  if (riskLevel === "medium")
+    return "border-status-warning/25 bg-status-warning/10 text-status-warning";
   if (riskLevel === "high") return "border-destructive/25 bg-destructive/10 text-destructive";
   return "border-border bg-muted/50 text-muted-foreground";
 }
 
 export function getDisplayCaseNumber(caseNumber: string | null | undefined, fallbackId: string) {
-  return caseNumber || fallbackId.replace(/^vapp_/, "CASE-").slice(0, 14).toUpperCase();
+  return (
+    caseNumber ||
+    fallbackId
+      .replace(/^vapp_/, "CASE-")
+      .slice(0, 14)
+      .toUpperCase()
+  );
+}
+
+export function formatAgencyVisaLabel({
+  destinationCountry,
+  visaType,
+}: {
+  destinationCountry?: string | null;
+  visaType?: string | null;
+}) {
+  return [destinationCountry, visaType].filter(Boolean).join(" ") || "Visa not set";
+}
+
+export function formatReviewerDisplayName({
+  firstName,
+  lastName,
+  email,
+  fallback = "Reviewer",
+}: {
+  firstName?: string | null;
+  lastName?: string | null;
+  email?: string | null;
+  fallback?: string;
+}) {
+  return `${firstName ?? ""} ${lastName ?? ""}`.trim() || email || fallback;
 }
