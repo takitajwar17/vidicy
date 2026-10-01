@@ -1,9 +1,11 @@
+import type { ReactNode } from "react";
 import Link from "next/link";
 import type { Route } from "next";
 import type { LucideIcon } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Table } from "@/components/ui/table";
 import { cn } from "@/lib/utils";
 import {
   CASE_PRIORITY_META,
@@ -40,7 +42,14 @@ export function CaseStatusBadge({ status, className }: { status: string; classNa
   const normalizedStatus = normalizeAgencyCaseStatus(status);
 
   return (
-    <Badge variant="outline" className={cn("rounded-full px-2.5 py-1 text-2xs font-bold", getStatusBadgeClass(status), className)}>
+    <Badge
+      variant="outline"
+      className={cn(
+        "rounded-full px-2.5 py-1 text-2xs font-bold",
+        getStatusBadgeClass(status),
+        className,
+      )}
+    >
       {CASE_STATUS_META[normalizedStatus].label}
     </Badge>
   );
@@ -48,16 +57,37 @@ export function CaseStatusBadge({ status, className }: { status: string; classNa
 
 export function PriorityBadge({ priority, className }: { priority: string; className?: string }) {
   return (
-    <span className={cn("text-xs font-bold", CASE_PRIORITY_META[priority as keyof typeof CASE_PRIORITY_META]?.className, className)}>
+    <span
+      className={cn(
+        "text-xs font-bold",
+        CASE_PRIORITY_META[priority as keyof typeof CASE_PRIORITY_META]?.className,
+        className,
+      )}
+    >
       {CASE_PRIORITY_META[priority as keyof typeof CASE_PRIORITY_META]?.label ?? priority}
     </span>
   );
 }
 
-export function RiskBadge({ riskLevel, className }: { riskLevel?: string | null; className?: string }) {
+export function RiskBadge({
+  riskLevel,
+  className,
+}: {
+  riskLevel?: string | null;
+  className?: string;
+}) {
   return (
-    <Badge variant="outline" className={cn("rounded-full px-2.5 py-1 text-2xs font-bold", getRiskBadgeClass(riskLevel), className)}>
-      {riskLevel ? (RISK_LEVEL_META[riskLevel as keyof typeof RISK_LEVEL_META]?.label ?? "Unscored") : "Unscored"}
+    <Badge
+      variant="outline"
+      className={cn(
+        "rounded-full px-2.5 py-1 text-2xs font-bold",
+        getRiskBadgeClass(riskLevel),
+        className,
+      )}
+    >
+      {riskLevel
+        ? (RISK_LEVEL_META[riskLevel as keyof typeof RISK_LEVEL_META]?.label ?? "Unscored")
+        : "Unscored"}
     </Badge>
   );
 }
@@ -65,7 +95,10 @@ export function RiskBadge({ riskLevel, className }: { riskLevel?: string | null;
 export function IssueSeverityBadge({ severity }: { severity: string }) {
   const meta = ISSUE_SEVERITY_META[severity as keyof typeof ISSUE_SEVERITY_META];
   return (
-    <Badge variant="outline" className={cn("rounded-full px-2.5 py-1 text-2xs font-bold", meta?.badgeClassName)}>
+    <Badge
+      variant="outline"
+      className={cn("rounded-full px-2.5 py-1 text-2xs font-bold", meta?.badgeClassName)}
+    >
       {meta?.label ?? severity}
     </Badge>
   );
@@ -87,24 +120,36 @@ export function ReviewerAvatar({
   labelClassName?: string;
 }) {
   const displayName = name || email || "Unassigned";
-  const initials = displayName
-    .split(/\s+/)
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((part) => part[0]?.toUpperCase())
-    .join("") || "UA";
+  const initials =
+    displayName
+      .split(/\s+/)
+      .filter(Boolean)
+      .slice(0, 2)
+      .map((part) => part[0]?.toUpperCase())
+      .join("") || "UA";
 
   return (
     <span className={cn("inline-flex items-center gap-2", className)}>
       {avatar ? (
         // eslint-disable-next-line @next/next/no-img-element
-        <img src={avatar} alt="" className={cn("h-7 w-7 rounded-full object-cover", avatarClassName)} />
+        <img
+          src={avatar}
+          alt=""
+          className={cn("h-7 w-7 rounded-full object-cover", avatarClassName)}
+        />
       ) : (
-        <span className={cn("flex h-7 w-7 items-center justify-center rounded-full bg-primary text-2xs font-bold text-primary-foreground", avatarClassName)}>
+        <span
+          className={cn(
+            "flex h-7 w-7 items-center justify-center rounded-full bg-primary text-2xs font-bold text-primary-foreground",
+            avatarClassName,
+          )}
+        >
           {initials}
         </span>
       )}
-      <span className={cn("min-w-0 truncate text-sm font-medium", labelClassName)}>{displayName}</span>
+      <span className={cn("min-w-0 truncate text-xs font-medium", labelClassName)}>
+        {displayName}
+      </span>
     </span>
   );
 }
@@ -133,7 +178,12 @@ export function MetricCard({
   return (
     <Card className="rounded-xl shadow-[var(--shadow-dashboard)]">
       <CardContent className="flex items-center gap-4 p-5">
-        <span className={cn("flex h-12 w-12 shrink-0 items-center justify-center rounded-xl", toneClass)}>
+        <span
+          className={cn(
+            "flex h-12 w-12 shrink-0 items-center justify-center rounded-xl",
+            toneClass,
+          )}
+        >
           <Icon className="h-5 w-5" />
         </span>
         <span className="min-w-0">
@@ -143,6 +193,52 @@ export function MetricCard({
         </span>
       </CardContent>
     </Card>
+  );
+}
+
+export function AgencyTableCard({
+  title,
+  description,
+  actions,
+  children,
+  className,
+}: {
+  title?: string;
+  description?: string;
+  actions?: ReactNode;
+  children: ReactNode;
+  className?: string;
+}) {
+  return (
+    <Card
+      className={cn(
+        "overflow-hidden rounded-xl border-border/80 shadow-[var(--shadow-dashboard)]",
+        className,
+      )}
+    >
+      {title || description || actions ? (
+        <CardHeader className="flex flex-col gap-3 border-b border-border/70 bg-muted/20 sm:flex-row sm:items-center sm:justify-between">
+          <div className="min-w-0">
+            {title ? <CardTitle className="text-base">{title}</CardTitle> : null}
+            {description ? (
+              <p className="mt-1 text-sm text-muted-foreground">{description}</p>
+            ) : null}
+          </div>
+          {actions ? <div className="flex shrink-0 flex-wrap gap-2">{actions}</div> : null}
+        </CardHeader>
+      ) : null}
+      <CardContent className="overflow-x-auto p-0">{children}</CardContent>
+    </Card>
+  );
+}
+
+export function AgencyTable({ className, ...props }: React.ComponentProps<typeof Table>) {
+  return (
+    <Table
+      wrapperClassName="rounded-none"
+      className={cn("min-w-max whitespace-nowrap text-[11px] leading-4", className)}
+      {...props}
+    />
   );
 }
 

@@ -32,7 +32,9 @@ function PdfViewer({ blobUrl }: { blobUrl: string }) {
     if (!container) return
 
     let cancelled = false
-    container.innerHTML = ""
+    let destroyLoadingTask: (() => void) | null = null
+
+    container.replaceChildren()
     setRenderError(null)
 
     // Dynamic import keeps pdfjs-dist out of the initial bundle
@@ -42,7 +44,11 @@ function PdfViewer({ blobUrl }: { blobUrl: string }) {
         pdfjsLib.GlobalWorkerOptions.workerSrc =
           `https://unpkg.com/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.min.mjs`
 
-        const pdf = await pdfjsLib.getDocument(blobUrl).promise
+        const loadingTask = pdfjsLib.getDocument(blobUrl)
+        destroyLoadingTask = () => {
+          void loadingTask.destroy()
+        }
+        const pdf = await loadingTask.promise
         if (cancelled) return
 
         for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
@@ -50,17 +56,20 @@ function PdfViewer({ blobUrl }: { blobUrl: string }) {
 
           const page = await pdf.getPage(pageNum)
 
-          // Scale to fill the container width
-          const containerWidth = container.clientWidth - 32 // 16px padding each side
+          const containerWidth = Math.max(container.clientWidth, 320)
           const baseViewport = page.getViewport({ scale: 1 })
           const scale = containerWidth / baseViewport.width
           const viewport = page.getViewport({ scale })
+          const outputScale = Math.min(window.devicePixelRatio || 1, 3)
 
           const canvas = document.createElement("canvas")
-          canvas.width = viewport.width
-          canvas.height = viewport.height
-          canvas.style.cssText =
-            "width:100%;display:block;border-radius:6px;box-shadow:0 1px 4px rgba(0,0,0,0.12);"
+          canvas.width = Math.floor(viewport.width * outputScale)
+          canvas.height = Math.floor(viewport.height * outputScale)
+          canvas.style.width = `${Math.floor(viewport.width)}px`
+          canvas.style.height = `${Math.floor(viewport.height)}px`
+          canvas.style.maxWidth = "100%"
+          canvas.style.display = "block"
+          canvas.style.backgroundColor = "white"
 
           // Gap between pages
           if (pageNum > 1) {
@@ -71,7 +80,11 @@ function PdfViewer({ blobUrl }: { blobUrl: string }) {
 
           container.appendChild(canvas)
 
-          await page.render({ canvas, viewport }).promise
+          await page.render({
+            canvas,
+            viewport,
+            transform: outputScale === 1 ? undefined : [outputScale, 0, 0, outputScale, 0, 0],
+          }).promise
         }
       })
       .catch(() => {
@@ -80,7 +93,8 @@ function PdfViewer({ blobUrl }: { blobUrl: string }) {
 
     return () => {
       cancelled = true
-      if (container) container.innerHTML = ""
+      container.replaceChildren()
+      destroyLoadingTask?.()
     }
   }, [blobUrl])
 
@@ -96,7 +110,7 @@ function PdfViewer({ blobUrl }: { blobUrl: string }) {
     )
   }
 
-  return <div ref={containerRef} className="h-full overflow-y-auto p-4" />
+  return <div ref={containerRef} className="h-full w-full overflow-y-auto" />
 }
 
 interface DocumentPreviewDrawerProps {
