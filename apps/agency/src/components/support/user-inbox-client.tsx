@@ -414,7 +414,7 @@ export function UserInboxClient({
         )}
       >
         {viewMode === "new" ? (
-          <NewTicketPanel onBack={onBack} onNewTicket={onNewTicket} />
+          <NewTicketPanel onBack={onBack} />
         ) : viewMode === "ticket" && selectedTicket ? (
           <UserTicketDetail ticket={selectedTicket} onBack={onBack} />
         ) : viewMode === "ticket" && isSelectedTicketLoading ? (

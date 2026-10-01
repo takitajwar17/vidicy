@@ -7,12 +7,10 @@ import { Button } from "@/components/ui/button";
 
 interface NewTicketPanelProps {
   onBack: () => void;
-  onNewTicket: () => void;
 }
 
 export function NewTicketPanel({
   onBack,
-  onNewTicket: _onNewTicket,
 }: NewTicketPanelProps) {
   const router = useRouter();
 
