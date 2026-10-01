@@ -12,6 +12,8 @@ import {
 
 import { AgencyPageShell } from "@/components/agency/agency-page-shell";
 import {
+  AgencyTable,
+  AgencyTableCard,
   CaseStatusBadge,
   EmptyState,
   MetricCard,
@@ -21,7 +23,7 @@ import {
 } from "@/components/agency/agency-ui";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { AGENCY_CASE_STATUS } from "@/db/schema";
 import { getAgencyDashboardData } from "@/server/agency-data";
 import { getDisplayCaseNumber } from "@/lib/agency-workflow";
@@ -53,9 +55,7 @@ function getDailyMovement(cases: Awaited<ReturnType<typeof getAgencyDashboardDat
     ).length;
     const flagged = cases.filter(
       ({ application, highIssueCount }) =>
-        highIssueCount > 0 &&
-        application.createdAt >= date &&
-        application.createdAt < nextDate,
+        highIssueCount > 0 && application.createdAt >= date && application.createdAt < nextDate,
     ).length;
 
     return {
@@ -145,17 +145,23 @@ export default async function DashboardPage() {
                     <div key={day.label} className="flex h-full flex-col justify-end gap-1.5">
                       <div
                         className="rounded-t bg-primary/80"
-                        style={{ height: `${Math.max((day.submitted / day.max) * 100, day.submitted ? 10 : 0)}%` }}
+                        style={{
+                          height: `${Math.max((day.submitted / day.max) * 100, day.submitted ? 10 : 0)}%`,
+                        }}
                         title={`${day.submitted} submitted`}
                       />
                       <div
                         className="rounded-t bg-status-success/80"
-                        style={{ height: `${Math.max((day.completed / day.max) * 76, day.completed ? 8 : 0)}%` }}
+                        style={{
+                          height: `${Math.max((day.completed / day.max) * 76, day.completed ? 8 : 0)}%`,
+                        }}
                         title={`${day.completed} completed`}
                       />
                       <div
                         className="rounded-t bg-destructive/75"
-                        style={{ height: `${Math.max((day.flagged / day.max) * 52, day.flagged ? 6 : 0)}%` }}
+                        style={{
+                          height: `${Math.max((day.flagged / day.max) * 52, day.flagged ? 6 : 0)}%`,
+                        }}
                         title={`${day.flagged} flagged`}
                       />
                     </div>
@@ -167,9 +173,15 @@ export default async function DashboardPage() {
                   ))}
                 </div>
                 <div className="mt-4 flex flex-wrap gap-4 text-xs text-muted-foreground">
-                  <span className="inline-flex items-center gap-2"><span className="h-2 w-2 rounded-full bg-primary" /> Submitted</span>
-                  <span className="inline-flex items-center gap-2"><span className="h-2 w-2 rounded-full bg-status-success" /> Completed</span>
-                  <span className="inline-flex items-center gap-2"><span className="h-2 w-2 rounded-full bg-destructive" /> Flagged</span>
+                  <span className="inline-flex items-center gap-2">
+                    <span className="h-2 w-2 rounded-full bg-primary" /> Submitted
+                  </span>
+                  <span className="inline-flex items-center gap-2">
+                    <span className="h-2 w-2 rounded-full bg-status-success" /> Completed
+                  </span>
+                  <span className="inline-flex items-center gap-2">
+                    <span className="h-2 w-2 rounded-full bg-destructive" /> Flagged
+                  </span>
                 </div>
               </CardContent>
             </Card>
@@ -177,14 +189,20 @@ export default async function DashboardPage() {
             <Card className="rounded-xl shadow-[var(--shadow-dashboard)]">
               <CardHeader className="flex-row items-center justify-between gap-3">
                 <CardTitle className="text-base">Top Flagged Issues</CardTitle>
-                <Link href={"/dashboard/review" as Route} className="text-xs font-bold text-primary">
+                <Link
+                  href={"/dashboard/review" as Route}
+                  className="text-xs font-bold text-primary"
+                >
                   View all
                 </Link>
               </CardHeader>
               <CardContent className="space-y-4">
                 {data.topFlaggedIssues.length > 0 ? (
                   data.topFlaggedIssues.map((issue) => (
-                    <div key={issue.label} className="flex items-center justify-between gap-4 border-b border-border/70 pb-3 last:border-b-0 last:pb-0">
+                    <div
+                      key={issue.label}
+                      className="flex items-center justify-between gap-4 border-b border-border/70 pb-3 last:border-b-0 last:pb-0"
+                    >
                       <div className="min-w-0">
                         <p className="truncate text-sm font-bold">{issue.label}</p>
                         <p className="text-xs text-muted-foreground">{issue.high} high priority</p>
@@ -210,15 +228,20 @@ export default async function DashboardPage() {
               <CardContent className="space-y-3">
                 {data.workload.length > 0 ? (
                   data.workload.slice(0, 5).map((member) => (
-                    <div key={member.userId ?? member.id} className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 border-b border-border/70 pb-3 last:border-b-0 last:pb-0">
-                      <ReviewerAvatar name={member.displayName} email={member.user?.email ?? member.email} avatar={member.user?.avatar ?? null} />
+                    <div
+                      key={member.userId ?? member.id}
+                      className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 border-b border-border/70 pb-3 last:border-b-0 last:pb-0"
+                    >
+                      <ReviewerAvatar
+                        name={member.displayName}
+                        email={member.user?.email ?? member.email}
+                        avatar={member.user?.avatar ?? null}
+                      />
                       <div className="text-right">
                         <p className="text-sm font-bold">
                           {member.inReview === 0 ? "No active cases" : `${member.inReview} active`}
                         </p>
-                        <p className="text-xs text-muted-foreground">
-                          {member.completed} ready
-                        </p>
+                        <p className="text-xs text-muted-foreground">{member.completed} ready</p>
                       </div>
                     </div>
                   ))
@@ -229,54 +252,76 @@ export default async function DashboardPage() {
             </Card>
           </section>
 
-          <Card className="rounded-xl shadow-[var(--shadow-dashboard)]">
-            <CardHeader className="flex-row items-center justify-between gap-3">
-              <CardTitle className="text-base">Recent Applications</CardTitle>
-              <Link href={"/dashboard/applications" as Route} className="text-xs font-bold text-primary">
+          <AgencyTableCard
+            title="Recent applications"
+            description="Latest client cases moving through the review queue."
+            actions={
+              <Link
+                href={"/dashboard/applications" as Route}
+                className="text-xs font-bold text-primary"
+              >
                 View all applications
               </Link>
-            </CardHeader>
-            <CardContent className="overflow-x-auto">
-              <Table className="text-xs">
-                <TableHeader className="[&_th]:text-xs">
-                  <TableRow>
-                    <TableHead>Application</TableHead>
-                    <TableHead>Client</TableHead>
-                    <TableHead>Applicant</TableHead>
-                    <TableHead>Visa Type</TableHead>
-                    <TableHead>Submitted</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead>Risk</TableHead>
-                    <TableHead>Reviewer</TableHead>
+            }
+          >
+            <AgencyTable>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Application</TableHead>
+                  <TableHead>Client</TableHead>
+                  <TableHead>Applicant</TableHead>
+                  <TableHead>Visa Type</TableHead>
+                  <TableHead>Submitted</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead>Risk</TableHead>
+                  <TableHead>Reviewer</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {data.recentCases.map((row) => (
+                  <TableRow key={row.application.id}>
+                    <TableCell>
+                      <Link
+                        href={`/dashboard/${row.application.id}` as Route}
+                        className="font-bold text-primary"
+                      >
+                        {getDisplayCaseNumber(row.application.caseNumber, row.application.id)}
+                      </Link>
+                    </TableCell>
+                    <TableCell>{row.application.clientName ?? "Unassigned"}</TableCell>
+                    <TableCell>{row.primaryApplicant?.name ?? "Applicant pending"}</TableCell>
+                    <TableCell>
+                      {row.application.destinationCountry} {row.application.visaType}
+                    </TableCell>
+                    <TableCell>
+                      {formatShortDate(row.application.submittedAt ?? row.application.createdAt)}
+                    </TableCell>
+                    <TableCell>
+                      <CaseStatusBadge
+                        status={row.application.agencyStatus ?? AGENCY_CASE_STATUS.INTAKE}
+                      />
+                    </TableCell>
+                    <TableCell>
+                      <RiskBadge
+                        riskLevel={row.latestEvaluation?.riskLevel ?? row.application.riskLevel}
+                      />
+                    </TableCell>
+                    <TableCell>
+                      <ReviewerAvatar
+                        name={
+                          row.reviewer
+                            ? `${row.reviewer.firstName ?? ""} ${row.reviewer.lastName ?? ""}`.trim()
+                            : null
+                        }
+                        email={row.reviewer?.email ?? null}
+                        avatar={row.reviewer?.avatar ?? null}
+                      />
+                    </TableCell>
                   </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {data.recentCases.map((row) => (
-                    <TableRow key={row.application.id}>
-                      <TableCell>
-                        <Link href={`/dashboard/${row.application.id}` as Route} className="font-bold text-primary">
-                          {getDisplayCaseNumber(row.application.caseNumber, row.application.id)}
-                        </Link>
-                      </TableCell>
-                      <TableCell>{row.application.clientName ?? "Unassigned"}</TableCell>
-                      <TableCell>{row.primaryApplicant?.name ?? "Applicant pending"}</TableCell>
-                      <TableCell>{row.application.destinationCountry} {row.application.visaType}</TableCell>
-                      <TableCell>{formatShortDate(row.application.submittedAt ?? row.application.createdAt)}</TableCell>
-                      <TableCell><CaseStatusBadge status={row.application.agencyStatus ?? AGENCY_CASE_STATUS.INTAKE} /></TableCell>
-                      <TableCell><RiskBadge riskLevel={row.latestEvaluation?.riskLevel ?? row.application.riskLevel} /></TableCell>
-                      <TableCell>
-                        <ReviewerAvatar
-                          name={row.reviewer ? `${row.reviewer.firstName ?? ""} ${row.reviewer.lastName ?? ""}`.trim() : null}
-                          email={row.reviewer?.email ?? null}
-                          avatar={row.reviewer?.avatar ?? null}
-                        />
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </CardContent>
-          </Card>
+                ))}
+              </TableBody>
+            </AgencyTable>
+          </AgencyTableCard>
         </>
       )}
     </AgencyPageShell>

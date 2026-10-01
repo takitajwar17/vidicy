@@ -1,11 +1,20 @@
 import type { Metadata } from "next";
 
 import { AgencyPageShell } from "@/components/agency/agency-page-shell";
-import { ReviewerAvatar, formatShortDate } from "@/components/agency/agency-ui";
-import { AddStaffDialog, DisableStaffButton, StaffRoleSelect } from "@/components/agency/agency-team-actions";
+import {
+  AgencyTable,
+  AgencyTableCard,
+  ReviewerAvatar,
+  formatShortDate,
+} from "@/components/agency/agency-ui";
+import {
+  AddStaffDialog,
+  DisableStaffButton,
+  StaffRoleSelect,
+} from "@/components/agency/agency-team-actions";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { AGENCY_STAFF_ROLE } from "@/db/schema";
 import { cn } from "@/lib/utils";
 import { getActiveAgencyStaffRows, getAgencyTeamWorkloadRows } from "@/server/agency-data";
@@ -80,137 +89,127 @@ export default async function TeamPage() {
         </Card>
       </section>
 
-      <Card className="overflow-hidden rounded-xl border-border/80 shadow-[var(--shadow-dashboard)]">
-        <CardHeader className="flex flex-col gap-3 border-b border-border/70 bg-muted/20 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <CardTitle className="text-base">Reviewer workload</CardTitle>
-            <p className="mt-1 text-sm text-muted-foreground">
-              Live queue ownership across active cases, unresolved issues, and uploaded files.
-            </p>
-          </div>
-          <div className="flex flex-wrap gap-2">
+      <AgencyTableCard
+        title="Reviewer workload"
+        description="Live queue ownership across active cases, unresolved issues, and uploaded files."
+        actions={
+          <>
             <Badge variant="outline" className="rounded-full px-3 py-1 text-2xs font-bold">
               {memberCount} members
             </Badge>
             <Badge variant="outline" className="rounded-full px-3 py-1 text-2xs font-bold">
               {totalActiveCases} active cases
             </Badge>
-          </div>
-        </CardHeader>
-        <CardContent className="overflow-x-auto p-0">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead className="pl-5">Reviewer</TableHead>
-                <TableHead>Role</TableHead>
-                <TableHead className="text-right">Assigned</TableHead>
-                <TableHead className="text-right">Intake</TableHead>
-                <TableHead className="text-right">Needs Client</TableHead>
-                <TableHead className="text-right">Ready</TableHead>
-                <TableHead className="text-right">Open Issues</TableHead>
-                <TableHead className="text-right">High Issues</TableHead>
-                <TableHead className="text-right">Documents</TableHead>
-                <TableHead className="pr-5 text-right">Last Activity</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {workload.length > 0 ? (
-                workload.map((row) => (
-                  <TableRow key={row.rowId}>
-                    <TableCell className="pl-5">
-                      <ReviewerAvatar
-                        name={row.displayName}
-                        email={row.staff?.user?.email ?? row.staff?.email}
-                        avatar={row.staff?.user?.avatar ?? null}
-                        labelClassName="max-w-[180px]"
-                      />
-                    </TableCell>
-                    <TableCell>
-                      <Badge
-                        variant="outline"
-                        className={cn(
-                          "rounded-full px-2.5 py-1 text-2xs font-bold",
-                          row.staff?.role === AGENCY_STAFF_ROLE.ADMIN && "border-primary/25 bg-primary/[0.08] text-primary",
-                        )}
-                      >
-                        {formatRoleLabel(row.staff?.role)}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-right font-bold">{row.assignedCases}</TableCell>
-                    <TableCell className="text-right">{row.intakeCases}</TableCell>
-                    <TableCell className="text-right">{row.needsClientCases}</TableCell>
-                    <TableCell className="text-right">{row.readyCases}</TableCell>
-                    <TableCell className="text-right font-bold">{row.openIssues}</TableCell>
-                    <TableCell className="text-right">
-                      <span className={row.highIssues > 0 ? "font-bold text-destructive" : "text-muted-foreground"}>
-                        {row.highIssues}
-                      </span>
-                    </TableCell>
-                    <TableCell className="text-right">{row.documents}</TableCell>
-                    <TableCell className="pr-5 text-right">{formatShortDate(row.lastActivityAt)}</TableCell>
-                  </TableRow>
-                ))
-              ) : (
-                <TableRow>
-                  <TableCell colSpan={10} className="h-20 pl-5 text-muted-foreground">
-                    No active reviewers yet.
+          </>
+        }
+      >
+        <AgencyTable>
+          <TableHeader>
+            <TableRow>
+              <TableHead className="pl-5">Reviewer</TableHead>
+              <TableHead>Role</TableHead>
+              <TableHead className="text-right">Assigned</TableHead>
+              <TableHead className="text-right">Intake</TableHead>
+              <TableHead className="text-right">Needs Client</TableHead>
+              <TableHead className="text-right">Ready</TableHead>
+              <TableHead className="text-right">Open Issues</TableHead>
+              <TableHead className="pr-5 text-right">Last Activity</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {workload.length > 0 ? (
+              workload.map((row) => (
+                <TableRow key={row.rowId}>
+                  <TableCell className="pl-5">
+                    <ReviewerAvatar
+                      name={row.displayName}
+                      email={row.staff?.user?.email ?? row.staff?.email}
+                      avatar={row.staff?.user?.avatar ?? null}
+                      labelClassName="max-w-[180px]"
+                    />
+                  </TableCell>
+                  <TableCell>
+                    <Badge
+                      variant="outline"
+                      className={cn(
+                        "rounded-full px-2.5 py-1 text-2xs font-bold",
+                        row.staff?.role === AGENCY_STAFF_ROLE.ADMIN &&
+                          "border-primary/25 bg-primary/[0.08] text-primary",
+                      )}
+                    >
+                      {formatRoleLabel(row.staff?.role)}
+                    </Badge>
+                  </TableCell>
+                  <TableCell className="text-right font-bold">{row.assignedCases}</TableCell>
+                  <TableCell className="text-right">{row.intakeCases}</TableCell>
+                  <TableCell className="text-right">{row.needsClientCases}</TableCell>
+                  <TableCell className="text-right">{row.readyCases}</TableCell>
+                  <TableCell className="text-right font-bold">{row.openIssues}</TableCell>
+                  <TableCell className="pr-5 text-right">
+                    {formatShortDate(row.lastActivityAt)}
                   </TableCell>
                 </TableRow>
-              )}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
-
-      <Card className="overflow-hidden rounded-xl border-border/80 shadow-[var(--shadow-dashboard)]">
-        <CardHeader className="border-b border-border/70 bg-muted/20">
-          <CardTitle className="text-base">Staff directory</CardTitle>
-          <p className="text-sm text-muted-foreground">Role and access controls for the active agency team.</p>
-        </CardHeader>
-        <CardContent className="overflow-x-auto p-0">
-          <Table>
-            <TableHeader>
+              ))
+            ) : (
               <TableRow>
-                <TableHead className="pl-5">Staff member</TableHead>
-                <TableHead>Email</TableHead>
-                <TableHead>Role</TableHead>
-                <TableHead>Joined</TableHead>
-                <TableHead className="pr-5 text-right">Access</TableHead>
+                <TableCell colSpan={8} className="h-20 pl-5 text-muted-foreground">
+                  No active reviewers yet.
+                </TableCell>
               </TableRow>
-            </TableHeader>
-            <TableBody>
-              {staff.map((member) => {
-                const displayName =
-                  `${member.user?.firstName ?? ""} ${member.user?.lastName ?? ""}`.trim() ||
-                  member.user?.email ||
-                  member.email ||
-                  "Staff member";
-                const isSelf = member.userId === session.userId;
-                return (
-                  <TableRow key={member.id}>
-                    <TableCell className="pl-5">
-                      <ReviewerAvatar
-                        name={displayName}
-                        email={member.user?.email ?? member.email}
-                        avatar={member.user?.avatar ?? null}
-                      />
-                    </TableCell>
-                    <TableCell>{member.user?.email ?? member.email ?? "—"}</TableCell>
-                    <TableCell className="w-[180px]">
-                      <StaffRoleSelect staffMemberId={member.id} role={member.role} disabled={!isAdmin || isSelf} />
-                    </TableCell>
-                    <TableCell>{formatShortDate(member.joinedAt ?? member.invitedAt)}</TableCell>
-                    <TableCell className="pr-5 text-right">
-                      <DisableStaffButton staffMemberId={member.id} disabled={!isAdmin || isSelf} />
-                    </TableCell>
-                  </TableRow>
-                );
-              })}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
+            )}
+          </TableBody>
+        </AgencyTable>
+      </AgencyTableCard>
 
+      <AgencyTableCard
+        title="Staff directory"
+        description="Role and access controls for the active agency team."
+      >
+        <AgencyTable>
+          <TableHeader>
+            <TableRow>
+              <TableHead className="pl-5">Staff member</TableHead>
+              <TableHead>Email</TableHead>
+              <TableHead>Role</TableHead>
+              <TableHead>Joined</TableHead>
+              <TableHead className="pr-5 text-right">Access</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {staff.map((member) => {
+              const displayName =
+                `${member.user?.firstName ?? ""} ${member.user?.lastName ?? ""}`.trim() ||
+                member.user?.email ||
+                member.email ||
+                "Staff member";
+              const isSelf = member.userId === session.userId;
+              return (
+                <TableRow key={member.id}>
+                  <TableCell className="pl-5">
+                    <ReviewerAvatar
+                      name={displayName}
+                      email={member.user?.email ?? member.email}
+                      avatar={member.user?.avatar ?? null}
+                    />
+                  </TableCell>
+                  <TableCell>{member.user?.email ?? member.email ?? "—"}</TableCell>
+                  <TableCell className="w-[180px]">
+                    <StaffRoleSelect
+                      staffMemberId={member.id}
+                      role={member.role}
+                      disabled={!isAdmin || isSelf}
+                    />
+                  </TableCell>
+                  <TableCell>{formatShortDate(member.joinedAt ?? member.invitedAt)}</TableCell>
+                  <TableCell className="pr-5 text-right">
+                    <DisableStaffButton staffMemberId={member.id} disabled={!isAdmin || isSelf} />
+                  </TableCell>
+                </TableRow>
+              );
+            })}
+          </TableBody>
+        </AgencyTable>
+      </AgencyTableCard>
     </AgencyPageShell>
   );
 }

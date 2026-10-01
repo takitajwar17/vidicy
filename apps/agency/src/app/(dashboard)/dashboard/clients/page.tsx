@@ -3,10 +3,14 @@ import Link from "next/link";
 import type { Route } from "next";
 
 import { AgencyPageShell } from "@/components/agency/agency-page-shell";
-import { EmptyState, formatShortDate } from "@/components/agency/agency-ui";
+import {
+  AgencyTable,
+  AgencyTableCard,
+  EmptyState,
+  formatShortDate,
+} from "@/components/agency/agency-ui";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { getAgencyClientsWithCounts } from "@/server/agency-data";
 
 export const metadata: Metadata = {
@@ -39,36 +43,37 @@ export default async function ClientsPage() {
         />
       ) : (
         <>
-          <Card className="rounded-xl shadow-[var(--shadow-dashboard)]">
-            <CardContent className="overflow-x-auto p-0">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="pl-5">Client</TableHead>
-                    <TableHead>Email</TableHead>
-                    <TableHead>Phone</TableHead>
-                    <TableHead>Country</TableHead>
-                    <TableHead>Open Cases</TableHead>
-                    <TableHead>Total Cases</TableHead>
-                    <TableHead className="pr-5">Last Activity</TableHead>
+          <AgencyTableCard
+            title="Client directory"
+            description="Agency clients with current case volume and recent activity."
+          >
+            <AgencyTable>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="pl-5">Client</TableHead>
+                  <TableHead>Email</TableHead>
+                  <TableHead>Phone</TableHead>
+                  <TableHead>Country</TableHead>
+                  <TableHead>Open Cases</TableHead>
+                  <TableHead>Total Cases</TableHead>
+                  <TableHead className="pr-5">Last Activity</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {rows.map(({ client, caseCount, openCaseCount, lastCaseAt }) => (
+                  <TableRow key={client.id}>
+                    <TableCell className="pl-5 font-bold">{client.name}</TableCell>
+                    <TableCell>{client.email ?? "—"}</TableCell>
+                    <TableCell>{client.phone ?? "—"}</TableCell>
+                    <TableCell>{client.country ?? "—"}</TableCell>
+                    <TableCell className="font-bold">{openCaseCount}</TableCell>
+                    <TableCell>{caseCount}</TableCell>
+                    <TableCell className="pr-5">{formatShortDate(lastCaseAt)}</TableCell>
                   </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {rows.map(({ client, caseCount, openCaseCount, lastCaseAt }) => (
-                    <TableRow key={client.id}>
-                      <TableCell className="pl-5 font-bold">{client.name}</TableCell>
-                      <TableCell>{client.email ?? "—"}</TableCell>
-                      <TableCell>{client.phone ?? "—"}</TableCell>
-                      <TableCell>{client.country ?? "—"}</TableCell>
-                      <TableCell className="font-bold">{openCaseCount}</TableCell>
-                      <TableCell>{caseCount}</TableCell>
-                      <TableCell className="pr-5">{formatShortDate(lastCaseAt)}</TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </CardContent>
-          </Card>
+                ))}
+              </TableBody>
+            </AgencyTable>
+          </AgencyTableCard>
         </>
       )}
     </AgencyPageShell>
