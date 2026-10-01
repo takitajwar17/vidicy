@@ -27,14 +27,14 @@ function toIsoDate(value: string | Date | null | undefined): string | undefined 
 describe("marketing SEO surfaces", () => {
   it("keeps the homepage title plain so the root template adds branding once", () => {
     expect(typeof homepageMetadata.title).toBe("string");
-    expect(homepageMetadata.title).toBe("AI Visa Review Software for High-Volume Agency Teams");
+    expect(homepageMetadata.title).toBe("Visa Review Software for High-Volume Agency Teams");
     expect(String(homepageMetadata.title)).not.toContain("Vidicy - Vidicy");
   });
 
   it("uses agency homepage metadata", () => {
     expect(typeof homepageMetadata.description).toBe("string");
     expect(homepageMetadata.description).toBe(
-      "Review client visa files faster with AI document checks, missing requirement detection, case tracking, and client-ready follow-ups for agency teams.",
+      "Review client visa files faster with document checks, missing requirement detection, case tracking, and client-ready follow-ups for agency teams.",
     );
   });
 

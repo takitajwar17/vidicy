@@ -39,7 +39,6 @@ const nextConfig: NextConfig = {
     optimizePackageImports: [
       "@heroui/react",
       "lucide-react",
-      "recharts",
       "motion/react",
       "date-fns",
       "remeda",
@@ -47,8 +46,6 @@ const nextConfig: NextConfig = {
       "@react-email/render",
       "zod",
       "@tanstack/react-table",
-      "@dnd-kit/core",
-      "@dnd-kit/sortable",
     ],
   },
   async redirects() {

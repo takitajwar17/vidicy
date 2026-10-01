@@ -112,7 +112,7 @@ describe("sidebar navigation guards", () => {
     expectOrderedTitles(contentSection, [
       "Dashboard",
       "Applications",
-      "AI Review",
+      "Issues",
       "Clients",
       "Documents",
       "Team",

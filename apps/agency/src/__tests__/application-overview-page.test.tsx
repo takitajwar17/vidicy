@@ -48,7 +48,7 @@ vi.mock("@/components/visa/document-upload", () => ({
 }));
 
 vi.mock("@/components/visa/evaluation-trigger", () => ({
-  EvaluationTrigger: () => <button>Run AI Review</button>,
+  EvaluationTrigger: () => <button>Run Review</button>,
 }));
 
 vi.mock("@/components/visa/document-preview-drawer", () => ({
@@ -301,9 +301,9 @@ describe("agency application pages", () => {
   it("renders the dashboard root as an agency operations dashboard", async () => {
     const markup = renderToStaticMarkup(await DashboardPage());
 
-    expect(markup).toContain("Overview of the agency review pipeline");
+    expect(markup).toContain("Agency review pipeline at a glance.");
     expect(markup).toContain("Application Throughput");
-    expect(markup).toContain("Recent Client Activity");
+    expect(markup).toContain("Recent applications");
     expect(markup).toContain("VA-2026-ABC123");
     expect(markup).not.toContain("Start Your First Application");
   });
@@ -316,10 +316,10 @@ describe("agency application pages", () => {
     const markup = renderToStaticMarkup(page);
 
     expect(markup).toContain("Application #VA-2026-ABC123");
-    expect(markup).toContain("AI Analysis");
+    expect(markup).toContain("Review");
     expect(markup).toContain("Overall review score");
     expect(markup).toContain("Client-ready issue summary");
-    expect(markup).toContain("AI-detected issues");
+    expect(markup).toContain("Review issues");
     expect(markup).toContain("Bank statement needs review");
     expect(markup).not.toContain("Atlas");
     expect(markup).not.toContain("Checkout");
