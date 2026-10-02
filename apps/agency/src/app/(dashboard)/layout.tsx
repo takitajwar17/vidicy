@@ -7,6 +7,7 @@ import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
 import { getCsrfToken } from "@/infra/csrf";
 import { CsrfProvider } from "@/components/csrf-provider";
 import { ensureAgencyTeamMembership } from "@/server/agency-team";
+import { AuthenticatedAppProviders } from "@/components/providers/authenticated-app-providers";
 
 export const metadata: Metadata = {
   robots: {
@@ -25,10 +26,12 @@ export default async function DashboardLayout({ children }: { children: React.Re
 
   return (
     <CsrfProvider token={csrfToken}>
-      <SidebarProvider>
-        <SiteSidebar />
-        <SidebarInset>{children}</SidebarInset>
-      </SidebarProvider>
+      <AuthenticatedAppProviders session={session}>
+        <SidebarProvider>
+          <SiteSidebar />
+          <SidebarInset>{children}</SidebarInset>
+        </SidebarProvider>
+      </AuthenticatedAppProviders>
     </CsrfProvider>
   );
 }

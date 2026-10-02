@@ -1,12 +1,7 @@
 "use client"
 
 import { ThemeProvider as NextThemesProvider } from "next-themes"
-import { HeroUIProvider } from "@heroui/react"
-import { Suspense } from "react"
 import type { ComponentProps, ComponentType, ReactNode } from "react"
-import { EmailVerificationDialog } from "./email-verification-dialog"
-import { RouteProgressProvider } from "./providers/route-progress-provider"
-import { SessionRefreshProvider } from "./providers/session-refresh-provider"
 
 type NextThemesProviderProps = Omit<ComponentProps<typeof NextThemesProvider>, "children"> & {
   children: ReactNode
@@ -19,15 +14,8 @@ export function ThemeProvider({
   ...props
 }: NextThemesProviderProps) {
   return (
-    <HeroUIProvider>
-      <SessionRefreshProvider />
-      <Suspense>
-        <RouteProgressProvider />
-      </Suspense>
-      <TypedNextThemesProvider {...props} attribute="class">
-        {children}
-        <EmailVerificationDialog />
-      </TypedNextThemesProvider>
-    </HeroUIProvider>
+    <TypedNextThemesProvider {...props} attribute="class">
+      {children}
+    </TypedNextThemesProvider>
   )
 }

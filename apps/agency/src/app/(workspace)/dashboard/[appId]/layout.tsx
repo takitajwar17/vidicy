@@ -7,6 +7,7 @@ import { requireVerifiedPageSession } from "@/utils/auth-page"
 import { getCsrfToken } from "@/infra/csrf"
 import { CsrfProvider } from "@/components/csrf-provider"
 import { ensureAgencyTeamMembership } from "@/server/agency-team"
+import { AuthenticatedAppProviders } from "@/components/providers/authenticated-app-providers"
 
 export const metadata: Metadata = {
   robots: {
@@ -36,12 +37,14 @@ export default async function WorkspaceLayout({
 
   return (
     <CsrfProvider token={csrfToken}>
-      <SidebarProvider>
-        <SiteSidebar />
-        <SidebarInset>
-          {children}
-        </SidebarInset>
-      </SidebarProvider>
+      <AuthenticatedAppProviders session={session}>
+        <SidebarProvider>
+          <SiteSidebar />
+          <SidebarInset>
+            {children}
+          </SidebarInset>
+        </SidebarProvider>
+      </AuthenticatedAppProviders>
     </CsrfProvider>
   )
 }

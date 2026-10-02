@@ -7,7 +7,15 @@ import { useConfigStore } from "@/state/config"
 import { useSessionStore } from "@/state/session"
 import type { SessionValidationResult } from "@/types"
 
-export function SessionRefreshProvider() {
+interface SessionRefreshProviderProps {
+  initialConfig?: Awaited<ReturnType<typeof getConfig>> | null
+  initialSession?: SessionValidationResult
+}
+
+export function SessionRefreshProvider({
+  initialConfig = null,
+  initialSession = null,
+}: SessionRefreshProviderProps) {
   const setSession = useSessionStore((store) => store.setSession)
   const setConfig = useConfigStore((store) => store.setConfig)
   const refetchSession = useSessionStore((store) => store.refetchSession)
@@ -48,8 +56,16 @@ export function SessionRefreshProvider() {
   )
 
   useEffect(() => {
-    fetchSession()
-  }, [fetchSession])
+    if (initialConfig) {
+      setConfig(initialConfig)
+    }
+
+    if (initialSession) {
+      setSession(initialSession)
+    } else {
+      clearSession()
+    }
+  }, [clearSession, initialConfig, initialSession, setConfig, setSession])
 
   useEffect(() => {
     function handleVisibilityChange() {

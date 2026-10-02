@@ -5,6 +5,7 @@ import { requirePageSession } from "@/utils/auth-page";
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
 import { getCsrfToken } from "@/infra/csrf";
 import { CsrfProvider } from "@/components/csrf-provider";
+import { AuthenticatedAppProviders } from "@/components/providers/authenticated-app-providers";
 
 export const metadata: Metadata = {
   robots: {
@@ -14,14 +15,16 @@ export const metadata: Metadata = {
 };
 
 export default async function SupportLayout({ children }: { children: React.ReactNode }) {
-  const [, csrfToken] = await Promise.all([requirePageSession(), getCsrfToken()]);
+  const [session, csrfToken] = await Promise.all([requirePageSession(), getCsrfToken()]);
 
   return (
     <CsrfProvider token={csrfToken}>
-      <SidebarProvider>
-        <SiteSidebar />
-        <SidebarInset>{children}</SidebarInset>
-      </SidebarProvider>
+      <AuthenticatedAppProviders session={session}>
+        <SidebarProvider>
+          <SiteSidebar />
+          <SidebarInset>{children}</SidebarInset>
+        </SidebarProvider>
+      </AuthenticatedAppProviders>
     </CsrfProvider>
   );
 }
