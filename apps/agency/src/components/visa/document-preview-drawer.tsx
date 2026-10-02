@@ -12,6 +12,7 @@ import {
   SheetDescription,
   SheetFooter,
 } from "@/components/ui/sheet"
+import { configurePdfJsWorker } from "@/lib/pdfjs-worker"
 
 function formatBytes(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`
@@ -40,9 +41,7 @@ function PdfViewer({ blobUrl }: { blobUrl: string }) {
     // Dynamic import keeps pdfjs-dist out of the initial bundle
     import("pdfjs-dist")
       .then(async (pdfjsLib) => {
-        // Worker must match the installed pdfjs-dist version exactly
-        pdfjsLib.GlobalWorkerOptions.workerSrc =
-          `https://unpkg.com/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.min.mjs`
+        configurePdfJsWorker(pdfjsLib)
 
         const loadingTask = pdfjsLib.getDocument(blobUrl)
         destroyLoadingTask = () => {
@@ -282,7 +281,7 @@ export function DocumentPreviewDrawer({
             )}
             {isImage && (
               <div className="w-full h-full flex items-center justify-center p-6 overflow-auto">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
+                {/* eslint-disable-next-line @next/next/no-img-element -- Authenticated document previews are served from an API route and should not be optimized/cached. */}
                 <img
                   src={`/api/document-preview/${documentId}`}
                   alt={fileName}
