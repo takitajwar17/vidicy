@@ -19,6 +19,7 @@ import { DocumentUpload } from "@/components/visa/document-upload";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
+import { configurePdfJsWorker } from "@/lib/pdfjs-worker";
 import { cn } from "@/lib/utils";
 
 const UPLOADED_CHECKLIST_STATUSES = new Set(["uploaded", "approved"]);
@@ -112,8 +113,7 @@ function PdfCanvasPreview({ blobUrl }: { blobUrl: string }) {
 
     import("pdfjs-dist")
       .then(async (pdfjsLib) => {
-        pdfjsLib.GlobalWorkerOptions.workerSrc =
-          `https://unpkg.com/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.min.mjs`;
+        configurePdfJsWorker(pdfjsLib);
 
         const loadingTask = pdfjsLib.getDocument(blobUrl);
         destroyLoadingTask = () => {
@@ -208,8 +208,7 @@ function PdfThumbnail({ documentId, fileName }: { documentId: string; fileName: 
       })
       .then(async (buffer) => {
         const pdfjsLib = await import("pdfjs-dist");
-        pdfjsLib.GlobalWorkerOptions.workerSrc =
-          `https://unpkg.com/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.min.mjs`;
+        configurePdfJsWorker(pdfjsLib);
 
         const loadingTask = pdfjsLib.getDocument({ data: new Uint8Array(buffer) });
         destroyLoadingTask = () => {
@@ -490,7 +489,7 @@ export function AgencyCaseDocumentDesk({
         >
           {activeDocument ? (
             activeDocument.mimeType.startsWith("image/") ? (
-              // eslint-disable-next-line @next/next/no-img-element
+              // eslint-disable-next-line @next/next/no-img-element -- Authenticated document previews are served from an API route and should not be optimized/cached.
               <img
                 src={`/api/document-preview/${activeDocument.id}`}
                 alt={activeDocument.fileName}
@@ -555,7 +554,7 @@ export function AgencyCaseDocumentDesk({
                   )}
                 >
                   {document.mimeType.startsWith("image/") ? (
-                    // eslint-disable-next-line @next/next/no-img-element
+                    // eslint-disable-next-line @next/next/no-img-element -- Authenticated document thumbnails are served from an API route and should not be optimized/cached.
                     <img src={`/api/document-preview/${document.id}`} alt="" className="h-14 w-full rounded object-cover" />
                   ) : isPdfDocument(document) ? (
                     <PdfThumbnail documentId={document.id} fileName={document.fileName} />

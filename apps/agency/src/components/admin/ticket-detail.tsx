@@ -471,7 +471,7 @@ export function TicketDetail({ ticket, onBack }: TicketDetailProps) {
             {screenshots.map((s, i) => (
               <div key={s.fileKey} className="relative group shrink-0">
                 <div className="w-14 h-14 rounded-md overflow-hidden border bg-muted">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  {/* eslint-disable-next-line @next/next/no-img-element -- Local blob previews are not compatible with next/image optimization. */}
                   <img src={s.previewUrl} alt={s.name} className="w-full h-full object-cover opacity-70 group-hover:opacity-100 transition-opacity" />
                 </div>
                 <button

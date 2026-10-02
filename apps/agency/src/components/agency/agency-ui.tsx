@@ -131,7 +131,7 @@ export function ReviewerAvatar({
   return (
     <span className={cn("inline-flex items-center gap-2", className)}>
       {avatar ? (
-        // eslint-disable-next-line @next/next/no-img-element
+        // eslint-disable-next-line @next/next/no-img-element -- Reviewer avatars can come from external identity providers not covered by the image allowlist.
         <img
           src={avatar}
           alt=""

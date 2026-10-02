@@ -225,7 +225,7 @@ export function SubmitTicketForm({ onSuccess }: SubmitTicketFormProps = {}) {
           <div className="flex flex-wrap gap-2">
             {screenshots.map((s, i) => (
               <div key={s.fileKey} className="relative group rounded-md overflow-hidden border w-24 h-24 shrink-0">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
+                {/* eslint-disable-next-line @next/next/no-img-element -- Local blob previews are not compatible with next/image optimization. */}
                 <img src={s.previewUrl} alt={s.name} className="w-full h-full object-cover" />
                 <button
                   type="button"

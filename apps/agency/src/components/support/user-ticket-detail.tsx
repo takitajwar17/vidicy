@@ -57,7 +57,7 @@ function ScreenshotThumbnails({ urls }: { urls: string[] | null | undefined }) {
           rel="noopener noreferrer"
           className="block aspect-square rounded-md overflow-hidden border border-border/50 bg-muted/20 hover:opacity-80 transition-opacity"
         >
-          {/* eslint-disable-next-line @next/next/no-img-element */}
+          {/* eslint-disable-next-line @next/next/no-img-element -- Authenticated support screenshots are served from an API route and should not be optimized/cached. */}
           <img
             src={`/api/support-screenshot?key=${encodeURIComponent(key)}`}
             alt={`Attachment ${i + 1}`}
@@ -342,7 +342,7 @@ export function UserTicketDetail({ ticket, onBack, backHref }: UserTicketDetailP
                 {screenshots.map((s, i) => (
                   <div key={s.fileKey} className="relative group shrink-0">
                     <div className="w-12 h-12 rounded-md overflow-hidden border bg-muted">
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      {/* eslint-disable-next-line @next/next/no-img-element -- Local blob previews are not compatible with next/image optimization. */}
                       <img src={s.previewUrl} alt={s.name} className="w-full h-full object-cover" />
                     </div>
                     <button
