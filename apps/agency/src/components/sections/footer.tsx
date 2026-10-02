@@ -2,6 +2,7 @@ import Logo from "@/components/logo";
 import { siteConfig } from "@/lib/config";
 import { cn } from "@/lib/utils";
 import Link from "next/link";
+import Image from "next/image";
 import type { Route } from "next";
 import { FaXTwitter } from "react-icons/fa6";
 import type { ComponentType } from "react";
@@ -18,16 +19,22 @@ interface ComplianceBadge {
   iconAlt: string;
   href?: string;
   imageClassName?: string;
+  width?: number;
+  height?: number;
 }
 
 const complianceBadges: readonly ComplianceBadge[] = [
   {
     iconSrc: "/regulations/gdpr.1dd801e6.svg",
     iconAlt: "GDPR regulation mark",
+    width: 92,
+    height: 44,
   },
   {
     iconSrc: "/regulations/ccpa.f8f08126.svg",
     iconAlt: "CCPA regulation mark",
+    width: 92,
+    height: 44,
   },
 ];
 
@@ -89,23 +96,29 @@ export default function Footer({ className }: { className?: string }) {
                   const imageClassName = item.imageClassName ?? "h-11 w-auto shrink-0";
                   const badgeImage = item.darkIconSrc ? (
                     <>
-                      <img
+                      <Image
                         src={item.iconSrc}
                         alt={item.iconAlt}
+                        width={item.width ?? 92}
+                        height={item.height ?? 44}
                         className={cn(imageClassName, "dark:hidden")}
                         loading="lazy"
                       />
-                      <img
+                      <Image
                         src={item.darkIconSrc}
                         alt={item.iconAlt}
+                        width={item.width ?? 92}
+                        height={item.height ?? 44}
                         className={cn(imageClassName, "hidden dark:block")}
                         loading="lazy"
                       />
                     </>
                   ) : (
-                    <img
+                    <Image
                       src={item.iconSrc}
                       alt={item.iconAlt}
+                      width={item.width ?? 92}
+                      height={item.height ?? 44}
                       className={imageClassName}
                       loading="lazy"
                     />
