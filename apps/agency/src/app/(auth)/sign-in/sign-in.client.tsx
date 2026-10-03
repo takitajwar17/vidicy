@@ -2,8 +2,7 @@
 
 import { signInAction } from "./sign-in.action";
 import { type SignInSchema, signInSchema } from "@/schemas/signin.schema";
-import { useState, useMemo } from "react";
-import { useSearchParams } from "next/navigation";
+import { useState } from "react";
 import type { Route } from "next";
 
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
@@ -24,14 +23,13 @@ import { useCsrfToken } from "@/components/csrf-provider";
 import { getAuthRouteHref } from "@/utils/auth-redirect";
 
 interface SignInClientProps {
+  email: string;
   redirectPath: string;
   isGoogleSSOEnabled: boolean;
 }
 
-const SignInPage = ({ redirectPath, isGoogleSSOEnabled }: SignInClientProps) => {
+const SignInPage = ({ email, redirectPath, isGoogleSSOEnabled }: SignInClientProps) => {
   const csrfToken = useCsrfToken();
-  const searchParams = useSearchParams();
-  const emailParam = searchParams.get("email") ?? "";
   const [showPassword, setShowPassword] = useState(false);
   const { execute: signIn, isPending: isSigningIn } = useServerAction(signInAction, {
     onError: (error) => {
@@ -49,7 +47,7 @@ const SignInPage = ({ redirectPath, isGoogleSSOEnabled }: SignInClientProps) => 
   })
   const form = useForm<SignInSchema>({
     resolver: zodResolver(signInSchema),
-    defaultValues: useMemo(() => ({ email: emailParam }), [emailParam]),
+    defaultValues: { email },
   });
 
   const onSubmit = async (data: SignInSchema) => {

@@ -32,27 +32,29 @@ import {
   EyeOffIcon,
 } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
-import { useConfigStore } from "@/state/config";
 import { REDIRECT_AFTER_SIGN_IN } from "@/constants";
 import { useCsrfToken } from "@/components/csrf-provider";
-import { useSearchParams } from "next/navigation";
 import { getAuthRouteHref, getPostAuthRedirectPath } from "@/utils/auth-redirect";
 import {
   type EmailSignupStep,
 } from "./progressive-signup";
 
 interface SignUpClientProps {
+  email: string;
   redirectPath: string;
   isGoogleSSOEnabled: boolean;
+  isTurnstileEnabled: boolean;
 }
 
-const SignUpPage = ({ redirectPath, isGoogleSSOEnabled }: SignUpClientProps) => {
+const SignUpPage = ({
+  email,
+  redirectPath,
+  isGoogleSSOEnabled,
+  isTurnstileEnabled,
+}: SignUpClientProps) => {
   const csrfToken = useCsrfToken();
-  const searchParams = useSearchParams();
-  const emailParam = searchParams.get("email");
-  const isTurnstileEnabled = useConfigStore((state) => state.isTurnstileEnabled);
   const [emailSignupStep, setEmailSignupStep] = useState<EmailSignupStep>(
-    emailParam ? "details" : "choice",
+    email ? "details" : "choice",
   );
   const [showPassword, setShowPassword] = useState(false);
 
@@ -101,7 +103,7 @@ const SignUpPage = ({ redirectPath, isGoogleSSOEnabled }: SignUpClientProps) => 
         .extend({ fullName: signUpSchema.shape.firstName }),
     ),
     defaultValues: {
-      email: emailParam || "",
+      email,
       fullName: "",
       password: "",
       captchaToken: "",
@@ -309,7 +311,10 @@ const SignUpPage = ({ redirectPath, isGoogleSSOEnabled }: SignUpClientProps) => 
                   render={() => (
                     <FormItem className="flex flex-col items-center">
                       <FormControl>
-                        <Captcha onSuccess={(token: string) => form.setValue("captchaToken", token)} />
+                        <Captcha
+                          enabled={isTurnstileEnabled}
+                          onSuccess={(token: string) => form.setValue("captchaToken", token)}
+                        />
                       </FormControl>
                       <FormMessage />
                     </FormItem>

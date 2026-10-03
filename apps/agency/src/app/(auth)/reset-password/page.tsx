@@ -32,5 +32,5 @@ export default async function ResetPasswordPage({
     return notFound();
   }
 
-  return <ResetPasswordClientComponent />;
+  return <ResetPasswordClientComponent token={token} />;
 }

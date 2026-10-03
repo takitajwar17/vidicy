@@ -8,7 +8,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { resetPasswordAction } from "./reset-password.action";
 import { useServerAction } from "zsa-react";
 import { toast } from "sonner";
@@ -20,16 +20,14 @@ import { resetPasswordSchema } from "@/schemas/reset-password.schema";
 import type { ResetPasswordSchema } from "@/schemas/reset-password.schema";
 import { useCsrfToken } from "@/components/csrf-provider";
 
-export default function ResetPasswordClientComponent() {
+export default function ResetPasswordClientComponent({ token }: { token: string }) {
   const router = useRouter();
-  const searchParams = useSearchParams();
-  const token = searchParams.get("token");
   const csrfToken = useCsrfToken();
 
   const form = useForm<ResetPasswordSchema>({
     resolver: zodResolver(resetPasswordSchema),
     defaultValues: {
-      token: token || "",
+      token,
       password: "",
       confirmPassword: "",
     },

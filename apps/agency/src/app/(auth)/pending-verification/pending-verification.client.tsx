@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useServerAction } from "zsa-react";
 import { toast } from "sonner";
-import { Alert } from "@heroui/react";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { AuthDivider } from "@/components/auth-divider";
 import { Spinner } from "@/components/ui/spinner";
@@ -82,11 +82,10 @@ export default function PendingVerificationClient({
       </div>
 
       {!isProd && (
-        <Alert
-          color="warning"
-          title="Development mode"
-          description="You can find the verification link in the console."
-        />
+        <Alert variant="warning">
+          <AlertTitle>Development mode</AlertTitle>
+          <AlertDescription>You can find the verification link in the console.</AlertDescription>
+        </Alert>
       )}
 
       <div className="space-y-3">

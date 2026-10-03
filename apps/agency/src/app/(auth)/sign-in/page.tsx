@@ -14,9 +14,9 @@ export const metadata: Metadata = {
 const SignInPage = async ({
   searchParams,
 }: {
-  searchParams: Promise<{ redirect?: string }>;
+  searchParams: Promise<{ email?: string; redirect?: string }>;
 }) => {
-  const { redirect: redirectParam } = await searchParams;
+  const { email, redirect: redirectParam } = await searchParams;
   const [session, config] = await Promise.all([
     getSessionFromCookie(),
     getConfig(),
@@ -32,6 +32,7 @@ const SignInPage = async ({
 
   return (
     <SignInClientPage
+      email={email ?? ""}
       redirectPath={redirectPath}
       isGoogleSSOEnabled={config.isGoogleSSOEnabled}
     />

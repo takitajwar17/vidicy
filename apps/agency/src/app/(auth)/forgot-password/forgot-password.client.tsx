@@ -17,18 +17,22 @@ import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { z } from "zod";
-import { useSessionStore } from "@/state/session";
 import { Captcha } from "@/components/captcha";
 import { forgotPasswordSchema } from "@/schemas/forgot-password.schema";
-import { useConfigStore } from "@/state/config";
 import { useEffect } from "react";
 import { useCsrfToken } from "@/components/csrf-provider";
 
 type ForgotPasswordSchema = z.infer<typeof forgotPasswordSchema>;
 
-export default function ForgotPasswordClientComponent() {
-  const session = useSessionStore((state) => state.session)
-  const isTurnstileEnabled = useConfigStore((state) => state.isTurnstileEnabled)
+interface ForgotPasswordClientProps {
+  email: string;
+  isTurnstileEnabled: boolean;
+}
+
+export default function ForgotPasswordClientComponent({
+  email,
+  isTurnstileEnabled,
+}: ForgotPasswordClientProps) {
   const router = useRouter();
   const csrfToken = useCsrfToken();
 
@@ -37,10 +41,10 @@ export default function ForgotPasswordClientComponent() {
   });
 
   useEffect(() => {
-    if (session?.user?.email) {
-      form.setValue('email', session?.user?.email);
+    if (email) {
+      form.setValue('email', email);
     }
-  }, [form,session?.user?.email]);
+  }, [email, form]);
 
   const captchaToken = useWatch({ control: form.control, name: 'captchaToken' })
 
@@ -61,7 +65,7 @@ export default function ForgotPasswordClientComponent() {
   const onSubmit = async (data: ForgotPasswordSchema) => {
     sendResetLink({
       ...data,
-      email: data.email ?? session?.user?.email,
+      email: data.email ?? email,
       csrfToken
     });
   };
@@ -95,7 +99,7 @@ export default function ForgotPasswordClientComponent() {
       <Card className="w-full max-w-md">
         <CardHeader>
           <CardTitle>
-            {session ? "Change Password" : "Forgot Password"}
+            {email ? "Change Password" : "Forgot Password"}
           </CardTitle>
           <CardDescription>
             Enter your email address and we&apos;ll send you instructions to reset your password.
@@ -107,8 +111,8 @@ export default function ForgotPasswordClientComponent() {
               <FormField
                 control={form.control}
                 name="email"
-                disabled={Boolean(session?.user?.email)}
-                defaultValue={session?.user?.email || undefined}
+                disabled={Boolean(email)}
+                defaultValue={email || undefined}
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel className="text-sm font-medium">Email</FormLabel>
@@ -126,6 +130,7 @@ export default function ForgotPasswordClientComponent() {
               />
               <div className="flex flex-col justify-center items-center">
                 <Captcha
+                  enabled={isTurnstileEnabled}
                   onSuccess={(token: string) => form.setValue('captchaToken', token)}
                   validationError={form.formState.errors.captchaToken?.message}
                 />
@@ -144,7 +149,7 @@ export default function ForgotPasswordClientComponent() {
       </Card>
 
       <div className="mt-4 w-full">
-        {session ? (
+        {email ? (
           <Button
             type="button"
             variant="link"

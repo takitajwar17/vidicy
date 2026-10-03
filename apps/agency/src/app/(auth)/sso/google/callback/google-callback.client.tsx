@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -10,11 +10,14 @@ import { googleSSOCallbackAction } from "./google-callback.action";
 import { googleSSOCallbackSchema } from "@/schemas/google-sso-callback.schema";
 import { Spinner } from "@/components/ui/spinner";
 
-export default function GoogleCallbackClientComponent() {
+export default function GoogleCallbackClientComponent({
+  code,
+  state,
+}: {
+  code: string;
+  state: string;
+}) {
   const router = useRouter();
-  const searchParams = useSearchParams();
-  const code = searchParams.get("code");
-  const state = searchParams.get("state");
   const hasCalledCallback = useRef(false);
 
   const { execute: handleCallback, isPending, error } = useServerAction(googleSSOCallbackAction, {

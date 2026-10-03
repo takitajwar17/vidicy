@@ -10,12 +10,16 @@ export const metadata: Metadata = {
   description: "Complete your sign in with Google",
 };
 
-export default async function GoogleCallbackPage() {
-  const session = await getSessionFromCookie();
+export default async function GoogleCallbackPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ code?: string; state?: string }>;
+}) {
+  const [session, params] = await Promise.all([getSessionFromCookie(), searchParams]);
 
   if (session) {
     return redirect(getSessionRedirectPath({ session }) as Route);
   }
 
-  return <GoogleCallbackClientComponent />;
+  return <GoogleCallbackClientComponent code={params.code ?? ""} state={params.state ?? ""} />;
 }

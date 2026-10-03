@@ -16,8 +16,8 @@ export default async function VerifyEmailPage({
 }: {
   searchParams: Promise<{ token?: string }>;
 }) {
-  const session = await getSessionFromCookie();
-  const token = (await searchParams).token;
+  const [session, params] = await Promise.all([getSessionFromCookie(), searchParams]);
+  const token = params.token;
 
   if (session?.user.emailVerified) {
     return redirect(REDIRECT_AFTER_SIGN_IN);
@@ -30,5 +30,5 @@ export default async function VerifyEmailPage({
     return redirect('/sign-in');
   }
 
-  return <VerifyEmailClientComponent />;
+  return <VerifyEmailClientComponent token={token} />;
 }

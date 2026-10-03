@@ -10,14 +10,18 @@ const Turnstile = dynamic(() => import('@marsidev/react-turnstile').then(mod => 
 })
 
 type Props = Omit<ComponentProps<typeof Turnstile>, 'siteKey'> & {
+  enabled?: boolean
   validationError?: string
 }
 
 export const Captcha = ({
+  enabled,
   validationError,
   ...props
 }: Props) => {
-  const isTurnstileEnabled = useConfigStore((state) => state.isTurnstileEnabled)
+  const storedIsTurnstileEnabled = useConfigStore((state) => state.isTurnstileEnabled)
+  const isTurnstileEnabled =
+    typeof enabled === 'boolean' ? enabled : storedIsTurnstileEnabled
 
   return (
     isTurnstileEnabled ? (
