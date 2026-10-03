@@ -194,6 +194,24 @@ export async function getAnnouncementsFeed(params?: {
       `${voter.firstName ?? ""} ${voter.lastName ?? ""}`.trim() || voter.email || "User",
     ]),
   );
+  const pollOptionsByPostId = new Map<string, typeof pollOptions>();
+  for (const option of pollOptions) {
+    pollOptionsByPostId.set(option.postId, [...(pollOptionsByPostId.get(option.postId) ?? []), option]);
+  }
+
+  const pollVotesByOptionId = new Map<string, typeof pollVotes>();
+  const viewerVotedOptionIds = new Set<string>();
+  for (const vote of pollVotes) {
+    pollVotesByOptionId.set(vote.optionId, [...(pollVotesByOptionId.get(vote.optionId) ?? []), vote]);
+    if (vote.userId === session.user.id) {
+      viewerVotedOptionIds.add(vote.optionId);
+    }
+  }
+
+  const commentsByPostId = new Map<string, typeof comments>();
+  for (const comment of comments) {
+    commentsByPostId.set(comment.postId, [...(commentsByPostId.get(comment.postId) ?? []), comment]);
+  }
 
   return {
     viewerRole: session.user.role,
@@ -201,22 +219,21 @@ export async function getAnnouncementsFeed(params?: {
       ...post,
       isRead: post.isRead > 0,
       hasUpvoted: post.hasUpvoted > 0,
-      pollOptions: pollOptions
-        .filter((opt) => opt.postId === post.id)
-        .map((opt) => ({
+      pollOptions: (pollOptionsByPostId.get(post.id) ?? [])
+        .map((opt) => {
+          const optionVotes = pollVotesByOptionId.get(opt.id) ?? [];
+          return {
           ...opt,
-          votes: pollVotes.filter((vote) => vote.optionId === opt.id).length,
-          hasVoted: pollVotes.some(
-            (vote) => vote.optionId === opt.id && vote.userId === session.user.id,
-          ),
-          voters: pollVotes
-            .filter((vote) => vote.optionId === opt.id)
+          votes: optionVotes.length,
+          hasVoted: viewerVotedOptionIds.has(opt.id),
+          voters: optionVotes
             .map((vote) => ({
               userId: vote.userId,
               name: voterDisplayNameByUserId.get(vote.userId) ?? "User",
             })),
-        })),
-      comments: comments.filter((comment) => comment.postId === post.id),
+        };
+        }),
+      comments: commentsByPostId.get(post.id) ?? [],
     })),
   };
 }

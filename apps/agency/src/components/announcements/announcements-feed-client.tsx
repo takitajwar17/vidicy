@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import dynamic from "next/dynamic";
 import Image from "next/image";
 import {
   ExternalLinkIcon,
@@ -11,8 +12,6 @@ import {
   PlusIcon,
   SearchIcon,
 } from "lucide-react";
-import ReactMarkdown from "react-markdown";
-import remarkGfm from "remark-gfm";
 import { toast } from "sonner";
 import { useServerAction } from "zsa-react";
 import {
@@ -75,6 +74,10 @@ import type {
   Feed,
   FeedPost,
 } from "./announcements-feed-model";
+
+const AnnouncementMarkdown = dynamic(() =>
+  import("./announcement-markdown").then((mod) => mod.AnnouncementMarkdown),
+);
 
 function RedditUpvoteIcon({ className }: { className?: string }) {
   return (
@@ -381,7 +384,7 @@ function PostCard({
             <div className="space-y-3">
               <h3 className="text-xl font-semibold tracking-tight text-foreground">{post.title}</h3>
               <div className="prose prose-sm max-w-none text-foreground dark:prose-invert prose-headings:scroll-m-20 prose-p:leading-7 prose-a:text-primary">
-                <ReactMarkdown remarkPlugins={[remarkGfm]}>{post.body}</ReactMarkdown>
+                <AnnouncementMarkdown>{post.body}</AnnouncementMarkdown>
               </div>
             </div>
           </div>
