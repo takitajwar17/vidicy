@@ -168,36 +168,37 @@ export default function Home() {
               />
             </div>
 
-            <div className="public-landing-panel public-on-dark relative -mt-8 w-full max-w-[21rem] rounded-2xl border border-white/15 p-4 text-left sm:max-w-3xl md:-mt-20 md:max-w-6xl md:p-6 lg:-mt-24">
-              <div className="grid gap-6 lg:grid-cols-[1fr_auto] lg:items-center">
-                <div>
-                  <p className="public-on-dark-subtle text-[10px] font-bold uppercase tracking-[0.16em] sm:text-[11px]">
-                    What your review team gets
-                  </p>
-                  <div className="mt-4 grid gap-3 sm:grid-cols-3">
+            <div className="public-landing-panel public-on-dark relative -mt-6 w-full max-w-[21rem] rounded-2xl border border-white/15 p-4 text-left sm:max-w-3xl md:-mt-16 md:max-w-6xl md:p-5 lg:-mt-20">
+              <div>
+                <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-start lg:gap-x-8">
+                  <div className="grid gap-5 sm:grid-cols-3 lg:gap-x-10">
                     {workflowHighlights.map((highlight) => (
-                      <div key={highlight.title}>
-                        <p className="text-base font-semibold leading-none sm:text-lg">
-                          {highlight.title}
-                        </p>
-                        <p className="public-on-dark-subtle mt-1.5 text-xs leading-5">
+                      <div className="min-w-0" key={highlight.title}>
+                        <div className="flex h-8 items-end sm:h-9">
+                          <p className="whitespace-nowrap text-base font-semibold leading-none sm:text-lg">
+                            {highlight.title}
+                          </p>
+                        </div>
+                        <p className="public-on-dark-subtle mt-1 text-xs leading-4">
                           {highlight.description}
                         </p>
                       </div>
                     ))}
                   </div>
-                </div>
-                <div className="grid grid-cols-3 gap-2 text-center sm:gap-4">
-                  {metrics.map((metric) => (
-                    <div key={metric.label}>
-                      <p className="text-2xl font-medium leading-none sm:text-3xl">
-                        {metric.value}
-                      </p>
-                      <p className="public-on-dark-subtle mt-2 text-[10px] leading-4 sm:text-[11px]">
-                        {metric.label}
-                      </p>
-                    </div>
-                  ))}
+                  <div className="grid gap-3 sm:grid-cols-3 lg:gap-x-5">
+                    {metrics.map((metric) => (
+                      <div className="text-left sm:text-center" key={metric.label}>
+                        <div className="flex h-8 items-end sm:h-9 sm:justify-center">
+                          <p className="text-2xl font-medium leading-none sm:text-3xl">
+                            {metric.value}
+                          </p>
+                        </div>
+                        <p className="public-on-dark-subtle mt-1.5 whitespace-nowrap text-[10px] leading-4 sm:text-[11px]">
+                          {metric.label}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               </div>
             </div>
