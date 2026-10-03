@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useRef } from "react"
+import { useState, useEffect } from "react"
 import { FileIcon, DownloadIcon, Loader2Icon, AlertCircleIcon, EyeIcon } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -12,104 +12,12 @@ import {
   SheetDescription,
   SheetFooter,
 } from "@/components/ui/sheet"
-import { configurePdfJsWorker } from "@/lib/pdfjs-worker"
+import { PdfCanvasPreview } from "@/components/visa/pdf-canvas-preview"
 
 function formatBytes(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
   return `${(bytes / 1024 / 1024).toFixed(1)} MB`
-}
-
-/**
- * Renders all PDF pages onto individual <canvas> elements using PDF.js.
- * This avoids the browser's native PDF viewer (which always shows its toolbar/sidebar).
- */
-function PdfViewer({ blobUrl }: { blobUrl: string }) {
-  const containerRef = useRef<HTMLDivElement>(null)
-  const [renderError, setRenderError] = useState<string | null>(null)
-
-  useEffect(() => {
-    const container = containerRef.current
-    if (!container) return
-
-    let cancelled = false
-    let destroyLoadingTask: (() => void) | null = null
-
-    container.replaceChildren()
-    setRenderError(null)
-
-    // Dynamic import keeps pdfjs-dist out of the initial bundle
-    import("pdfjs-dist")
-      .then(async (pdfjsLib) => {
-        configurePdfJsWorker(pdfjsLib)
-
-        const loadingTask = pdfjsLib.getDocument(blobUrl)
-        destroyLoadingTask = () => {
-          void loadingTask.destroy()
-        }
-        const pdf = await loadingTask.promise
-        if (cancelled) return
-
-        for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
-          if (cancelled) return
-
-          const page = await pdf.getPage(pageNum)
-
-          const containerWidth = Math.max(container.clientWidth, 320)
-          const baseViewport = page.getViewport({ scale: 1 })
-          const scale = containerWidth / baseViewport.width
-          const viewport = page.getViewport({ scale })
-          const outputScale = Math.min(window.devicePixelRatio || 1, 3)
-
-          const canvas = document.createElement("canvas")
-          canvas.width = Math.floor(viewport.width * outputScale)
-          canvas.height = Math.floor(viewport.height * outputScale)
-          canvas.style.width = `${Math.floor(viewport.width)}px`
-          canvas.style.height = `${Math.floor(viewport.height)}px`
-          canvas.style.maxWidth = "100%"
-          canvas.style.display = "block"
-          canvas.style.backgroundColor = "white"
-
-          // Gap between pages
-          if (pageNum > 1) {
-            const spacer = document.createElement("div")
-            spacer.style.height = "16px"
-            container.appendChild(spacer)
-          }
-
-          container.appendChild(canvas)
-
-          await page.render({
-            canvas,
-            viewport,
-            transform: outputScale === 1 ? undefined : [outputScale, 0, 0, outputScale, 0, 0],
-          }).promise
-        }
-      })
-      .catch(() => {
-        if (!cancelled) setRenderError("Failed to render PDF pages.")
-      })
-
-    return () => {
-      cancelled = true
-      container.replaceChildren()
-      destroyLoadingTask?.()
-    }
-  }, [blobUrl])
-
-  if (renderError) {
-    return (
-      <div className="flex flex-col items-center justify-center gap-3 p-8 text-center h-full">
-        <AlertCircleIcon className="h-8 w-8 text-destructive" />
-        <div className="space-y-1">
-          <p className="text-sm font-medium">Preview unavailable</p>
-          <p className="text-xs text-muted-foreground">{renderError}</p>
-        </div>
-      </div>
-    )
-  }
-
-  return <div ref={containerRef} className="h-full w-full overflow-y-auto" />
 }
 
 interface DocumentPreviewDrawerProps {
@@ -276,7 +184,12 @@ export function DocumentPreviewDrawer({
                     </div>
                   </div>
                 )}
-                {pdfBlobUrl && <PdfViewer blobUrl={pdfBlobUrl} />}
+                {pdfBlobUrl && (
+                  <PdfCanvasPreview
+                    blobUrl={pdfBlobUrl}
+                    errorMessage="Failed to render PDF pages."
+                  />
+                )}
               </>
             )}
             {isImage && (

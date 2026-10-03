@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   AlertCircleIcon,
   CheckCircle2Icon,
@@ -10,7 +10,6 @@ import {
   FileIcon,
   FileTextIcon,
   Loader2Icon,
-  Maximize2Icon,
   MoreVerticalIcon,
   ShieldCheckIcon,
 } from "lucide-react";
@@ -19,7 +18,10 @@ import { DocumentUpload } from "@/components/visa/document-upload";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
-import { configurePdfJsWorker } from "@/lib/pdfjs-worker";
+import {
+  PdfCanvasPreview,
+  PdfDocumentThumbnail,
+} from "@/components/visa/pdf-canvas-preview";
 import { cn } from "@/lib/utils";
 
 const UPLOADED_CHECKLIST_STATUSES = new Set(["uploaded", "approved"]);
@@ -95,179 +97,6 @@ function getInitialDocumentId(documents: AgencyCaseDocument[]) {
   if (imageDocument) return imageDocument.id;
 
   return documents[0]?.id ?? null;
-}
-
-function PdfCanvasPreview({ blobUrl }: { blobUrl: string }) {
-  const containerRef = useRef<HTMLDivElement>(null);
-  const [renderError, setRenderError] = useState<string | null>(null);
-
-  useEffect(() => {
-    const container = containerRef.current;
-    if (!container) return;
-
-    let cancelled = false;
-    let destroyLoadingTask: (() => void) | null = null;
-
-    container.replaceChildren();
-    setRenderError(null);
-
-    import("pdfjs-dist")
-      .then(async (pdfjsLib) => {
-        configurePdfJsWorker(pdfjsLib);
-
-        const loadingTask = pdfjsLib.getDocument(blobUrl);
-        destroyLoadingTask = () => {
-          void loadingTask.destroy();
-        };
-        const pdf = await loadingTask.promise;
-        if (cancelled) return;
-
-        for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber += 1) {
-          if (cancelled) return;
-
-          const page = await pdf.getPage(pageNumber);
-          const containerWidth = Math.max(container.clientWidth, 320);
-          const baseViewport = page.getViewport({ scale: 1 });
-          const scale = containerWidth / baseViewport.width;
-          const viewport = page.getViewport({ scale });
-          const outputScale = Math.min(window.devicePixelRatio || 1, 3);
-          const canvas = document.createElement("canvas");
-
-          canvas.width = Math.floor(viewport.width * outputScale);
-          canvas.height = Math.floor(viewport.height * outputScale);
-          canvas.style.width = `${Math.floor(viewport.width)}px`;
-          canvas.style.height = `${Math.floor(viewport.height)}px`;
-          canvas.style.maxWidth = "100%";
-          canvas.style.display = "block";
-          canvas.style.backgroundColor = "white";
-
-          if (pageNumber > 1) {
-            const spacer = document.createElement("div");
-            spacer.style.height = "16px";
-            container.appendChild(spacer);
-          }
-
-          container.appendChild(canvas);
-          await page.render({
-            canvas,
-            viewport,
-            transform: outputScale === 1 ? undefined : [outputScale, 0, 0, outputScale, 0, 0],
-          }).promise;
-        }
-      })
-      .catch(() => {
-        if (!cancelled) {
-          setRenderError("Could not render the PDF preview.");
-        }
-      });
-
-    return () => {
-      cancelled = true;
-      container.replaceChildren();
-      destroyLoadingTask?.();
-    };
-  }, [blobUrl]);
-
-  if (renderError) {
-    return (
-      <div className="flex max-w-sm flex-col items-center justify-center gap-3 text-center text-muted-foreground">
-        <AlertCircleIcon className="h-9 w-9 text-destructive" />
-        <div>
-          <p className="text-sm font-semibold text-foreground">Preview unavailable</p>
-          <p className="mt-1 text-xs">{renderError}</p>
-        </div>
-      </div>
-    );
-  }
-
-  return <div ref={containerRef} className="h-full w-full overflow-y-auto" />;
-}
-
-function PdfThumbnail({ documentId, fileName }: { documentId: string; fileName: string }) {
-  const containerRef = useRef<HTMLDivElement>(null);
-  const [failed, setFailed] = useState(false);
-
-  useEffect(() => {
-    const container = containerRef.current;
-    if (!container) return;
-
-    const abortController = new AbortController();
-    let cancelled = false;
-    let destroyLoadingTask: (() => void) | null = null;
-
-    container.replaceChildren();
-    setFailed(false);
-
-    fetch(`/api/document-preview/${documentId}`, { signal: abortController.signal })
-      .then(async (response) => {
-        if (!response.ok) {
-          throw new Error(`Thumbnail failed with status ${response.status}`);
-        }
-
-        return response.arrayBuffer();
-      })
-      .then(async (buffer) => {
-        const pdfjsLib = await import("pdfjs-dist");
-        configurePdfJsWorker(pdfjsLib);
-
-        const loadingTask = pdfjsLib.getDocument({ data: new Uint8Array(buffer) });
-        destroyLoadingTask = () => {
-          void loadingTask.destroy();
-        };
-        const pdf = await loadingTask.promise;
-        if (cancelled) return;
-
-        const page = await pdf.getPage(1);
-        const containerWidth = Math.max(container.clientWidth, 1);
-        const baseViewport = page.getViewport({ scale: 1 });
-        const scale = containerWidth / baseViewport.width;
-        const viewport = page.getViewport({ scale });
-        const outputScale = Math.min(window.devicePixelRatio || 1, 3);
-        const canvas = document.createElement("canvas");
-
-        canvas.width = Math.floor(viewport.width * outputScale);
-        canvas.height = Math.floor(viewport.height * outputScale);
-        canvas.style.width = `${Math.floor(viewport.width)}px`;
-        canvas.style.height = `${Math.floor(viewport.height)}px`;
-        canvas.style.display = "block";
-        canvas.style.backgroundColor = "white";
-
-        container.appendChild(canvas);
-        await page.render({
-          canvas,
-          viewport,
-          transform: outputScale === 1 ? undefined : [outputScale, 0, 0, outputScale, 0, 0],
-        }).promise;
-      })
-      .catch(() => {
-        if (!abortController.signal.aborted && !cancelled) {
-          setFailed(true);
-        }
-      });
-
-    return () => {
-      cancelled = true;
-      abortController.abort();
-      container.replaceChildren();
-      destroyLoadingTask?.();
-    };
-  }, [documentId]);
-
-  if (failed) {
-    return (
-      <span className="flex h-14 w-full items-center justify-center rounded bg-muted/40">
-        <FileTextIcon className="h-5 w-5" />
-      </span>
-    );
-  }
-
-  return (
-    <span
-      ref={containerRef}
-      aria-label={`${fileName} thumbnail`}
-      className="block h-14 w-full overflow-hidden rounded bg-white"
-    />
-  );
 }
 
 export function AgencyCaseDocumentDesk({
@@ -475,9 +304,6 @@ export function AgencyCaseDocumentDesk({
                 </a>
               </Button>
             ) : null}
-            <Button variant="outline" size="icon" className="h-9 w-9 rounded-xl">
-              <Maximize2Icon className="h-4 w-4" />
-            </Button>
           </div>
         </div>
 
@@ -513,7 +339,10 @@ export function AgencyCaseDocumentDesk({
                   </div>
                 ) : null}
                 {pdfPreviewUrl ? (
-                  <PdfCanvasPreview blobUrl={pdfPreviewUrl} />
+                  <PdfCanvasPreview
+                    blobUrl={pdfPreviewUrl}
+                    errorClassName="max-w-sm"
+                  />
                 ) : null}
               </>
             ) : (
@@ -557,7 +386,7 @@ export function AgencyCaseDocumentDesk({
                     // eslint-disable-next-line @next/next/no-img-element -- Authenticated document thumbnails are served from an API route and should not be optimized/cached.
                     <img src={`/api/document-preview/${document.id}`} alt="" className="h-14 w-full rounded object-cover" />
                   ) : isPdfDocument(document) ? (
-                    <PdfThumbnail documentId={document.id} fileName={document.fileName} />
+                    <PdfDocumentThumbnail documentId={document.id} fileName={document.fileName} />
                   ) : (
                     <span className="flex h-14 w-full items-center justify-center rounded bg-muted/40">
                       <FileTextIcon className="h-5 w-5" />
