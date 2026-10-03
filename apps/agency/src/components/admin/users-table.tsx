@@ -1,8 +1,9 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import dynamic from "next/dynamic"
 import { columns, type User } from "./columns"
+import type { getAdminUsersPage } from "@/server/admin-users"
 
 // Dynamic import to code-split the heavy data-table bundle (tanstack-table + dnd-kit)
 const DataTable = dynamic(
@@ -50,11 +51,26 @@ import { ROLES_ENUM } from "@/db/schema"
 import { exportToCSV } from "@/lib/csv-export"
 import { useCsrfToken } from "@/components/csrf-provider"
 
-export function UsersTable() {
+type AdminUsersPageData = Awaited<ReturnType<typeof getAdminUsersPage>>
+
+interface UsersTableProps {
+  initialData: AdminUsersPageData
+  initialEmailFilter: string
+  initialPage: string
+  initialPageSize: string
+}
+
+export function UsersTable({
+  initialData,
+  initialEmailFilter,
+  initialPage,
+  initialPageSize,
+}: UsersTableProps) {
   const csrfToken = useCsrfToken()
-  const [page, setPage] = useQueryState("page", { defaultValue: "1" })
-  const [pageSize, setPageSize] = useQueryState("pageSize", { defaultValue: PAGE_SIZE_OPTIONS[0].toString() })
-  const [emailFilter, setEmailFilter] = useQueryState("email", { defaultValue: "" })
+  const [page, setPage] = useQueryState("page", { defaultValue: initialPage })
+  const [pageSize, setPageSize] = useQueryState("pageSize", { defaultValue: initialPageSize })
+  const [emailFilter, setEmailFilter] = useQueryState("email", { defaultValue: initialEmailFilter })
+  const hasUsedInitialData = useRef(false)
 
   // Delete confirmation dialog state
   const [deleteDialog, setDeleteDialog] = useState<{
@@ -120,6 +136,11 @@ export function UsersTable() {
   })
 
   useEffect(() => {
+    if (!hasUsedInitialData.current) {
+      hasUsedInitialData.current = true
+      return
+    }
+
     fetchUsers({ page: parseInt(page), pageSize: parseInt(pageSize), emailFilter })
   }, [fetchUsers, page, pageSize, emailFilter])
 
@@ -223,6 +244,8 @@ export function UsersTable() {
     )
   }
 
+  const tableData = data ?? initialData
+
   return (
     <div className="w-full min-w-0 flex flex-col overflow-hidden">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between flex-shrink-0">
@@ -240,7 +263,7 @@ export function UsersTable() {
       </div>
       <div className="mt-6 flex-1 min-h-0">
         <div className="space-y-4 h-full">
-          {status === 'pending' || status === 'idle' ? (
+          {status === 'pending' ? (
             <div className="flex flex-col gap-4">
                {[1, 2, 3, 4, 5].map((i) => (
                  <div key={i} className="h-12 w-full bg-muted animate-pulse rounded-lg" />
@@ -250,7 +273,7 @@ export function UsersTable() {
             <div className="p-8 text-center text-destructive bg-destructive/5 rounded-lg border border-destructive/20">
               Error: Failed to fetch users
             </div>
-          ) : !data ? (
+          ) : !tableData ? (
             <div className="p-12 text-center text-muted-foreground bg-muted/5 rounded-lg border border-dashed">
               No users found
             </div>
@@ -258,13 +281,13 @@ export function UsersTable() {
             <div className="w-full min-w-0">
               <DataTable
                 columns={columns}
-                data={data.users}
-                pageCount={data.totalPages}
+                data={tableData.users}
+                pageCount={tableData.totalPages}
                 pageIndex={parseInt(page) - 1}
                 pageSize={parseInt(pageSize)}
                 onPageChange={handlePageChange}
                 onPageSizeChange={handlePageSizeChange}
-                totalCount={data.totalCount}
+                totalCount={tableData.totalCount}
                 itemNameSingular="user"
                 itemNamePlural="users"
                 pageSizeOptions={PAGE_SIZE_OPTIONS}

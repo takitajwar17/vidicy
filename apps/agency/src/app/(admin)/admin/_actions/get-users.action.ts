@@ -1,12 +1,9 @@
 "use server"
 
 import { createServerAction } from "zsa"
-import { getDB } from "@/db"
-import { requireAdmin } from "@/utils/auth"
 import { z } from "zod"
-import { sql, like } from "drizzle-orm"
-import { userTable } from "@/db/schema"
 import { PAGE_SIZE_OPTIONS } from "../admin-constants"
+import { getAdminUsersPage } from "@/server/admin-users"
 
 const getUsersSchema = z.object({
   page: z.number().min(1).default(1),
@@ -17,60 +14,5 @@ const getUsersSchema = z.object({
 export const getUsersAction = createServerAction()
   .input(getUsersSchema)
   .handler(async ({ input }) => {
-    await requireAdmin()
-
-    const db = getDB()
-    const { page, pageSize, emailFilter } = input
-
-    // Calculate offset
-    const offset = (page - 1) * pageSize
-
-    // Build where clause - Escape LIKE special characters to prevent SQL injection
-    // and use Drizzle's safe like() function
-    const whereClause = emailFilter
-      ? like(userTable.email, `%${emailFilter.replace(/[%_\\]/g, '\\$&')}%`)
-      : undefined
-
-    // Fetch total count and paginated users in parallel
-    const [[{ count }], users] = await Promise.all([
-      db
-        .select({ count: sql<number>`count(*)` })
-        .from(userTable)
-        .where(whereClause),
-      db.query.userTable.findMany({
-        columns: {
-          id: true,
-          email: true,
-          firstName: true,
-          lastName: true,
-          role: true,
-          emailVerified: true,
-          createdAt: true,
-        },
-        where: whereClause,
-        orderBy: (users, { desc }) => [desc(users.createdAt)],
-        limit: pageSize,
-        offset,
-      }),
-    ])
-
-    // Transform the data to match our table's expected format
-    const transformedUsers = users.map(user => ({
-      id: user.id,
-      email: user.email,
-      name: user.firstName && user.lastName
-        ? `${user.firstName} ${user.lastName}`
-        : null,
-      role: user.role,
-      status: user.emailVerified ? "active" as const : "inactive" as const,
-      createdAt: user.createdAt,
-    }))
-
-    return {
-      users: transformedUsers,
-      totalCount: count,
-      page,
-      pageSize,
-      totalPages: Math.ceil(count / pageSize),
-    }
+    return getAdminUsersPage(input)
   })
