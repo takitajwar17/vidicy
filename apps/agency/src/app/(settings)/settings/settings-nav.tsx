@@ -3,7 +3,6 @@
 import type { Route } from 'next'
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { ScrollShadow } from '@heroui/react'
 import {
   User,
   Smartphone,
@@ -64,10 +63,12 @@ export function SettingsNav() {
 
   return (
     <div className="w-full flex items-center justify-between gap-4">
-      <ScrollShadow
-        className="whitespace-nowrap"
-        orientation="horizontal"
-        isEnabled={isLgAndSmaller}
+      <div
+        className={
+          isLgAndSmaller
+            ? "whitespace-nowrap overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+            : "whitespace-nowrap"
+        }
       >
         <Tabs value={pathname}>
           <TabsList className="h-auto p-1">
@@ -85,7 +86,7 @@ export function SettingsNav() {
             ))}
           </TabsList>
         </Tabs>
-      </ScrollShadow>
+      </div>
 
       <Dialog>
         <DialogTrigger asChild>

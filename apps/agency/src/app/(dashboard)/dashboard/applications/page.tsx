@@ -24,7 +24,6 @@ import {
   formatAgencyVisaLabel,
   formatReviewerDisplayName,
   getDisplayCaseNumber,
-  normalizeAgencyCaseStatus,
 } from "@/lib/agency-workflow";
 import { getAgencyCaseRows } from "@/server/agency-data";
 
@@ -38,37 +37,57 @@ const APPLICATIONS_TABLE_BADGE_CLASS = "whitespace-nowrap text-[10px] leading-4"
 const APPLICATIONS_TABLE_AVATAR_CLASS = "h-5 w-5 shrink-0 text-[9px]";
 const APPLICATIONS_TABLE_REVIEWER_CLASS = "max-w-[150px] whitespace-nowrap";
 const APPLICATIONS_TABLE_REVIEWER_LABEL_CLASS = "max-w-[116px] truncate whitespace-nowrap";
+const APPLICATIONS_PAGE_SIZE = 50;
 
 function normalize(value: string | null | undefined) {
   return (value ?? "").toLowerCase().trim();
 }
 
+function parsePage(value: string | null | undefined) {
+  const parsed = Number.parseInt(value ?? "1", 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : 1;
+}
+
+function getApplicationsHref({
+  page,
+  query,
+  status,
+}: {
+  page: number;
+  query: string;
+  status: string;
+}) {
+  const params = new URLSearchParams();
+  if (query) params.set("q", query);
+  if (status) params.set("status", status);
+  if (page > 1) params.set("page", String(page));
+  const suffix = params.toString();
+  return `/dashboard/applications${suffix ? `?${suffix}` : ""}` as Route;
+}
+
 export default async function ApplicationsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string; status?: string }>;
+  searchParams: Promise<{ page?: string; q?: string; status?: string }>;
 }) {
   const params = await searchParams;
-  const rows = await getAgencyCaseRows({ limit: 500 });
-  const query = normalize(params.q);
+  const query = params.q?.trim() ?? "";
   const statusFilter = normalize(params.status);
-
-  const filteredRows = rows.filter((row) => {
-    const searchable = normalize(
-      [
-        row.application.caseNumber,
-        row.application.clientName,
-        row.application.clientEmail,
-        row.primaryApplicant?.name,
-        row.application.destinationCountry,
-        row.application.visaType,
-      ].join(" "),
-    );
-    const matchesQuery = !query || searchable.includes(query);
-    const matchesStatus =
-      !statusFilter || normalizeAgencyCaseStatus(row.application.agencyStatus) === statusFilter;
-    return matchesQuery && matchesStatus;
+  const status = AGENCY_CASE_STATUS_OPTIONS.includes(
+    statusFilter as (typeof AGENCY_CASE_STATUS_OPTIONS)[number],
+  )
+    ? statusFilter
+    : "";
+  const page = parsePage(params.page);
+  const rowsWithLookahead = await getAgencyCaseRows({
+    limit: APPLICATIONS_PAGE_SIZE + 1,
+    offset: (page - 1) * APPLICATIONS_PAGE_SIZE,
+    query,
+    statuses: status ? [status] : undefined,
   });
+  const rows = rowsWithLookahead.slice(0, APPLICATIONS_PAGE_SIZE);
+  const hasNextPage = rowsWithLookahead.length > APPLICATIONS_PAGE_SIZE;
+  const hasActiveFilters = Boolean(query || status);
 
   return (
     <AgencyPageShell
@@ -89,10 +108,14 @@ export default async function ApplicationsPage({
     >
       {rows.length === 0 ? (
         <EmptyState
-          title="No applications yet"
-          description="Create the first client file to start the agency intake queue."
+          title={hasActiveFilters ? "No matching applications" : "No applications yet"}
+          description={
+            hasActiveFilters
+              ? "Adjust the search or status filter to widen the application queue."
+              : "Create the first client file to start the agency intake queue."
+          }
           href="/dashboard/applications/new"
-          actionLabel="Create application"
+          actionLabel={hasActiveFilters ? "Create application" : "Create application"}
         />
       ) : (
         <>
@@ -101,13 +124,13 @@ export default async function ApplicationsPage({
               <form className="contents">
                 <Input
                   name="q"
-                  defaultValue={params.q ?? ""}
+                  defaultValue={query}
                   placeholder="Search applications, clients, applicants..."
                   className="h-11 rounded-xl bg-card"
                 />
                 <select
                   name="status"
-                  defaultValue={params.status ?? ""}
+                  defaultValue={status}
                   className="h-11 rounded-xl border border-input bg-card px-3 text-sm font-medium"
                 >
                   <option value="">All statuses</option>
@@ -147,7 +170,7 @@ export default async function ApplicationsPage({
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filteredRows.map((row) => (
+                {rows.map((row) => (
                   <TableRow key={row.application.id}>
                     <TableCell className="pl-5">
                       <Link
@@ -215,6 +238,36 @@ export default async function ApplicationsPage({
                 ))}
               </TableBody>
             </AgencyTable>
+            <div className="flex items-center justify-between border-t border-border/70 px-5 py-3 text-xs text-muted-foreground">
+              <span>
+                Page {page}
+                {hasNextPage ? "" : " · End of queue"}
+              </span>
+              <div className="flex items-center gap-2">
+                {page === 1 ? (
+                  <Button variant="outline" size="sm" disabled>
+                    Previous
+                  </Button>
+                ) : (
+                  <Button asChild variant="outline" size="sm">
+                    <Link href={getApplicationsHref({ page: page - 1, query, status })}>
+                      Previous
+                    </Link>
+                  </Button>
+                )}
+                {hasNextPage ? (
+                  <Button asChild variant="outline" size="sm">
+                    <Link href={getApplicationsHref({ page: page + 1, query, status })}>
+                      Next
+                    </Link>
+                  </Button>
+                ) : (
+                  <Button variant="outline" size="sm" disabled>
+                    Next
+                  </Button>
+                )}
+              </div>
+            </div>
           </AgencyTableCard>
         </>
       )}

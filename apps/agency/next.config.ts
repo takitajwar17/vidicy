@@ -37,7 +37,6 @@ const nextConfig: NextConfig = {
   },
   experimental: {
     optimizePackageImports: [
-      "@heroui/react",
       "lucide-react",
       "motion/react",
       "date-fns",

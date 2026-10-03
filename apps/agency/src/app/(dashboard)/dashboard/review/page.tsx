@@ -11,6 +11,7 @@ import {
   formatShortDate,
 } from "@/components/agency/agency-ui";
 import { ReviewIssueStatusSelect } from "@/components/agency/agency-case-actions";
+import { Button } from "@/components/ui/button";
 import { TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { getDisplayCaseNumber } from "@/lib/agency-workflow";
 import { getAgencyReviewIssueRows } from "@/server/agency-data";
@@ -19,8 +20,30 @@ export const metadata: Metadata = {
   title: "Issues",
 };
 
-export default async function IssuesPage() {
-  const rows = await getAgencyReviewIssueRows();
+const ISSUES_PAGE_SIZE = 75;
+
+function parsePage(value: string | null | undefined) {
+  const parsed = Number.parseInt(value ?? "1", 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : 1;
+}
+
+function getIssuesHref(page: number) {
+  return page > 1 ? (`/dashboard/review?page=${page}` as Route) : ("/dashboard/review" as Route);
+}
+
+export default async function IssuesPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ page?: string }>;
+}) {
+  const params = await searchParams;
+  const page = parsePage(params.page);
+  const rowsWithLookahead = await getAgencyReviewIssueRows({
+    limit: ISSUES_PAGE_SIZE + 1,
+    offset: (page - 1) * ISSUES_PAGE_SIZE,
+  });
+  const rows = rowsWithLookahead.slice(0, ISSUES_PAGE_SIZE);
+  const hasNextPage = rowsWithLookahead.length > ISSUES_PAGE_SIZE;
 
   return (
     <AgencyPageShell
@@ -92,6 +115,32 @@ export default async function IssuesPage() {
                 ))}
               </TableBody>
             </AgencyTable>
+            <div className="flex items-center justify-between border-t border-border/70 px-5 py-3 text-xs text-muted-foreground">
+              <span>
+                Page {page}
+                {hasNextPage ? "" : " · End of queue"}
+              </span>
+              <div className="flex items-center gap-2">
+                {page === 1 ? (
+                  <Button variant="outline" size="sm" disabled>
+                    Previous
+                  </Button>
+                ) : (
+                  <Button asChild variant="outline" size="sm">
+                    <Link href={getIssuesHref(page - 1)}>Previous</Link>
+                  </Button>
+                )}
+                {hasNextPage ? (
+                  <Button asChild variant="outline" size="sm">
+                    <Link href={getIssuesHref(page + 1)}>Next</Link>
+                  </Button>
+                ) : (
+                  <Button variant="outline" size="sm" disabled>
+                    Next
+                  </Button>
+                )}
+              </div>
+            </div>
           </AgencyTableCard>
         </>
       )}

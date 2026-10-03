@@ -7,15 +7,14 @@ import { UserTicketDetail } from "@/components/support/user-ticket-detail";
 import type { Route } from "next";
 
 export default async function TicketPage({ params }: { params: Promise<{ ticketId: string }> }) {
-  await requirePageSession();
-
-  const { ticketId } = await params;
+  const [, { ticketId }] = await Promise.all([requirePageSession(), params]);
 
   try {
     const ticket = await getSupportTicketById({ ticketId });
 
-    // Mark as viewed when visiting the dedicated page
-    await markTicketAsViewed({ ticketId });
+    markTicketAsViewed({ ticketId }).catch((error) => {
+      logger.warn("Failed to mark support ticket as viewed", { ticketId, error });
+    });
 
     return (
       <>

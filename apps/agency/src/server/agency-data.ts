@@ -1,6 +1,6 @@
 import "server-only";
 
-import { and, desc, eq, inArray, isNotNull, isNull, ne } from "drizzle-orm";
+import { and, desc, eq, inArray, isNotNull, isNull, like, ne, or } from "drizzle-orm";
 
 import { getDB } from "@/db";
 import {
@@ -63,6 +63,25 @@ function getAgencyCaseFilters() {
   return [isNull(visaApplicationTable.trashedAt), isNotNull(visaApplicationTable.clientId)];
 }
 
+function normalizeSearchQuery(query?: string | null) {
+  return query?.trim() || "";
+}
+
+async function getApplicationIdsMatchingApplicantQuery(query: string): Promise<string[]> {
+  if (!query) return [];
+
+  const db = getDB();
+  const applicants = await db.query.applicantTable.findMany({
+    where: like(applicantTable.name, `%${query}%`),
+    columns: {
+      applicationId: true,
+    },
+    limit: 500,
+  });
+
+  return Array.from(new Set(applicants.map((applicant) => applicant.applicationId)));
+}
+
 export async function getActiveAgencyStaffRows(): Promise<AgencyStaffRow[]> {
   const db = getDB();
 
@@ -116,22 +135,44 @@ export interface AgencyTeamWorkloadRow {
 
 export async function getAgencyCaseRows({
   limit = 200,
+  offset = 0,
+  query: rawQuery = null,
   statuses,
 }: {
   limit?: number;
+  offset?: number;
+  query?: string | null;
   statuses?: string[];
 } = {}): Promise<AgencyCaseRow[]> {
   const db = getDB();
+  const query = normalizeSearchQuery(rawQuery);
+  const queryApplicationIds = await getApplicationIdsMatchingApplicantQuery(query);
 
   const filters = getAgencyCaseFilters();
   if (statuses?.length) {
     filters.push(inArray(visaApplicationTable.agencyStatus, statuses));
   }
+  if (query) {
+    const queryFilters = [
+      like(visaApplicationTable.caseNumber, `%${query}%`),
+      like(visaApplicationTable.clientName, `%${query}%`),
+      like(visaApplicationTable.clientEmail, `%${query}%`),
+      like(visaApplicationTable.destinationCountry, `%${query}%`),
+      like(visaApplicationTable.visaType, `%${query}%`),
+    ];
+
+    if (queryApplicationIds.length) {
+      queryFilters.push(inArray(visaApplicationTable.id, queryApplicationIds));
+    }
+
+    filters.push(or(...queryFilters)!);
+  }
 
   const applications = await db.query.visaApplicationTable.findMany({
-    where: filters.length > 1 ? and(...filters) : filters[0],
+    where: and(...filters),
     orderBy: [desc(visaApplicationTable.createdAt)],
     limit,
+    offset,
   });
 
   if (applications.length === 0) return [];
@@ -506,27 +547,31 @@ export async function getAgencyClientsWithCounts() {
   });
 }
 
-export async function getAgencyDocuments() {
+export async function getAgencyDocuments({
+  limit = 100,
+  offset = 0,
+}: {
+  limit?: number;
+  offset?: number;
+} = {}) {
   const db = getDB();
 
-  const applications = await db.query.visaApplicationTable.findMany({
-    where: and(...getAgencyCaseFilters()),
-    orderBy: [desc(visaApplicationTable.createdAt)],
-    limit: 500,
-  });
-  if (applications.length === 0) return [];
+  const documentRows = await db
+    .select({
+      application: visaApplicationTable,
+      document: uploadedDocumentTable,
+    })
+    .from(uploadedDocumentTable)
+    .innerJoin(visaApplicationTable, eq(uploadedDocumentTable.applicationId, visaApplicationTable.id))
+    .where(and(...getAgencyCaseFilters()))
+    .orderBy(desc(uploadedDocumentTable.uploadedAt))
+    .limit(limit)
+    .offset(offset);
 
-  const applicationIds = applications.map((application) => application.id);
-  const documents = await db.query.uploadedDocumentTable.findMany({
-    where: inArray(uploadedDocumentTable.applicationId, applicationIds),
-    orderBy: [desc(uploadedDocumentTable.uploadedAt)],
-    limit: 300,
-  });
-
-  if (documents.length === 0) return [];
+  if (documentRows.length === 0) return [];
 
   const applicantIds = Array.from(
-    new Set(documents.map((document) => document.applicantId).filter(Boolean)),
+    new Set(documentRows.map(({ document }) => document.applicantId).filter(Boolean)),
   ) as string[];
 
   const applicants = applicantIds.length
@@ -535,23 +580,29 @@ export async function getAgencyDocuments() {
       })
     : [];
 
-  const appById = new Map(applications.map((application) => [application.id, application]));
   const applicantById = new Map(applicants.map((applicant) => [applicant.id, applicant]));
 
-  return documents.map((document) => ({
+  return documentRows.map(({ application, document }) => ({
     document,
-    application: appById.get(document.applicationId) ?? null,
+    application,
     applicant: document.applicantId ? (applicantById.get(document.applicantId) ?? null) : null,
   }));
 }
 
-export async function getAgencyReviewIssueRows({ limit = 300 }: { limit?: number } = {}) {
+export async function getAgencyReviewIssueRows({
+  limit = 100,
+  offset = 0,
+}: {
+  limit?: number;
+  offset?: number;
+} = {}) {
   const db = getDB();
 
   const issues = await db.query.reviewIssueTable.findMany({
     where: ne(reviewIssueTable.status, REVIEW_ISSUE_STATUS.DISMISSED),
     orderBy: [desc(reviewIssueTable.createdAt)],
     limit,
+    offset,
   });
 
   if (issues.length === 0) return [];

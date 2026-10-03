@@ -11,6 +11,7 @@ import {
   formatShortDate,
 } from "@/components/agency/agency-ui";
 import { DocumentPreviewDrawer } from "@/components/visa/document-preview-drawer";
+import { Button } from "@/components/ui/button";
 import { TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { getDisplayCaseNumber } from "@/lib/agency-workflow";
 import { getAgencyDocuments } from "@/server/agency-data";
@@ -19,8 +20,30 @@ export const metadata: Metadata = {
   title: "Documents",
 };
 
-export default async function DocumentsPage() {
-  const rows = await getAgencyDocuments();
+const DOCUMENTS_PAGE_SIZE = 75;
+
+function parsePage(value: string | null | undefined) {
+  const parsed = Number.parseInt(value ?? "1", 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : 1;
+}
+
+function getDocumentsHref(page: number) {
+  return page > 1 ? (`/dashboard/documents?page=${page}` as Route) : ("/dashboard/documents" as Route);
+}
+
+export default async function DocumentsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ page?: string }>;
+}) {
+  const params = await searchParams;
+  const page = parsePage(params.page);
+  const rowsWithLookahead = await getAgencyDocuments({
+    limit: DOCUMENTS_PAGE_SIZE + 1,
+    offset: (page - 1) * DOCUMENTS_PAGE_SIZE,
+  });
+  const rows = rowsWithLookahead.slice(0, DOCUMENTS_PAGE_SIZE);
+  const hasNextPage = rowsWithLookahead.length > DOCUMENTS_PAGE_SIZE;
 
   return (
     <AgencyPageShell
@@ -103,6 +126,32 @@ export default async function DocumentsPage() {
                 ))}
               </TableBody>
             </AgencyTable>
+            <div className="flex items-center justify-between border-t border-border/70 px-5 py-3 text-xs text-muted-foreground">
+              <span>
+                Page {page}
+                {hasNextPage ? "" : " · End of inventory"}
+              </span>
+              <div className="flex items-center gap-2">
+                {page === 1 ? (
+                  <Button variant="outline" size="sm" disabled>
+                    Previous
+                  </Button>
+                ) : (
+                  <Button asChild variant="outline" size="sm">
+                    <Link href={getDocumentsHref(page - 1)}>Previous</Link>
+                  </Button>
+                )}
+                {hasNextPage ? (
+                  <Button asChild variant="outline" size="sm">
+                    <Link href={getDocumentsHref(page + 1)}>Next</Link>
+                  </Button>
+                ) : (
+                  <Button variant="outline" size="sm" disabled>
+                    Next
+                  </Button>
+                )}
+              </div>
+            </div>
           </AgencyTableCard>
         </>
       )}
