@@ -62,7 +62,7 @@ export default async function ClientsPage({
       description="Which clients have files open, how many are moving, and when they last sent work."
       actions={
         <Button asChild>
-          <Link href={"/dashboard/applications/new" as Route}>New Application</Link>
+          <Link href={"/dashboard/applications/new" as Route}>New client file</Link>
         </Button>
       }
     >
@@ -74,10 +74,10 @@ export default async function ClientsPage({
             placeholder="Search clients, emails, countries..."
             className="h-11 rounded-xl bg-card"
           />
-          <Button type="submit" variant="outline">
-            Apply Filters
+          <Button type="submit" variant="outline" className="h-11">
+            Apply filters
           </Button>
-          <Button asChild variant="ghost">
+          <Button asChild variant="ghost" className="h-11">
             <Link href={"/dashboard/clients" as Route}>Clear</Link>
           </Button>
         </form>
@@ -92,7 +92,7 @@ export default async function ClientsPage({
               : "Clients appear here after you add their first case."
           }
           href="/dashboard/applications/new"
-          actionLabel="New Application"
+          actionLabel="New client file"
         />
       ) : (
           <AgencyTableCard
@@ -106,9 +106,9 @@ export default async function ClientsPage({
                   <TableHead>Email</TableHead>
                   <TableHead>Phone</TableHead>
                   <TableHead>Country</TableHead>
-                  <TableHead>Open Cases</TableHead>
-                  <TableHead>Total Cases</TableHead>
-                  <TableHead className="pr-5">Last Activity</TableHead>
+                  <TableHead>Open cases</TableHead>
+                  <TableHead>Total cases</TableHead>
+                  <TableHead className="pr-5">Last activity</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>

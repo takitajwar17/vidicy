@@ -73,10 +73,10 @@ export default async function ReportsPage({
             placeholder="Search reports, clients, applicants..."
             className="h-11 rounded-xl bg-card"
           />
-          <Button type="submit" variant="outline">
-            Apply Filters
+          <Button type="submit" variant="outline" className="h-11">
+            Apply filters
           </Button>
-          <Button asChild variant="ghost">
+          <Button asChild variant="ghost" className="h-11">
             <Link href={"/dashboard/reports" as Route}>Clear</Link>
           </Button>
         </form>
@@ -91,7 +91,7 @@ export default async function ReportsPage({
               : "Generate a report after a case has missing documents, reviewer notes, or client fixes."
           }
           href="/dashboard/applications"
-          actionLabel="View applications"
+          actionLabel="View cases"
         />
       ) : (
         <>
@@ -102,7 +102,7 @@ export default async function ReportsPage({
             <AgencyTable>
               <TableHeader>
                 <TableRow>
-                  <TableHead className="pl-5">Application</TableHead>
+                  <TableHead className="pl-5">Case</TableHead>
                   <TableHead>Client</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead>Items</TableHead>

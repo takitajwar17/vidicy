@@ -102,7 +102,7 @@ export default async function ApplicationsPage({
         <Button asChild>
           <Link href={"/dashboard/applications/new" as Route}>
             <PlusIcon className="h-4 w-4" />
-            New Application
+            New client file
           </Link>
         </Button>
       }
@@ -128,10 +128,10 @@ export default async function ApplicationsPage({
                 </option>
               ))}
             </select>
-            <Button type="submit" variant="outline">
-              Apply Filters
+            <Button type="submit" variant="outline" className="h-11">
+              Apply filters
             </Button>
-            <Button asChild variant="ghost">
+            <Button asChild variant="ghost" className="h-11">
               <Link href={"/dashboard/applications" as Route}>Clear</Link>
             </Button>
           </form>
@@ -140,14 +140,14 @@ export default async function ApplicationsPage({
 
       {rows.length === 0 ? (
         <EmptyState
-          title={hasActiveFilters ? "No matching applications" : "No applications yet"}
+          title={hasActiveFilters ? "No matching client files" : "No client files yet"}
           description={
             hasActiveFilters
               ? "Try a client name, applicant name, or case number from the queue."
               : "Add the first client file to start the agency intake queue."
           }
           href="/dashboard/applications/new"
-          actionLabel="New Application"
+          actionLabel="New client file"
         />
       ) : (
           <AgencyTableCard

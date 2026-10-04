@@ -203,11 +203,11 @@ export function NewApplicationClient({ staff }: NewApplicationClientProps) {
     });
 
     if (error || !result) {
-      toast.error(error?.message ?? "Could not create application.");
+      toast.error(error?.message ?? "Could not create client file.");
       return;
     }
 
-    toast.success("Application added to the agency queue.");
+    toast.success("Client file added to the agency queue.");
     router.push(`/dashboard/${result.application.id}` as Route);
   }
 
@@ -216,7 +216,7 @@ export function NewApplicationClient({ staff }: NewApplicationClientProps) {
       breadcrumbs={[
         { href: "/dashboard", label: "Dashboard" },
         { href: "/dashboard/applications", label: "Applications" },
-        { href: "/dashboard/applications/new", label: "New Application" },
+        { href: "/dashboard/applications/new", label: "New client file" },
       ]}
       title="New client file"
       description="Add the client, applicant, route, reviewer, and dates before documents arrive."

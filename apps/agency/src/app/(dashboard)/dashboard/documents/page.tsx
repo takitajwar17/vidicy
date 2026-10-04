@@ -72,10 +72,10 @@ export default async function DocumentsPage({
             placeholder="Search files, applicants, clients..."
             className="h-11 rounded-xl bg-card"
           />
-          <Button type="submit" variant="outline">
-            Apply Filters
+          <Button type="submit" variant="outline" className="h-11">
+            Apply filters
           </Button>
-          <Button asChild variant="ghost">
+          <Button asChild variant="ghost" className="h-11">
             <Link href={"/dashboard/documents" as Route}>Clear</Link>
           </Button>
         </form>
@@ -90,7 +90,7 @@ export default async function DocumentsPage({
               : "Open a case and upload the passport, form, bank statement, and supporting evidence."
           }
           href="/dashboard/applications"
-          actionLabel="View applications"
+          actionLabel="View cases"
         />
       ) : (
           <AgencyTableCard
@@ -101,7 +101,7 @@ export default async function DocumentsPage({
               <TableHeader>
                 <TableRow>
                   <TableHead className="pl-5">Document</TableHead>
-                  <TableHead>Application</TableHead>
+                  <TableHead>Case</TableHead>
                   <TableHead>Client</TableHead>
                   <TableHead>Applicant</TableHead>
                   <TableHead>Size</TableHead>

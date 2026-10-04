@@ -109,10 +109,10 @@ export default async function TeamPage() {
               <TableHead className="pl-5">Reviewer</TableHead>
               <TableHead>Role</TableHead>
               <TableHead className="text-right">Assigned</TableHead>
-              <TableHead className="text-right">Needs Client</TableHead>
+              <TableHead className="text-right">Needs client</TableHead>
               <TableHead className="text-right">Ready</TableHead>
-              <TableHead className="text-right">Open Issues</TableHead>
-              <TableHead className="pr-5 text-right">Last Activity</TableHead>
+              <TableHead className="text-right">Open issues</TableHead>
+              <TableHead className="pr-5 text-right">Last activity</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>

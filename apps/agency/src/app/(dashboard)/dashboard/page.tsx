@@ -53,7 +53,7 @@ export default async function DashboardPage() {
         <Button asChild>
           <Link href={"/dashboard/applications/new" as Route}>
             <PlusIcon className="h-4 w-4" />
-            New Application
+            New client file
           </Link>
         </Button>
       }
@@ -63,7 +63,7 @@ export default async function DashboardPage() {
           title="No agency cases yet"
           description="Add the first client, applicant, route, and reviewer. The case will appear here before documents arrive."
           href="/dashboard/applications/new"
-          actionLabel="New Application"
+          actionLabel="New client file"
         />
       ) : (
         <>
@@ -84,21 +84,21 @@ export default async function DashboardPage() {
             />
             <MetricCard
               icon={Clock3Icon}
-              label="In Review"
+              label="In review"
               value={data.stats.inReview}
               detail="On a reviewer's desk"
               tone="warning"
             />
             <MetricCard
               icon={FileWarningIcon}
-              label="Needs Client"
+              label="Needs client"
               value={needsClient}
               detail="Waiting on client fixes"
               tone="danger"
             />
             <MetricCard
               icon={LineChartIcon}
-              label="Ready Rate"
+              label="Ready rate"
               value={`${readyRate}%`}
               detail={`${data.stats.scoredCases} checked cases`}
               tone="default"
@@ -192,7 +192,7 @@ export default async function DashboardPage() {
 
             <Card className="rounded-xl shadow-[var(--shadow-dashboard)]">
               <CardHeader className="flex-row items-center justify-between gap-3">
-                <CardTitle className="text-base">Reviewer Workload</CardTitle>
+                <CardTitle className="text-base">Reviewer workload</CardTitle>
                 <Link href={"/dashboard/team" as Route} className="text-xs font-bold text-primary">
                   View team
                 </Link>
@@ -225,21 +225,21 @@ export default async function DashboardPage() {
           </section>
 
           <AgencyTableCard
-            title="Recent applications"
+            title="Recent client files"
             description="The latest passports, forms, and evidence moving through the desk."
             actions={
               <Link
                 href={"/dashboard/applications" as Route}
                 className="text-xs font-bold text-primary"
               >
-                View all applications
+                  View all client files
               </Link>
             }
           >
             <AgencyTable>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Application</TableHead>
+                  <TableHead>Case</TableHead>
                   <TableHead>Client</TableHead>
                   <TableHead>Applicant</TableHead>
                   <TableHead>Visa</TableHead>
