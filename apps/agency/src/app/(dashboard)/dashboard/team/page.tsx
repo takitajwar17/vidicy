@@ -49,7 +49,7 @@ export default async function TeamPage() {
         { href: "/dashboard/team", label: "Team" },
       ]}
       title="Team"
-      description="Staff access and roles."
+      description="Who can enter the review desk and who owns each client file."
     >
       <section>
         <Card className="overflow-hidden rounded-xl border-border/80 shadow-[var(--shadow-dashboard)]">
@@ -57,7 +57,7 @@ export default async function TeamPage() {
             <div>
               <CardTitle className="text-base">Team capacity</CardTitle>
               <p className="mt-1 text-sm text-muted-foreground">
-                Active staff, reviewer access, and current queue pressure in one place.
+                Admins, reviewers, active cases, and open issues on one screen.
               </p>
             </div>
             {isAdmin ? (
@@ -91,7 +91,7 @@ export default async function TeamPage() {
 
       <AgencyTableCard
         title="Reviewer workload"
-        description="Live queue ownership across active cases and unresolved client follow-ups."
+        description="Assigned cases, client waits, ready files, and open issues by reviewer."
         actions={
           <>
             <Badge variant="outline" className="rounded-full px-3 py-1 text-2xs font-bold">
@@ -161,7 +161,7 @@ export default async function TeamPage() {
 
       <AgencyTableCard
         title="Staff directory"
-        description="Role and access controls for the active agency team."
+        description="Who can sign in, who can add staff, and who can be removed."
       >
         <AgencyTable>
           <TableHeader>

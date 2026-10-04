@@ -218,14 +218,14 @@ export function NewApplicationClient({ staff }: NewApplicationClientProps) {
         { href: "/dashboard/applications", label: "Applications" },
         { href: "/dashboard/applications/new", label: "New Application" },
       ]}
-      title="New Application"
-      description="Create a client case for the agency review queue."
+      title="New client file"
+      description="Add the client, applicant, route, reviewer, and dates before documents arrive."
     >
       <form onSubmit={handleSubmit} className="grid gap-4 xl:grid-cols-[1fr_360px]">
         <div className="space-y-4">
           <Card className="rounded-xl shadow-[var(--shadow-dashboard)]">
             <CardHeader>
-              <CardTitle className="text-base">Client and applicant</CardTitle>
+              <CardTitle className="text-base">Who sent the file</CardTitle>
             </CardHeader>
             <CardContent className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
               <Field label="Client name">
@@ -257,7 +257,7 @@ export function NewApplicationClient({ staff }: NewApplicationClientProps) {
 
           <Card className="rounded-xl shadow-[var(--shadow-dashboard)]">
             <CardHeader>
-              <CardTitle className="text-base">Visa route and review setup</CardTitle>
+              <CardTitle className="text-base">Route and reviewer</CardTitle>
             </CardHeader>
             <CardContent className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
               <Field label="Applying from">
@@ -343,7 +343,7 @@ export function NewApplicationClient({ staff }: NewApplicationClientProps) {
 
           <Card className="rounded-xl shadow-[var(--shadow-dashboard)]">
             <CardHeader>
-              <CardTitle className="text-base">Application history</CardTitle>
+              <CardTitle className="text-base">Prior visa history</CardTitle>
             </CardHeader>
             <CardContent className="grid gap-5 xl:grid-cols-2">
               <div className="space-y-4 rounded-xl border border-border/70 bg-muted/30 p-4">
@@ -375,7 +375,7 @@ export function NewApplicationClient({ staff }: NewApplicationClientProps) {
                         <SelectContent>{YEAR_OPTIONS.map((year) => <SelectItem key={year} value={year}>{year}</SelectItem>)}</SelectContent>
                       </Select>
                     </div>
-                    <Textarea value={form.rejectedReason} onChange={(event) => update("rejectedReason", event.target.value)} placeholder="Refusal reason or reviewer note" />
+                    <Textarea value={form.rejectedReason} onChange={(event) => update("rejectedReason", event.target.value)} placeholder="Refusal reason, refusal letter note, or reviewer context" />
                   </div>
                 ) : null}
               </div>
@@ -386,7 +386,7 @@ export function NewApplicationClient({ staff }: NewApplicationClientProps) {
         <aside className="space-y-4">
           <Card className="sticky top-20 rounded-xl shadow-[var(--shadow-dashboard)]">
             <CardHeader>
-              <CardTitle className="text-base">Queue details</CardTitle>
+              <CardTitle className="text-base">Dates for the queue</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
               <Field label="Received date">
@@ -402,14 +402,14 @@ export function NewApplicationClient({ staff }: NewApplicationClientProps) {
                 </div>
               </Field>
               <div className="rounded-xl border border-border/70 bg-muted/35 p-4 text-sm text-muted-foreground">
-                <p className="font-semibold text-foreground">Created as an agency case</p>
+                <p className="font-semibold text-foreground">Starts in intake</p>
                 <p className="mt-1">
-                  The case starts in intake, uses the enterprise agency workflow, and is available to every active agency staff member.
+                  Every active staff member can see the case. The assigned reviewer owns the file once documents arrive.
                 </p>
               </div>
               <Button type="submit" className="w-full" disabled={isPending}>
                 {isPending ? <Loader2Icon className="h-4 w-4 animate-spin" /> : <PlusIcon className="h-4 w-4" />}
-                Create Application
+                Create client file
               </Button>
             </CardContent>
           </Card>

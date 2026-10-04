@@ -62,14 +62,14 @@ export default async function IssuesPage({
         { href: "/dashboard/issues", label: "Issues" },
       ]}
       title="Issues"
-      description="Open flags, reviewer notes, and client follow-ups."
+      description="Missing bank statements, unreadable passports, stale evidence, and client fixes."
     >
       <AgencyFilterCard>
         <form className="grid gap-3 lg:grid-cols-[minmax(280px,1fr)_180px_180px]">
           <Input
             name="q"
             defaultValue={query}
-            placeholder="Search issues, applicants, applications..."
+            placeholder="Search issues, applicants, cases..."
             className="h-11 rounded-xl bg-card"
           />
           <Button type="submit" variant="outline">
@@ -86,8 +86,8 @@ export default async function IssuesPage({
           title={hasActiveFilters ? "No matching issues" : "No issues yet"}
           description={
             hasActiveFilters
-              ? "Adjust the search query to widen the issue queue."
-              : "Run document review inside an application, then sync review flags to build this agency-wide issue queue."
+              ? "Try a missing document, applicant name, client, or case number."
+              : "Run review on a case. Missing documents, mismatched names, and weak evidence will land here."
           }
           href="/dashboard/applications"
           actionLabel="View applications"
@@ -95,7 +95,7 @@ export default async function IssuesPage({
       ) : (
           <AgencyTableCard
             title="Issue queue"
-            description="Open flags, reviewer notes, and client follow-up items."
+            description="What the reviewer or client still needs to fix."
           >
             <AgencyTable>
               <TableHeader>

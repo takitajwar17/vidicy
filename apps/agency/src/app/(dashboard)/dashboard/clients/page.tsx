@@ -59,7 +59,7 @@ export default async function ClientsPage({
         { href: "/dashboard/clients", label: "Clients" },
       ]}
       title="Clients"
-      description="Agency clients and their active case volume."
+      description="Which clients have files open, how many are moving, and when they last sent work."
       actions={
         <Button asChild>
           <Link href={"/dashboard/applications/new" as Route}>New Application</Link>
@@ -88,8 +88,8 @@ export default async function ClientsPage({
           title={hasActiveFilters ? "No matching clients" : "No clients yet"}
           description={
             hasActiveFilters
-              ? "Adjust the search query to widen the client directory."
-              : "Clients are created automatically when you add agency applications."
+              ? "Try a client name, email, phone number, or country."
+              : "Clients appear here after you add their first case."
           }
           href="/dashboard/applications/new"
           actionLabel="New Application"
@@ -97,7 +97,7 @@ export default async function ClientsPage({
       ) : (
           <AgencyTableCard
             title="Client directory"
-            description="Agency clients with current case volume and recent activity."
+            description="Open files, total files, and the last day each client sent work."
           >
             <AgencyTable>
               <TableHeader>

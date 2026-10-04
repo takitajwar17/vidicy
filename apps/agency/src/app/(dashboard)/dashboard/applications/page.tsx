@@ -97,7 +97,7 @@ export default async function ApplicationsPage({
         { href: "/dashboard/applications", label: "Applications" },
       ]}
       title="Applications"
-      description="Client cases across intake, review, follow-up, and final readiness."
+      description="Every client file: who owns it, which route it is on, and what still blocks it."
       actions={
         <Button asChild>
           <Link href={"/dashboard/applications/new" as Route}>
@@ -113,7 +113,7 @@ export default async function ApplicationsPage({
             <Input
               name="q"
               defaultValue={query}
-              placeholder="Search applications, clients, applicants..."
+              placeholder="Search cases, clients, applicants..."
               className="h-11 rounded-xl bg-card"
             />
             <select
@@ -143,16 +143,16 @@ export default async function ApplicationsPage({
           title={hasActiveFilters ? "No matching applications" : "No applications yet"}
           description={
             hasActiveFilters
-              ? "Adjust the search or status filter to widen the application queue."
-              : "Create the first client file to start the agency intake queue."
+              ? "Try a client name, applicant name, or case number from the queue."
+              : "Add the first client file to start the agency intake queue."
           }
           href="/dashboard/applications/new"
           actionLabel="New Application"
         />
       ) : (
           <AgencyTableCard
-            title="Application queue"
-            description="Client applications across intake, review, follow-up, and readiness."
+            title="Case queue"
+            description="Passports, forms, statements, letters, and client fixes by case."
           >
             <AgencyTable className={APPLICATIONS_TABLE_TEXT_CLASS}>
               <TableHeader>

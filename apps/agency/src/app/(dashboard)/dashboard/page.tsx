@@ -48,7 +48,7 @@ export default async function DashboardPage() {
     <AgencyPageShell
       breadcrumbs={[{ href: "/dashboard", label: "Dashboard" }]}
       title="Dashboard"
-      description="Agency review queue, reviewer workload, and client follow-ups."
+      description="Today's queue: files in review, clients waiting on fixes, and reviewers carrying the work."
       actions={
         <Button asChild>
           <Link href={"/dashboard/applications/new" as Route}>
@@ -61,7 +61,7 @@ export default async function DashboardPage() {
       {data.stats.totalApplications === 0 ? (
         <EmptyState
           title="No agency cases yet"
-          description="Create the first client application to initialize the agency review workflow."
+          description="Add the first client, applicant, route, and reviewer. The case will appear here before documents arrive."
           href="/dashboard/applications/new"
           actionLabel="New Application"
         />
@@ -70,37 +70,37 @@ export default async function DashboardPage() {
           <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
             <MetricCard
               icon={FilesIcon}
-              label="Total Applications"
+              label="Client files"
               value={data.stats.totalApplications}
-              detail="Across all clients"
+              detail="Every active client case"
               tone="info"
             />
             <MetricCard
               icon={CheckCircle2Icon}
               label="Ready to submit"
               value={readyToSubmit}
-              detail="Ready for agency handoff"
+              detail="Reviewer marked ready"
               tone="success"
             />
             <MetricCard
               icon={Clock3Icon}
               label="In Review"
               value={data.stats.inReview}
-              detail="Reviewer checks underway"
+              detail="On a reviewer's desk"
               tone="warning"
             />
             <MetricCard
               icon={FileWarningIcon}
               label="Needs Client"
               value={needsClient}
-              detail="Waiting on client follow-up"
+              detail="Waiting on client fixes"
               tone="danger"
             />
             <MetricCard
               icon={LineChartIcon}
               label="Ready Rate"
               value={`${readyRate}%`}
-              detail={`${data.stats.scoredCases} reviewed cases`}
+              detail={`${data.stats.scoredCases} checked cases`}
               tone="default"
             />
           </section>
@@ -108,7 +108,7 @@ export default async function DashboardPage() {
           <section className="grid gap-4 xl:grid-cols-[1.45fr_0.95fr_0.95fr]">
             <Card className="rounded-xl shadow-[var(--shadow-dashboard)]">
               <CardHeader className="flex-row items-center justify-between gap-3">
-                <CardTitle className="text-base">Application Throughput</CardTitle>
+                <CardTitle className="text-base">Files moving this week</CardTitle>
                 <span className="text-xs font-medium text-muted-foreground">Last 7 days</span>
               </CardHeader>
               <CardContent>
@@ -146,10 +146,10 @@ export default async function DashboardPage() {
                 </div>
                 <div className="mt-4 flex flex-wrap gap-4 text-xs text-muted-foreground">
                   <span className="inline-flex items-center gap-2">
-                    <span className="h-2 w-2 rounded-full bg-primary" /> Submitted
+                    <span className="h-2 w-2 rounded-full bg-primary" /> Received
                   </span>
                   <span className="inline-flex items-center gap-2">
-                    <span className="h-2 w-2 rounded-full bg-status-success" /> Ready
+                    <span className="h-2 w-2 rounded-full bg-status-success" /> Ready to submit
                   </span>
                   <span className="inline-flex items-center gap-2">
                     <span className="h-2 w-2 rounded-full bg-destructive" /> Needs client
@@ -160,7 +160,7 @@ export default async function DashboardPage() {
 
             <Card className="rounded-xl shadow-[var(--shadow-dashboard)]">
               <CardHeader className="flex-row items-center justify-between gap-3">
-                <CardTitle className="text-base">Top Open Issues</CardTitle>
+                <CardTitle className="text-base">Most repeated issues</CardTitle>
                 <Link
                   href={"/dashboard/issues" as Route}
                   className="text-xs font-bold text-primary"
@@ -185,7 +185,7 @@ export default async function DashboardPage() {
                     </div>
                   ))
                 ) : (
-                  <p className="text-sm text-muted-foreground">No active issue clusters yet.</p>
+                  <p className="text-sm text-muted-foreground">No repeated issue patterns yet.</p>
                 )}
               </CardContent>
             </Card>
@@ -213,12 +213,12 @@ export default async function DashboardPage() {
                         <p className="text-sm font-bold">
                           {member.inReview === 0 ? "No active cases" : `${member.inReview} active`}
                         </p>
-                        <p className="text-xs text-muted-foreground">{member.completed} ready to submit</p>
+                        <p className="text-xs text-muted-foreground">{member.completed} ready files</p>
                       </div>
                     </div>
                   ))
                 ) : (
-                  <p className="text-sm text-muted-foreground">No reviewers have been added yet.</p>
+                  <p className="text-sm text-muted-foreground">No reviewers in the team yet.</p>
                 )}
               </CardContent>
             </Card>
@@ -226,7 +226,7 @@ export default async function DashboardPage() {
 
           <AgencyTableCard
             title="Recent applications"
-            description="Latest client cases moving through the review queue."
+            description="The latest passports, forms, and evidence moving through the desk."
             actions={
               <Link
                 href={"/dashboard/applications" as Route}

@@ -62,14 +62,14 @@ export default async function DocumentsPage({
         { href: "/dashboard/documents", label: "Documents" },
       ]}
       title="Documents"
-      description="Uploaded client files across applications."
+      description="Passports, forms, bank statements, letters, bookings, and photos uploaded by case."
     >
       <AgencyFilterCard>
         <form className="grid gap-3 lg:grid-cols-[minmax(280px,1fr)_180px_180px]">
           <Input
             name="q"
             defaultValue={query}
-            placeholder="Search documents, applicants, clients..."
+            placeholder="Search files, applicants, clients..."
             className="h-11 rounded-xl bg-card"
           />
           <Button type="submit" variant="outline">
@@ -86,16 +86,16 @@ export default async function DocumentsPage({
           title={hasActiveFilters ? "No matching documents" : "No documents uploaded"}
           description={
             hasActiveFilters
-              ? "Adjust the search query to widen the document inventory."
-              : "Generate a checklist inside an application and upload files against the required client documents."
+              ? "Try a passport, bank statement, applicant, client, or case number."
+              : "Open a case and upload the passport, form, bank statement, and supporting evidence."
           }
           href="/dashboard/applications"
           actionLabel="View applications"
         />
       ) : (
           <AgencyTableCard
-            title="Document inventory"
-            description="Recently uploaded client files linked to agency applications."
+            title="File inventory"
+            description="Client files linked to agency cases."
           >
             <AgencyTable>
               <TableHeader>

@@ -115,7 +115,7 @@ export async function AgencyCaseContent({ appId }: { appId: string }) {
           <div className="min-w-0 space-y-3">
             <div className="flex flex-wrap items-center gap-3">
               <h1 className="text-2xl font-bold tracking-tight text-foreground md:text-3xl">
-                Application #{caseNumber}
+                Case #{caseNumber}
               </h1>
               <AgencyCaseStatusSelect applicationId={app.id} status={app.agencyStatus} />
             </div>
@@ -176,7 +176,7 @@ export async function AgencyCaseContent({ appId }: { appId: string }) {
                   <div className="rounded-xl border border-border/80 bg-background p-3">
                     <div className="mb-2 flex items-center gap-2 text-status-warning">
                       <CircleAlertIcon className="h-4 w-4" />
-                      <span className="text-xs font-bold">Inconsistencies</span>
+                      <span className="text-xs font-bold">Mismatches</span>
                     </div>
                     <p className="text-3xl font-bold">{mediumIssues.length}</p>
                     <p className="text-xs font-semibold text-muted-foreground">Medium priority</p>
@@ -184,7 +184,7 @@ export async function AgencyCaseContent({ appId }: { appId: string }) {
                   <div className="rounded-xl border border-border/80 bg-background p-3">
                     <div className="mb-2 flex items-center gap-2 text-primary">
                       <FileIcon className="h-4 w-4" />
-                      <span className="text-xs font-bold">Missing Items</span>
+                      <span className="text-xs font-bold">Missing files</span>
                     </div>
                     <p className="text-3xl font-bold">{missingRequiredItems.length}</p>
                     <p className="text-xs font-semibold text-muted-foreground">To be provided</p>
@@ -193,7 +193,7 @@ export async function AgencyCaseContent({ appId }: { appId: string }) {
 
                 <div className="mt-5">
                   <div className="mb-2 flex items-center justify-between text-sm">
-                    <span className="font-bold">Overall review score</span>
+                    <span className="font-bold">Case readiness score</span>
                     <span className="font-bold">{data.latestEvaluation?.overallScore ?? "Pending"}</span>
                   </div>
                   <Progress value={data.latestEvaluation?.overallScore ?? 0} className="h-2" />
@@ -211,7 +211,7 @@ export async function AgencyCaseContent({ appId }: { appId: string }) {
                           <div className="flex items-start justify-between gap-3">
                             <div>
                               <p className="text-sm font-bold">{issue}</p>
-                              <p className="mt-1 text-xs text-muted-foreground">Generated from the latest document review.</p>
+                              <p className="mt-1 text-xs text-muted-foreground">From the latest passport, form, and evidence check.</p>
                             </div>
                             <IssueSeverityBadge severity={index < 2 ? "high" : "medium"} />
                           </div>
@@ -220,14 +220,14 @@ export async function AgencyCaseContent({ appId }: { appId: string }) {
                     </div>
                   ) : (
                     <div className="rounded-xl border border-dashed border-border p-5 text-sm text-muted-foreground">
-                      Run document review after the file set is ready.
+                      Upload the passport, form, and evidence, then run review.
                     </div>
                   )}
                 </div>
 
                 <div className="mt-5 space-y-3">
                   <div className="flex items-center justify-between">
-                    <h3 className="text-sm font-bold">Missing items</h3>
+                    <h3 className="text-sm font-bold">Missing files</h3>
                     <span className="text-xs font-bold text-primary">View all</span>
                   </div>
                   {missingRequiredItems.length > 0 ? (
@@ -239,7 +239,7 @@ export async function AgencyCaseContent({ appId }: { appId: string }) {
                     ))
                   ) : (
                     <p className="rounded-xl border border-border/80 bg-background p-3 text-sm text-muted-foreground">
-                      All required checklist items have at least one uploaded file.
+                      Every required document has at least one uploaded file.
                     </p>
                   )}
                 </div>
@@ -247,9 +247,9 @@ export async function AgencyCaseContent({ appId }: { appId: string }) {
                 <div className="mt-5 rounded-xl border border-border/80 bg-background p-4">
                   <div className="mb-3 flex items-center justify-between gap-3">
                     <div>
-                      <h3 className="text-sm font-bold">Client-ready issue summary</h3>
+                      <h3 className="text-sm font-bold">Client fix list</h3>
                       <p className="mt-1 text-xs text-muted-foreground">
-                        {hasReport ? "A report draft is available." : "Generate after document review or reviewer issues."}
+                        {hasReport ? "A draft list is available." : "Generate after missing files or reviewer notes."}
                       </p>
                     </div>
                     <Badge variant="outline" className="rounded-full">
@@ -272,7 +272,7 @@ export async function AgencyCaseContent({ appId }: { appId: string }) {
               <TabsContent value="checklist" className="min-h-0 flex-1 overflow-y-auto p-4">
                 <div className="mb-4 rounded-xl border border-border/80 bg-background p-4">
                   <div className="mb-2 flex items-center justify-between gap-3">
-                    <p className="text-sm font-bold">Required document readiness</p>
+                    <p className="text-sm font-bold">Required files uploaded</p>
                     <span className="text-sm font-bold">{completionPercent}%</span>
                   </div>
                   <Progress value={completionPercent} className="h-2" />
@@ -331,7 +331,7 @@ export async function AgencyCaseContent({ appId }: { appId: string }) {
                   </div>
 
                   <div className="rounded-xl border border-border/80 bg-background p-4">
-                    <h3 className="text-sm font-bold">Add reviewer issue</h3>
+                    <h3 className="text-sm font-bold">Add issue</h3>
                     <div className="mt-3">
                       <AddReviewIssueForm applicationId={app.id} />
                     </div>
@@ -345,7 +345,7 @@ export async function AgencyCaseContent({ appId }: { appId: string }) {
                     { label: "Case created", date: app.createdAt, icon: PlusIcon },
                     { label: "Client submitted files", date: app.submittedAt, icon: FileTextIcon },
                     { label: "Review completed", date: app.reviewCompletedAt, icon: CheckCircle2Icon },
-                    { label: "Submission handoff", date: app.finalSubmissionAt, icon: Clock3Icon },
+                    { label: "Marked ready for submission", date: app.finalSubmissionAt, icon: Clock3Icon },
                   ].map((event) => (
                     <div key={event.label} className="flex gap-3 rounded-xl border border-border/80 bg-background p-3">
                       <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/8 text-primary">
@@ -360,7 +360,7 @@ export async function AgencyCaseContent({ appId }: { appId: string }) {
 
                   {data.issues.length > 0 ? (
                     <div className="space-y-2 pt-2">
-                      <h3 className="text-sm font-bold">Reviewer issues</h3>
+                      <h3 className="text-sm font-bold">Open issues</h3>
                       {data.issues.map((issue) => (
                         <div key={issue.id} className="rounded-xl border border-border/80 bg-background p-3">
                           <div className="mb-2 flex items-start justify-between gap-3">

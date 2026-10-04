@@ -63,7 +63,7 @@ export default async function ReportsPage({
         { href: "/dashboard/reports", label: "Reports" },
       ]}
       title="Reports"
-      description="Client-ready summaries and missing follow-ups."
+      description="Client issue lists: what to upload, fix, replace, or clarify."
     >
       <AgencyFilterCard>
         <form className="grid gap-3 lg:grid-cols-[minmax(280px,1fr)_180px_180px]">
@@ -87,8 +87,8 @@ export default async function ReportsPage({
           title={hasActiveFilters ? "No matching reports" : "No reports yet"}
           description={
             hasActiveFilters
-              ? "Adjust the search query to widen the report list."
-              : "Generate a client report inside an application after document or reviewer issues have been added."
+              ? "Try a client, applicant, case number, or report summary."
+              : "Generate a report after a case has missing documents, reviewer notes, or client fixes."
           }
           href="/dashboard/applications"
           actionLabel="View applications"
@@ -97,7 +97,7 @@ export default async function ReportsPage({
         <>
           <AgencyTableCard
             title="Client reports"
-            description="Generated summaries ready for client follow-up."
+            description="Fix lists ready to send back to clients."
           >
             <AgencyTable>
               <TableHeader>
@@ -159,7 +159,7 @@ export default async function ReportsPage({
           {data.casesWithoutReports.length > 0 ? (
             <Card className="rounded-xl shadow-[var(--shadow-dashboard)]">
               <CardHeader>
-                <CardTitle className="text-base">Cases without reports</CardTitle>
+                <CardTitle className="text-base">Cases still missing a client list</CardTitle>
               </CardHeader>
               <CardContent className="grid gap-2">
                 {data.casesWithoutReports.slice(0, 8).map((row) => (
