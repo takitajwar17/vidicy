@@ -71,6 +71,9 @@ describe("marketing SEO surfaces", () => {
     expect(toIsoDate(byUrl.get(`${CANONICAL_SITE_URL}/terms`)?.lastModified)).toBe(
       "2026-10-02T00:00:00.000Z",
     );
+    expect(toIsoDate(byUrl.get(`${CANONICAL_SITE_URL}/subprocessors`)?.lastModified)).toBe(
+      "2026-10-14T00:00:00.000Z",
+    );
   });
 
   it("keeps public navigation free of removed feature anchors", () => {

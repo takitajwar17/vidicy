@@ -305,8 +305,8 @@ describe("agency application pages", () => {
   it("renders the dashboard root as an agency operations dashboard", async () => {
     const markup = renderToStaticMarkup(await DashboardPage());
 
-    expect(markup).toContain("Agency review queue, reviewer workload, and client follow-ups.");
-    expect(markup).toContain("Application Throughput");
+    expect(markup).toContain("Today&#x27;s queue: files in review, clients waiting on fixes, and reviewers carrying the work.");
+    expect(markup).toContain("Files moving this week");
     expect(markup).toContain("Recent applications");
     expect(markup).toContain("VA-2026-ABC123");
     expect(markup).not.toContain("Start Your First Application");
@@ -319,10 +319,10 @@ describe("agency application pages", () => {
 
     const markup = renderToStaticMarkup(page);
 
-    expect(markup).toContain("Application #VA-2026-ABC123");
+    expect(markup).toContain("Case #VA-2026-ABC123");
     expect(markup).toContain("Review");
-    expect(markup).toContain("Overall review score");
-    expect(markup).toContain("Client-ready issue summary");
+    expect(markup).toContain("Case readiness score");
+    expect(markup).toContain("Client fix list");
     expect(markup).toContain("Review issues");
     expect(markup).toContain("Bank statement needs review");
     expect(markup).not.toContain("Atlas");
