@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { requireVerifiedPageSession } from "@/utils/auth-page";
 
 export const metadata: Metadata = {
-  title: "Settings",
+  title: "Profile",
 };
 import { SettingsForm } from "./settings-form";
 import { Suspense } from "react";
@@ -12,9 +12,11 @@ import ThemeSwitch from "@/components/theme-switch";
 import { AccountDetailsCard } from "@/components/settings/account-details-card";
 import { DangerZoneCard } from "@/components/settings/danger-zone-card";
 
+const SETTINGS_CARD_CLASS = "rounded-xl border-border/80 shadow-[var(--shadow-dashboard)]";
+
 function SettingsFormSkeleton() {
   return (
-    <Card>
+    <Card className={SETTINGS_CARD_CLASS}>
       <CardHeader>
         <div className="space-y-2">
           <Skeleton className="h-8 w-[200px]" />
@@ -51,7 +53,7 @@ function SettingsFormSkeleton() {
 
 function AccountDetailsSkeleton() {
   return (
-    <Card>
+    <Card className={SETTINGS_CARD_CLASS}>
       <CardHeader>
         <Skeleton className="h-5 w-32" />
         <Skeleton className="h-4 w-48" />
@@ -72,7 +74,15 @@ export default async function SettingsPage() {
 
   return (
     <div className="flex flex-col gap-4 md:gap-6">
-      {/* Personal Info + Account Details side by side */}
+      <div className="space-y-1">
+        <h1 className="text-2xl font-bold tracking-tight text-foreground md:text-3xl">
+          Profile
+        </h1>
+        <p className="max-w-3xl text-sm text-muted-foreground">
+          Your profile, sign-in details, device preferences, and account controls.
+        </p>
+      </div>
+
       <div className="grid gap-4 md:gap-6 md:grid-cols-2">
         <Suspense fallback={<SettingsFormSkeleton />}>
           <SettingsForm />
@@ -82,8 +92,7 @@ export default async function SettingsPage() {
         </Suspense>
       </div>
 
-      {/* Appearance */}
-      <Card>
+      <Card className={SETTINGS_CARD_CLASS}>
         <CardHeader>
           <CardTitle>Appearance</CardTitle>
           <CardDescription>
@@ -103,7 +112,6 @@ export default async function SettingsPage() {
         </CardContent>
       </Card>
 
-      {/* Danger Zone — Account deletion & data export (GDPR) */}
       <DangerZoneCard />
     </div>
   );

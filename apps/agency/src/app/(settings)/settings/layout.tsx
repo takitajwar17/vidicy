@@ -37,20 +37,18 @@ export default async function SettingsLayout({
         <SidebarProvider>
           <SiteSidebar />
           <SidebarInset className="w-full flex flex-col">
-            <header className="sticky top-0 z-10 bg-background flex h-16 shrink-0 items-center justify-between border-b px-4 transition-[width,height] ease-linear group-has-[[data-collapsible=icon]]/sidebar-wrapper:h-12">
-              <div className="flex items-center gap-2">
+            <header className="sticky top-0 z-20 flex h-14 shrink-0 items-center gap-2 border-b border-border/70 bg-background/92 backdrop-blur transition-[width,height] ease-linear group-has-[[data-collapsible=icon]]/sidebar-wrapper:h-12">
+              <div className="flex min-w-0 items-center gap-2 px-3 md:px-4">
                 <SidebarTrigger className="-ml-1" />
                 <Separator orientation="vertical" className="mr-2 h-4" />
                 <SettingsBreadcrumbs />
               </div>
             </header>
             <div className="flex flex-1 flex-col">
-              <div className="@container/main flex flex-1 flex-col gap-2">
-                <div className="flex flex-col gap-4 py-4 md:gap-6 md:py-6">
-                  <div className="px-4 lg:px-6 flex flex-col gap-4 md:gap-6">
-                    <SettingsNav />
-                    {children}
-                  </div>
+              <div className="@container/main flex flex-1 flex-col">
+                <div className="mx-auto flex w-full max-w-[1520px] flex-col gap-5 px-4 py-5 md:px-6 md:py-6">
+                  <SettingsNav />
+                  {children}
                 </div>
               </div>
             </div>

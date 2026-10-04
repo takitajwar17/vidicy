@@ -25,6 +25,8 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useRouter } from "next/navigation";
 import { useCsrfToken } from "@/components/csrf-provider";
 
+const SETTINGS_CARD_CLASS = "rounded-xl border-border/80 shadow-[var(--shadow-dashboard)]";
+
 export function SettingsForm() {
   const router = useRouter()
   const csrfToken = useCsrfToken();
@@ -64,7 +66,7 @@ export function SettingsForm() {
 
   if (!session || isLoading) {
     return (
-      <Card>
+      <Card className={SETTINGS_CARD_CLASS}>
         <CardHeader>
           <div className="space-y-2">
             <Skeleton className="h-8 w-[200px]" />
@@ -104,7 +106,7 @@ export function SettingsForm() {
   }
 
   return (
-    <Card>
+    <Card className={SETTINGS_CARD_CLASS}>
       <CardHeader>
         <CardTitle>Profile Settings</CardTitle>
         <CardDescription>

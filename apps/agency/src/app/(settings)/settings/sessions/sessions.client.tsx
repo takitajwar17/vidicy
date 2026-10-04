@@ -36,7 +36,7 @@ export function SessionsClient({ sessions }: { sessions: SessionWithMeta[] }) {
   const dialogCloseRef = React.useRef<HTMLButtonElement>(null);
   const { execute: deleteSession } = useServerAction(deleteSessionAction, {
     onSuccess: () => {
-      toast.success("Session deleted");
+      toast.success("Device signed out");
       dialogCloseRef.current?.click();
       router.refresh();
     }
@@ -46,8 +46,8 @@ export function SessionsClient({ sessions }: { sessions: SessionWithMeta[] }) {
     <div className="flex flex-col gap-4">
       {sessions.map((session) => (
         <Card key={session.id} className={cn(
-          "overflow-hidden transition-all",
-          !session.isCurrentSession ? "bg-card/40" : "border-2 border-primary/20 shadow-md bg-secondary/10"
+          "overflow-hidden rounded-xl border-border/80 shadow-[var(--shadow-dashboard)] transition-colors",
+          session.isCurrentSession && "border-primary/25 bg-primary/[0.04]"
         )}>
           <CardHeader className="p-4 sm:p-6">
             <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
@@ -59,8 +59,8 @@ export function SessionsClient({ sessions }: { sessions: SessionWithMeta[] }) {
                       : session.country || "Unknown location"}
                   </CardTitle>
                   {session.isCurrentSession && (
-                    <Badge className="bg-primary/10 text-primary border-primary/20 hover:bg-primary/15 transition-colors">
-                      Current Session
+                    <Badge variant="outline" className="border-primary/25 bg-primary/10 text-primary">
+                      Current session
                     </Badge>
                   )}
                   {session?.authenticationType && (
@@ -92,12 +92,12 @@ export function SessionsClient({ sessions }: { sessions: SessionWithMeta[] }) {
                   <Dialog>
                     <DialogTrigger asChild>
                       <Button size="sm" variant="destructive" className="w-full sm:w-auto h-8 text-xs bg-destructive/10 text-destructive hover:bg-destructive/20 border-destructive/20">
-                        Delete session
+                        Sign out device
                       </Button>
                     </DialogTrigger>
                     <DialogContent className="sm:max-w-[425px]">
                       <DialogHeader>
-                        <DialogTitle>Delete session?</DialogTitle>
+                        <DialogTitle>Sign out this device?</DialogTitle>
                         <DialogDescription>
                           This will sign out this device. This action cannot be undone.
                         </DialogDescription>
@@ -111,7 +111,7 @@ export function SessionsClient({ sessions }: { sessions: SessionWithMeta[] }) {
                           className="w-full sm:w-auto"
                           onClick={() => deleteSession({ sessionId: session.id })}
                         >
-                          Delete session
+                          Sign out device
                         </Button>
                       </DialogFooter>
                     </DialogContent>
