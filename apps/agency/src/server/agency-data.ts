@@ -67,19 +67,26 @@ function normalizeSearchQuery(query?: string | null) {
   return query?.trim() || "";
 }
 
-async function getApplicationIdsMatchingApplicantQuery(query: string): Promise<string[]> {
-  if (!query) return [];
+async function getApplicantSearchMatches(query: string): Promise<{
+  applicationIds: string[];
+  applicantIds: string[];
+}> {
+  if (!query) return { applicationIds: [], applicantIds: [] };
 
   const db = getDB();
   const applicants = await db.query.applicantTable.findMany({
     where: like(applicantTable.name, `%${query}%`),
     columns: {
+      id: true,
       applicationId: true,
     },
     limit: 500,
   });
 
-  return Array.from(new Set(applicants.map((applicant) => applicant.applicationId)));
+  return {
+    applicationIds: Array.from(new Set(applicants.map((applicant) => applicant.applicationId))),
+    applicantIds: Array.from(new Set(applicants.map((applicant) => applicant.id))),
+  };
 }
 
 export async function getActiveAgencyStaffRows(): Promise<AgencyStaffRow[]> {
@@ -146,7 +153,7 @@ export async function getAgencyCaseRows({
 } = {}): Promise<AgencyCaseRow[]> {
   const db = getDB();
   const query = normalizeSearchQuery(rawQuery);
-  const queryApplicationIds = await getApplicationIdsMatchingApplicantQuery(query);
+  const applicantMatches = await getApplicantSearchMatches(query);
 
   const filters = getAgencyCaseFilters();
   if (statuses?.length) {
@@ -161,8 +168,8 @@ export async function getAgencyCaseRows({
       like(visaApplicationTable.visaType, `%${query}%`),
     ];
 
-    if (queryApplicationIds.length) {
-      queryFilters.push(inArray(visaApplicationTable.id, queryApplicationIds));
+    if (applicantMatches.applicationIds.length) {
+      queryFilters.push(inArray(visaApplicationTable.id, applicantMatches.applicationIds));
     }
 
     filters.push(or(...queryFilters)!);
@@ -370,22 +377,26 @@ export async function getAgencyDashboardData() {
   ]);
 
   const totalApplications = cases.length;
-  const completed = cases.filter(
+  const readyToSubmit = cases.filter(
     ({ application }) =>
       normalizeAgencyCaseStatus(application.agencyStatus) === AGENCY_CASE_STATUS.READY_TO_SUBMIT,
   ).length;
-  const inReview = cases.filter(({ application }) => {
-    const status = normalizeAgencyCaseStatus(application.agencyStatus);
-    return status === AGENCY_CASE_STATUS.IN_REVIEW || status === AGENCY_CASE_STATUS.NEEDS_CLIENT;
-  }).length;
-  const flagged = cases.filter(
+  const inReview = cases.filter(
+    ({ application }) =>
+      normalizeAgencyCaseStatus(application.agencyStatus) === AGENCY_CASE_STATUS.IN_REVIEW,
+  ).length;
+  const needsClient = cases.filter(
+    ({ application }) =>
+      normalizeAgencyCaseStatus(application.agencyStatus) === AGENCY_CASE_STATUS.NEEDS_CLIENT,
+  ).length;
+  const openIssueCases = cases.filter(
     (row) =>
       row.highIssueCount > 0 ||
       normalizeAgencyCaseStatus(row.application.agencyStatus) === AGENCY_CASE_STATUS.NEEDS_CLIENT,
   ).length;
   const scoredCases = cases.filter((row) => row.latestEvaluation);
-  const approvalReadyRate =
-    totalApplications > 0 ? Math.round((completed / totalApplications) * 1000) / 10 : 0;
+  const readyRate =
+    totalApplications > 0 ? Math.round((readyToSubmit / totalApplications) * 1000) / 10 : 0;
 
   const issueBuckets = new Map<string, { count: number; high: number }>();
   for (const row of cases) {
@@ -440,10 +451,14 @@ export async function getAgencyDashboardData() {
     topFlaggedIssues,
     stats: {
       totalApplications,
-      completed,
+      completed: readyToSubmit,
+      readyToSubmit,
       inReview,
-      flagged,
-      approvalReadyRate,
+      needsClient,
+      flagged: openIssueCases,
+      openIssueCases,
+      approvalReadyRate: readyRate,
+      readyRate,
       scoredCases: scoredCases.length,
     },
   };
@@ -515,11 +530,31 @@ export async function getAgencyCaseDetail(appId: string) {
   };
 }
 
-export async function getAgencyClientsWithCounts() {
+export async function getAgencyClientsWithCounts({
+  limit = 100,
+  offset = 0,
+  query: rawQuery = null,
+}: {
+  limit?: number;
+  offset?: number;
+  query?: string | null;
+} = {}) {
   const db = getDB();
+  const query = normalizeSearchQuery(rawQuery);
+  const clientFilters = query
+    ? or(
+        like(agencyClientTable.name, `%${query}%`),
+        like(agencyClientTable.email, `%${query}%`),
+        like(agencyClientTable.phone, `%${query}%`),
+        like(agencyClientTable.country, `%${query}%`),
+      )
+    : undefined;
   const [clients, cases] = await Promise.all([
     db.query.agencyClientTable.findMany({
+      where: clientFilters,
       orderBy: [desc(agencyClientTable.updatedAt)],
+      limit,
+      offset,
     }),
     db.query.visaApplicationTable.findMany({
       where: and(...getAgencyCaseFilters()),
@@ -550,11 +585,36 @@ export async function getAgencyClientsWithCounts() {
 export async function getAgencyDocuments({
   limit = 100,
   offset = 0,
+  query: rawQuery = null,
 }: {
   limit?: number;
   offset?: number;
+  query?: string | null;
 } = {}) {
   const db = getDB();
+  const query = normalizeSearchQuery(rawQuery);
+  const applicantMatches = await getApplicantSearchMatches(query);
+  const filters = getAgencyCaseFilters();
+
+  if (query) {
+    const queryFilters = [
+      like(uploadedDocumentTable.fileName, `%${query}%`),
+      like(uploadedDocumentTable.mimeType, `%${query}%`),
+      like(visaApplicationTable.caseNumber, `%${query}%`),
+      like(visaApplicationTable.clientName, `%${query}%`),
+      like(visaApplicationTable.destinationCountry, `%${query}%`),
+      like(visaApplicationTable.visaType, `%${query}%`),
+    ];
+
+    if (applicantMatches.applicationIds.length) {
+      queryFilters.push(inArray(visaApplicationTable.id, applicantMatches.applicationIds));
+    }
+    if (applicantMatches.applicantIds.length) {
+      queryFilters.push(inArray(uploadedDocumentTable.applicantId, applicantMatches.applicantIds));
+    }
+
+    filters.push(or(...queryFilters)!);
+  }
 
   const documentRows = await db
     .select({
@@ -563,7 +623,7 @@ export async function getAgencyDocuments({
     })
     .from(uploadedDocumentTable)
     .innerJoin(visaApplicationTable, eq(uploadedDocumentTable.applicationId, visaApplicationTable.id))
-    .where(and(...getAgencyCaseFilters()))
+    .where(and(...filters))
     .orderBy(desc(uploadedDocumentTable.uploadedAt))
     .limit(limit)
     .offset(offset);
@@ -592,14 +652,36 @@ export async function getAgencyDocuments({
 export async function getAgencyReviewIssueRows({
   limit = 100,
   offset = 0,
+  query: rawQuery = null,
 }: {
   limit?: number;
   offset?: number;
+  query?: string | null;
 } = {}) {
   const db = getDB();
+  const query = normalizeSearchQuery(rawQuery);
+  const applicantMatches = await getApplicantSearchMatches(query);
+  const issueFilters = [ne(reviewIssueTable.status, REVIEW_ISSUE_STATUS.DISMISSED)];
+
+  if (query) {
+    const queryFilters = [
+      like(reviewIssueTable.title, `%${query}%`),
+      like(reviewIssueTable.description, `%${query}%`),
+      like(reviewIssueTable.recommendation, `%${query}%`),
+    ];
+
+    if (applicantMatches.applicationIds.length) {
+      queryFilters.push(inArray(reviewIssueTable.applicationId, applicantMatches.applicationIds));
+    }
+    if (applicantMatches.applicantIds.length) {
+      queryFilters.push(inArray(reviewIssueTable.applicantId, applicantMatches.applicantIds));
+    }
+
+    issueFilters.push(or(...queryFilters)!);
+  }
 
   const issues = await db.query.reviewIssueTable.findMany({
-    where: ne(reviewIssueTable.status, REVIEW_ISSUE_STATUS.DISMISSED),
+    where: and(...issueFilters),
     orderBy: [desc(reviewIssueTable.createdAt)],
     limit,
     offset,
@@ -653,15 +735,24 @@ export async function getAgencyReviewIssueRows({
     }));
 }
 
-export async function getAgencyReports() {
+export async function getAgencyReports({
+  limit = 75,
+  offset = 0,
+  query: rawQuery = null,
+}: {
+  limit?: number;
+  offset?: number;
+  query?: string | null;
+} = {}) {
   const db = getDB();
+  const query = normalizeSearchQuery(rawQuery);
 
   const reports = await db.query.clientReportTable.findMany({
     orderBy: [desc(clientReportTable.createdAt)],
     limit: 200,
   });
 
-  const cases = await getAgencyCaseRows({ limit: 500 });
+  const cases = await getAgencyCaseRows({ limit: 500, query });
   const casesById = new Map(cases.map((row) => [row.application.id, row]));
   const agencyReports = reports.filter((report) => casesById.has(report.applicationId));
   const latestReportByApplicationId = new Map<string, ClientReportRow>();
@@ -674,7 +765,7 @@ export async function getAgencyReports() {
 
   const latestReports = Array.from(latestReportByApplicationId.values());
 
-  const reportRows = latestReports.map((report) => ({
+  const reportRows = latestReports.slice(offset, offset + limit).map((report) => ({
     report,
     caseRow: casesById.get(report.applicationId) ?? null,
   }));
