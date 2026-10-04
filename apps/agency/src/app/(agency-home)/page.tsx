@@ -168,28 +168,28 @@ export default function Home() {
               />
             </div>
 
-            <div className="public-landing-panel public-on-dark relative -mt-[clamp(1.5rem,7.5vw,5rem)] w-full max-w-[21rem] rounded-[clamp(1rem,2.25vw,1.5rem)] border border-white/15 p-[clamp(0.55rem,1.7vw,1.25rem)] text-left sm:max-w-3xl md:max-w-5xl">
-              <div className="grid grid-cols-[1.16fr_1.16fr_1.16fr_0.84fr_0.84fr_0.84fr] items-start gap-x-[clamp(0.28rem,1.2vw,1.65rem)]">
+            <div className="public-landing-panel public-on-dark relative -mt-[clamp(1.65rem,8.25vw,5.5rem)] w-full max-w-[23.1rem] rounded-[clamp(0.55rem,1.265vw,0.9625rem)] border border-white/15 p-[clamp(0.605rem,1.87vw,1.375rem)] text-left sm:max-w-[52.8rem] md:max-w-[70.4rem]">
+              <div className="grid grid-cols-[1.16fr_1.16fr_1.16fr_0.84fr_0.84fr_0.84fr] items-start gap-x-[clamp(0.308rem,1.32vw,1.815rem)]">
                 {workflowHighlights.map((highlight) => (
                   <div className="min-w-0" key={highlight.title}>
-                    <div className="flex h-[clamp(1.15rem,3.1vw,2.25rem)] items-end">
-                      <p className="whitespace-nowrap text-[clamp(0.43rem,1.55vw,1.125rem)] font-semibold leading-none">
+                    <div className="flex h-[clamp(1.265rem,3.41vw,2.475rem)] items-end">
+                      <p className="whitespace-nowrap text-[clamp(0.473rem,1.705vw,1.2375rem)] font-semibold leading-none">
                         {highlight.title}
                       </p>
                     </div>
-                    <p className="public-on-dark-subtle mt-[clamp(0.18rem,0.45vw,0.35rem)] whitespace-nowrap text-[clamp(0.31rem,1.05vw,0.75rem)] leading-none">
+                    <p className="public-on-dark-subtle mt-[clamp(0.198rem,0.495vw,0.385rem)] whitespace-nowrap text-[clamp(0.341rem,1.155vw,0.825rem)] leading-none">
                       {highlight.description}
                     </p>
                   </div>
                 ))}
                 {metrics.map((metric) => (
                   <div className="min-w-0 text-center" key={metric.label}>
-                    <div className="flex h-[clamp(1.15rem,3.1vw,2.25rem)] items-end justify-center">
-                      <p className="whitespace-nowrap text-[clamp(0.62rem,2.6vw,1.875rem)] font-medium leading-none">
+                    <div className="flex h-[clamp(1.265rem,3.41vw,2.475rem)] items-end justify-center">
+                      <p className="whitespace-nowrap text-[clamp(0.682rem,2.86vw,2.0625rem)] font-medium leading-none">
                         {metric.value}
                       </p>
                     </div>
-                    <p className="public-on-dark-subtle mt-[clamp(0.16rem,0.42vw,0.4rem)] whitespace-nowrap text-[clamp(0.27rem,0.85vw,0.6875rem)] leading-none">
+                    <p className="public-on-dark-subtle mt-[clamp(0.176rem,0.462vw,0.44rem)] whitespace-nowrap text-[clamp(0.297rem,0.935vw,0.75625rem)] leading-none">
                       {metric.label}
                     </p>
                   </div>

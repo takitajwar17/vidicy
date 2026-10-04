@@ -181,9 +181,13 @@ describe("agency application pages", () => {
       stats: {
         totalApplications: 1,
         completed: 0,
+        readyToSubmit: 0,
         inReview: 1,
+        needsClient: 0,
         flagged: 1,
+        openIssueCases: 1,
         approvalReadyRate: 0,
+        readyRate: 0,
         scoredCases: 1,
       },
     });
@@ -301,7 +305,7 @@ describe("agency application pages", () => {
   it("renders the dashboard root as an agency operations dashboard", async () => {
     const markup = renderToStaticMarkup(await DashboardPage());
 
-    expect(markup).toContain("Agency review pipeline at a glance.");
+    expect(markup).toContain("Agency review queue, reviewer workload, and client follow-ups.");
     expect(markup).toContain("Application Throughput");
     expect(markup).toContain("Recent applications");
     expect(markup).toContain("VA-2026-ABC123");

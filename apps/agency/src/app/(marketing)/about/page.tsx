@@ -76,9 +76,8 @@ export default function AboutPage() {
           </h2>
           <div className="space-y-5 text-base leading-8 text-muted-foreground sm:text-lg">
             <p>
-              Agencies should keep control of the client relationship and final submission
-              decision. Software should make the review process faster, clearer, and easier to
-              repeat.
+              Agencies should keep control of the client relationship and submission judgment.
+              Software should make the review process faster, clearer, and easier to repeat.
             </p>
             <p>
               The best version of Vidicy is not a generic chatbot. It is a review system that fits

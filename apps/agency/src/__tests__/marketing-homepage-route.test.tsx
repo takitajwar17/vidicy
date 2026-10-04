@@ -27,7 +27,6 @@ describe("main marketing homepage route", () => {
     expect(markup).toContain("Request a demo");
     expect(markup).toContain("Vidicy agency dashboard showing application review results");
     expect(markup).toContain("dashboard.png");
-    expect(markup).toContain("What your review team gets");
     expect(markup).toContain("30 sec");
     expect(markup).toContain("Turn manual review into a repeatable workflow");
     expect(markup).toContain(

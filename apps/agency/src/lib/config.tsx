@@ -59,7 +59,7 @@ export const siteConfig = {
         <span>
           Vidicy is built for agencies that already handle visa clients and need a faster review
           desk: intake queues, document checks, issue tracking, reviewer notes, and client-ready
-          reports without losing control of the final submission decision.
+          reports that keep every file moving with clear next steps.
         </span>
       ),
     },
@@ -78,7 +78,7 @@ export const siteConfig = {
       answer: (
         <span>
           No. Vidicy is designed to make review teams faster and more consistent. Agencies keep the
-          client relationship, reviewer judgment, and final submission decision.
+          client relationship, reviewer judgment, and submission call.
         </span>
       ),
     },
