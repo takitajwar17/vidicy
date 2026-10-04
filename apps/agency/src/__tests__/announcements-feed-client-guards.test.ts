@@ -9,7 +9,7 @@ describe("announcements feed client guards", () => {
       "utf8",
     );
 
-    expect(source).toContain("PageHeader");
+    expect(source).toContain("AgencyPageShell");
     expect(source).toContain('label: "Dashboard"');
     expect(source).toContain('label: "Announcements"');
   });

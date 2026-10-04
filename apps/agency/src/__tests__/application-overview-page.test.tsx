@@ -307,7 +307,7 @@ describe("agency application pages", () => {
 
     expect(markup).toContain("Today&#x27;s queue: files in review, clients waiting on fixes, and reviewers carrying the work.");
     expect(markup).toContain("Files moving this week");
-    expect(markup).toContain("Recent applications");
+    expect(markup).toContain("Recent client files");
     expect(markup).toContain("VA-2026-ABC123");
     expect(markup).not.toContain("Start Your First Application");
   });
