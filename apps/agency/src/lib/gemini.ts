@@ -21,9 +21,15 @@ export function getGeminiClient(): GoogleGenAI {
   const project = getConfigValue("GOOGLE_CLOUD_PROJECT")
   if (!project) throw new Error("GOOGLE_CLOUD_PROJECT not configured")
 
+  const credentialsJson = getConfigValue("GOOGLE_APPLICATION_CREDENTIALS_JSON")
+  const googleAuthOptions = credentialsJson
+    ? { credentials: JSON.parse(credentialsJson) }
+    : undefined
+
   return new GoogleGenAI({
     vertexai: true,
     project,
     location: getConfigValue("GOOGLE_CLOUD_LOCATION") ?? DEFAULT_VERTEX_LOCATION,
+    googleAuthOptions,
   })
 }
