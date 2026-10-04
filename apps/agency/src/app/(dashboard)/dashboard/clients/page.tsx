@@ -6,10 +6,13 @@ import { AgencyPageShell } from "@/components/agency/agency-page-shell";
 import {
   AgencyTable,
   AgencyTableCard,
+  AgencyFilterCard,
+  AgencyPagination,
   EmptyState,
   formatShortDate,
 } from "@/components/agency/agency-ui";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { getAgencyClientsWithCounts } from "@/server/agency-data";
 
@@ -17,8 +20,37 @@ export const metadata: Metadata = {
   title: "Clients",
 };
 
-export default async function ClientsPage() {
-  const rows = await getAgencyClientsWithCounts();
+const CLIENTS_PAGE_SIZE = 50;
+
+function parsePage(value: string | null | undefined) {
+  const parsed = Number.parseInt(value ?? "1", 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : 1;
+}
+
+function getClientsHref({ page, query }: { page: number; query: string }) {
+  const params = new URLSearchParams();
+  if (query) params.set("q", query);
+  if (page > 1) params.set("page", String(page));
+  const suffix = params.toString();
+  return `/dashboard/clients${suffix ? `?${suffix}` : ""}` as Route;
+}
+
+export default async function ClientsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ page?: string; q?: string }>;
+}) {
+  const params = await searchParams;
+  const query = params.q?.trim() ?? "";
+  const page = parsePage(params.page);
+  const rowsWithLookahead = await getAgencyClientsWithCounts({
+    limit: CLIENTS_PAGE_SIZE + 1,
+    offset: (page - 1) * CLIENTS_PAGE_SIZE,
+    query,
+  });
+  const rows = rowsWithLookahead.slice(0, CLIENTS_PAGE_SIZE);
+  const hasNextPage = rowsWithLookahead.length > CLIENTS_PAGE_SIZE;
+  const hasActiveFilters = Boolean(query);
 
   return (
     <AgencyPageShell
@@ -27,22 +59,42 @@ export default async function ClientsPage() {
         { href: "/dashboard/clients", label: "Clients" },
       ]}
       title="Clients"
-      description="Agency client directory."
+      description="Agency clients and their active case volume."
       actions={
         <Button asChild>
-          <Link href={"/dashboard/applications/new" as Route}>Create application</Link>
+          <Link href={"/dashboard/applications/new" as Route}>New Application</Link>
         </Button>
       }
     >
+      <AgencyFilterCard>
+        <form className="grid gap-3 lg:grid-cols-[minmax(280px,1fr)_180px_180px]">
+          <Input
+            name="q"
+            defaultValue={query}
+            placeholder="Search clients, emails, countries..."
+            className="h-11 rounded-xl bg-card"
+          />
+          <Button type="submit" variant="outline">
+            Apply Filters
+          </Button>
+          <Button asChild variant="ghost">
+            <Link href={"/dashboard/clients" as Route}>Clear</Link>
+          </Button>
+        </form>
+      </AgencyFilterCard>
+
       {rows.length === 0 ? (
         <EmptyState
-          title="No clients yet"
-          description="Clients are created automatically when you add agency applications."
+          title={hasActiveFilters ? "No matching clients" : "No clients yet"}
+          description={
+            hasActiveFilters
+              ? "Adjust the search query to widen the client directory."
+              : "Clients are created automatically when you add agency applications."
+          }
           href="/dashboard/applications/new"
-          actionLabel="Create application"
+          actionLabel="New Application"
         />
       ) : (
-        <>
           <AgencyTableCard
             title="Client directory"
             description="Agency clients with current case volume and recent activity."
@@ -73,8 +125,14 @@ export default async function ClientsPage() {
                 ))}
               </TableBody>
             </AgencyTable>
+            <AgencyPagination
+              page={page}
+              hasNextPage={hasNextPage}
+              previousHref={getClientsHref({ page: page - 1, query })}
+              nextHref={getClientsHref({ page: page + 1, query })}
+              endLabel="End of directory"
+            />
           </AgencyTableCard>
-        </>
       )}
     </AgencyPageShell>
   );

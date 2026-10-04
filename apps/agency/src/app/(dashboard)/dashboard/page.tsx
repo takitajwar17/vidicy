@@ -40,12 +40,15 @@ export const metadata: Metadata = {
 export default async function DashboardPage() {
   const data = await getAgencyDashboardData();
   const movement = getDashboardDailyMovement({ cases: data.cases });
+  const readyToSubmit = data.stats.readyToSubmit ?? data.stats.completed ?? 0;
+  const needsClient = data.stats.needsClient ?? data.stats.flagged ?? 0;
+  const readyRate = data.stats.readyRate ?? data.stats.approvalReadyRate ?? 0;
 
   return (
     <AgencyPageShell
       breadcrumbs={[{ href: "/dashboard", label: "Dashboard" }]}
       title="Dashboard"
-      description="Agency review pipeline at a glance."
+      description="Agency review queue, reviewer workload, and client follow-ups."
       actions={
         <Button asChild>
           <Link href={"/dashboard/applications/new" as Route}>
@@ -60,7 +63,7 @@ export default async function DashboardPage() {
           title="No agency cases yet"
           description="Create the first client application to initialize the agency review workflow."
           href="/dashboard/applications/new"
-          actionLabel="Create application"
+          actionLabel="New Application"
         />
       ) : (
         <>
@@ -75,28 +78,28 @@ export default async function DashboardPage() {
             <MetricCard
               icon={CheckCircle2Icon}
               label="Ready to submit"
-              value={data.stats.completed}
-              detail="Review-complete cases"
+              value={readyToSubmit}
+              detail="Ready for agency handoff"
               tone="success"
             />
             <MetricCard
               icon={Clock3Icon}
               label="In Review"
               value={data.stats.inReview}
-              detail="Currently moving through review"
+              detail="Reviewer checks underway"
               tone="warning"
             />
             <MetricCard
               icon={FileWarningIcon}
-              label="Flagged"
-              value={data.stats.flagged}
-              detail="Needs reviewer or client action"
+              label="Needs Client"
+              value={needsClient}
+              detail="Waiting on client follow-up"
               tone="danger"
             />
             <MetricCard
               icon={LineChartIcon}
               label="Ready Rate"
-              value={`${data.stats.approvalReadyRate}%`}
+              value={`${readyRate}%`}
               detail={`${data.stats.scoredCases} reviewed cases`}
               tone="default"
             />
@@ -146,10 +149,10 @@ export default async function DashboardPage() {
                     <span className="h-2 w-2 rounded-full bg-primary" /> Submitted
                   </span>
                   <span className="inline-flex items-center gap-2">
-                    <span className="h-2 w-2 rounded-full bg-status-success" /> Completed
+                    <span className="h-2 w-2 rounded-full bg-status-success" /> Ready
                   </span>
                   <span className="inline-flex items-center gap-2">
-                    <span className="h-2 w-2 rounded-full bg-destructive" /> Flagged
+                    <span className="h-2 w-2 rounded-full bg-destructive" /> Needs client
                   </span>
                 </div>
               </CardContent>
@@ -157,9 +160,9 @@ export default async function DashboardPage() {
 
             <Card className="rounded-xl shadow-[var(--shadow-dashboard)]">
               <CardHeader className="flex-row items-center justify-between gap-3">
-                <CardTitle className="text-base">Top Flagged Issues</CardTitle>
+                <CardTitle className="text-base">Top Open Issues</CardTitle>
                 <Link
-                  href={"/dashboard/review" as Route}
+                  href={"/dashboard/issues" as Route}
                   className="text-xs font-bold text-primary"
                 >
                   View all
@@ -210,7 +213,7 @@ export default async function DashboardPage() {
                         <p className="text-sm font-bold">
                           {member.inReview === 0 ? "No active cases" : `${member.inReview} active`}
                         </p>
-                        <p className="text-xs text-muted-foreground">{member.completed} ready</p>
+                        <p className="text-xs text-muted-foreground">{member.completed} ready to submit</p>
                       </div>
                     </div>
                   ))
@@ -239,7 +242,7 @@ export default async function DashboardPage() {
                   <TableHead>Application</TableHead>
                   <TableHead>Client</TableHead>
                   <TableHead>Applicant</TableHead>
-                  <TableHead>Visa Type</TableHead>
+                  <TableHead>Visa</TableHead>
                   <TableHead>Submitted</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead>Risk</TableHead>

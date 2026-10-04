@@ -4,6 +4,7 @@ import type { Route } from "next";
 import type { LucideIcon } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table } from "@/components/ui/table";
 import { cn } from "@/lib/utils";
@@ -229,6 +230,63 @@ export function AgencyTableCard({
       ) : null}
       <CardContent className="overflow-x-auto p-0">{children}</CardContent>
     </Card>
+  );
+}
+
+export function AgencyFilterCard({
+  children,
+  className,
+}: {
+  children: ReactNode;
+  className?: string;
+}) {
+  return (
+    <Card className={cn("rounded-xl border-border/80 shadow-[var(--shadow-dashboard)]", className)}>
+      <CardContent className="p-4">{children}</CardContent>
+    </Card>
+  );
+}
+
+export function AgencyPagination({
+  page,
+  hasNextPage,
+  previousHref,
+  nextHref,
+  endLabel = "End of list",
+}: {
+  page: number;
+  hasNextPage: boolean;
+  previousHref: Route;
+  nextHref: Route;
+  endLabel?: string;
+}) {
+  return (
+    <div className="flex items-center justify-between border-t border-border/70 px-5 py-3 text-xs text-muted-foreground">
+      <span>
+        Page {page}
+        {hasNextPage ? "" : ` · ${endLabel}`}
+      </span>
+      <div className="flex items-center gap-2">
+        {page === 1 ? (
+          <Button variant="outline" size="sm" disabled>
+            Previous
+          </Button>
+        ) : (
+          <Button asChild variant="outline" size="sm">
+            <Link href={previousHref}>Previous</Link>
+          </Button>
+        )}
+        {hasNextPage ? (
+          <Button asChild variant="outline" size="sm">
+            <Link href={nextHref}>Next</Link>
+          </Button>
+        ) : (
+          <Button variant="outline" size="sm" disabled>
+            Next
+          </Button>
+        )}
+      </div>
+    </div>
   );
 }
 

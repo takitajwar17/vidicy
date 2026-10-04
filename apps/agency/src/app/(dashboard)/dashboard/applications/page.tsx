@@ -7,6 +7,8 @@ import { AgencyPageShell } from "@/components/agency/agency-page-shell";
 import {
   AgencyTable,
   AgencyTableCard,
+  AgencyFilterCard,
+  AgencyPagination,
   CaseStatusBadge,
   EmptyState,
   PriorityBadge,
@@ -15,7 +17,6 @@ import {
   formatShortDate,
 } from "@/components/agency/agency-ui";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import {
@@ -106,6 +107,37 @@ export default async function ApplicationsPage({
         </Button>
       }
     >
+      <AgencyFilterCard>
+        <div className="grid gap-3 lg:grid-cols-[minmax(280px,1fr)_180px_180px_180px]">
+          <form className="contents">
+            <Input
+              name="q"
+              defaultValue={query}
+              placeholder="Search applications, clients, applicants..."
+              className="h-11 rounded-xl bg-card"
+            />
+            <select
+              name="status"
+              defaultValue={status}
+              className="h-11 rounded-xl border border-input bg-card px-3 text-sm font-medium"
+            >
+              <option value="">All statuses</option>
+              {AGENCY_CASE_STATUS_OPTIONS.map((status) => (
+                <option key={status} value={status}>
+                  {CASE_STATUS_META[status].label}
+                </option>
+              ))}
+            </select>
+            <Button type="submit" variant="outline">
+              Apply Filters
+            </Button>
+            <Button asChild variant="ghost">
+              <Link href={"/dashboard/applications" as Route}>Clear</Link>
+            </Button>
+          </form>
+        </div>
+      </AgencyFilterCard>
+
       {rows.length === 0 ? (
         <EmptyState
           title={hasActiveFilters ? "No matching applications" : "No applications yet"}
@@ -115,41 +147,9 @@ export default async function ApplicationsPage({
               : "Create the first client file to start the agency intake queue."
           }
           href="/dashboard/applications/new"
-          actionLabel={hasActiveFilters ? "Create application" : "Create application"}
+          actionLabel="New Application"
         />
       ) : (
-        <>
-          <Card className="rounded-xl shadow-[var(--shadow-dashboard)]">
-            <CardContent className="grid gap-3 p-4 lg:grid-cols-[minmax(280px,1fr)_180px_180px_180px]">
-              <form className="contents">
-                <Input
-                  name="q"
-                  defaultValue={query}
-                  placeholder="Search applications, clients, applicants..."
-                  className="h-11 rounded-xl bg-card"
-                />
-                <select
-                  name="status"
-                  defaultValue={status}
-                  className="h-11 rounded-xl border border-input bg-card px-3 text-sm font-medium"
-                >
-                  <option value="">All statuses</option>
-                  {AGENCY_CASE_STATUS_OPTIONS.map((status) => (
-                    <option key={status} value={status}>
-                      {CASE_STATUS_META[status].label}
-                    </option>
-                  ))}
-                </select>
-                <Button type="submit" variant="outline">
-                  Apply Filters
-                </Button>
-                <Button asChild variant="ghost">
-                  <Link href={"/dashboard/applications" as Route}>Clear</Link>
-                </Button>
-              </form>
-            </CardContent>
-          </Card>
-
           <AgencyTableCard
             title="Application queue"
             description="Client applications across intake, review, follow-up, and readiness."
@@ -238,38 +238,14 @@ export default async function ApplicationsPage({
                 ))}
               </TableBody>
             </AgencyTable>
-            <div className="flex items-center justify-between border-t border-border/70 px-5 py-3 text-xs text-muted-foreground">
-              <span>
-                Page {page}
-                {hasNextPage ? "" : " · End of queue"}
-              </span>
-              <div className="flex items-center gap-2">
-                {page === 1 ? (
-                  <Button variant="outline" size="sm" disabled>
-                    Previous
-                  </Button>
-                ) : (
-                  <Button asChild variant="outline" size="sm">
-                    <Link href={getApplicationsHref({ page: page - 1, query, status })}>
-                      Previous
-                    </Link>
-                  </Button>
-                )}
-                {hasNextPage ? (
-                  <Button asChild variant="outline" size="sm">
-                    <Link href={getApplicationsHref({ page: page + 1, query, status })}>
-                      Next
-                    </Link>
-                  </Button>
-                ) : (
-                  <Button variant="outline" size="sm" disabled>
-                    Next
-                  </Button>
-                )}
-              </div>
-            </div>
+            <AgencyPagination
+              page={page}
+              hasNextPage={hasNextPage}
+              previousHref={getApplicationsHref({ page: page - 1, query, status })}
+              nextHref={getApplicationsHref({ page: page + 1, query, status })}
+              endLabel="End of queue"
+            />
           </AgencyTableCard>
-        </>
       )}
     </AgencyPageShell>
   );

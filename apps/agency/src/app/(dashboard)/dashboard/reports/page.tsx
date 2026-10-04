@@ -6,12 +6,16 @@ import { AgencyPageShell } from "@/components/agency/agency-page-shell";
 import {
   AgencyTable,
   AgencyTableCard,
+  AgencyFilterCard,
+  AgencyPagination,
   CaseStatusBadge,
   EmptyState,
   formatShortDate,
 } from "@/components/agency/agency-ui";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
 import { TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { CLIENT_REPORT_DELIVERY_STATUS_META, getDisplayCaseNumber } from "@/lib/agency-workflow";
 import { getAgencyReports } from "@/server/agency-data";
@@ -20,8 +24,37 @@ export const metadata: Metadata = {
   title: "Reports",
 };
 
-export default async function ReportsPage() {
-  const data = await getAgencyReports();
+const REPORTS_PAGE_SIZE = 50;
+
+function parsePage(value: string | null | undefined) {
+  const parsed = Number.parseInt(value ?? "1", 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : 1;
+}
+
+function getReportsHref({ page, query }: { page: number; query: string }) {
+  const params = new URLSearchParams();
+  if (query) params.set("q", query);
+  if (page > 1) params.set("page", String(page));
+  const suffix = params.toString();
+  return `/dashboard/reports${suffix ? `?${suffix}` : ""}` as Route;
+}
+
+export default async function ReportsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ page?: string; q?: string }>;
+}) {
+  const params = await searchParams;
+  const query = params.q?.trim() ?? "";
+  const page = parsePage(params.page);
+  const data = await getAgencyReports({
+    limit: REPORTS_PAGE_SIZE + 1,
+    offset: (page - 1) * REPORTS_PAGE_SIZE,
+    query,
+  });
+  const reports = data.reports.slice(0, REPORTS_PAGE_SIZE);
+  const hasNextPage = data.reports.length > REPORTS_PAGE_SIZE;
+  const hasActiveFilters = Boolean(query);
 
   return (
     <AgencyPageShell
@@ -30,12 +63,33 @@ export default async function ReportsPage() {
         { href: "/dashboard/reports", label: "Reports" },
       ]}
       title="Reports"
-      description="Client-ready issue summaries."
+      description="Client-ready summaries and missing follow-ups."
     >
-      {data.reports.length === 0 && data.casesWithoutReports.length === 0 ? (
+      <AgencyFilterCard>
+        <form className="grid gap-3 lg:grid-cols-[minmax(280px,1fr)_180px_180px]">
+          <Input
+            name="q"
+            defaultValue={query}
+            placeholder="Search reports, clients, applicants..."
+            className="h-11 rounded-xl bg-card"
+          />
+          <Button type="submit" variant="outline">
+            Apply Filters
+          </Button>
+          <Button asChild variant="ghost">
+            <Link href={"/dashboard/reports" as Route}>Clear</Link>
+          </Button>
+        </form>
+      </AgencyFilterCard>
+
+      {reports.length === 0 && data.casesWithoutReports.length === 0 ? (
         <EmptyState
-          title="No reports yet"
-          description="Generate a client report inside an application after document or reviewer issues have been added."
+          title={hasActiveFilters ? "No matching reports" : "No reports yet"}
+          description={
+            hasActiveFilters
+              ? "Adjust the search query to widen the report list."
+              : "Generate a client report inside an application after document or reviewer issues have been added."
+          }
           href="/dashboard/applications"
           actionLabel="View applications"
         />
@@ -57,7 +111,7 @@ export default async function ReportsPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {data.reports.map(({ report, caseRow }) => (
+                {reports.map(({ report, caseRow }) => (
                   <TableRow key={report.id}>
                     <TableCell className="pl-5">
                       {caseRow ? (
@@ -93,6 +147,13 @@ export default async function ReportsPage() {
                 ))}
               </TableBody>
             </AgencyTable>
+            <AgencyPagination
+              page={page}
+              hasNextPage={hasNextPage}
+              previousHref={getReportsHref({ page: page - 1, query })}
+              nextHref={getReportsHref({ page: page + 1, query })}
+              endLabel="End of reports"
+            />
           </AgencyTableCard>
 
           {data.casesWithoutReports.length > 0 ? (

@@ -409,7 +409,7 @@ export function NewApplicationClient({ staff }: NewApplicationClientProps) {
               </div>
               <Button type="submit" className="w-full" disabled={isPending}>
                 {isPending ? <Loader2Icon className="h-4 w-4 animate-spin" /> : <PlusIcon className="h-4 w-4" />}
-                Create application
+                Create Application
               </Button>
             </CardContent>
           </Card>

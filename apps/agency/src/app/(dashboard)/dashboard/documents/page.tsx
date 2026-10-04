@@ -6,12 +6,15 @@ import { AgencyPageShell } from "@/components/agency/agency-page-shell";
 import {
   AgencyTable,
   AgencyTableCard,
+  AgencyFilterCard,
+  AgencyPagination,
   EmptyState,
   formatBytes,
   formatShortDate,
 } from "@/components/agency/agency-ui";
 import { DocumentPreviewDrawer } from "@/components/visa/document-preview-drawer";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { getDisplayCaseNumber } from "@/lib/agency-workflow";
 import { getAgencyDocuments } from "@/server/agency-data";
@@ -27,23 +30,30 @@ function parsePage(value: string | null | undefined) {
   return Number.isFinite(parsed) && parsed > 0 ? parsed : 1;
 }
 
-function getDocumentsHref(page: number) {
-  return page > 1 ? (`/dashboard/documents?page=${page}` as Route) : ("/dashboard/documents" as Route);
+function getDocumentsHref({ page, query }: { page: number; query: string }) {
+  const params = new URLSearchParams();
+  if (query) params.set("q", query);
+  if (page > 1) params.set("page", String(page));
+  const suffix = params.toString();
+  return `/dashboard/documents${suffix ? `?${suffix}` : ""}` as Route;
 }
 
 export default async function DocumentsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ page?: string }>;
+  searchParams: Promise<{ page?: string; q?: string }>;
 }) {
   const params = await searchParams;
+  const query = params.q?.trim() ?? "";
   const page = parsePage(params.page);
   const rowsWithLookahead = await getAgencyDocuments({
     limit: DOCUMENTS_PAGE_SIZE + 1,
     offset: (page - 1) * DOCUMENTS_PAGE_SIZE,
+    query,
   });
   const rows = rowsWithLookahead.slice(0, DOCUMENTS_PAGE_SIZE);
   const hasNextPage = rowsWithLookahead.length > DOCUMENTS_PAGE_SIZE;
+  const hasActiveFilters = Boolean(query);
 
   return (
     <AgencyPageShell
@@ -52,17 +62,37 @@ export default async function DocumentsPage({
         { href: "/dashboard/documents", label: "Documents" },
       ]}
       title="Documents"
-      description="Uploaded client files."
+      description="Uploaded client files across applications."
     >
+      <AgencyFilterCard>
+        <form className="grid gap-3 lg:grid-cols-[minmax(280px,1fr)_180px_180px]">
+          <Input
+            name="q"
+            defaultValue={query}
+            placeholder="Search documents, applicants, clients..."
+            className="h-11 rounded-xl bg-card"
+          />
+          <Button type="submit" variant="outline">
+            Apply Filters
+          </Button>
+          <Button asChild variant="ghost">
+            <Link href={"/dashboard/documents" as Route}>Clear</Link>
+          </Button>
+        </form>
+      </AgencyFilterCard>
+
       {rows.length === 0 ? (
         <EmptyState
-          title="No documents uploaded"
-          description="Generate a checklist inside an application and upload files against the required client documents."
+          title={hasActiveFilters ? "No matching documents" : "No documents uploaded"}
+          description={
+            hasActiveFilters
+              ? "Adjust the search query to widen the document inventory."
+              : "Generate a checklist inside an application and upload files against the required client documents."
+          }
           href="/dashboard/applications"
           actionLabel="View applications"
         />
       ) : (
-        <>
           <AgencyTableCard
             title="Document inventory"
             description="Recently uploaded client files linked to agency applications."
@@ -126,34 +156,14 @@ export default async function DocumentsPage({
                 ))}
               </TableBody>
             </AgencyTable>
-            <div className="flex items-center justify-between border-t border-border/70 px-5 py-3 text-xs text-muted-foreground">
-              <span>
-                Page {page}
-                {hasNextPage ? "" : " · End of inventory"}
-              </span>
-              <div className="flex items-center gap-2">
-                {page === 1 ? (
-                  <Button variant="outline" size="sm" disabled>
-                    Previous
-                  </Button>
-                ) : (
-                  <Button asChild variant="outline" size="sm">
-                    <Link href={getDocumentsHref(page - 1)}>Previous</Link>
-                  </Button>
-                )}
-                {hasNextPage ? (
-                  <Button asChild variant="outline" size="sm">
-                    <Link href={getDocumentsHref(page + 1)}>Next</Link>
-                  </Button>
-                ) : (
-                  <Button variant="outline" size="sm" disabled>
-                    Next
-                  </Button>
-                )}
-              </div>
-            </div>
+            <AgencyPagination
+              page={page}
+              hasNextPage={hasNextPage}
+              previousHref={getDocumentsHref({ page: page - 1, query })}
+              nextHref={getDocumentsHref({ page: page + 1, query })}
+              endLabel="End of inventory"
+            />
           </AgencyTableCard>
-        </>
       )}
     </AgencyPageShell>
   );
