@@ -32,6 +32,7 @@ import { PageHeader } from "@/components/page-header";
 import { CHECKLIST_ITEM_STATUS } from "@/db/schema";
 import {
   CLIENT_REPORT_STATUS_META,
+  formatAgencyVisaLabel,
   getDisplayCaseNumber,
   isOpenReviewIssueStatus,
 } from "@/lib/agency-workflow";
@@ -121,7 +122,13 @@ export async function AgencyCaseContent({ appId }: { appId: string }) {
             <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-muted-foreground">
               {app.clientName ? <span><span className="font-semibold text-foreground">Client:</span> {app.clientName}</span> : null}
               {primaryApplicant?.name ? <span><span className="font-semibold text-foreground">Applicant:</span> {primaryApplicant.name}</span> : null}
-              <span><span className="font-semibold text-foreground">Visa Type:</span> {app.visaType}</span>
+              <span>
+                <span className="font-semibold text-foreground">Visa:</span>{" "}
+                {formatAgencyVisaLabel({
+                  destinationCountry: app.destinationCountry,
+                  visaType: app.visaType,
+                })}
+              </span>
               <span><span className="font-semibold text-foreground">Destination:</span> {app.destinationCountry}</span>
               {app.submittedAt ? <span><span className="font-semibold text-foreground">Submitted:</span> {formatShortDate(app.submittedAt)}</span> : null}
             </div>
@@ -338,7 +345,7 @@ export async function AgencyCaseContent({ appId }: { appId: string }) {
                     { label: "Case created", date: app.createdAt, icon: PlusIcon },
                     { label: "Client submitted files", date: app.submittedAt, icon: FileTextIcon },
                     { label: "Review completed", date: app.reviewCompletedAt, icon: CheckCircle2Icon },
-                    { label: "Final submission", date: app.finalSubmissionAt, icon: Clock3Icon },
+                    { label: "Submission handoff", date: app.finalSubmissionAt, icon: Clock3Icon },
                   ].map((event) => (
                     <div key={event.label} className="flex gap-3 rounded-xl border border-border/80 bg-background p-3">
                       <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/8 text-primary">

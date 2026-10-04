@@ -13,7 +13,7 @@ import {
 export const AGENCY_NAV_ITEMS = [
   { title: "Dashboard", url: "/dashboard" as Route },
   { title: "Applications", url: "/dashboard/applications" as Route },
-  { title: "Issues", url: "/dashboard/review" as Route },
+  { title: "Issues", url: "/dashboard/issues" as Route },
   { title: "Clients", url: "/dashboard/clients" as Route },
   { title: "Documents", url: "/dashboard/documents" as Route },
   { title: "Team", url: "/dashboard/team" as Route },
@@ -40,7 +40,7 @@ export const CASE_STATUS_META = {
   [AGENCY_CASE_STATUS.READY_TO_SUBMIT]: {
     label: "Ready to Submit",
     tone: "success",
-    description: "Reviewer approved the file for final submission.",
+    description: "Reviewer marked the file ready for submission.",
   },
 } as const;
 

@@ -413,7 +413,7 @@ export const syncReviewIssuesFromEvaluationAction = createServerAction()
 
     revalidatePath(`/dashboard/${input.applicationId}`);
     revalidatePath("/dashboard");
-    revalidatePath("/dashboard/review");
+    revalidatePath("/dashboard/issues");
     return { createdCount };
   });
 
@@ -461,6 +461,7 @@ export const addReviewIssueAction = createServerAction()
 
     revalidatePath(`/dashboard/${input.applicationId}`);
     revalidatePath("/dashboard");
+    revalidatePath("/dashboard/issues");
     return issue;
   });
 
@@ -499,7 +500,7 @@ export const updateReviewIssueStatusAction = createServerAction()
 
     revalidatePath(`/dashboard/${issue.applicationId}`);
     revalidatePath("/dashboard");
-    revalidatePath("/dashboard/review");
+    revalidatePath("/dashboard/issues");
     return { success: true };
   });
 
@@ -542,7 +543,7 @@ export const generateClientReportAction = createServerAction()
     const summary =
       actionItems.length > 0
         ? `${application.clientName ?? "Client"} has ${actionItems.length} item${actionItems.length === 1 ? "" : "s"} to fix before the review desk can mark the case ready.`
-        : "No client-visible issues remain. The case can move toward final submission.";
+        : "No client-ready issues remain. The case can move to the ready queue.";
 
     const [report] = await db
       .insert(clientReportTable)
