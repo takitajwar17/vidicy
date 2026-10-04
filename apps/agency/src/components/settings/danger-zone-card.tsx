@@ -82,7 +82,7 @@ export function DangerZoneCard() {
       <CardHeader>
         <CardTitle className="text-destructive">Danger Zone</CardTitle>
         <CardDescription>
-          Irreversible actions that affect your account and all associated data.
+          Actions that remove your account data from the review desk.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -91,8 +91,7 @@ export function DangerZoneCard() {
           <div className="space-y-0.5">
             <span className="text-sm font-medium">Export My Data</span>
             <p className="text-xs text-muted-foreground">
-              Download all your personal data as a JSON file (GDPR data
-              portability).
+              Download your profile, sign-in, and review-desk account records as JSON.
             </p>
           </div>
           <Button
@@ -116,7 +115,7 @@ export function DangerZoneCard() {
             <span className="text-sm font-medium">Delete My Account</span>
             <p className="text-xs text-muted-foreground">
               Permanently delete your account and all data, including
-              applications, documents, and chat history.
+              client files, documents, and review history.
             </p>
           </div>
           <AlertDialog open={dialogOpen} onOpenChange={setDialogOpen}>
@@ -137,7 +136,7 @@ export function DangerZoneCard() {
                     It will delete:
                   </span>
                   <span className="block">
-                    • All visa applications, documents, and evaluations
+                    • All visa cases, documents, and evaluations
                     <br />
                     • All uploaded files from cloud storage
                     <br />

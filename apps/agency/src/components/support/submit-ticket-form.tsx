@@ -32,10 +32,10 @@ const schema = z.object({
 type FormValues = z.infer<typeof schema>
 
 const CATEGORY_LABELS: Record<string, string> = {
-  bug: "Bug Report",
+  bug: "Something broke",
   feedback: "Feedback",
   question: "Question",
-  feature_request: "Feature Request",
+  feature_request: "Request a change",
   other: "Other",
 }
 
@@ -151,7 +151,7 @@ export function SubmitTicketForm({ onSuccess }: SubmitTicketFormProps = {}) {
         <div>
           <p className="font-semibold text-lg">Ticket submitted!</p>
           <p className="text-sm text-muted-foreground mt-1">
-            Your ticket ID is <span className="font-mono font-medium">{submittedId}</span>. We&apos;ll get back to you soon.
+            Your ticket ID is <span className="font-mono font-medium">{submittedId}</span>. We&apos;ll follow up in this thread.
           </p>
         </div>
         <Button variant="outline" onClick={() => setSubmittedId(null)}>
@@ -172,12 +172,12 @@ export function SubmitTicketForm({ onSuccess }: SubmitTicketFormProps = {}) {
       className="space-y-4"
     >
       <div className="space-y-1.5">
-        <Label htmlFor="category">Category</Label>
+        <Label htmlFor="category">What do you need?</Label>
         <Select
           onValueChange={(v) => setValue("category", v as FormValues["category"])}
         >
           <SelectTrigger id="category">
-            <SelectValue placeholder="Select a category" />
+            <SelectValue placeholder="Choose the closest match" />
           </SelectTrigger>
           <SelectContent>
             {Object.entries(CATEGORY_LABELS).map(([value, label]) => (
@@ -192,7 +192,7 @@ export function SubmitTicketForm({ onSuccess }: SubmitTicketFormProps = {}) {
         <Label htmlFor="subject">Subject</Label>
         <Input
           id="subject"
-          placeholder="Brief summary of your issue"
+          placeholder="Example: PDF preview is blurry on a bank statement"
           maxLength={255}
           {...register("subject")}
         />
@@ -206,7 +206,7 @@ export function SubmitTicketForm({ onSuccess }: SubmitTicketFormProps = {}) {
         </div>
         <Textarea
           id="description"
-          placeholder="Please describe your issue in detail. Include steps to reproduce for bugs."
+          placeholder="Tell us where you were in the app, what case or file you were viewing, and what happened."
           rows={5}
           maxLength={5000}
           {...register("description")}

@@ -58,7 +58,7 @@ const SignInPage = ({ email, redirectPath, isGoogleSSOEnabled }: SignInClientPro
     <AuthShell
       testimonial={{
         quote:
-          "We moved first-pass reviews from hours to minutes and sent clients clear fixes the same day.",
+          "The morning pile of passports, forms, and bank statements became a same-day fix list for clients.",
         author: "Operations Lead, Visa & Travel Agency",
       }}
     >
@@ -67,7 +67,7 @@ const SignInPage = ({ email, redirectPath, isGoogleSSOEnabled }: SignInClientPro
           Sign in to Vidicy
         </h1>
         <p className="text-sm leading-6 text-muted-foreground/90">
-          Access your agency review queue.
+          Open the review desk your agency uses for client files.
         </p>
       </div>
 
@@ -81,7 +81,7 @@ const SignInPage = ({ email, redirectPath, isGoogleSSOEnabled }: SignInClientPro
       <Form {...form}>
         <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-5">
           <p className="text-sm leading-6 text-muted-foreground/90">
-            Enter your agency account email.
+            Enter the email your agency added to the review desk.
           </p>
 
           <FormField

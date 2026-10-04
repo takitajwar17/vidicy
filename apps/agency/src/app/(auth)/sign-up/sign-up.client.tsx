@@ -122,15 +122,15 @@ const SignUpPage = ({
   > = {
     choice: {
       title: "Create your agency account",
-      description: "Join the review workspace your agency uses to manage client files.",
+      description: "Join the review desk your agency uses for passports, forms, and client fixes.",
     },
     email: {
       title: "Create your account",
-      description: "Add your details so your team can recognize you in the review queue.",
+      description: "Add the name your team should see beside assigned client files.",
     },
     details: {
       title: "Create your account",
-      description: "Add your details so your team can recognize you in the review queue.",
+      description: "Add the name your team should see beside assigned client files.",
     },
   };
 
@@ -146,7 +146,7 @@ const SignUpPage = ({
     <AuthShell
       testimonial={{
         quote:
-          "Our reviewers cleared the morning file backlog before lunch and sent clients the exact fixes they needed.",
+          "Our reviewers turned the morning file backlog into exact client fixes before lunch.",
         author: "Agency Operations Manager",
       }}
     >

@@ -87,7 +87,7 @@ export default async function SettingsPage() {
         <CardHeader>
           <CardTitle>Appearance</CardTitle>
           <CardDescription>
-            Customize how the application looks on your device.
+            Choose how the review desk looks on this device.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -95,7 +95,7 @@ export default async function SettingsPage() {
             <div className="space-y-0.5">
               <span className="text-sm font-medium">Interface Theme</span>
               <p className="text-xs text-muted-foreground">
-                Select your preferred theme for the dashboard.
+                Pick the theme you want while reviewing client files.
               </p>
             </div>
             <ThemeSwitch>Select Theme</ThemeSwitch>

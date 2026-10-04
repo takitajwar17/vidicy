@@ -108,7 +108,7 @@ export function SettingsForm() {
       <CardHeader>
         <CardTitle>Profile Settings</CardTitle>
         <CardDescription>
-          Update your personal information and contact details.
+          Set the name your team sees on assigned client files.
         </CardDescription>
       </CardHeader>
       <CardContent>
@@ -154,7 +154,7 @@ export function SettingsForm() {
                 />
               </FormControl>
               <FormDescription>
-                This is the email you use to sign in.
+                This is the email your agency uses for access.
               </FormDescription>
               <FormMessage />
             </FormItem>

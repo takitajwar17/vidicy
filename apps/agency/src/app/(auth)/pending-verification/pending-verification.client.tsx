@@ -65,7 +65,7 @@ export default function PendingVerificationClient({
     <AuthShell
       testimonial={{
         quote:
-          "Our reviewers cleared the morning file backlog before lunch and sent clients the exact fixes they needed.",
+          "Our reviewers turned the morning file backlog into exact client fixes before lunch.",
         author: "Agency Operations Manager",
       }}
     >

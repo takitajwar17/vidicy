@@ -24,7 +24,7 @@ export async function AccountDetailsCard() {
     <Card>
       <CardHeader>
         <CardTitle>Account Details</CardTitle>
-        <CardDescription>Your account information and connected services.</CardDescription>
+        <CardDescription>Sign-in details for your agency review desk.</CardDescription>
       </CardHeader>
       <CardContent className="space-y-5">
         {/* Email */}
@@ -61,7 +61,7 @@ export async function AccountDetailsCard() {
           <div className="flex-1 min-w-0 space-y-1">
             <p className="text-sm font-medium">Google account</p>
             <p className="text-sm text-muted-foreground">
-              {isGoogleLinked ? "Linked for single sign-on" : "Not connected"}
+              {isGoogleLinked ? "Linked for agency sign-in" : "Not connected"}
             </p>
           </div>
           {isGoogleLinked ? (

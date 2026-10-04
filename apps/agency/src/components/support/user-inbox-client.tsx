@@ -217,7 +217,7 @@ export function UserInboxClient({
             <div className="relative group flex-1">
               <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground group-focus-within:text-primary transition-colors" />
               <Input
-                placeholder="Search conversations..."
+                placeholder="Search support threads..."
                 className="pl-10 h-9 bg-muted/50 border-none focus-visible:ring-1 text-sm w-full transition-all"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
@@ -228,7 +228,7 @@ export function UserInboxClient({
               onClick={onNewTicket}
               className="h-9 gap-1.5 shrink-0"
             >
-              <PlusIcon className="h-3.5 w-3.5" /> New Ticket
+              <PlusIcon className="h-3.5 w-3.5" /> New thread
             </Button>
           </div>
 
@@ -261,11 +261,11 @@ export function UserInboxClient({
                   <MessageSquareIcon className="h-10 w-10 text-primary" />
                 </div>
                 <div className="space-y-2 max-w-sm">
-                  <p className="text-lg font-semibold">No conversations</p>
+                  <p className="text-lg font-semibold">No support threads</p>
                   <p className="text-sm text-muted-foreground leading-relaxed">
                     {searchQuery || statusFilter !== "all"
-                      ? "No tickets match your current filters. Try adjusting your search or status filter."
-                      : "Submit a ticket to get help from our team. We typically respond within a few hours."}
+                      ? "No support threads match that search or status."
+                      : "Send us the case, file, or screen where you are stuck. We usually respond within a few hours."}
                   </p>
                 </div>
                 {!searchQuery && statusFilter === "all" && (
@@ -274,7 +274,7 @@ export function UserInboxClient({
                     className="shadow-lg hover:shadow-primary/10 transition-all hover:-translate-y-0.5"
                   >
                     <PlusIcon className="h-4 w-4" />
-                    New Ticket
+                    New thread
                   </Button>
                 )}
               </div>
@@ -426,7 +426,7 @@ export function UserInboxClient({
               <div>
                 <h2 className="text-lg font-semibold">Loading conversation</h2>
                 <p className="text-sm text-muted-foreground mt-1 leading-relaxed">
-                  Fetching the latest ticket details.
+                  Fetching the latest support thread.
                 </p>
               </div>
             </div>
@@ -440,12 +440,11 @@ export function UserInboxClient({
               <div>
                 <h2 className="text-xl font-semibold">How can we help?</h2>
                 <p className="text-sm text-muted-foreground mt-1 leading-relaxed">
-                  Select a conversation from the left, or start a new support
-                  ticket.
+                  Select a support thread from the left, or start a new one with the case or file where you are stuck.
                 </p>
               </div>
               <Button onClick={onNewTicket} className="gap-2">
-                <PlusIcon className="h-4 w-4" /> New Ticket
+                <PlusIcon className="h-4 w-4" /> New thread
               </Button>
             </div>
           </div>

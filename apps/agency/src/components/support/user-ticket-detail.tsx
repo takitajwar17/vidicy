@@ -386,7 +386,7 @@ export function UserTicketDetail({ ticket, onBack, backHref }: UserTicketDetailP
               {/* Textarea */}
               <div className="flex-1 bg-muted/30 rounded-xl border border-border/60 shadow-inner focus-within:border-primary/40 focus-within:bg-background transition-all px-1">
                 <Textarea
-                  placeholder="Reply to support..."
+                  placeholder="Add the case, file, or screen where this happens..."
                   value={replyContent}
                   onChange={(e) => setReplyContent(e.target.value)}
                   onKeyDown={handleKeyDown}
