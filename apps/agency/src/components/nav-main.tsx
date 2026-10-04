@@ -34,12 +34,12 @@ export function NavMain({
           <SidebarMenuItem>
             <SidebarMenuButton
               asChild
-              tooltip="New Application"
+              tooltip="New client file"
               className="min-w-8 rounded-full border border-[var(--sidebar-action-border)] bg-[var(--sidebar-action)] text-[var(--sidebar-action-foreground)] duration-200 ease-linear hover:bg-[var(--sidebar-action-hover)] hover:text-[var(--sidebar-action-foreground)] active:bg-[var(--sidebar-action-active)]"
             >
               <Link href={"/dashboard/applications/new" as Route} onClick={() => setOpenMobile(false)}>
                 <PlusCircleIcon />
-                <span>New Application</span>
+                <span>New client file</span>
               </Link>
             </SidebarMenuButton>
           </SidebarMenuItem>

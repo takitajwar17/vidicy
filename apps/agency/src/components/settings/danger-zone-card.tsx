@@ -78,7 +78,7 @@ export function DangerZoneCard() {
   }
 
   return (
-    <Card className="border-destructive/50">
+    <Card className="rounded-xl border-destructive/50 shadow-[var(--shadow-dashboard)]">
       <CardHeader>
         <CardTitle className="text-destructive">Danger Zone</CardTitle>
         <CardDescription>
@@ -87,8 +87,8 @@ export function DangerZoneCard() {
       </CardHeader>
       <CardContent className="space-y-4">
         {/* Data Export */}
-        <div className="flex items-center justify-between rounded-lg border p-4">
-          <div className="space-y-0.5">
+        <div className="flex flex-col gap-4 rounded-lg border p-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="min-w-0 space-y-0.5">
             <span className="text-sm font-medium">Export My Data</span>
             <p className="text-xs text-muted-foreground">
               Download your profile, sign-in, and review-desk account records as JSON.
@@ -110,8 +110,8 @@ export function DangerZoneCard() {
         </div>
 
         {/* Account Deletion */}
-        <div className="flex items-center justify-between rounded-lg border border-destructive/30 p-4">
-          <div className="space-y-0.5">
+        <div className="flex flex-col gap-4 rounded-lg border border-destructive/30 p-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="min-w-0 space-y-0.5">
             <span className="text-sm font-medium">Delete My Account</span>
             <p className="text-xs text-muted-foreground">
               Permanently delete your account and all data, including

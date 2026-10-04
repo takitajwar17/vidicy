@@ -1,9 +1,11 @@
 "use client";
 
-import { ChevronLeftIcon, PlusCircleIcon } from "lucide-react";
+import { ChevronLeftIcon } from "lucide-react";
 import { SubmitTicketForm } from "./submit-ticket-form";
 import { useRouter } from "next/navigation";
+import type { Route } from "next";
 import { Button } from "@/components/ui/button";
+import { PageHeader } from "@/components/page-header";
 
 interface NewTicketPanelProps {
   onBack: () => void;
@@ -22,25 +24,25 @@ export function NewTicketPanel({
 
   return (
     <div className="flex flex-col h-full w-full bg-background overflow-hidden">
-      {/* Header */}
-      <div className="h-14 px-4 lg:px-6 bg-card border-b flex items-center gap-3 shrink-0">
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={onBack}
-          className="h-8 w-8 -ml-1"
-        >
-          <ChevronLeftIcon className="h-4 w-4" />
-        </Button>
-        <div className="flex items-center gap-2">
-          <PlusCircleIcon className="h-4 w-4 text-primary" />
-          <span className="font-semibold text-sm">New Support Ticket</span>
-        </div>
-      </div>
+      <PageHeader
+        items={[
+          { href: "/dashboard" as Route, label: "Dashboard" },
+          { href: "/dashboard/support" as Route, label: "Support" },
+          { href: "/dashboard/support" as Route, label: "New support thread" },
+        ]}
+      />
 
-      {/* Form */}
       <div className="flex-1 flex items-center justify-center p-6">
         <div className="max-w-xl w-full">
+          <Button
+            type="button"
+            variant="ghost"
+            onClick={onBack}
+            className="mb-6 -ml-2"
+          >
+            <ChevronLeftIcon className="h-4 w-4" />
+            Back to support threads
+          </Button>
           <p className="text-sm text-muted-foreground mb-6 leading-relaxed text-center">
             Describe your issue and we&apos;ll get back to you as soon as
             possible. For bugs, include steps to reproduce.

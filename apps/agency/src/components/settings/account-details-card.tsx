@@ -21,7 +21,7 @@ export async function AccountDetailsCard() {
     : null
 
   return (
-    <Card>
+    <Card className="rounded-xl border-border/80 shadow-[var(--shadow-dashboard)]">
       <CardHeader>
         <CardTitle>Account Details</CardTitle>
         <CardDescription>Sign-in details for your agency review desk.</CardDescription>
