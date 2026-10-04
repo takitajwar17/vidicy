@@ -10,7 +10,7 @@ import {
 
 export const metadata: Metadata = constructMetadata({
   title: "Enterprise visa document review",
-  description: "Custom pilots, review queues, client-ready reports, and workflow support for agencies processing visa applications at volume.",
+  description: "Pilot Vidicy on real agency files: passports, forms, bank statements, issue queues, and client fix lists.",
   alternates: {
     canonical: "/enterprise",
   },
@@ -22,7 +22,7 @@ const enterpriseServiceSchema = {
   name: "Vidicy Enterprise",
   serviceType: "Enterprise visa document review platform",
   description:
-    "Custom pilots, review queues, reporting workflows, and dedicated support for immigration agencies and high-volume visa-processing teams.",
+    "Private pilots for visa agencies that review passports, forms, bank statements, client evidence, and follow-up reports at volume.",
   url: `${CANONICAL_SITE_URL}/enterprise`,
   areaServed: "Worldwide",
   audience: {
@@ -50,8 +50,8 @@ export default function EnterprisePage() {
       />
       <PublicPageHero
         eyebrow="Enterprise"
-        title="Built for agencies and high-volume teams"
-        description="Pilot setup, review queues, client-ready reports, and hands-on support tailored to the way your agency works."
+        title="For agencies with a stack of client files every morning"
+        description="Pilot Vidicy on the routes your team reviews now. Bring the passports, forms, bank statements, letters, bookings, and client follow-ups that slow the desk down."
       />
       <PublicPageContent>
         <EnterpriseForm />

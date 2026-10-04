@@ -54,7 +54,7 @@ const STATIC_SITEMAP_ENTRIES: StaticSitemapEntry[] = [
   },
   {
     path: "/subprocessors",
-    lastModified: "2026-10-07",
+    lastModified: "2026-10-14",
     changeFrequency: "yearly",
     priority: 0.3,
   },

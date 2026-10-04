@@ -31,12 +31,12 @@ export default function PilotAccessPage() {
             full self-serve product.
           </p>
           <p>
-            The pilot is for teams that already review client files in volume and need a cleaner way
-            to handle intake, review queues, issue tracking, and client-ready follow-ups.
+            The pilot is for teams that already review client files in volume: passports, forms,
+            bank statements, letters, bookings, missing documents, reviewer notes, and client fixes.
           </p>
           <p>
-            If your team is evaluating bulk application review, request pilot access and we will
-            follow up with the next step.
+            If your team is evaluating bulk file review, request pilot access and tell us where the
+            desk slows down.
           </p>
           <div className="pt-4">
             <Link className={buttonVariants({ size: "lg" })} href="/enterprise">

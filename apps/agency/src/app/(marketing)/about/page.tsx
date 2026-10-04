@@ -13,7 +13,7 @@ import { constructMetadata } from "@/lib/utils";
 export const metadata: Metadata = constructMetadata({
   title: "About Vidicy",
   description:
-    "Vidicy builds visa application review software for visa and travel agencies that process client files at scale.",
+    "Vidicy helps visa agencies check passports, forms, bank statements, and client evidence in one review queue.",
   alternates: {
     canonical: "/about",
   },
@@ -24,7 +24,7 @@ const aboutPageSchema = {
   "@type": "AboutPage",
   name: "About Vidicy",
   description:
-    "Vidicy builds visa application review software for visa and travel agencies that process client files at scale.",
+    "Vidicy helps visa agencies check passports, forms, bank statements, and client evidence in one review queue.",
   url: `${CANONICAL_SITE_URL}/about`,
   isPartOf: {
     "@type": "WebSite",
@@ -48,8 +48,8 @@ export default function AboutPage() {
       />
       <PublicPageHero
         eyebrow="About"
-        title="Visa review should not depend on manual checking forever."
-        description="Vidicy helps visa and travel agencies turn scattered client files into a repeatable review workflow."
+        title="The bottleneck is the pile of PDFs on the review desk."
+        description="Vidicy turns passports, forms, bank statements, bookings, and letters into one queue your agency team can work through."
       />
 
       <PublicPageContent className="space-y-12">
@@ -60,13 +60,13 @@ export default function AboutPage() {
             statements, finding gaps, writing notes, and explaining fixes back to clients.
           </p>
           <p>
-            Vidicy is built for that operational layer. The product gives agencies bulk intake,
-            review queues, document checks, issue tracking, and client-ready reports so
-            teams can review more applications without adding review headcount at the same pace.
+            Vidicy is built for that desk. Each case has the client, applicant, route, reviewer,
+            required files, missing documents, open issues, and client fixes in one place.
           </p>
           <p>
-            We are starting with high-volume visa and travel agencies in markets where a single
-            missing document or inconsistent detail can slow down a client file for days.
+            We are starting with agencies in high-friction visa markets, where one stale bank
+            statement, unreadable passport scan, or mismatched name can send a file back to the
+            client for another day.
           </p>
         </section>
 
@@ -76,12 +76,14 @@ export default function AboutPage() {
           </h2>
           <div className="space-y-5 text-base leading-8 text-muted-foreground sm:text-lg">
             <p>
-              Agencies should keep control of the client relationship and submission judgment.
-              Software should make the review process faster, clearer, and easier to repeat.
+              Agencies should keep control of the client relationship and submission judgment. The
+              software should do the pointing: this passport page is missing, this statement is too
+              old, this travel date conflicts with the form.
             </p>
             <p>
-              The best version of Vidicy is not a generic chatbot. It is a review system that fits
-              how agency teams already work: queues, files, flags, notes, and follow-ups.
+              The best version of Vidicy is not a generic chat box. It is the desk your team already
+              runs, but with queues, files, flags, notes, and follow-ups visible before a reviewer
+              loses twenty minutes in tabs.
             </p>
           </div>
         </section>

@@ -15,12 +15,12 @@ export const faqSections = [
       {
         question: "What is Vidicy?",
         answer:
-          "Vidicy is visa application review software for visa and travel agencies. It helps review teams check client files in bulk, flag missing documents and inconsistencies, and produce client-ready issue lists.",
+          "Vidicy is a review desk for visa agencies. Upload passports, forms, bank statements, letters, bookings, and photos; Vidicy points reviewers to missing files, mismatched details, and client fixes.",
       },
       {
         question: "Who is this for?",
         answer:
-          "Vidicy is for agencies that already process visa applications and want to increase review capacity without adding reviewers at the same pace.",
+          "Vidicy is for agencies where reviewers still open piles of PDFs, compare forms against passports, chase clients for missing files, and write the same follow-up notes every week.",
       },
       {
         question: "Is Vidicy replacing agency reviewers?",
@@ -30,10 +30,10 @@ export const faqSections = [
       {
         question: "What types of agencies are a good fit?",
         answer:
-          "The strongest fit is a visa or travel agency reviewing many client files every month, especially where missing documents, weak evidence, and cross-file inconsistencies slow the team down.",
+          "The strongest fit is a visa or travel agency with a daily queue of client files, especially where stale statements, weak letters, unreadable scans, and name or date mismatches slow the team down.",
       },
       {
-        question: "Which visa categories can the workflow support?",
+        question: "Which visa categories can Vidicy review?",
         answer:
           "Vidicy is designed around document-heavy visa routes: tourist, visit, study, work, family, and similar cases where agencies need to review forms, passports, bank statements, employment documents, invitations, bookings, and supporting evidence.",
       },
@@ -50,7 +50,7 @@ export const faqSections = [
       {
         question: "How does the review workflow work?",
         answer:
-          "Agencies upload client files, route each case into a review queue, run document checks, review flagged issues, and produce clear next steps for the client.",
+          "Agencies add a case, upload the client files, assign a reviewer, check the documents, review the flags, and send the client a list of exact fixes.",
       },
       {
         question: "What does Vidicy check?",
@@ -65,7 +65,7 @@ export const faqSections = [
       {
         question: "Can reviewers edit the final output?",
         answer:
-          "Yes. The first review output is a starting point for the review desk. Reviewers can keep, revise, or remove notes before anything is sent to a client.",
+          "Yes. Reviewers can keep, rewrite, or remove any note before it reaches a client. The software points; the reviewer decides.",
       },
       {
         question: "What does the client receive?",
@@ -75,7 +75,7 @@ export const faqSections = [
       {
         question: "Can Vidicy handle bulk intake?",
         answer:
-          "That is the direction of the product. The agency workflow is being built around bulk upload, case queues, reviewer dashboards, and repeatable review steps.",
+          "Yes, that is the core agency direction: many client files, one queue, assigned reviewers, required documents, issue lists, and repeatable review steps.",
       },
     ],
   },
@@ -85,12 +85,12 @@ export const faqSections = [
       {
         question: "How do agency pilots work?",
         answer:
-          "We start with a narrow workflow, review real agency cases with the team, learn where the manual bottlenecks are, and configure the pilot around the agency's existing process.",
+          "We start with the files your team already reviews: the route, the required documents, the reviewer handoff, and the client follow-up. Then we pilot Vidicy around that desk.",
       },
       {
         question: "What kind of agency should request access?",
         answer:
-          "Request access if your team reviews client files in volume and already feels the pain of repeated manual checks, reviewer backlogs, and unclear client follow-ups.",
+          "Request access if your team reviews client files in volume and already loses time to repeated document checks, reviewer backlogs, and vague client follow-ups.",
       },
       {
         question: "Do we need to replace our current CRM or case system?",
@@ -105,7 +105,7 @@ export const faqSections = [
       {
         question: "How long does it take to start a pilot?",
         answer:
-          "It depends on volume and workflow complexity. The first step is a short conversation about your current review process, case volume, routes, and reporting needs.",
+          "It depends on case volume and route complexity. The first step is a short conversation about monthly files, top visa routes, reviewer handoffs, and where clients get stuck.",
       },
     ],
   },
@@ -135,7 +135,7 @@ export const faqSections = [
       {
         question: "Who should contact Vidicy from our agency?",
         answer:
-          "The best person is usually an owner, operations lead, visa department head, or manager responsible for review throughput and client delivery quality.",
+          "The best person is usually the owner, operations lead, visa department head, or manager who knows how many files arrive each month and where reviewers lose time.",
       },
     ],
   },
@@ -155,7 +155,7 @@ export const faqSections = [
       {
         question: "Who can see client files?",
         answer:
-          "Access should be limited to authorized agency users and the systems needed to run the review. Enterprise needs such as reviewer roles and permissions can be handled as part of rollout.",
+          "Only authorized agency users should see client files. Admins manage staff access, and reviewer roles can be set during rollout.",
       },
       {
         question: "Is Vidicy legal advice?",
@@ -185,7 +185,7 @@ export const faqSections = [
       {
         question: "What happens when route requirements change?",
         answer:
-          "Agencies should continue checking official sources. Vidicy is meant to help review teams apply the right checklist and re-check client files when requirements, fees, appointment steps, or evidence windows change.",
+          "Agencies should continue checking official sources. Vidicy helps the team re-check affected files when requirements, fees, appointment steps, or evidence windows change.",
       },
       {
         question: "Can agencies keep their own route checklists?",

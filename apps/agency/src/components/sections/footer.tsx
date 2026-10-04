@@ -58,7 +58,6 @@ const footerSections = [
     links: [
       { href: "/privacy", text: "Privacy Policy" },
       { href: "/terms", text: "Terms of Service" },
-      { href: "/terms#data-processing", text: "Data Processing" },
       { href: "/subprocessors", text: "Subprocessors" },
     ],
   },

@@ -12,11 +12,11 @@ export interface MarkdownPayload {
 }
 
 const homepageHowItWorksSteps = [
-  "Faster, more accurate visa reviews. Every file. Every time.",
-  "Check client files for missing documents, mistakes, and inconsistencies.",
-  "Review summary, severity breakdowns, top issues, and client-ready reports.",
-  "Trusted by agencies worldwide with 98% issue detection accuracy.",
-  "Start a free trial or book a demo.",
+  "Check passports, forms, bank statements, letters, bookings, and photos in one queue.",
+  "Spot missing files, unreadable scans, stale statements, and mismatched details.",
+  "Give each reviewer a case owner, open issues, and the next client fix.",
+  "Turn review notes into a client list: upload this, replace that, clarify this date.",
+  "Request pilot access or book an agency demo.",
 ] as const;
 
 export function countEstimatedMarkdownTokens(markdown: string): string {
@@ -53,7 +53,7 @@ function buildHomepageMarkdown(): MarkdownPayload {
   const body = [
     createFrontmatter({
       title: "Vidicy Agency",
-      description: "Bulk visa application review for travel and visa agencies.",
+      description: "Visa file review for agency desks handling passports, forms, statements, and client fixes.",
       canonicalPath: "/",
     }),
     "# Vidicy Agency",

@@ -5,7 +5,7 @@ export interface SubprocessorEntry {
   website: string;
 }
 
-export const SUBPROCESSORS_LAST_UPDATED = "October 7, 2026";
+export const SUBPROCESSORS_LAST_UPDATED = "October 14, 2026";
 
 export const SUBPROCESSORS: SubprocessorEntry[] = [
   {

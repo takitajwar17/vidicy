@@ -41,7 +41,7 @@ const privacyPageSchema = {
   name: "Privacy Policy",
   description: privacyDescription,
   url: `${CANONICAL_SITE_URL}/privacy`,
-  dateModified: "2026-10-02",
+  dateModified: "2026-10-15",
   isPartOf: {
     "@type": "WebSite",
     name: siteConfig.name,
@@ -92,7 +92,7 @@ export default function PrivacyPage() {
       <PublicPageHero
         eyebrow="Legal"
         title="Privacy Policy"
-        meta="Last updated: October 2, 2026"
+        meta="Last updated: October 15, 2026"
         description="How Vidicy handles agency accounts, client visa documents, uploaded files, subprocessors, cookies, and data rights."
       />
 
@@ -118,7 +118,7 @@ export default function PrivacyPage() {
           <SectionHeading icon={ScaleIcon} title="2. Legal Basis for Processing (GDPR Article 6)" />
           <p className="text-sm text-muted-foreground leading-relaxed mb-4">We process your personal data based on the following lawful grounds:</p>
           <ul className="space-y-3">
-            <ListItem><strong className="text-foreground">Contract Performance:</strong> Processing data is necessary to provide agency review workflows, document evaluation, issue tracking, and client-ready reporting.</ListItem>
+            <ListItem><strong className="text-foreground">Contract Performance:</strong> Processing data is necessary to provide agency case queues, document checks, issue tracking, and client fix lists.</ListItem>
             <ListItem><strong className="text-foreground">Consent:</strong> Agency users provide consent when creating an account and agreeing to our Terms of Service and this Privacy Policy. Consent may be withdrawn where applicable.</ListItem>
             <ListItem><strong className="text-foreground">Legitimate Interest:</strong> We process certain data to improve our services, ensure platform security, and prevent fraud, where such interests are not overridden by your rights.</ListItem>
           </ul>

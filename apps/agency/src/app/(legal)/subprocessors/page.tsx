@@ -28,7 +28,7 @@ const subprocessorsPageSchema = {
   name: "Subprocessors",
   description: subprocessorsDescription,
   url: `${CANONICAL_SITE_URL}/subprocessors`,
-  dateModified: "2026-10-07",
+  dateModified: "2026-10-14",
   isPartOf: {
     "@type": "WebSite",
     name: siteConfig.name,

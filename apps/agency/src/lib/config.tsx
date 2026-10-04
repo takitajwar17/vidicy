@@ -47,9 +47,9 @@ export const siteConfig = {
       question: "What is Vidicy?",
       answer: (
         <span>
-          Vidicy is visa application review software for visa and travel agencies. It
-          helps teams check client files in bulk, catch missing documents and inconsistencies, and
-          turn review notes into clear client follow-ups.
+          Vidicy is a review desk for visa agencies. Upload the passport, form, bank statement,
+          letters, bookings, and photos; Vidicy points to missing files, mismatched details, and
+          client fixes before a reviewer sends the report.
         </span>
       ),
     },
@@ -57,9 +57,9 @@ export const siteConfig = {
       question: "Who is Vidicy built for?",
       answer: (
         <span>
-          Vidicy is built for agencies that already handle visa clients and need a faster review
-          desk: intake queues, document checks, issue tracking, reviewer notes, and client-ready
-          reports that keep every file moving with clear next steps.
+          Vidicy is built for agencies whose workday is passports, forms, bank statements, client
+          letters, and follow-up messages. It gives the team one queue for each client file and one
+          list of fixes before the case moves forward.
         </span>
       ),
     },
@@ -67,9 +67,9 @@ export const siteConfig = {
       question: "Which workflows does Vidicy support?",
       answer: (
         <span>
-          The product is focused on high-volume tourist, visit, study, work, and family visa review
-          workflows where document completeness, evidence quality, and cross-file consistency
-          affect agency throughput.
+          The product is focused on tourist, visit, study, work, and family cases where reviewers
+          compare forms, passports, statements, letters, bookings, and prior visas before a client
+          file is marked ready.
         </span>
       ),
     },
@@ -77,8 +77,9 @@ export const siteConfig = {
       question: "Is Vidicy replacing agency reviewers?",
       answer: (
         <span>
-          No. Vidicy is designed to make review teams faster and more consistent. Agencies keep the
-          client relationship, reviewer judgment, and submission call.
+          No. Vidicy gives reviewers a shorter pile: what is missing, what contradicts another
+          file, and what the client must fix. The agency keeps the client relationship and the final
+          submission call.
         </span>
       ),
     },
@@ -96,8 +97,8 @@ export const siteConfig = {
       question: "How can an agency get access?",
       answer: (
         <span>
-          Vidicy is currently onboarding selected agency teams through private pilots. Teams can
-          reach out through the Enterprise page to discuss volume, workflow, and rollout needs.
+          Vidicy is onboarding selected agency teams through private pilots. Tell us the routes you
+          review, how many files arrive each month, and where the review desk slows down.
         </span>
       ),
     },

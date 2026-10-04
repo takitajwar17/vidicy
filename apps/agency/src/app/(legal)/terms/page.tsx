@@ -38,7 +38,7 @@ const termsPageSchema = {
   name: "Terms of Service",
   description: termsDescription,
   url: `${CANONICAL_SITE_URL}/terms`,
-  dateModified: "2026-10-02",
+  dateModified: "2026-10-15",
   isPartOf: {
     "@type": "WebSite",
     name: siteConfig.name,
@@ -97,7 +97,7 @@ export default function TermsPage() {
       <PublicPageHero
         eyebrow="Legal"
         title="Terms of Service"
-        meta="Last updated: October 2, 2026"
+        meta="Last updated: October 15, 2026"
         description="The terms that govern Vidicy for agency review workflows, including acceptable use, automated review limitations, data processing, and liability boundaries."
       />
 
@@ -183,8 +183,8 @@ export default function TermsPage() {
               rejection, or agency quality control completion.
             </ListItem>
             <ListItem>
-              Generated responses are informational workflow support and may contain inaccuracies. They do
-              not constitute immigration advice.
+              Generated responses support document review and client fix lists, and may contain
+              inaccuracies. They do not constitute immigration advice.
             </ListItem>
             <ListItem>
               {siteConfig.name} shall not be liable for adverse outcomes arising from reliance on

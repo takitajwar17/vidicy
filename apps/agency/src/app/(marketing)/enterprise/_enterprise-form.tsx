@@ -12,11 +12,11 @@ import { CheckCircle2Icon, BuildingIcon, UsersIcon, ZapIcon, ShieldCheckIcon, He
 import Link from "next/link"
 
 const PERKS = [
-  { icon: UsersIcon,       label: "Bulk client-file intake and review queues" },
-  { icon: BuildingIcon,    label: "Reviewer dashboard for agency operations" },
-  { icon: ZapIcon,         label: "Workflow integrations for high-volume teams" },
-  { icon: ShieldCheckIcon, label: "Client-ready reports and controlled final review" },
-  { icon: HeadphonesIcon,  label: "Pilot support, onboarding, and workflow setup" },
+  { icon: UsersIcon,       label: "Passports, forms, and statements routed into one queue" },
+  { icon: BuildingIcon,    label: "Reviewer ownership for every client file" },
+  { icon: ZapIcon,         label: "Missing files and mismatched details surfaced fast" },
+  { icon: ShieldCheckIcon, label: "Client fix lists before the agency marks a case ready" },
+  { icon: HeadphonesIcon,  label: "Pilot setup around the routes your team already reviews" },
 ]
 
 export function EnterpriseForm() {
@@ -48,9 +48,10 @@ export function EnterpriseForm() {
           <CheckCircle2Icon className="h-8 w-8 text-status-info" />
         </div>
         <div className="space-y-2 max-w-sm">
-          <h1 className="text-2xl font-semibold">We'll be in touch!</h1>
+          <h1 className="text-2xl font-semibold">We&apos;ll review the queue you described.</h1>
           <p className="text-muted-foreground text-sm leading-relaxed">
-            Thanks for reaching out. We&apos;ll review your inquiry and get back to you within one business day.
+            Thanks for reaching out. We&apos;ll look at your routes, monthly file volume, and review
+            bottleneck, then get back to you within one business day.
           </p>
         </div>
         <Button variant="outline" asChild>
@@ -64,7 +65,7 @@ export function EnterpriseForm() {
     <div className="grid grid-cols-1 items-start gap-10 lg:grid-cols-5 lg:gap-16">
       {/* Left — perks */}
       <div className="lg:col-span-2 space-y-5">
-        <h2 className="font-semibold text-lg">What teams usually need</h2>
+        <h2 className="font-semibold text-lg">What agency teams usually bring</h2>
         <ul className="space-y-4">
           {PERKS.map(({ icon: Icon, label }) => (
             <li key={label} className="flex items-start gap-3">
@@ -98,8 +99,8 @@ export function EnterpriseForm() {
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-1.5">
-                <Label htmlFor="company">Company / Agency <span className="text-destructive">*</span></Label>
-                <Input id="company" placeholder="Acme Immigration Ltd." value={company} onChange={(e) => setCompany(e.target.value)} required />
+                <Label htmlFor="company">Agency name <span className="text-destructive">*</span></Label>
+                <Input id="company" placeholder="Global Gateway Travels" value={company} onChange={(e) => setCompany(e.target.value)} required />
               </div>
               <div className="space-y-1.5">
                 <Label htmlFor="website">Company website</Label>
@@ -153,7 +154,7 @@ export function EnterpriseForm() {
               <Label htmlFor="message">Anything else we should know?</Label>
               <Textarea
                 id="message"
-                placeholder="Tell us about your workflow, the tools you use, or anything else we should know."
+                placeholder="Tell us the routes you review, where files get stuck, and what your reviewers check by hand today."
                 value={message}
                 onChange={(e) => setMessage(e.target.value)}
                 className="min-h-[100px] resize-none"
@@ -162,7 +163,7 @@ export function EnterpriseForm() {
             </div>
 
             <Button type="submit" className="w-full" size="lg" disabled={isPending}>
-              {isPending ? "Sending…" : "Send Inquiry"}
+              {isPending ? "Sending…" : "Request pilot access"}
             </Button>
 
             <p className="text-[11px] text-muted-foreground text-center">
