@@ -62,17 +62,15 @@ const SignInPage = ({ email, redirectPath, isGoogleSSOEnabled }: SignInClientPro
         author: "Operations Lead, Visa & Travel Agency",
       }}
     >
-      {/* Header */}
       <div className="space-y-2.5">
         <h1 className="text-2xl font-semibold tracking-[-0.02em] text-foreground sm:text-3xl">
-          Sign In or Join Now!
+          Sign in to Vidicy
         </h1>
         <p className="text-sm leading-6 text-muted-foreground/90">
-          Login or create your Vidicy account.
+          Access your agency review queue.
         </p>
       </div>
 
-      {/* Social login buttons */}
       <div className="space-y-3">
         <SSOButtons isSignIn redirectPath={redirectPath} isGoogleSSOEnabled={isGoogleSSOEnabled} />
       </div>
@@ -83,7 +81,7 @@ const SignInPage = ({ email, redirectPath, isGoogleSSOEnabled }: SignInClientPro
       <Form {...form}>
         <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-5">
           <p className="text-sm leading-6 text-muted-foreground/90">
-            Enter your email address to sign in to your account
+            Enter your agency account email.
           </p>
 
           <FormField
@@ -166,7 +164,7 @@ const SignInPage = ({ email, redirectPath, isGoogleSSOEnabled }: SignInClientPro
           href={getAuthRouteHref("/sign-up", redirectPath) as Route}
           className="font-semibold text-primary hover:text-primary/90 underline"
         >
-          Create one free
+          Create an account
         </Link>
       </p>
     </AuthShell>

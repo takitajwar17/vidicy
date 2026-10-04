@@ -58,8 +58,6 @@ const SignUpPage = ({
   );
   const [showPassword, setShowPassword] = useState(false);
 
-  // ── Server actions ──
-
   const { execute: signUp, isPending: isSigningUp } = useServerAction(signUpAction, {
     onError: (error) => {
       toast.dismiss();
@@ -94,8 +92,6 @@ const SignUpPage = ({
     },
   });
 
-  // ── Forms ──
-
   const form = useForm<SignUpSchema & { fullName: string }>({
     resolver: zodResolver(
       signUpSchema
@@ -120,23 +116,21 @@ const SignUpPage = ({
     signUp({ ...data, firstName, lastName, csrfToken, verifiedRedirectPath: redirectPath });
   };
 
-  // ── Step navigation ──
-
   const stepCopy: Record<
     EmailSignupStep,
     { title: string; description: string }
   > = {
     choice: {
-      title: "Get Your Free Evaluation!",
-      description: "Choose how you want to create your account. No card required.",
+      title: "Create your agency account",
+      description: "Join the review workspace your agency uses to manage client files.",
     },
     email: {
       title: "Create your account",
-      description: "Add your details so you can save your progress and come back later.",
+      description: "Add your details so your team can recognize you in the review queue.",
     },
     details: {
       title: "Create your account",
-      description: "Add your details so you can save your progress and come back later.",
+      description: "Add your details so your team can recognize you in the review queue.",
     },
   };
 
@@ -152,11 +146,10 @@ const SignUpPage = ({
     <AuthShell
       testimonial={{
         quote:
-          "The review caught inconsistencies I never would have found manually. My Schengen visa was approved on the first try.",
-        author: "Ali Hassan, Schengen Business Visa",
+          "Our reviewers cleared the morning file backlog before lunch and sent clients the exact fixes they needed.",
+        author: "Agency Operations Manager",
       }}
     >
-      {/* Header — changes per step */}
       <div className="space-y-2.5">
         <h1 className="text-2xl font-semibold tracking-[-0.02em] text-foreground sm:text-3xl">
           {stepCopy[emailSignupStep].title}
@@ -169,7 +162,6 @@ const SignUpPage = ({
       {/* Main form — wraps all steps */}
       <Form {...form}>
         <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-5">
-          {/* ── Step 1: Choice ── */}
           {emailSignupStep === "choice" && (
             <div className="space-y-4">
               <SSOButtons redirectPath={redirectPath} isGoogleSSOEnabled={isGoogleSSOEnabled} />
@@ -187,7 +179,6 @@ const SignUpPage = ({
             </div>
           )}
 
-          {/* ── Step 2: Details ── */}
           {emailSignupStep === "details" && (
             <div className="space-y-4">
               <FormField
