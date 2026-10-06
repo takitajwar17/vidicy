@@ -8,6 +8,7 @@ import {
   AGENCY_STAFF_STATUS,
   APPLICANT_RELATIONSHIP,
   CLIENT_REPORT_DELIVERY_STATUS,
+  CLIENT_REPORT_STATUS,
   REVIEW_ISSUE_STATUS,
   agencyClientTable,
   agencyTeamMemberTable,
@@ -26,6 +27,12 @@ import {
   normalizeAgencyCaseStatus,
   normalizeReviewIssueStatus,
 } from "@/lib/agency-workflow";
+
+import {
+  isEvaluationCurrent,
+  newestDocumentOrder,
+  newestEvaluationOrder,
+} from "@/server/agency-review";
 
 type VisaApplicationRow = typeof visaApplicationTable.$inferSelect;
 type ApplicantRow = typeof applicantTable.$inferSelect;
@@ -110,13 +117,12 @@ function getAgencyTopIssuePatterns(issues: ReviewIssueRow[]): AgencyIssuePattern
 
     const label = issue.title.trim() || "Untitled issue";
     const key = label.toLowerCase();
-    const current =
-      issueBuckets.get(key) ?? {
-        label,
-        count: 0,
-        high: 0,
-        caseIds: new Set<string>(),
-      };
+    const current = issueBuckets.get(key) ?? {
+      label,
+      count: 0,
+      high: 0,
+      caseIds: new Set<string>(),
+    };
 
     current.count += 1;
     current.caseIds.add(issue.applicationId);
@@ -298,42 +304,49 @@ export async function getAgencyCaseRows({
     new Set(applications.map((application) => application.assignedReviewerId).filter(Boolean)),
   ) as string[];
 
-  const [applicants, documents, issues, evaluations, reviewers] = await Promise.all([
-    db.query.applicantTable.findMany({
-      where: inArray(applicantTable.applicationId, applicationIds),
-      orderBy: [desc(applicantTable.createdAt)],
-    }),
-    db.query.uploadedDocumentTable.findMany({
-      where: inArray(uploadedDocumentTable.applicationId, applicationIds),
-      columns: {
-        id: true,
-        applicationId: true,
-        fileSize: true,
-      },
-    }),
-    db.query.reviewIssueTable.findMany({
-      where: and(
-        inArray(reviewIssueTable.applicationId, applicationIds),
-        ne(reviewIssueTable.status, REVIEW_ISSUE_STATUS.DISMISSED),
-      ),
-    }),
-    db.query.documentEvaluationTable.findMany({
-      where: inArray(documentEvaluationTable.applicationId, applicationIds),
-      orderBy: [desc(documentEvaluationTable.createdAt)],
-    }),
-    reviewerIds.length
-      ? db
-          .select({
-            id: userTable.id,
-            firstName: userTable.firstName,
-            lastName: userTable.lastName,
-            email: userTable.email,
-            avatar: userTable.avatar,
-          })
-          .from(userTable)
-          .where(inArray(userTable.id, reviewerIds))
-      : Promise.resolve([]),
-  ]);
+  const [applicants, documents, issues, evaluations, reviewers, checklistItems] = await Promise.all(
+    [
+      db.query.applicantTable.findMany({
+        where: inArray(applicantTable.applicationId, applicationIds),
+        orderBy: [desc(applicantTable.createdAt)],
+      }),
+      db.query.uploadedDocumentTable.findMany({
+        where: inArray(uploadedDocumentTable.applicationId, applicationIds),
+        columns: {
+          id: true,
+          applicationId: true,
+          fileSize: true,
+          checklistItemId: true,
+        },
+        orderBy: newestDocumentOrder,
+      }),
+      db.query.reviewIssueTable.findMany({
+        where: and(
+          inArray(reviewIssueTable.applicationId, applicationIds),
+          ne(reviewIssueTable.status, REVIEW_ISSUE_STATUS.DISMISSED),
+        ),
+      }),
+      db.query.documentEvaluationTable.findMany({
+        where: inArray(documentEvaluationTable.applicationId, applicationIds),
+        orderBy: newestEvaluationOrder,
+      }),
+      reviewerIds.length
+        ? db
+            .select({
+              id: userTable.id,
+              firstName: userTable.firstName,
+              lastName: userTable.lastName,
+              email: userTable.email,
+              avatar: userTable.avatar,
+            })
+            .from(userTable)
+            .where(inArray(userTable.id, reviewerIds))
+        : Promise.resolve([]),
+      db.query.checklistItemTable.findMany({
+        where: inArray(checklistItemTable.applicationId, applicationIds),
+      }),
+    ],
+  );
 
   const primaryApplicantByApp = getPrimaryApplicantByApplication(applicants);
 
@@ -371,17 +384,31 @@ export async function getAgencyCaseRows({
 
   const reviewerById = new Map(reviewers.map((reviewer) => [reviewer.id, reviewer]));
 
-  return applications.map((application) => ({
-    application,
-    primaryApplicant: primaryApplicantByApp.get(application.id) ?? null,
-    reviewer: application.assignedReviewerId
-      ? (reviewerById.get(application.assignedReviewerId) ?? null)
-      : null,
-    latestEvaluation: latestEvaluationByApp.get(application.id) ?? null,
-    documentCount: documentCountByApp.get(application.id) ?? 0,
-    openIssueCount: openIssueCountByApp.get(application.id) ?? 0,
-    highIssueCount: highIssueCountByApp.get(application.id) ?? 0,
-  }));
+  return applications.map((application) => {
+    const evaluation = latestEvaluationByApp.get(application.id) ?? null;
+    const currentEvaluation = isEvaluationCurrent({
+      evaluation,
+      checklistItems: checklistItems.filter((item) => item.applicationId === application.id),
+      documents: documents.filter((document) => document.applicationId === application.id),
+    })
+      ? evaluation
+      : null;
+    return {
+      application: {
+        ...application,
+        readinessScore: currentEvaluation?.overallScore ?? null,
+        riskLevel: currentEvaluation?.riskLevel ?? null,
+      },
+      primaryApplicant: primaryApplicantByApp.get(application.id) ?? null,
+      reviewer: application.assignedReviewerId
+        ? (reviewerById.get(application.assignedReviewerId) ?? null)
+        : null,
+      latestEvaluation: currentEvaluation,
+      documentCount: documentCountByApp.get(application.id) ?? 0,
+      openIssueCount: openIssueCountByApp.get(application.id) ?? 0,
+      highIssueCount: highIssueCountByApp.get(application.id) ?? 0,
+    };
+  });
 }
 
 export async function getAgencyTeamWorkloadRows(): Promise<AgencyTeamWorkloadRow[]> {
@@ -529,13 +556,12 @@ export async function getAgencyDashboardData() {
         inReview: reviewerInReview,
         completed: reviewerCompleted,
       };
-    })
+    });
   const unassignedCases = cases.filter((row) => !row.application.assignedReviewerId);
   if (unassignedCases.length > 0) {
     const unassignedReady = unassignedCases.filter(
       ({ application }) =>
-        normalizeAgencyCaseStatus(application.agencyStatus) ===
-        AGENCY_CASE_STATUS.READY_TO_SUBMIT,
+        normalizeAgencyCaseStatus(application.agencyStatus) === AGENCY_CASE_STATUS.READY_TO_SUBMIT,
     ).length;
     const unassignedActive = unassignedCases.filter(({ application }) => {
       const status = normalizeAgencyCaseStatus(application.agencyStatus);
@@ -562,11 +588,11 @@ export async function getAgencyDashboardData() {
   }
 
   workload.sort(
-      (a, b) =>
-        b.inReview - a.inReview ||
-        b.completed - a.completed ||
-        (a.displayName ?? "").localeCompare(b.displayName ?? ""),
-    );
+    (a, b) =>
+      b.inReview - a.inReview ||
+      b.completed - a.completed ||
+      (a.displayName ?? "").localeCompare(b.displayName ?? ""),
+  );
 
   return {
     cases,
@@ -619,11 +645,11 @@ export async function getAgencyCaseDetail(appId: string) {
     }),
     db.query.uploadedDocumentTable.findMany({
       where: eq(uploadedDocumentTable.applicationId, appId),
-      orderBy: [desc(uploadedDocumentTable.uploadedAt)],
+      orderBy: newestDocumentOrder,
     }),
     db.query.documentEvaluationTable.findFirst({
       where: eq(documentEvaluationTable.applicationId, appId),
-      orderBy: [desc(documentEvaluationTable.createdAt)],
+      orderBy: newestEvaluationOrder,
     }),
     db.query.reviewIssueTable.findMany({
       where: eq(reviewIssueTable.applicationId, appId),
@@ -636,6 +662,12 @@ export async function getAgencyCaseDetail(appId: string) {
     getActiveAgencyStaffRows(),
   ]);
 
+  const hasCurrentEvaluation = isEvaluationCurrent({
+    evaluation: latestEvaluation,
+    checklistItems,
+    documents,
+  });
+
   return {
     application,
     applicants,
@@ -645,12 +677,18 @@ export async function getAgencyCaseDetail(appId: string) {
       null,
     checklistItems,
     documents,
-    latestEvaluation,
+    latestEvaluation: hasCurrentEvaluation ? latestEvaluation : null,
+    isReviewStale: Boolean(latestEvaluation) && !hasCurrentEvaluation,
     issues: issues.map((issue) => ({
       ...issue,
       status: normalizeReviewIssueStatus(issue.status),
     })),
-    latestReport: reports[0] ?? null,
+    latestReport:
+      hasCurrentEvaluation &&
+      (application?.clientReportStatus === CLIENT_REPORT_STATUS.READY ||
+        application?.clientReportStatus === CLIENT_REPORT_STATUS.SENT)
+        ? (reports[0] ?? null)
+        : null,
     staff,
   };
 }
@@ -747,7 +785,10 @@ export async function getAgencyDocuments({
       document: uploadedDocumentTable,
     })
     .from(uploadedDocumentTable)
-    .innerJoin(visaApplicationTable, eq(uploadedDocumentTable.applicationId, visaApplicationTable.id))
+    .innerJoin(
+      visaApplicationTable,
+      eq(uploadedDocumentTable.applicationId, visaApplicationTable.id),
+    )
     .where(and(...filters))
     .orderBy(desc(uploadedDocumentTable.uploadedAt))
     .limit(limit)
@@ -755,9 +796,7 @@ export async function getAgencyDocuments({
 
   if (documentRows.length === 0) return [];
 
-  const applicationIds = Array.from(
-    new Set(documentRows.map(({ application }) => application.id)),
-  );
+  const applicationIds = Array.from(new Set(documentRows.map(({ application }) => application.id)));
   const applicants = await db.query.applicantTable.findMany({
     where: inArray(applicantTable.applicationId, applicationIds),
     orderBy: [desc(applicantTable.createdAt)],
@@ -770,7 +809,9 @@ export async function getAgencyDocuments({
     document,
     application,
     applicant: document.applicantId
-      ? (applicantById.get(document.applicantId) ?? primaryApplicantByApp.get(application.id) ?? null)
+      ? (applicantById.get(document.applicantId) ??
+        primaryApplicantByApp.get(application.id) ??
+        null)
       : (primaryApplicantByApp.get(application.id) ?? null),
   }));
 }
@@ -918,7 +959,16 @@ export async function getAgencyReports({
     }
   }
 
-  const latestReports = Array.from(latestReportByApplicationId.values());
+  const latestReports = Array.from(latestReportByApplicationId.values()).map((report) => {
+    const caseRow = casesById.get(report.applicationId);
+    return {
+      ...report,
+      isStale:
+        !caseRow?.latestEvaluation ||
+        (caseRow.application.clientReportStatus !== CLIENT_REPORT_STATUS.READY &&
+          caseRow.application.clientReportStatus !== CLIENT_REPORT_STATUS.SENT),
+    };
+  });
 
   const reportRows = latestReports.slice(offset, offset + limit).map((report) => ({
     report,
@@ -926,10 +976,10 @@ export async function getAgencyReports({
   }));
 
   const readyCount = latestReports.filter(
-    (report) => report.status === CLIENT_REPORT_DELIVERY_STATUS.READY,
+    (report) => !report.isStale && report.status === CLIENT_REPORT_DELIVERY_STATUS.READY,
   ).length;
   const sentCount = latestReports.filter(
-    (report) => report.status === CLIENT_REPORT_DELIVERY_STATUS.SENT,
+    (report) => !report.isStale && report.status === CLIENT_REPORT_DELIVERY_STATUS.SENT,
   ).length;
 
   return {
@@ -948,7 +998,7 @@ export async function getAgencyReports({
 export type AgencyCaseDetail = Awaited<ReturnType<typeof getAgencyCaseDetail>>;
 export type AgencyDocumentRow = Awaited<ReturnType<typeof getAgencyDocuments>>[number];
 export type AgencyReportRow = {
-  report: ClientReportRow;
+  report: ClientReportRow & { isStale: boolean };
   caseRow: AgencyCaseRow | null;
 };
 export type AgencyReviewIssueRow = Awaited<ReturnType<typeof getAgencyReviewIssueRows>>[number];

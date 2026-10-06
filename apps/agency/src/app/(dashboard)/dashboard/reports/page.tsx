@@ -131,18 +131,20 @@ export default async function ReportsPage({
                     <TableCell>{caseRow?.application.clientName ?? "—"}</TableCell>
                     <TableCell>
                       <Badge variant="outline" className="rounded-full text-2xs font-bold">
-                        {CLIENT_REPORT_DELIVERY_STATUS_META[
-                          report.status as keyof typeof CLIENT_REPORT_DELIVERY_STATUS_META
-                        ]?.label ?? "Draft"}
+                        {report.isStale
+                          ? "Out of date"
+                          : (CLIENT_REPORT_DELIVERY_STATUS_META[
+                              report.status as keyof typeof CLIENT_REPORT_DELIVERY_STATUS_META
+                            ]?.label ?? "Draft")}
                       </Badge>
                     </TableCell>
                     <TableCell>{report.actionItems.length}</TableCell>
                     <TableCell>{formatShortDate(report.createdAt)}</TableCell>
-                      <TableCell className="max-w-[520px] pr-5">
-                        <p className="truncate text-xs text-muted-foreground" title={report.summary}>
-                          {report.summary}
-                        </p>
-                      </TableCell>
+                    <TableCell className="max-w-[520px] pr-5">
+                      <p className="truncate text-xs text-muted-foreground" title={report.summary}>
+                        {report.summary}
+                      </p>
+                    </TableCell>
                   </TableRow>
                 ))}
               </TableBody>
