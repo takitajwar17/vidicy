@@ -7,6 +7,7 @@ import {
 } from "@/components/public-page-shell";
 import { buttonVariants } from "@/components/ui/button";
 import { constructMetadata } from "@/lib/utils";
+import { PilotAccessTokenForm } from "./_pilot-access-token";
 
 export const metadata = constructMetadata({
   title: "Vidicy agency pilots are invite-only",
@@ -42,6 +43,9 @@ export default function PilotAccessPage() {
             <Link className={buttonVariants({ size: "lg" })} href="/enterprise">
               Request pilot access
             </Link>
+          </div>
+          <div className="border-t border-border/70 pt-8">
+            <PilotAccessTokenForm />
           </div>
         </section>
       </PublicPageContent>
