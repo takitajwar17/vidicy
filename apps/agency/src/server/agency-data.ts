@@ -31,6 +31,7 @@ type VisaApplicationRow = typeof visaApplicationTable.$inferSelect;
 type ApplicantRow = typeof applicantTable.$inferSelect;
 type EvaluationRow = typeof documentEvaluationTable.$inferSelect;
 type ClientReportRow = typeof clientReportTable.$inferSelect;
+type ReviewIssueRow = typeof reviewIssueTable.$inferSelect;
 
 export interface AgencyStaffRow {
   id: string;
@@ -59,12 +60,81 @@ export interface AgencyCaseRow {
   highIssueCount: number;
 }
 
+export interface AgencyIssuePattern {
+  label: string;
+  count: number;
+  high: number;
+  caseCount: number;
+}
+
 function getAgencyCaseFilters() {
   return [isNull(visaApplicationTable.trashedAt), isNotNull(visaApplicationTable.clientId)];
 }
 
 function normalizeSearchQuery(query?: string | null) {
   return query?.trim() || "";
+}
+
+function getPrimaryApplicantByApplication(applicants: ApplicantRow[]) {
+  const primaryApplicantByApp = new Map<string, ApplicantRow>();
+
+  for (const applicant of applicants) {
+    if (applicant.relationship !== APPLICANT_RELATIONSHIP.PRIMARY) continue;
+    if (!primaryApplicantByApp.has(applicant.applicationId)) {
+      primaryApplicantByApp.set(applicant.applicationId, applicant);
+    }
+  }
+
+  for (const applicant of applicants) {
+    if (!primaryApplicantByApp.has(applicant.applicationId)) {
+      primaryApplicantByApp.set(applicant.applicationId, applicant);
+    }
+  }
+
+  return primaryApplicantByApp;
+}
+
+function getAgencyTopIssuePatterns(issues: ReviewIssueRow[]): AgencyIssuePattern[] {
+  const issueBuckets = new Map<
+    string,
+    {
+      label: string;
+      count: number;
+      high: number;
+      caseIds: Set<string>;
+    }
+  >();
+
+  for (const issue of issues) {
+    if (!isOpenReviewIssueStatus(issue.status)) continue;
+
+    const label = issue.title.trim() || "Untitled issue";
+    const key = label.toLowerCase();
+    const current =
+      issueBuckets.get(key) ?? {
+        label,
+        count: 0,
+        high: 0,
+        caseIds: new Set<string>(),
+      };
+
+    current.count += 1;
+    current.caseIds.add(issue.applicationId);
+    if (issue.severity === "high") {
+      current.high += 1;
+    }
+    issueBuckets.set(key, current);
+  }
+
+  return Array.from(issueBuckets.values())
+    .map((pattern) => ({
+      label: pattern.label,
+      count: pattern.count,
+      high: pattern.high,
+      caseCount: pattern.caseIds.size,
+    }))
+    .sort((a, b) => b.count - a.count || b.high - a.high || a.label.localeCompare(b.label))
+    .slice(0, 5);
 }
 
 async function getApplicantSearchMatches(query: string): Promise<{
@@ -87,6 +157,45 @@ async function getApplicantSearchMatches(query: string): Promise<{
     applicationIds: Array.from(new Set(applicants.map((applicant) => applicant.applicationId))),
     applicantIds: Array.from(new Set(applicants.map((applicant) => applicant.id))),
   };
+}
+
+async function getApplicationSearchMatches(query: string): Promise<string[]> {
+  if (!query) return [];
+
+  const db = getDB();
+  const applications = await db.query.visaApplicationTable.findMany({
+    where: and(
+      ...getAgencyCaseFilters(),
+      or(
+        like(visaApplicationTable.caseNumber, `%${query}%`),
+        like(visaApplicationTable.clientName, `%${query}%`),
+        like(visaApplicationTable.clientEmail, `%${query}%`),
+        like(visaApplicationTable.destinationCountry, `%${query}%`),
+        like(visaApplicationTable.visaType, `%${query}%`),
+      ),
+    ),
+    columns: {
+      id: true,
+    },
+    limit: 500,
+  });
+
+  return applications.map((application) => application.id);
+}
+
+function matchesReportSearch(report: ClientReportRow, query: string) {
+  if (!query) return true;
+
+  const normalizedQuery = query.toLowerCase();
+  const actionItemText = report.actionItems
+    .map((item) => `${item.title} ${item.detail}`)
+    .join(" ")
+    .toLowerCase();
+
+  return (
+    report.summary.toLowerCase().includes(normalizedQuery) ||
+    actionItemText.includes(normalizedQuery)
+  );
 }
 
 export async function getActiveAgencyStaffRows(): Promise<AgencyStaffRow[]> {
@@ -226,19 +335,7 @@ export async function getAgencyCaseRows({
       : Promise.resolve([]),
   ]);
 
-  const primaryApplicantByApp = new Map<string, ApplicantRow>();
-  for (const applicant of applicants) {
-    if (applicant.relationship !== APPLICANT_RELATIONSHIP.PRIMARY) continue;
-    if (!primaryApplicantByApp.has(applicant.applicationId)) {
-      primaryApplicantByApp.set(applicant.applicationId, applicant);
-    }
-  }
-
-  for (const applicant of applicants) {
-    if (!primaryApplicantByApp.has(applicant.applicationId)) {
-      primaryApplicantByApp.set(applicant.applicationId, applicant);
-    }
-  }
+  const primaryApplicantByApp = getPrimaryApplicantByApplication(applicants);
 
   const documentCountByApp = new Map<string, number>();
   for (const document of documents) {
@@ -375,6 +472,16 @@ export async function getAgencyDashboardData() {
     getAgencyCaseRows({ limit: 500 }),
     getActiveAgencyStaffRows(),
   ]);
+  const caseIds = cases.map((row) => row.application.id);
+  const issueRows = caseIds.length
+    ? await getDB().query.reviewIssueTable.findMany({
+        where: and(
+          inArray(reviewIssueTable.applicationId, caseIds),
+          ne(reviewIssueTable.status, REVIEW_ISSUE_STATUS.DISMISSED),
+        ),
+        orderBy: [desc(reviewIssueTable.createdAt)],
+      })
+    : [];
 
   const totalApplications = cases.length;
   const readyToSubmit = cases.filter(
@@ -398,20 +505,7 @@ export async function getAgencyDashboardData() {
   const readyRate =
     totalApplications > 0 ? Math.round((readyToSubmit / totalApplications) * 1000) / 10 : 0;
 
-  const issueBuckets = new Map<string, { count: number; high: number }>();
-  for (const row of cases) {
-    if (row.openIssueCount === 0) continue;
-    const key = row.highIssueCount > 0 ? "High-priority file issues" : "Review issues";
-    const current = issueBuckets.get(key) ?? { count: 0, high: 0 };
-    current.count += row.openIssueCount;
-    current.high += row.highIssueCount;
-    issueBuckets.set(key, current);
-  }
-
-  const topFlaggedIssues = Array.from(issueBuckets.entries())
-    .map(([label, value]) => ({ label, ...value }))
-    .sort((a, b) => b.count - a.count)
-    .slice(0, 5);
+  const topFlaggedIssues = getAgencyTopIssuePatterns(issueRows);
 
   const workload = staff
     .filter((member) => member.userId && member.user)
@@ -436,7 +530,38 @@ export async function getAgencyDashboardData() {
         completed: reviewerCompleted,
       };
     })
-    .sort(
+  const unassignedCases = cases.filter((row) => !row.application.assignedReviewerId);
+  if (unassignedCases.length > 0) {
+    const unassignedReady = unassignedCases.filter(
+      ({ application }) =>
+        normalizeAgencyCaseStatus(application.agencyStatus) ===
+        AGENCY_CASE_STATUS.READY_TO_SUBMIT,
+    ).length;
+    const unassignedActive = unassignedCases.filter(({ application }) => {
+      const status = normalizeAgencyCaseStatus(application.agencyStatus);
+      return (
+        status === AGENCY_CASE_STATUS.INTAKE ||
+        status === AGENCY_CASE_STATUS.IN_REVIEW ||
+        status === AGENCY_CASE_STATUS.NEEDS_CLIENT
+      );
+    }).length;
+
+    workload.push({
+      id: "unassigned",
+      userId: null,
+      email: null,
+      role: "member",
+      status: AGENCY_STAFF_STATUS.ACTIVE,
+      joinedAt: null,
+      invitedAt: null,
+      user: null,
+      displayName: "Unassigned",
+      inReview: unassignedActive,
+      completed: unassignedReady,
+    });
+  }
+
+  workload.sort(
       (a, b) =>
         b.inReview - a.inReview ||
         b.completed - a.completed ||
@@ -577,7 +702,7 @@ export async function getAgencyClientsWithCounts({
           normalizeAgencyCaseStatus(application.agencyStatus) !==
           AGENCY_CASE_STATUS.READY_TO_SUBMIT,
       ).length,
-      lastCaseAt: clientCases[0]?.createdAt ?? null,
+      lastCaseAt: clientCases[0]?.updatedAt ?? clientCases[0]?.createdAt ?? null,
     };
   });
 }
@@ -630,22 +755,23 @@ export async function getAgencyDocuments({
 
   if (documentRows.length === 0) return [];
 
-  const applicantIds = Array.from(
-    new Set(documentRows.map(({ document }) => document.applicantId).filter(Boolean)),
-  ) as string[];
-
-  const applicants = applicantIds.length
-    ? await db.query.applicantTable.findMany({
-        where: inArray(applicantTable.id, applicantIds),
-      })
-    : [];
+  const applicationIds = Array.from(
+    new Set(documentRows.map(({ application }) => application.id)),
+  );
+  const applicants = await db.query.applicantTable.findMany({
+    where: inArray(applicantTable.applicationId, applicationIds),
+    orderBy: [desc(applicantTable.createdAt)],
+  });
 
   const applicantById = new Map(applicants.map((applicant) => [applicant.id, applicant]));
+  const primaryApplicantByApp = getPrimaryApplicantByApplication(applicants);
 
   return documentRows.map(({ application, document }) => ({
     document,
     application,
-    applicant: document.applicantId ? (applicantById.get(document.applicantId) ?? null) : null,
+    applicant: document.applicantId
+      ? (applicantById.get(document.applicantId) ?? primaryApplicantByApp.get(application.id) ?? null)
+      : (primaryApplicantByApp.get(application.id) ?? null),
   }));
 }
 
@@ -661,6 +787,7 @@ export async function getAgencyReviewIssueRows({
   const db = getDB();
   const query = normalizeSearchQuery(rawQuery);
   const applicantMatches = await getApplicantSearchMatches(query);
+  const applicationMatches = await getApplicationSearchMatches(query);
   const issueFilters = [ne(reviewIssueTable.status, REVIEW_ISSUE_STATUS.DISMISSED)];
 
   if (query) {
@@ -672,6 +799,9 @@ export async function getAgencyReviewIssueRows({
 
     if (applicantMatches.applicationIds.length) {
       queryFilters.push(inArray(reviewIssueTable.applicationId, applicantMatches.applicationIds));
+    }
+    if (applicationMatches.length) {
+      queryFilters.push(inArray(reviewIssueTable.applicationId, applicationMatches));
     }
     if (applicantMatches.applicantIds.length) {
       queryFilters.push(inArray(reviewIssueTable.applicantId, applicantMatches.applicantIds));
@@ -690,9 +820,6 @@ export async function getAgencyReviewIssueRows({
   if (issues.length === 0) return [];
 
   const applicationIds = Array.from(new Set(issues.map((issue) => issue.applicationId)));
-  const applicantIds = Array.from(
-    new Set(issues.map((issue) => issue.applicantId).filter(Boolean)),
-  ) as string[];
   const documentIds = Array.from(
     new Set(issues.map((issue) => issue.documentId).filter(Boolean)),
   ) as string[];
@@ -705,11 +832,10 @@ export async function getAgencyReviewIssueRows({
         isNotNull(visaApplicationTable.clientId),
       ),
     }),
-    applicantIds.length
-      ? db.query.applicantTable.findMany({
-          where: inArray(applicantTable.id, applicantIds),
-        })
-      : Promise.resolve([]),
+    db.query.applicantTable.findMany({
+      where: inArray(applicantTable.applicationId, applicationIds),
+      orderBy: [desc(applicantTable.createdAt)],
+    }),
     documentIds.length
       ? db.query.uploadedDocumentTable.findMany({
           where: inArray(uploadedDocumentTable.id, documentIds),
@@ -720,6 +846,7 @@ export async function getAgencyReviewIssueRows({
   const applicationById = new Map(applications.map((application) => [application.id, application]));
   const agencyApplicationIds = new Set(applicationById.keys());
   const applicantById = new Map(applicants.map((applicant) => [applicant.id, applicant]));
+  const primaryApplicantByApp = getPrimaryApplicantByApplication(applicants);
   const documentById = new Map(documents.map((document) => [document.id, document]));
 
   return issues
@@ -730,7 +857,11 @@ export async function getAgencyReviewIssueRows({
         status: normalizeReviewIssueStatus(issue.status),
       },
       application: applicationById.get(issue.applicationId) ?? null,
-      applicant: issue.applicantId ? (applicantById.get(issue.applicantId) ?? null) : null,
+      applicant: issue.applicantId
+        ? (applicantById.get(issue.applicantId) ??
+          primaryApplicantByApp.get(issue.applicationId) ??
+          null)
+        : (primaryApplicantByApp.get(issue.applicationId) ?? null),
       document: issue.documentId ? (documentById.get(issue.documentId) ?? null) : null,
     }));
 }
@@ -749,10 +880,34 @@ export async function getAgencyReports({
 
   const reports = await db.query.clientReportTable.findMany({
     orderBy: [desc(clientReportTable.createdAt)],
-    limit: 200,
+    limit: 500,
   });
 
-  const cases = await getAgencyCaseRows({ limit: 500, query });
+  const allCases = await getAgencyCaseRows({ limit: 500 });
+  const cases = query
+    ? allCases.filter((row) => {
+        const searchableCaseText = [
+          row.application.caseNumber,
+          row.application.clientName,
+          row.application.clientEmail,
+          row.application.destinationCountry,
+          row.application.visaType,
+          row.primaryApplicant?.name,
+          row.primaryApplicant?.email,
+        ]
+          .filter(Boolean)
+          .join(" ")
+          .toLowerCase();
+        const normalizedQuery = query.toLowerCase();
+        return (
+          searchableCaseText.includes(normalizedQuery) ||
+          reports.some(
+            (report) =>
+              report.applicationId === row.application.id && matchesReportSearch(report, query),
+          )
+        );
+      })
+    : allCases;
   const casesById = new Map(cases.map((row) => [row.application.id, row]));
   const agencyReports = reports.filter((report) => casesById.has(report.applicationId));
   const latestReportByApplicationId = new Map<string, ClientReportRow>();

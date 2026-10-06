@@ -177,7 +177,9 @@ describe("agency application pages", () => {
       ],
       staff: [],
       workload: [],
-      topFlaggedIssues: [{ label: "High-priority file issues", count: 1, high: 1 }],
+      topFlaggedIssues: [
+        { label: "Bank statement needs review", count: 1, high: 1, caseCount: 1 },
+      ],
       stats: {
         totalApplications: 1,
         completed: 0,
@@ -308,6 +310,8 @@ describe("agency application pages", () => {
     expect(markup).toContain("Today&#x27;s queue: files in review, clients waiting on fixes, and reviewers carrying the work.");
     expect(markup).toContain("Files moving this week");
     expect(markup).toContain("Recent client files");
+    expect(markup).toContain("Bank statement needs review");
+    expect(markup).not.toContain("High-priority file issues");
     expect(markup).toContain("VA-2026-ABC123");
     expect(markup).not.toContain("Start Your First Application");
   });
