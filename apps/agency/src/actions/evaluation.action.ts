@@ -3,7 +3,7 @@
 import { createServerAction, ZSAError } from "zsa";
 import { z } from "zod";
 import type OpenAI from "openai";
-import { eq, and, desc, asc } from "drizzle-orm";
+import { eq, and, asc } from "drizzle-orm";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { getDB } from "@/db";
 import {
@@ -35,6 +35,10 @@ import {
   CLIENT_REPORT_STATUS,
   MARKETING_EVENT_TYPE,
 } from "@/db/schema";
+import {
+  invalidateAgencyReview, isEvaluationCurrent, newestDocumentOrder,
+  newestEvaluationOrder, syncAgencyReviewIssues,
+} from "@/server/agency-review";
 import { recordMarketingEvent } from "@/server/marketing/events";
 
 // ---------------------------------------------------------------------------
@@ -499,14 +503,14 @@ export const evaluateDocumentsAction = createServerAction()
           eq(uploadedDocumentTable.applicationId, application.id),
           eq(uploadedDocumentTable.applicantId, input.applicantId)
         ),
-        orderBy: [desc(uploadedDocumentTable.uploadedAt)],
+        orderBy: newestDocumentOrder,
       }),
       db.query.documentEvaluationTable.findFirst({
         where: and(
           eq(documentEvaluationTable.applicationId, application.id),
           eq(documentEvaluationTable.applicantId, input.applicantId)
         ),
-        orderBy: [desc(documentEvaluationTable.createdAt)],
+        orderBy: newestEvaluationOrder,
       }),
     ]);
 
@@ -1325,17 +1329,7 @@ Return JSON with this exact structure:
     // Persist evaluation and update application/applicant scores
     // ---------------------------------------------------------------------------
 
-    // Update application status based on this applicant's score.
-    // Threshold varies by visa type — work/PR visas require a higher score than tourist visas.
-    // readyThreshold is already computed above for ensemble scoring.
-    const newStatus =
-      evaluationData.overallScore >= readyThreshold
-        ? VISA_APPLICATION_STATUS.READY
-        : VISA_APPLICATION_STATUS.IN_PROGRESS;
-
-    // Persist evaluation, applicant score, and application status in parallel.
-    // If side-effect updates (applicant/application) fail, we still save the evaluation
-    // so the user isn't left with nothing after expensive AI calls.
+    // Store the review history before publishing scores or tracked issues.
     const [evaluation] = await db
       .insert(documentEvaluationTable)
       .values({
@@ -1354,6 +1348,28 @@ Return JSON with this exact structure:
       })
       .returning();
 
+    // A corrected upload can finish while the AI is running. Keep that review as
+    // history, but do not publish its score or findings against newer evidence.
+    const currentDocuments = await db.query.uploadedDocumentTable.findMany({
+      where: eq(uploadedDocumentTable.applicationId, application.id),
+      orderBy: newestDocumentOrder,
+    });
+    if (!isEvaluationCurrent({ evaluation, checklistItems, documents: currentDocuments })) {
+      await invalidateAgencyReview({ db, applicationId: application.id });
+      throw new ZSAError(
+        "PRECONDITION_FAILED",
+        "The documents changed during review. Run review again.",
+      );
+    }
+    // Issue synchronization is required; do not report a completed review if it fails.
+    await syncAgencyReviewIssues({
+      db,
+      applicationId: application.id,
+      evaluation,
+      userId: session.userId,
+    });
+    await invalidateAgencyReview({ db, applicationId: application.id });
+
     // Non-fatal: update denormalized scores on applicant and application
     await Promise.all([
       db
@@ -1363,18 +1379,23 @@ Return JSON with this exact structure:
           riskLevel: evaluationData.riskLevel,
         })
         .where(eq(applicantTable.id, input.applicantId))
-        .catch((err) => logger.error("Failed to update applicant score after evaluation", { applicantId: input.applicantId, error: err })),
+        .catch((err) => logger.error("Failed to update applicant score after evaluation", { applicantId: input.applicantId, error: err,
+          }),
+        ),
       db
         .update(visaApplicationTable)
         .set({
 	          riskLevel: evaluationData.riskLevel,
 	          readinessScore: evaluationData.overallScore,
-	          status: newStatus,
+	          status: VISA_APPLICATION_STATUS.IN_PROGRESS,
+          reviewCompletedAt: null,
 	          agencyStatus: AGENCY_CASE_STATUS.IN_REVIEW,
 	          clientReportStatus: CLIENT_REPORT_STATUS.DRAFT,
 	        })
         .where(eq(visaApplicationTable.id, application.id))
-        .catch((err) => logger.error("Failed to update application status after evaluation", { applicationId: application.id, error: err })),
+        .catch((err) => logger.error("Failed to update application status after evaluation", { applicationId: application.id, error: err,
+          }),
+        ),
     ]);
 
     await recordMarketingEvent({
@@ -1389,6 +1410,21 @@ Return JSON with this exact structure:
       },
     });
 
+    // Recheck after publication so a concurrent upload cannot restore an old score.
+    const finalDocuments = await db.query.uploadedDocumentTable.findMany({
+      where: eq(uploadedDocumentTable.applicationId, application.id),
+      orderBy: newestDocumentOrder,
+    });
+    if (!isEvaluationCurrent({ evaluation, checklistItems, documents: finalDocuments })) {
+      await invalidateAgencyReview({ db, applicationId: application.id });
+      throw new ZSAError(
+        "PRECONDITION_FAILED",
+        "The documents changed during review. Run review again.",
+      );
+    }
     revalidatePath(`/dashboard/${application.id}`);
+    revalidatePath("/dashboard");
+    revalidatePath("/dashboard/issues");
+    revalidatePath("/dashboard/reports");
     return evaluation;
   });

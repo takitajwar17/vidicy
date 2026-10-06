@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { and, desc, eq, isNotNull, isNull, ne } from "drizzle-orm";
+import { and, desc, eq, isNotNull, isNull, ne, sql } from "drizzle-orm";
 import { createId } from "@paralleldrive/cuid2";
 import { createServerAction, ZSAError } from "zsa";
 import { z } from "zod";
@@ -20,7 +20,6 @@ import {
   agencyClientTable,
   agencyTeamMemberTable,
   applicantTable,
-  checklistItemTable,
   clientReportTable,
   documentEvaluationTable,
   reviewIssueTable,
@@ -35,6 +34,13 @@ import { sendEmailBestEffort } from "@/lib/best-effort-email";
 import { isOpenReviewIssueStatus, normalizeReviewIssueStatus } from "@/lib/agency-workflow";
 import { logger } from "@/infra/logger";
 import { sendAgencyTeamAccessEmail } from "@/utils/email";
+import {
+  invalidateAgencyReports,
+  newestEvaluationOrder,
+  requireCurrentAgencyReview,
+  markAgencyCaseReady,
+  syncAgencyReviewIssues,
+} from "@/server/agency-review";
 
 const nullableDateSchema = z
   .string()
@@ -76,7 +82,7 @@ async function requireAgencyCase({
       isNull(visaApplicationTable.trashedAt),
       isNotNull(visaApplicationTable.clientId),
     ),
-    columns: { id: true },
+    columns: { id: true, updateCounter: true },
   });
 
   if (!application) {
@@ -254,23 +260,22 @@ export const updateAgencyCaseStatusAction = createServerAction()
     }),
   )
   .handler(async ({ input }) => {
-    await requireAgencyStaff();
+    const { session } = await requireAgencyStaff();
     const db = getDB();
     await requireAgencyCase({ db, applicationId: input.applicationId });
 
-    const nextValues: Partial<typeof visaApplicationTable.$inferInsert> = {
-      agencyStatus: input.status,
-    };
-
     if (input.status === AGENCY_CASE_STATUS.READY_TO_SUBMIT) {
-      nextValues.reviewCompletedAt = new Date();
-      nextValues.status = VISA_APPLICATION_STATUS.READY;
+      await markAgencyCaseReady({ db, applicationId: input.applicationId, userId: session.userId });
+    } else {
+      await db
+        .update(visaApplicationTable)
+        .set({
+          agencyStatus: input.status,
+          reviewCompletedAt: null,
+          status: VISA_APPLICATION_STATUS.IN_PROGRESS,
+        })
+        .where(eq(visaApplicationTable.id, input.applicationId));
     }
-
-    await db
-      .update(visaApplicationTable)
-      .set(nextValues)
-      .where(eq(visaApplicationTable.id, input.applicationId));
 
     revalidatePath(`/dashboard/${input.applicationId}`);
     revalidatePath("/dashboard");
@@ -318,21 +323,6 @@ export const assignAgencyCaseAction = createServerAction()
     return { success: true };
   });
 
-function getIssueSeverityFromFeedback(feedback: {
-  status?: string;
-  score?: number;
-  issues?: string[];
-  hasDocument?: boolean;
-}) {
-  if (!feedback.hasDocument || feedback.status === "missing" || (feedback.score ?? 100) < 45) {
-    return REVIEW_ISSUE_SEVERITY.HIGH;
-  }
-  if ((feedback.score ?? 100) < 75 || (feedback.issues?.length ?? 0) > 0) {
-    return REVIEW_ISSUE_SEVERITY.MEDIUM;
-  }
-  return REVIEW_ISSUE_SEVERITY.LOW;
-}
-
 export const syncReviewIssuesFromEvaluationAction = createServerAction()
   .input(z.object({ applicationId: z.string().min(1) }))
   .handler(async ({ input }) => {
@@ -340,81 +330,24 @@ export const syncReviewIssuesFromEvaluationAction = createServerAction()
     const db = getDB();
     await requireAgencyCase({ db, applicationId: input.applicationId });
 
-    const [evaluation, checklistItems] = await Promise.all([
-      db.query.documentEvaluationTable.findFirst({
-        where: eq(documentEvaluationTable.applicationId, input.applicationId),
-        orderBy: [desc(documentEvaluationTable.createdAt)],
-      }),
-      db.query.checklistItemTable.findMany({
-        where: eq(checklistItemTable.applicationId, input.applicationId),
-      }),
-    ]);
+    const evaluation = await db.query.documentEvaluationTable.findFirst({
+      where: eq(documentEvaluationTable.applicationId, input.applicationId),
+      orderBy: newestEvaluationOrder,
+    });
 
-    if (!evaluation?.itemFeedback) {
-      throw new ZSAError("PRECONDITION_FAILED", "Run document review before syncing issues.");
-    }
-
-    let createdCount = 0;
-    for (const item of checklistItems) {
-      const feedback = evaluation.itemFeedback[item.id];
-      if (!feedback) continue;
-
-      const issues = feedback.issues ?? [];
-      const shouldCreate =
-        feedback.status === "missing" ||
-        feedback.status === "needs_review" ||
-        issues.length > 0 ||
-        (feedback.score ?? 100) < 80;
-
-      if (!shouldCreate) continue;
-
-      const existing = await db.query.reviewIssueTable.findFirst({
-        where: and(
-          eq(reviewIssueTable.applicationId, input.applicationId),
-          eq(reviewIssueTable.checklistItemId, item.id),
-          eq(reviewIssueTable.source, REVIEW_ISSUE_SOURCE.AI),
-          ne(reviewIssueTable.status, REVIEW_ISSUE_STATUS.DISMISSED),
-        ),
-      });
-
-      if (existing) continue;
-
-      await db.insert(reviewIssueTable).values({
-        applicationId: input.applicationId,
-        applicantId: item.applicantId,
-        checklistItemId: item.id,
-        title:
-          feedback.status === "missing"
-            ? `Missing ${item.documentName}`
-            : `${item.documentName} needs review`,
-        description: issues[0] || feedback.feedback || item.description,
-        recommendation:
-          feedback.feedback ||
-          `Ask the client to provide a clearer or corrected ${item.documentName}.`,
-        category: feedback.status === "missing" ? "missing_document" : "document_quality",
-        severity: getIssueSeverityFromFeedback(feedback),
-        status: REVIEW_ISSUE_STATUS.OPEN,
-        source: REVIEW_ISSUE_SOURCE.AI,
-        confidence: feedback.confidence ?? null,
-        clientVisible: true,
-        assignedToId: session.userId,
-        createdById: session.userId,
-      });
-      createdCount += 1;
-    }
-
-    await db
-      .update(visaApplicationTable)
-      .set({
-        agencyStatus: AGENCY_CASE_STATUS.IN_REVIEW,
-        clientReportStatus: CLIENT_REPORT_STATUS.DRAFT,
-      })
-      .where(eq(visaApplicationTable.id, input.applicationId));
+    if (!evaluation) throw new ZSAError("PRECONDITION_FAILED", "Run document review first.");
+    const result = await syncAgencyReviewIssues({
+      db,
+      applicationId: input.applicationId,
+      evaluation,
+      userId: session.userId,
+    });
+    await invalidateAgencyReports({ db, applicationId: input.applicationId });
 
     revalidatePath(`/dashboard/${input.applicationId}`);
     revalidatePath("/dashboard");
     revalidatePath("/dashboard/issues");
-    return { createdCount };
+    return result;
   });
 
 export const addReviewIssueAction = createServerAction()
@@ -456,8 +389,14 @@ export const addReviewIssueAction = createServerAction()
 
     await db
       .update(visaApplicationTable)
-      .set({ agencyStatus: AGENCY_CASE_STATUS.IN_REVIEW })
+      .set({
+        agencyStatus: AGENCY_CASE_STATUS.IN_REVIEW,
+        status: VISA_APPLICATION_STATUS.IN_PROGRESS,
+        reviewCompletedAt: null,
+      })
       .where(eq(visaApplicationTable.id, input.applicationId));
+
+    await invalidateAgencyReports({ db, applicationId: input.applicationId });
 
     revalidatePath(`/dashboard/${input.applicationId}`);
     revalidatePath("/dashboard");
@@ -469,7 +408,9 @@ export const updateReviewIssueStatusAction = createServerAction()
   .input(
     z.object({
       issueId: z.string().min(1),
-      status: z.union([z.enum(reviewIssueStatusTuple), z.literal("accepted")]).transform(normalizeReviewIssueStatus),
+      status: z
+        .union([z.enum(reviewIssueStatusTuple), z.literal("accepted")])
+        .transform(normalizeReviewIssueStatus),
     }),
   )
   .handler(async ({ input }) => {
@@ -498,6 +439,17 @@ export const updateReviewIssueStatusAction = createServerAction()
       })
       .where(eq(reviewIssueTable.id, input.issueId));
 
+    await invalidateAgencyReports({ db, applicationId: issue.applicationId });
+    if (isOpenReviewIssueStatus(input.status)) {
+      await db
+        .update(visaApplicationTable)
+        .set({
+          agencyStatus: AGENCY_CASE_STATUS.IN_REVIEW,
+          status: VISA_APPLICATION_STATUS.IN_PROGRESS,
+          reviewCompletedAt: null,
+        })
+        .where(eq(visaApplicationTable.id, issue.applicationId));
+    }
     revalidatePath(`/dashboard/${issue.applicationId}`);
     revalidatePath("/dashboard");
     revalidatePath("/dashboard/issues");
@@ -509,6 +461,13 @@ export const generateClientReportAction = createServerAction()
   .handler(async ({ input }) => {
     const { session } = await requireAgencyStaff();
     const db = getDB();
+
+    const original = await requireAgencyCase({ db, applicationId: input.applicationId });
+    await requireCurrentAgencyReview({
+      db,
+      applicationId: input.applicationId,
+      userId: session.userId,
+    });
 
     const [application, issues] = await Promise.all([
       db.query.visaApplicationTable.findFirst({
@@ -543,7 +502,7 @@ export const generateClientReportAction = createServerAction()
     const summary =
       actionItems.length > 0
         ? `${application.clientName ?? "Client"} has ${actionItems.length} item${actionItems.length === 1 ? "" : "s"} to fix before the review desk can mark the case ready.`
-        : "No client-ready issues remain. The case can move to the ready queue.";
+        : "No client issues remain. Check the required documents and review before you mark the case ready.";
 
     const [report] = await db
       .insert(clientReportTable)
@@ -556,14 +515,35 @@ export const generateClientReportAction = createServerAction()
       })
       .returning();
 
-    await db
+    const updated = await db
       .update(visaApplicationTable)
       .set({
         clientReportStatus: CLIENT_REPORT_STATUS.READY,
-        agencyStatus:
-          actionItems.length > 0 ? AGENCY_CASE_STATUS.NEEDS_CLIENT : AGENCY_CASE_STATUS.READY_TO_SUBMIT,
+        ...(actionItems.length > 0
+          ? {
+              agencyStatus: AGENCY_CASE_STATUS.NEEDS_CLIENT,
+              status: VISA_APPLICATION_STATUS.IN_PROGRESS,
+              reviewCompletedAt: null,
+            }
+          : {}),
       })
-      .where(eq(visaApplicationTable.id, input.applicationId));
+      .where(
+        and(
+          eq(visaApplicationTable.id, input.applicationId),
+          sql`${visaApplicationTable.updateCounter} IS ${original.updateCounter}`,
+        ),
+      )
+      .returning({ id: visaApplicationTable.id });
+    if (!updated.length) {
+      await db
+        .update(clientReportTable)
+        .set({ status: CLIENT_REPORT_DELIVERY_STATUS.DRAFT })
+        .where(eq(clientReportTable.id, report.id));
+      throw new ZSAError(
+        "PRECONDITION_FAILED",
+        "The case changed. Run review again before you prepare the report.",
+      );
+    }
 
     revalidatePath(`/dashboard/${input.applicationId}`);
     revalidatePath("/dashboard");
@@ -574,18 +554,11 @@ export const generateClientReportAction = createServerAction()
 export const finalizeReviewAction = createServerAction()
   .input(z.object({ applicationId: z.string().min(1) }))
   .handler(async ({ input }) => {
-    await requireAgencyStaff();
+    const { session } = await requireAgencyStaff();
     const db = getDB();
     await requireAgencyCase({ db, applicationId: input.applicationId });
 
-    await db
-      .update(visaApplicationTable)
-      .set({
-        agencyStatus: AGENCY_CASE_STATUS.READY_TO_SUBMIT,
-        status: VISA_APPLICATION_STATUS.READY,
-        reviewCompletedAt: new Date(),
-      })
-      .where(eq(visaApplicationTable.id, input.applicationId));
+    await markAgencyCaseReady({ db, applicationId: input.applicationId, userId: session.userId });
 
     revalidatePath(`/dashboard/${input.applicationId}`);
     revalidatePath("/dashboard");
@@ -600,101 +573,103 @@ export const addAgencyStaffAction = createServerAction()
       role: z.enum([AGENCY_STAFF_ROLE.ADMIN, AGENCY_STAFF_ROLE.MEMBER]),
     }),
   )
-	  .handler(async ({ input }) => {
-	    const { session } = await requireAgencyAdmin();
-	    const db = getDB();
-	    const email = input.email.trim().toLowerCase();
-	    const addedByName = getStaffDisplayName(session.user);
+  .handler(async ({ input }) => {
+    const { session } = await requireAgencyAdmin();
+    const db = getDB();
+    const email = input.email.trim().toLowerCase();
+    const addedByName = getStaffDisplayName(session.user);
 
-	    const existingUser = await db.query.userTable.findFirst({
-	      where: eq(userTable.email, email),
-	      columns: { id: true, firstName: true, lastName: true, email: true },
-	    });
+    const existingUser = await db.query.userTable.findFirst({
+      where: eq(userTable.email, email),
+      columns: { id: true, firstName: true, lastName: true, email: true },
+    });
 
-	    const [existingByEmail, existingByUser] = await Promise.all([
-	      db.query.agencyTeamMemberTable.findFirst({
-	        where: eq(agencyTeamMemberTable.email, email),
-	      }),
-	      existingUser
-	        ? db.query.agencyTeamMemberTable.findFirst({
-	            where: eq(agencyTeamMemberTable.userId, existingUser.id),
-	          })
-	        : Promise.resolve(null),
-	    ]);
+    const [existingByEmail, existingByUser] = await Promise.all([
+      db.query.agencyTeamMemberTable.findFirst({
+        where: eq(agencyTeamMemberTable.email, email),
+      }),
+      existingUser
+        ? db.query.agencyTeamMemberTable.findFirst({
+            where: eq(agencyTeamMemberTable.userId, existingUser.id),
+          })
+        : Promise.resolve(null),
+    ]);
 
-	    if (existingByEmail && existingByUser && existingByEmail.id !== existingByUser.id) {
-	      throw new ZSAError(
-	        "CONFLICT",
-	        "This email and account are already linked to different staff records.",
-	      );
-	    }
+    if (existingByEmail && existingByUser && existingByEmail.id !== existingByUser.id) {
+      throw new ZSAError(
+        "CONFLICT",
+        "This email and account are already linked to different staff records.",
+      );
+    }
 
-	    const existingMember = existingByEmail ?? existingByUser;
-	    const now = new Date();
-	    const nextValues = {
-	      email,
-	      userId: existingUser?.id ?? existingMember?.userId ?? null,
-	      role: input.role,
-	      status: AGENCY_STAFF_STATUS.ACTIVE,
-	      invitedBy: session.userId,
-	      invitedAt: existingMember?.invitedAt ?? now,
-      joinedAt: existingUser ? (existingMember?.joinedAt ?? now) : (existingMember?.joinedAt ?? null),
-	      updatedAt: now,
-	    };
+    const existingMember = existingByEmail ?? existingByUser;
+    const now = new Date();
+    const nextValues = {
+      email,
+      userId: existingUser?.id ?? existingMember?.userId ?? null,
+      role: input.role,
+      status: AGENCY_STAFF_STATUS.ACTIVE,
+      invitedBy: session.userId,
+      invitedAt: existingMember?.invitedAt ?? now,
+      joinedAt: existingUser
+        ? (existingMember?.joinedAt ?? now)
+        : (existingMember?.joinedAt ?? null),
+      updatedAt: now,
+    };
 
-	    if (existingMember) {
-	      await db
-	        .update(agencyTeamMemberTable)
-	        .set(nextValues)
-	        .where(eq(agencyTeamMemberTable.id, existingMember.id));
-	    } else {
-	      await db.insert(agencyTeamMemberTable).values(nextValues);
-	    }
+    if (existingMember) {
+      await db
+        .update(agencyTeamMemberTable)
+        .set(nextValues)
+        .where(eq(agencyTeamMemberTable.id, existingMember.id));
+    } else {
+      await db.insert(agencyTeamMemberTable).values(nextValues);
+    }
 
-	    const emailSent = await sendEmailBestEffort({
-	      send: () =>
-	        sendAgencyTeamAccessEmail({
-	          email,
-	          addedByName,
-	          role: input.role,
-	        }),
-	      logger,
-	      message: "Failed to send agency staff access email",
-	      context: { email, role: input.role },
-	    });
+    const emailSent = await sendEmailBestEffort({
+      send: () =>
+        sendAgencyTeamAccessEmail({
+          email,
+          addedByName,
+          role: input.role,
+        }),
+      logger,
+      message: "Failed to send agency staff access email",
+      context: { email, role: input.role },
+    });
 
-	    revalidatePath("/dashboard/team");
-	    return { status: "added" as const, emailSent };
-	  });
+    revalidatePath("/dashboard/team");
+    return { status: "added" as const, emailSent };
+  });
 
 export const updateAgencyStaffRoleAction = createServerAction()
   .input(
     z.object({
-	      staffMemberId: z.string().min(1),
-	      role: z.enum([AGENCY_STAFF_ROLE.ADMIN, AGENCY_STAFF_ROLE.MEMBER]),
-	    }),
+      staffMemberId: z.string().min(1),
+      role: z.enum([AGENCY_STAFF_ROLE.ADMIN, AGENCY_STAFF_ROLE.MEMBER]),
+    }),
   )
   .handler(async ({ input }) => {
-	    const { session } = await requireAgencyAdmin();
-	    const db = getDB();
+    const { session } = await requireAgencyAdmin();
+    const db = getDB();
 
-	    const member = await db.query.agencyTeamMemberTable.findFirst({
-	      where: eq(agencyTeamMemberTable.id, input.staffMemberId),
-	      columns: { id: true, userId: true },
-	    });
+    const member = await db.query.agencyTeamMemberTable.findFirst({
+      where: eq(agencyTeamMemberTable.id, input.staffMemberId),
+      columns: { id: true, userId: true },
+    });
 
-	    if (!member) {
-	      throw new ZSAError("NOT_FOUND", "Staff member not found.");
-	    }
+    if (!member) {
+      throw new ZSAError("NOT_FOUND", "Staff member not found.");
+    }
 
-	    if (member.userId === session.userId && input.role !== AGENCY_STAFF_ROLE.ADMIN) {
-	      throw new ZSAError("FORBIDDEN", "You cannot remove your own admin access.");
-	    }
+    if (member.userId === session.userId && input.role !== AGENCY_STAFF_ROLE.ADMIN) {
+      throw new ZSAError("FORBIDDEN", "You cannot remove your own admin access.");
+    }
 
-	    await db
-	      .update(agencyTeamMemberTable)
-	      .set({ role: input.role, updatedAt: new Date() })
-	      .where(eq(agencyTeamMemberTable.id, input.staffMemberId));
+    await db
+      .update(agencyTeamMemberTable)
+      .set({ role: input.role, updatedAt: new Date() })
+      .where(eq(agencyTeamMemberTable.id, input.staffMemberId));
 
     revalidatePath("/dashboard/team");
     return { success: true };
