@@ -3,8 +3,8 @@ import type { Route } from "next";
 export const SITE_NAME = "Vidicy";
 export const SITE_DESCRIPTION =
   "AI visa review software for agencies: check client documents, spot missing requirements, manage cases, and send clear follow-ups before submission.";
-export const CANONICAL_SITE_URL = "https://agency.vidicy.com";
-export const CANONICAL_SITE_DOMAIN = "agency.vidicy.com";
+export const CANONICAL_SITE_URL = "https://vidicy.com";
+export const CANONICAL_SITE_DOMAIN = "vidicy.com";
 export const OPEN_GRAPH_IMAGE_PATH = "/og_image.png";
 export const OPEN_GRAPH_IMAGE_WIDTH = 1200;
 export const OPEN_GRAPH_IMAGE_HEIGHT = 630;
@@ -12,7 +12,7 @@ export const SITE_URL =
   process.env.NEXT_PUBLIC_SITE_URL ??
   (process.env.NODE_ENV === "development"
     ? "http://localhost:3002"
-    : "https://agency.vidicy.com");
+    : "https://vidicy.com");
 export const API_CATALOG_PATH = "/.well-known/api-catalog";
 export const AGENT_CARD_PATH = "/.well-known/agent-card.json";
 export const AGENT_SKILLS_INDEX_PATH = "/.well-known/agent-skills/index.json";
@@ -42,7 +42,7 @@ export const PUBLIC_ROBOTS_DISALLOW_PATHS = [
 export const PUBLIC_SIGN_UP_CTA_LABEL = "Start a pilot";
 
 export const SITE_DOMAIN = new URL(SITE_URL).hostname;
-export const LEGACY_SITE_DOMAINS = [] as const;
+export const LEGACY_SITE_DOMAINS = ["agency.vidicy.com", "www.vidicy.com"] as const;
 
 // External API endpoints
 export const PERPLEXITY_API_BASE_URL = "https://api.perplexity.ai";

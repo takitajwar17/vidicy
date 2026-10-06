@@ -33,6 +33,14 @@
   },
   "routes": [
     {
+      "pattern": "vidicy.com",
+      "custom_domain": true
+    },
+    {
+      "pattern": "www.vidicy.com",
+      "custom_domain": true
+    },
+    {
       "pattern": "agency.vidicy.com",
       "custom_domain": true
     }
@@ -53,7 +61,7 @@
     "EMAIL_REPLY_TO": "support@vidicy.com",
     "SENTRY_DSN": "https://2205a26662a98553c00ff1af4b639432@o4509695829540864.ingest.us.sentry.io/4510965026390016",
     "GOOGLE_CLIENT_ID": "600776052247-u1vjvu7ccd1rso27c5h81estus9mbodi.apps.googleusercontent.com",
-    "NEXT_PUBLIC_SITE_URL": "https://agency.vidicy.com",
+    "NEXT_PUBLIC_SITE_URL": "https://vidicy.com",
     "NEXT_PUBLIC_TURNSTILE_SITE_KEY": "0x4AAAAAACY3QEqdhpl26JyY",
     "GOOGLE_CLOUD_PROJECT": "eco-azimuth-441108-s4",
     "GOOGLE_CLOUD_LOCATION": "global",

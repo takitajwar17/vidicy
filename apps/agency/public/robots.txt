@@ -14,5 +14,5 @@ Disallow: /sign-up
 Disallow: /verify-email
 Disallow: /api/
 
-Host: agency.vidicy.com
-Sitemap: https://agency.vidicy.com/sitemap.xml
+Host: vidicy.com
+Sitemap: https://vidicy.com/sitemap.xml
