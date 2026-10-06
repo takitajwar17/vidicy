@@ -209,6 +209,18 @@ export async function AgencyCaseContent({ appId }: { appId: string }) {
                     review again.
                   </p>
                 ) : null}
+                {primaryApplicant ? (
+                  <div className="mb-4">
+                    <Suspense fallback={<p>Loading review controls...</p>}>
+                      <EvaluationTrigger
+                        applicationId={app.id}
+                        applicantId={primaryApplicant.id}
+                        hasDocuments={hasDocuments}
+                        rerun={hasEvaluation || data.isReviewStale}
+                      />
+                    </Suspense>
+                  </div>
+                ) : null}
                 <div className="grid grid-cols-3 gap-3">
                   <div className="rounded-xl border border-border/80 bg-background p-3">
                     <div className="mb-2 flex items-center gap-2 text-destructive">
@@ -329,14 +341,6 @@ export async function AgencyCaseContent({ appId }: { appId: string }) {
                       ]?.label ?? "Not Started"}
                     </Badge>
                   </div>
-                  {primaryApplicant ? (
-                    <EvaluationTrigger
-                      applicationId={app.id}
-                      applicantId={primaryApplicant.id}
-                      hasDocuments={hasDocuments}
-                      rerun={hasEvaluation || data.isReviewStale}
-                    />
-                  ) : null}
                 </div>
               </TabsContent>
 
