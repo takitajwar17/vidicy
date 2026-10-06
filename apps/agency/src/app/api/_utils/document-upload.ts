@@ -7,6 +7,7 @@ import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { authorizeApplicationRouteAccess } from "@/app/api/_utils/application-route-auth";
 import { requireRouteSession } from "@/app/api/_utils/request-auth";
 import { getDB } from "@/db";
+import { invalidateAgencyReview } from "@/server/agency-review";
 import {
   applicantTable,
   uploadedDocumentTable,
@@ -65,7 +66,9 @@ function getUnsupportedMimeTypeError(routeKind: DocumentUploadRouteKind): string
   return "Unsupported file type. Allowed types: PDF, JPEG, PNG.";
 }
 
-async function validatePdfPageCount(bytes: Uint8Array): Promise<{ pageCount: number | null; response: Response | null }> {
+async function validatePdfPageCount(
+  bytes: Uint8Array,
+): Promise<{ pageCount: number | null; response: Response | null }> {
   try {
     const pageCount = await getPdfPageCount(bytes);
 
@@ -132,10 +135,7 @@ export async function handleDocumentUploadRoute({
     const allowedMimeTypes = getAllowedMimeTypes(routeKind);
 
     if (!resolvedRouteKind || !allowedMimeTypes.has(normalizedMimeType)) {
-      return NextResponse.json(
-        { error: getUnsupportedMimeTypeError(routeKind) },
-        { status: 400 },
-      );
+      return NextResponse.json({ error: getUnsupportedMimeTypeError(routeKind) }, { status: 400 });
     }
 
     const applicationAccess = await authorizeApplicationRouteAccess(
@@ -267,6 +267,8 @@ export async function handleDocumentUploadRoute({
         pageCount: pdfPageValidation.pageCount,
       })
       .returning();
+
+    await invalidateAgencyReview({ db, applicationId: applicationIdValue });
 
     await recordMarketingEvent({
       db,
