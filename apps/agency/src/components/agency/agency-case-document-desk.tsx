@@ -17,11 +17,15 @@ import {
 import { DocumentUpload } from "@/components/visa/document-upload";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Progress } from "@/components/ui/progress";
 import {
-  PdfCanvasPreview,
-  PdfDocumentThumbnail,
-} from "@/components/visa/pdf-canvas-preview";
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Progress } from "@/components/ui/progress";
+import { PdfCanvasPreview, PdfDocumentThumbnail } from "@/components/visa/pdf-canvas-preview";
 import { cn } from "@/lib/utils";
 
 const UPLOADED_CHECKLIST_STATUSES = new Set(["uploaded", "approved"]);
@@ -45,7 +49,6 @@ interface AgencyCaseChecklistItem {
 interface AgencyCaseDocumentDeskProps {
   applicationId: string;
   applicantId: string | null;
-  firstChecklistItemId: string | null;
   documents: AgencyCaseDocument[];
   checklistItems: AgencyCaseChecklistItem[];
   totalStorage: number;
@@ -90,7 +93,9 @@ function isPdfDocument(document: AgencyCaseDocument | null) {
 }
 
 function getInitialDocumentId(documents: AgencyCaseDocument[]) {
-  const passportDocument = documents.find((document) => /passport/i.test(document.fileName) && document.mimeType.startsWith("image/"));
+  const passportDocument = documents.find(
+    (document) => /passport/i.test(document.fileName) && document.mimeType.startsWith("image/"),
+  );
   if (passportDocument) return passportDocument.id;
 
   const imageDocument = documents.find((document) => document.mimeType.startsWith("image/"));
@@ -102,16 +107,22 @@ function getInitialDocumentId(documents: AgencyCaseDocument[]) {
 export function AgencyCaseDocumentDesk({
   applicationId,
   applicantId,
-  firstChecklistItemId,
   documents,
   checklistItems,
   totalStorage,
 }: AgencyCaseDocumentDeskProps) {
-  const [activeDocumentId, setActiveDocumentId] = useState<string | null>(() => getInitialDocumentId(documents));
+  const [uploadChecklistItemId, setUploadChecklistItemId] = useState("");
+  const uploadItem = checklistItems.find((item) => item.id === uploadChecklistItemId);
+  const [activeDocumentId, setActiveDocumentId] = useState<string | null>(() =>
+    getInitialDocumentId(documents),
+  );
   const [pdfPreviewUrl, setPdfPreviewUrl] = useState<string | null>(null);
   const [pdfPreviewLoading, setPdfPreviewLoading] = useState(false);
   const [pdfPreviewError, setPdfPreviewError] = useState<string | null>(null);
-  const checklistById = useMemo(() => new Map(checklistItems.map((item) => [item.id, item])), [checklistItems]);
+  const checklistById = useMemo(
+    () => new Map(checklistItems.map((item) => [item.id, item])),
+    [checklistItems],
+  );
 
   useEffect(() => {
     if (activeDocumentId && documents.some((document) => document.id === activeDocumentId)) return;
@@ -122,9 +133,14 @@ export function AgencyCaseDocumentDesk({
     ? documents.find((document) => document.id === activeDocumentId)
     : undefined;
   const activeDocument = selectedDocument || documents[0] || null;
-  const activeIndex = activeDocument ? documents.findIndex((document) => document.id === activeDocument.id) : -1;
+  const activeIndex = activeDocument
+    ? documents.findIndex((document) => document.id === activeDocument.id)
+    : -1;
   const previewDocuments = activeDocument
-    ? [activeDocument, ...documents.filter((document) => document.id !== activeDocument.id)].slice(0, 8)
+    ? [activeDocument, ...documents.filter((document) => document.id !== activeDocument.id)].slice(
+        0,
+        8,
+      )
     : documents.slice(0, 8);
 
   useEffect(() => {
@@ -162,7 +178,9 @@ export function AgencyCaseDocumentDesk({
       })
       .catch((error: unknown) => {
         if (abortController.signal.aborted) return;
-        setPdfPreviewError(error instanceof Error ? error.message : "Could not load the PDF preview.");
+        setPdfPreviewError(
+          error instanceof Error ? error.message : "Could not load the PDF preview.",
+        );
       })
       .finally(() => {
         if (!abortController.signal.aborted) {
@@ -180,7 +198,9 @@ export function AgencyCaseDocumentDesk({
 
   const groupedDocuments = useMemo(() => {
     return documents.reduce<Record<string, AgencyCaseDocument[]>>((groups, document) => {
-      const checklistItem = document.checklistItemId ? checklistById.get(document.checklistItemId) : null;
+      const checklistItem = document.checklistItemId
+        ? checklistById.get(document.checklistItemId)
+        : null;
       const category = getDocumentCategory({
         fileName: document.fileName,
         checklistName: checklistItem?.documentName,
@@ -213,18 +233,50 @@ export function AgencyCaseDocumentDesk({
             <h2 className="text-base font-bold">Documents ({documents.length})</h2>
             <p className="text-xs text-muted-foreground">{formatBytes(totalStorage)} uploaded</p>
           </div>
-          {applicantId && firstChecklistItemId ? (
-            <DocumentUpload
-              applicationId={applicationId}
-              applicantId={applicantId}
-              checklistItemId={firstChecklistItemId}
-              label="Upload More"
-            />
-          ) : null}
         </div>
+        {applicantId && checklistItems.length > 0 ? (
+          <div className="flex flex-col gap-2 border-b border-border/70 p-3">
+            <label htmlFor="upload-document-type" className="text-xs font-semibold">
+              Document type
+            </label>
+            <Select value={uploadChecklistItemId} onValueChange={setUploadChecklistItemId}>
+              <SelectTrigger id="upload-document-type" className="w-full">
+                <SelectValue placeholder="Select a document type" />
+              </SelectTrigger>
+              <SelectContent>
+                {checklistItems.map((item) => (
+                  <SelectItem key={item.id} value={item.id}>
+                    {item.documentName}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {uploadItem ? (
+              <DocumentUpload
+                key={uploadItem.id}
+                applicationId={applicationId}
+                applicantId={applicantId}
+                checklistItemId={uploadItem.id}
+                label="Upload file"
+              />
+            ) : (
+              <Button disabled size="sm">
+                Select a document type first
+              </Button>
+            )}
+            <p className="text-xs text-muted-foreground">
+              A new file replaces the previous file for this document type in the next review.
+            </p>
+          </div>
+        ) : null}
 
         <div className="min-h-0 flex-1 overflow-y-auto px-3 py-3">
-          {["Identity Documents", "Financial Documents", "Application Documents", "Supporting Documents"].map((group) => {
+          {[
+            "Identity Documents",
+            "Financial Documents",
+            "Application Documents",
+            "Supporting Documents",
+          ].map((group) => {
             const groupDocuments = groupedDocuments[group] ?? [];
             if (groupDocuments.length === 0) return null;
 
@@ -236,7 +288,9 @@ export function AgencyCaseDocumentDesk({
                 </div>
                 <div className="space-y-1.5">
                   {groupDocuments.map((document) => {
-                    const checklistItem = document.checklistItemId ? checklistById.get(document.checklistItemId) : null;
+                    const checklistItem = document.checklistItemId
+                      ? checklistById.get(document.checklistItemId)
+                      : null;
                     const isActive = document.id === activeDocument?.id;
 
                     return (
@@ -255,9 +309,12 @@ export function AgencyCaseDocumentDesk({
                           <FileTextIcon className="h-4 w-4 text-muted-foreground" />
                         </span>
                         <span className="min-w-0 flex-1">
-                          <span className="block truncate text-sm font-bold">{document.fileName}</span>
+                          <span className="block truncate text-sm font-bold">
+                            {document.fileName}
+                          </span>
                           <span className="block truncate text-xs text-muted-foreground">
-                            {document.pageCount ?? 1} page{document.pageCount === 1 ? "" : "s"} · {getDocumentMeta(document.mimeType)}
+                            {document.pageCount ?? 1} page{document.pageCount === 1 ? "" : "s"} ·{" "}
+                            {getDocumentMeta(document.mimeType)}
                           </span>
                         </span>
                         {checklistItem && UPLOADED_CHECKLIST_STATUSES.has(checklistItem.status) ? (
@@ -280,26 +337,39 @@ export function AgencyCaseDocumentDesk({
             <span>Storage Used</span>
             <span>{formatBytes(totalStorage)} / 5 GB</span>
           </div>
-          <Progress value={Math.min((totalStorage / (5 * 1024 * 1024 * 1024)) * 100, 100)} className="h-1.5" />
+          <Progress
+            value={Math.min((totalStorage / (5 * 1024 * 1024 * 1024)) * 100, 100)}
+            className="h-1.5"
+          />
         </div>
       </aside>
 
       <section className="flex min-h-[620px] flex-col overflow-hidden rounded-xl border border-border/80 bg-card shadow-[var(--shadow-dashboard)] xl:min-h-0">
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border/70 px-4 py-3">
           <div className="min-w-0">
-            <h2 className="truncate text-base font-bold">{activeDocument?.fileName ?? "No document selected"}</h2>
+            <h2 className="truncate text-base font-bold">
+              {activeDocument?.fileName ?? "No document selected"}
+            </h2>
             <p className="text-xs text-muted-foreground">
-              {activeDocument ? `${getDocumentMeta(activeDocument.mimeType)} · ${formatBytes(activeDocument.fileSize)}` : "Upload a document to preview it here."}
+              {activeDocument
+                ? `${getDocumentMeta(activeDocument.mimeType)} · ${formatBytes(activeDocument.fileSize)}`
+                : "Upload a document to preview it here."}
             </p>
           </div>
           <div className="flex items-center gap-2">
-            <Badge variant="outline" className="rounded-full border-status-success/25 bg-status-success/10 text-status-success">
+            <Badge
+              variant="outline"
+              className="rounded-full border-status-success/25 bg-status-success/10 text-status-success"
+            >
               <ShieldCheckIcon className="mr-1 h-3.5 w-3.5" />
               {activeDocument?.extractionStatus === "completed" ? "Readable" : "Queued"}
             </Badge>
             {activeDocument ? (
               <Button asChild variant="outline" size="icon" className="h-9 w-9 rounded-xl">
-                <a href={`/api/document-preview/${activeDocument.id}?download=1`} download={activeDocument.fileName}>
+                <a
+                  href={`/api/document-preview/${activeDocument.id}?download=1`}
+                  download={activeDocument.fileName}
+                >
                   <DownloadIcon className="h-4 w-4" />
                 </a>
               </Button>
@@ -339,10 +409,7 @@ export function AgencyCaseDocumentDesk({
                   </div>
                 ) : null}
                 {pdfPreviewUrl ? (
-                  <PdfCanvasPreview
-                    blobUrl={pdfPreviewUrl}
-                    errorClassName="max-w-sm"
-                  />
+                  <PdfCanvasPreview blobUrl={pdfPreviewUrl} errorClassName="max-w-sm" />
                 ) : null}
               </>
             ) : (
@@ -379,12 +446,18 @@ export function AgencyCaseDocumentDesk({
                   onClick={() => setActiveDocumentId(document.id)}
                   className={cn(
                     "flex h-24 w-20 shrink-0 flex-col items-center justify-center gap-1 rounded-lg border bg-background p-1 text-xs font-bold transition-colors",
-                    document.id === activeDocument?.id ? "border-primary text-primary" : "border-border/80 text-muted-foreground hover:border-primary/40",
+                    document.id === activeDocument?.id
+                      ? "border-primary text-primary"
+                      : "border-border/80 text-muted-foreground hover:border-primary/40",
                   )}
                 >
                   {document.mimeType.startsWith("image/") ? (
                     // eslint-disable-next-line @next/next/no-img-element -- Authenticated document thumbnails are served from an API route and should not be optimized/cached.
-                    <img src={`/api/document-preview/${document.id}`} alt="" className="h-14 w-full rounded object-cover" />
+                    <img
+                      src={`/api/document-preview/${document.id}`}
+                      alt=""
+                      className="h-14 w-full rounded object-cover"
+                    />
                   ) : isPdfDocument(document) ? (
                     <PdfDocumentThumbnail documentId={document.id} fileName={document.fileName} />
                   ) : (
