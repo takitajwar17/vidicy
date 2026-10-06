@@ -84,7 +84,7 @@ export function AgencyCaseToolbar({
       status: normalizedStatus,
     });
     if (error) {
-      toast.error("Could not update case status.");
+      toast.error(error.message || "Could not update case status.");
       setStatusValue(normalizeAgencyCaseStatus(status));
       return;
     }
@@ -203,7 +203,7 @@ export function AgencyCaseStatusSelect({
       status: normalizedStatus,
     });
     if (error) {
-      toast.error("Could not update case status.");
+      toast.error(error.message || "Could not update case status.");
       setStatusValue(normalizeAgencyCaseStatus(status));
       return;
     }

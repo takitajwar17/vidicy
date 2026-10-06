@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import { notFound } from "next/navigation";
 import {
   AlertTriangleIcon,
@@ -23,6 +24,7 @@ import {
   formatShortDate,
 } from "@/components/agency/agency-ui";
 import { AgencyCaseDocumentDesk } from "@/components/agency/agency-case-document-desk";
+import { ChecklistGenerator } from "@/components/visa/checklist-generator";
 import { DocumentUpload } from "@/components/visa/document-upload";
 import { EvaluationTrigger } from "@/components/visa/evaluation-trigger";
 import { Badge } from "@/components/ui/badge";
@@ -39,7 +41,9 @@ import {
 import { getAgencyCaseDetail } from "@/server/agency-data";
 import { requireApplicationPagePermission } from "@/utils/application-page-auth";
 
-function getPersonName(user: { firstName: string | null; lastName: string | null; email: string | null } | null) {
+function getPersonName(
+  user: { firstName: string | null; lastName: string | null; email: string | null } | null,
+) {
   if (!user) return null;
   return `${user.firstName ?? ""} ${user.lastName ?? ""}`.trim() || user.email || null;
 }
@@ -59,7 +63,8 @@ export async function AgencyCaseContent({ appId }: { appId: string }) {
   }
 
   const primaryApplicant = data.primaryApplicant;
-  const assignedReviewer = data.staff.find((member) => member.userId === app.assignedReviewerId && member.user) ?? null;
+  const assignedReviewer =
+    data.staff.find((member) => member.userId === app.assignedReviewerId && member.user) ?? null;
   const docsByChecklistItem = new Map<string, typeof data.documents>();
 
   for (const document of data.documents) {
@@ -70,7 +75,9 @@ export async function AgencyCaseContent({ appId }: { appId: string }) {
   }
 
   const requiredItems = data.checklistItems.filter((item) => item.isRequired);
-  const uploadedRequiredCount = requiredItems.filter((item) => isUploadedStatus(item.status)).length;
+  const uploadedRequiredCount = requiredItems.filter((item) =>
+    isUploadedStatus(item.status),
+  ).length;
   const completionPercent =
     requiredItems.length > 0 ? Math.round((uploadedRequiredCount / requiredItems.length) * 100) : 0;
   const missingRequiredItems = requiredItems.filter((item) => !docsByChecklistItem.has(item.id));
@@ -79,7 +86,6 @@ export async function AgencyCaseContent({ appId }: { appId: string }) {
   const mediumIssues = openIssues.filter((issue) => issue.severity === "medium");
   const totalStorage = data.documents.reduce((sum, document) => sum + document.fileSize, 0);
   const caseNumber = getDisplayCaseNumber(app.caseNumber, app.id);
-  const firstChecklistItem = data.checklistItems[0] ?? null;
   const hasDocuments = data.documents.length > 0;
   const hasEvaluation = Boolean(data.latestEvaluation);
   const hasReport = Boolean(data.latestReport);
@@ -120,8 +126,17 @@ export async function AgencyCaseContent({ appId }: { appId: string }) {
               <AgencyCaseStatusSelect applicationId={app.id} status={app.agencyStatus} />
             </div>
             <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-muted-foreground">
-              {app.clientName ? <span><span className="font-semibold text-foreground">Client:</span> {app.clientName}</span> : null}
-              {primaryApplicant?.name ? <span><span className="font-semibold text-foreground">Applicant:</span> {primaryApplicant.name}</span> : null}
+              {app.clientName ? (
+                <span>
+                  <span className="font-semibold text-foreground">Client:</span> {app.clientName}
+                </span>
+              ) : null}
+              {primaryApplicant?.name ? (
+                <span>
+                  <span className="font-semibold text-foreground">Applicant:</span>{" "}
+                  {primaryApplicant.name}
+                </span>
+              ) : null}
               <span>
                 <span className="font-semibold text-foreground">Visa:</span>{" "}
                 {formatAgencyVisaLabel({
@@ -129,41 +144,71 @@ export async function AgencyCaseContent({ appId }: { appId: string }) {
                   visaType: app.visaType,
                 })}
               </span>
-              <span><span className="font-semibold text-foreground">Destination:</span> {app.destinationCountry}</span>
-              {app.submittedAt ? <span><span className="font-semibold text-foreground">Submitted:</span> {formatShortDate(app.submittedAt)}</span> : null}
+              <span>
+                <span className="font-semibold text-foreground">Destination:</span>{" "}
+                {app.destinationCountry}
+              </span>
+              {app.submittedAt ? (
+                <span>
+                  <span className="font-semibold text-foreground">Submitted:</span>{" "}
+                  {formatShortDate(app.submittedAt)}
+                </span>
+              ) : null}
             </div>
           </div>
-
         </section>
 
         <section className="grid min-h-0 flex-1 gap-4 xl:grid-cols-[340px_minmax(0,1fr)_430px]">
           <AgencyCaseDocumentDesk
             applicationId={app.id}
             applicantId={primaryApplicant?.id ?? null}
-            firstChecklistItemId={firstChecklistItem?.id ?? null}
             documents={documentRows}
             checklistItems={checklistRows}
             totalStorage={totalStorage}
           />
 
           <aside className="flex min-h-[620px] flex-col overflow-hidden rounded-xl border border-border/80 bg-card shadow-[var(--shadow-dashboard)] xl:min-h-0">
-            <Tabs defaultValue="review" className="flex min-h-0 flex-1 flex-col">
+            <Tabs
+              defaultValue={data.checklistItems.length ? "review" : "checklist"}
+              className="flex min-h-0 flex-1 flex-col"
+            >
               <TabsList className="grid h-14 w-full grid-cols-4 rounded-none border-0 border-b border-border/70 bg-card p-0">
-                <TabsTrigger value="review" className="h-14 rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:shadow-none">
+                <TabsTrigger
+                  value="review"
+                  className="h-14 rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:shadow-none"
+                >
                   Review
                 </TabsTrigger>
-                <TabsTrigger value="checklist" className="h-14 rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:shadow-none">
+                <TabsTrigger
+                  value="checklist"
+                  className="h-14 rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:shadow-none"
+                >
                   Checklist
                 </TabsTrigger>
-                <TabsTrigger value="notes" className="h-14 rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:shadow-none">
+                <TabsTrigger
+                  value="notes"
+                  className="h-14 rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:shadow-none"
+                >
                   Notes
                 </TabsTrigger>
-                <TabsTrigger value="activity" className="h-14 rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:shadow-none">
+                <TabsTrigger
+                  value="activity"
+                  className="h-14 rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:shadow-none"
+                >
                   Activity
                 </TabsTrigger>
               </TabsList>
 
               <TabsContent value="review" className="min-h-0 flex-1 overflow-y-auto p-4">
+                {data.isReviewStale ? (
+                  <p
+                    role="status"
+                    className="mb-4 rounded-lg border border-status-warning p-3 text-sm"
+                  >
+                    The documents changed. The previous review and report are out of date. Run
+                    review again.
+                  </p>
+                ) : null}
                 <div className="grid grid-cols-3 gap-3">
                   <div className="rounded-xl border border-border/80 bg-background p-3">
                     <div className="mb-2 flex items-center gap-2 text-destructive">
@@ -171,12 +216,14 @@ export async function AgencyCaseContent({ appId }: { appId: string }) {
                       <span className="text-xs font-bold">Issues</span>
                     </div>
                     <p className="text-3xl font-bold">{openIssues.length}</p>
-                    <p className="text-xs font-semibold text-destructive">{highIssues.length} high priority</p>
+                    <p className="text-xs font-semibold text-destructive">
+                      {highIssues.length} high priority
+                    </p>
                   </div>
                   <div className="rounded-xl border border-border/80 bg-background p-3">
                     <div className="mb-2 flex items-center gap-2 text-status-warning">
                       <CircleAlertIcon className="h-4 w-4" />
-                      <span className="text-xs font-bold">Mismatches</span>
+                      <span className="text-xs font-bold">Medium issues</span>
                     </div>
                     <p className="text-3xl font-bold">{mediumIssues.length}</p>
                     <p className="text-xs font-semibold text-muted-foreground">Medium priority</p>
@@ -194,7 +241,9 @@ export async function AgencyCaseContent({ appId }: { appId: string }) {
                 <div className="mt-5">
                   <div className="mb-2 flex items-center justify-between text-sm">
                     <span className="font-bold">Case readiness score</span>
-                    <span className="font-bold">{data.latestEvaluation?.overallScore ?? "Pending"}</span>
+                    <span className="font-bold">
+                      {data.latestEvaluation?.overallScore ?? "Pending"}
+                    </span>
                   </div>
                   <Progress value={data.latestEvaluation?.overallScore ?? 0} className="h-2" />
                 </div>
@@ -202,25 +251,42 @@ export async function AgencyCaseContent({ appId }: { appId: string }) {
                 <div className="mt-5 space-y-3">
                   <div className="flex items-center justify-between">
                     <h3 className="text-sm font-bold">Review issues</h3>
-                    <RiskBadge riskLevel={data.latestEvaluation?.riskLevel ?? app.riskLevel} />
+                    <RiskBadge riskLevel={data.latestEvaluation?.riskLevel ?? null} />
                   </div>
-                  {data.latestEvaluation ? (
+                  {data.issues.length > 0 ? (
                     <div className="space-y-2">
-                      {data.latestEvaluation.redFlags.slice(0, 5).map((issue, index) => (
-                        <div key={`${issue}-${index}`} className="rounded-xl border border-border/80 bg-background p-3">
-                          <div className="flex items-start justify-between gap-3">
+                      {data.issues.map((issue) => (
+                        <div
+                          key={issue.id}
+                          className="rounded-xl border border-border/80 bg-background p-3"
+                        >
+                          <div className="mb-2 flex items-start justify-between gap-3">
                             <div>
-                              <p className="text-sm font-bold">{issue}</p>
-                              <p className="mt-1 text-xs text-muted-foreground">From the latest passport, form, and evidence check.</p>
+                              <p className="text-sm font-bold">{issue.title}</p>
+                              <p className="mt-1 whitespace-pre-line text-xs text-muted-foreground">
+                                {issue.description}
+                              </p>
+                              {issue.recommendation ? (
+                                <p className="mt-2 text-xs">{issue.recommendation}</p>
+                              ) : null}
+                              <p className="mt-1 text-xs text-muted-foreground">
+                                {issue.source === "ai" ? "AI finding" : "Reviewer issue"}
+                                {data.isReviewStale && issue.source === "ai"
+                                  ? " — previous review"
+                                  : ""}
+                              </p>
                             </div>
-                            <IssueSeverityBadge severity={index < 2 ? "high" : "medium"} />
+                            <IssueSeverityBadge severity={issue.severity} />
                           </div>
+                          <ReviewIssueStatusSelect issueId={issue.id} status={issue.status} />
                         </div>
                       ))}
                     </div>
                   ) : (
                     <div className="rounded-xl border border-dashed border-border p-5 text-sm text-muted-foreground">
-                      Upload the passport, form, and evidence, then run review.
+                      {hasEvaluation
+                        ? "The current review has no tracked issues."
+                        : "Generate the checklist, upload documents, then run review."}
                     </div>
                   )}
                 </div>
@@ -232,7 +298,10 @@ export async function AgencyCaseContent({ appId }: { appId: string }) {
                   </div>
                   {missingRequiredItems.length > 0 ? (
                     missingRequiredItems.slice(0, 4).map((item) => (
-                      <div key={item.id} className="flex items-start gap-2 text-sm text-muted-foreground">
+                      <div
+                        key={item.id}
+                        className="flex items-start gap-2 text-sm text-muted-foreground"
+                      >
                         <CircleIcon className="mt-0.5 h-4 w-4 text-primary" />
                         <span>{item.documentName}</span>
                       </div>
@@ -249,7 +318,9 @@ export async function AgencyCaseContent({ appId }: { appId: string }) {
                     <div>
                       <h3 className="text-sm font-bold">Client fix list</h3>
                       <p className="mt-1 text-xs text-muted-foreground">
-                        {hasReport ? "A draft list is available." : "Generate after missing files or reviewer notes."}
+                        {hasReport
+                          ? "A current list is available."
+                          : "Run review before you prepare the client list."}
                       </p>
                     </div>
                     <Badge variant="outline" className="rounded-full">
@@ -263,32 +334,50 @@ export async function AgencyCaseContent({ appId }: { appId: string }) {
                       applicationId={app.id}
                       applicantId={primaryApplicant.id}
                       hasDocuments={hasDocuments}
-                      rerun={hasEvaluation}
+                      rerun={hasEvaluation || data.isReviewStale}
                     />
                   ) : null}
                 </div>
               </TabsContent>
 
               <TabsContent value="checklist" className="min-h-0 flex-1 overflow-y-auto p-4">
+                {data.checklistItems.length === 0 && primaryApplicant ? (
+                  <Suspense fallback={<p>Loading checklist controls...</p>}>
+                    <ChecklistGenerator
+                      applicationId={app.id}
+                      applicantId={primaryApplicant.id}
+                      applicantName={primaryApplicant.name}
+                    />
+                  </Suspense>
+                ) : null}
                 <div className="mb-4 rounded-xl border border-border/80 bg-background p-4">
                   <div className="mb-2 flex items-center justify-between gap-3">
                     <p className="text-sm font-bold">Required files uploaded</p>
                     <span className="text-sm font-bold">{completionPercent}%</span>
                   </div>
                   <Progress value={completionPercent} className="h-2" />
-                  <p className="mt-2 text-xs text-muted-foreground">{uploadedRequiredCount}/{requiredItems.length || 0} required documents uploaded.</p>
+                  <p className="mt-2 text-xs text-muted-foreground">
+                    {uploadedRequiredCount}/{requiredItems.length || 0} required documents uploaded.
+                  </p>
                 </div>
 
                 <div className="space-y-2">
                   {data.checklistItems.map((item) => {
                     const itemDocs = docsByChecklistItem.get(item.id) ?? [];
                     return (
-                      <div key={item.id} className="rounded-xl border border-border/80 bg-background p-3">
+                      <div
+                        key={item.id}
+                        className="rounded-xl border border-border/80 bg-background p-3"
+                      >
                         <div className="flex items-start justify-between gap-3">
                           <div className="min-w-0">
                             <p className="text-sm font-bold">{item.documentName}</p>
-                            <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">{item.description}</p>
-                            <p className="mt-2 text-xs font-semibold text-muted-foreground">{itemDocs.length} file{itemDocs.length === 1 ? "" : "s"}</p>
+                            <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">
+                              {item.description}
+                            </p>
+                            <p className="mt-2 text-xs font-semibold text-muted-foreground">
+                              {itemDocs.length} file{itemDocs.length === 1 ? "" : "s"}
+                            </p>
                           </div>
                           {primaryApplicant ? (
                             <DocumentUpload
@@ -310,11 +399,30 @@ export async function AgencyCaseContent({ appId }: { appId: string }) {
                   <div className="rounded-xl border border-border/80 bg-background p-4">
                     <h3 className="text-sm font-bold">Applicant</h3>
                     <div className="mt-3 grid gap-3 text-sm text-muted-foreground">
-                      <p><span className="font-semibold text-foreground">Name:</span> {primaryApplicant?.name ?? "Not set"}</p>
-                      <p><span className="font-semibold text-foreground">Nationality:</span> {primaryApplicant?.nationality ?? "Not set"}</p>
-                      <p><span className="font-semibold text-foreground">Passport:</span> {primaryApplicant?.passportNumber ?? "Not set"}</p>
-                      <p><span className="font-semibold text-foreground">Previous approvals:</span> {primaryApplicant?.approvedBefore ? `${primaryApplicant.approvedVisaType ?? "Visa"} (${primaryApplicant.approvedYear ?? "year not set"})` : "None recorded"}</p>
-                      <p><span className="font-semibold text-foreground">Previous rejections:</span> {primaryApplicant?.rejectedBefore ? `${primaryApplicant.rejectedVisaType ?? "Visa"} (${primaryApplicant.rejectedYear ?? "year not set"})` : "None recorded"}</p>
+                      <p>
+                        <span className="font-semibold text-foreground">Name:</span>{" "}
+                        {primaryApplicant?.name ?? "Not set"}
+                      </p>
+                      <p>
+                        <span className="font-semibold text-foreground">Nationality:</span>{" "}
+                        {primaryApplicant?.nationality ?? "Not set"}
+                      </p>
+                      <p>
+                        <span className="font-semibold text-foreground">Passport:</span>{" "}
+                        {primaryApplicant?.passportNumber ?? "Not set"}
+                      </p>
+                      <p>
+                        <span className="font-semibold text-foreground">Previous approvals:</span>{" "}
+                        {primaryApplicant?.approvedBefore
+                          ? `${primaryApplicant.approvedVisaType ?? "Visa"} (${primaryApplicant.approvedYear ?? "year not set"})`
+                          : "None recorded"}
+                      </p>
+                      <p>
+                        <span className="font-semibold text-foreground">Previous rejections:</span>{" "}
+                        {primaryApplicant?.rejectedBefore
+                          ? `${primaryApplicant.rejectedVisaType ?? "Visa"} (${primaryApplicant.rejectedYear ?? "year not set"})`
+                          : "None recorded"}
+                      </p>
                     </div>
                   </div>
 
@@ -344,29 +452,47 @@ export async function AgencyCaseContent({ appId }: { appId: string }) {
                   {[
                     { label: "Case created", date: app.createdAt, icon: PlusIcon },
                     { label: "Client submitted files", date: app.submittedAt, icon: FileTextIcon },
-                    { label: "Review completed", date: app.reviewCompletedAt, icon: CheckCircle2Icon },
-                    { label: "Marked ready for submission", date: app.finalSubmissionAt, icon: Clock3Icon },
+                    {
+                      label: "Review completed",
+                      date: app.reviewCompletedAt,
+                      icon: CheckCircle2Icon,
+                    },
+                    {
+                      label: "Marked ready for submission",
+                      date: app.finalSubmissionAt,
+                      icon: Clock3Icon,
+                    },
                   ].map((event) => (
-                    <div key={event.label} className="flex gap-3 rounded-xl border border-border/80 bg-background p-3">
+                    <div
+                      key={event.label}
+                      className="flex gap-3 rounded-xl border border-border/80 bg-background p-3"
+                    >
                       <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/8 text-primary">
                         <event.icon className="h-4 w-4" />
                       </span>
                       <div>
                         <p className="text-sm font-bold">{event.label}</p>
-                        <p className="text-xs text-muted-foreground">{formatShortDate(event.date)}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {formatShortDate(event.date)}
+                        </p>
                       </div>
                     </div>
                   ))}
 
                   {data.issues.length > 0 ? (
                     <div className="space-y-2 pt-2">
-                      <h3 className="text-sm font-bold">Open issues</h3>
+                      <h3 className="text-sm font-bold">Tracked issues</h3>
                       {data.issues.map((issue) => (
-                        <div key={issue.id} className="rounded-xl border border-border/80 bg-background p-3">
+                        <div
+                          key={issue.id}
+                          className="rounded-xl border border-border/80 bg-background p-3"
+                        >
                           <div className="mb-2 flex items-start justify-between gap-3">
                             <div>
                               <p className="text-sm font-bold">{issue.title}</p>
-                              <p className="mt-1 text-xs text-muted-foreground">{issue.description}</p>
+                              <p className="mt-1 text-xs text-muted-foreground">
+                                {issue.description}
+                              </p>
                             </div>
                             <IssueSeverityBadge severity={issue.severity} />
                           </div>

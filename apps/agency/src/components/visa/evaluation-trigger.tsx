@@ -33,7 +33,7 @@ export function EvaluationTrigger({
     const [, err] = await evaluateDocumentsAction({ applicationId, applicantId })
     if (err) {
       // Use Sonner toast for consistency with the rest of the app — never native alert()
-      toast.error("Evaluation failed. Please try again.")
+      toast.error(err.message || "Review failed. Please try again.")
     } else {
       router.refresh()
     }
