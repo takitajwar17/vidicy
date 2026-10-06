@@ -37,6 +37,33 @@ export const metadata: Metadata = {
   title: "Dashboard",
 };
 
+function formatCountLabel(count: number, singular: string, plural = `${singular}s`) {
+  return `${count} ${count === 1 ? singular : plural}`;
+}
+
+function formatReadyRateDetail({
+  readyToSubmit,
+  totalApplications,
+}: {
+  readyToSubmit: number;
+  totalApplications: number;
+}) {
+  if (totalApplications === 0) return "No client files yet";
+  return `${readyToSubmit} of ${formatCountLabel(totalApplications, "file")} ready`;
+}
+
+function formatIssuePatternDetail({
+  caseCount,
+  high,
+}: {
+  caseCount: number;
+  high: number;
+}) {
+  const caseLabel = formatCountLabel(caseCount, "case");
+  if (high === 0) return caseLabel;
+  return `${caseLabel} · ${formatCountLabel(high, "high-priority issue")}`;
+}
+
 export default async function DashboardPage() {
   const data = await getAgencyDashboardData();
   const movement = getDashboardDailyMovement({ cases: data.cases });
@@ -100,7 +127,10 @@ export default async function DashboardPage() {
               icon={LineChartIcon}
               label="Ready rate"
               value={`${readyRate}%`}
-              detail={`${data.stats.scoredCases} checked cases`}
+              detail={formatReadyRateDetail({
+                readyToSubmit,
+                totalApplications: data.stats.totalApplications,
+              })}
               tone="default"
             />
           </section>
@@ -177,7 +207,12 @@ export default async function DashboardPage() {
                     >
                       <div className="min-w-0">
                         <p className="truncate text-sm font-bold">{issue.label}</p>
-                        <p className="text-xs text-muted-foreground">{issue.high} high priority</p>
+                        <p className="text-xs text-muted-foreground">
+                          {formatIssuePatternDetail({
+                            caseCount: issue.caseCount,
+                            high: issue.high,
+                          })}
+                        </p>
                       </div>
                       <span className="rounded-full bg-destructive/10 px-2.5 py-1 text-xs font-bold text-destructive">
                         {issue.count}

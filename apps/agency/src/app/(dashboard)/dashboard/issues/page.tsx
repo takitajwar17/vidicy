@@ -133,7 +133,7 @@ export default async function IssuesPage({
                       )}
                     </TableCell>
                     <TableCell>{application?.clientName ?? "Unassigned"}</TableCell>
-                    <TableCell>{applicant?.name ?? "Primary applicant"}</TableCell>
+                    <TableCell>{applicant?.name ?? "Applicant pending"}</TableCell>
                     <TableCell>
                       <IssueSeverityBadge severity={issue.severity} />
                     </TableCell>
