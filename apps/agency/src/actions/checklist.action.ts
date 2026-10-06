@@ -413,6 +413,25 @@ Mark isRequired: false only for truly optional documents. Required items first i
       );
     }
 
+    const validatedItems = z
+      .array(
+        z.object({
+          documentName: z.string().trim().min(1).max(255),
+          description: z.string().trim().max(1000).optional().default(""),
+          commonMistakes: z.string().trim().max(1000).optional().default(""),
+          isRequired: z.boolean().optional().default(true),
+          sortOrder: z.number().finite().optional().default(0),
+        }),
+      )
+      .safeParse(checklistItems);
+    if (!validatedItems.success) {
+      throw new ZSAError(
+        "INTERNAL_SERVER_ERROR",
+        "The AI returned an invalid checklist. Please generate it again.",
+      );
+    }
+    checklistItems = validatedItems.data;
+
     // Deduplication: drop items with identical documentName (case-insensitive), keep first occurrence
     const seenNames = new Set<string>();
     checklistItems = checklistItems.filter((item) => {
@@ -421,6 +440,13 @@ Mark isRequired: false only for truly optional documents. Required items first i
       seenNames.add(key);
       return true;
     });
+
+    if (checklistItems.length < 3 || !checklistItems.some((item) => item.isRequired)) {
+      throw new ZSAError(
+        "INTERNAL_SERVER_ERROR",
+        "The checklist needs at least three distinct documents and one required document. Please generate it again.",
+      );
+    }
 
     // Normalize sortOrder: required items first, then optional, sequential 1-based
     const requiredItems = checklistItems.filter((i) => i.isRequired !== false);
