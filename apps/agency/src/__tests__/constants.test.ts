@@ -37,8 +37,8 @@ describe('Application Constants Consistency', () => {
     })
 
     it('should have a fixed canonical site URL', () => {
-      expect(CANONICAL_SITE_URL).toBe('https://agency.vidicy.com')
-      expect(CANONICAL_SITE_DOMAIN).toBe('agency.vidicy.com')
+      expect(CANONICAL_SITE_URL).toBe('https://vidicy.com')
+      expect(CANONICAL_SITE_DOMAIN).toBe('vidicy.com')
       expect(new URL(CANONICAL_SITE_URL).hostname).toBe(CANONICAL_SITE_DOMAIN)
     })
 

@@ -5,8 +5,8 @@ import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 
-// Pilot access token: BuildwithGeminiXPRIZE2026
-const ACCESS_TOKEN = "BuildwithGeminiXPRIZE2026"
+// Pilot access token: AIBuilderCup2026
+const ACCESS_TOKEN = "AIBuilderCup2026"
 
 export function PilotAccessTokenForm() {
   const [token, setToken] = useState("")

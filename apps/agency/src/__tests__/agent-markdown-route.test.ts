@@ -15,7 +15,7 @@ describe("agent markdown route", () => {
     expect(body).toContain("title: Vidicy Agency");
     expect(body).toContain("# Vidicy Agency");
     expect(body).toContain("Check passports, forms, bank statements");
-    expect(body).toContain("https://agency.vidicy.com/sign-in");
+    expect(body).toContain("https://vidicy.com/sign-in");
   });
 
   it("returns headers without a body for HEAD requests", async () => {
