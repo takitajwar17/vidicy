@@ -120,6 +120,7 @@ function createUploadDbMock({
       },
       insert,
       update,
+      batch: vi.fn(async (queries: Promise<unknown>[]) => Promise.all(queries)),
     },
     insertValuesCalls,
     checklistStatusUpdates,
@@ -209,7 +210,10 @@ describe("document upload routes", () => {
     mockGetPdfPageCount.mockResolvedValue(41);
 
     const formData = new FormData();
-    formData.set("file", new File([new Uint8Array([1, 2, 3])], "bundle.pdf", { type: "application/pdf" }));
+    formData.set(
+      "file",
+      new File([new Uint8Array([1, 2, 3])], "bundle.pdf", { type: "application/pdf" }),
+    );
     formData.set("applicationId", "app_123");
     formData.set("applicantId", "applicant_123");
     formData.set("checklistItemId", "item_123");
@@ -239,7 +243,10 @@ describe("document upload routes", () => {
     mockQueueDocumentExtraction.mockReturnValue(new Promise(() => undefined));
 
     const formData = new FormData();
-    formData.set("file", new File([new Uint8Array([1, 2, 3])], "passport.pdf", { type: "application/pdf" }));
+    formData.set(
+      "file",
+      new File([new Uint8Array([1, 2, 3])], "passport.pdf", { type: "application/pdf" }),
+    );
     formData.set("applicationId", "app_123");
     formData.set("applicantId", "applicant_123");
     formData.set("checklistItemId", "item_123");
@@ -258,7 +265,7 @@ describe("document upload routes", () => {
       fileName: "uploaded-file",
       fileSize: 2048,
     });
-    expect(waitUntil).toHaveBeenCalledTimes(1);
+    expect(waitUntil).toHaveBeenCalledTimes(2);
     expect(mockQueueDocumentExtraction).toHaveBeenCalledWith({
       documentId: "doc_pdf",
     });
@@ -281,7 +288,10 @@ describe("document upload routes", () => {
     mockQueueDocumentExtraction.mockReturnValue(new Promise(() => undefined));
 
     const formData = new FormData();
-    formData.set("file", new File([new Uint8Array([1, 2, 3])], "passport.png", { type: "image/png" }));
+    formData.set(
+      "file",
+      new File([new Uint8Array([1, 2, 3])], "passport.png", { type: "image/png" }),
+    );
     formData.set("applicationId", "app_123");
     formData.set("applicantId", "applicant_123");
     formData.set("checklistItemId", "item_123");
@@ -300,7 +310,7 @@ describe("document upload routes", () => {
       fileName: "uploaded-file",
       fileSize: 2048,
     });
-    expect(waitUntil).toHaveBeenCalledTimes(1);
+    expect(waitUntil).toHaveBeenCalledTimes(2);
     expect(mockQueueDocumentExtraction).toHaveBeenCalledWith({
       documentId: "doc_img",
     });
@@ -310,5 +320,42 @@ describe("document upload routes", () => {
       indexingStatus: "queued",
       pageCount: 1,
     });
+  });
+});
+
+describe("upload workflow consistency", () => {
+  it("saves the selected document type and resets readiness in one batch", async () => {
+    const { db, insertValuesCalls, checklistStatusUpdates } = createUploadDbMock();
+    mockGetDB.mockReturnValue(db);
+    mockRequireRouteSession.mockResolvedValue({ session: { user: { id: "user_123" } } });
+    mockAuthorizeApplicationRouteAccess.mockResolvedValue({
+      session: { user: { id: "user_123" } },
+    });
+    mockGetCloudflareContext.mockResolvedValue({ env: { R2: {} }, ctx: { waitUntil: vi.fn() } });
+    mockQueueDocumentExtraction.mockResolvedValue(undefined);
+    mockRecordMarketingEvent.mockRejectedValueOnce(new Error("analytics unavailable"));
+    const formData = new FormData();
+    formData.set("file", new File(["image"], "bank.png", { type: "image/png" }));
+    formData.set("applicationId", "app_123");
+    formData.set("checklistItemId", "bank_statement_item");
+    const response = await uploadImagePOST(
+      new Request("http://localhost:3002/api/documents/upload/image", {
+        method: "POST",
+        body: formData,
+      }),
+    );
+    expect(response.status).toBe(200);
+    expect(db.batch).toHaveBeenCalledTimes(1);
+    expect(insertValuesCalls[0].checklistItemId).toBe("bank_statement_item");
+    expect(checklistStatusUpdates).toContainEqual(
+      expect.objectContaining({
+        status: "in_progress",
+        agencyStatus: "in_review",
+        readinessScore: null,
+        riskLevel: null,
+        reviewCompletedAt: null,
+      }),
+    );
+    expect(mockQueueDocumentExtraction).toHaveBeenCalled();
   });
 });

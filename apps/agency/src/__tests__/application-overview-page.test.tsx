@@ -52,8 +52,17 @@ vi.mock("@/components/visa/evaluation-trigger", () => ({
 }));
 
 vi.mock("@/components/visa/document-preview-drawer", () => ({
-  DocumentPreviewDrawer: ({ children, fileName }: { children?: React.ReactNode; fileName: string }) => (
-    <div>{fileName}{children}</div>
+  DocumentPreviewDrawer: ({
+    children,
+    fileName,
+  }: {
+    children?: React.ReactNode;
+    fileName: string;
+  }) => (
+    <div>
+      {fileName}
+      {children}
+    </div>
   ),
 }));
 
@@ -177,9 +186,7 @@ describe("agency application pages", () => {
       ],
       staff: [],
       workload: [],
-      topFlaggedIssues: [
-        { label: "Bank statement needs review", count: 1, high: 1, caseCount: 1 },
-      ],
+      topFlaggedIssues: [{ label: "Bank statement needs review", count: 1, high: 1, caseCount: 1 }],
       stats: {
         totalApplications: 1,
         completed: 0,
@@ -283,7 +290,9 @@ describe("agency application pages", () => {
         applicationId: "vapp_123",
         status: "ready",
         summary: "Client needs one updated statement.",
-        actionItems: [{ title: "Bank statement", detail: "Upload a fresh statement.", severity: "high" }],
+        actionItems: [
+          { title: "Bank statement", detail: "Upload a fresh statement.", severity: "high" },
+        ],
         createdById: "user_reviewer",
         sentAt: null,
         createdAt: new Date("2026-10-16T00:00:00.000Z"),
@@ -307,7 +316,9 @@ describe("agency application pages", () => {
   it("renders the dashboard root as an agency operations dashboard", async () => {
     const markup = renderToStaticMarkup(await DashboardPage());
 
-    expect(markup).toContain("Today&#x27;s queue: files in review, clients waiting on fixes, and reviewers carrying the work.");
+    expect(markup).toContain(
+      "Today&#x27;s queue: files in review, clients waiting on fixes, and reviewers carrying the work.",
+    );
     expect(markup).toContain("Files moving this week");
     expect(markup).toContain("Recent client files");
     expect(markup).toContain("Bank statement needs review");
@@ -331,5 +342,57 @@ describe("agency application pages", () => {
     expect(markup).toContain("Bank statement needs review");
     expect(markup).not.toContain("Atlas");
     expect(markup).not.toContain("Checkout");
+  });
+
+  it("shows checklist generation as the first step for an empty case", async () => {
+    const detail = await mockGetAgencyCaseDetail("vapp_123");
+    mockGetAgencyCaseDetail.mockResolvedValue({
+      ...detail,
+      checklistItems: [],
+      documents: [],
+      latestEvaluation: null,
+      issues: [],
+      latestReport: null,
+    });
+    const markup = renderToStaticMarkup(
+      await ApplicationDetailPage({ params: Promise.resolve({ appId: "vapp_123" }) }),
+    );
+    expect(markup).toContain("Generate checklist");
+    expect(markup).not.toContain("Upload More");
+    expect(markup).not.toContain('type="file"');
+  });
+
+  it("shows saved issues with status controls instead of a separate AI flag list", async () => {
+    const detail = await mockGetAgencyCaseDetail("vapp_123");
+    mockGetAgencyCaseDetail.mockResolvedValue({
+      ...detail,
+      latestEvaluation: {
+        ...detail.latestEvaluation,
+        redFlags: ["Untracked flag must not be shown"],
+      },
+    });
+    const markup = renderToStaticMarkup(
+      await ApplicationDetailPage({ params: Promise.resolve({ appId: "vapp_123" }) }),
+    );
+    expect(markup).toContain("Bank statement needs review");
+    expect(markup).toContain("Issue status select");
+    expect(markup).not.toContain("Untracked flag must not be shown");
+    expect(markup).toContain("Select a document type first");
+  });
+
+  it("hides the score and marks findings from an old review", async () => {
+    const detail = await mockGetAgencyCaseDetail("vapp_123");
+    mockGetAgencyCaseDetail.mockResolvedValue({
+      ...detail,
+      latestEvaluation: null,
+      isReviewStale: true,
+      latestReport: null,
+    });
+    const markup = renderToStaticMarkup(
+      await ApplicationDetailPage({ params: Promise.resolve({ appId: "vapp_123" }) }),
+    );
+    expect(markup).toContain("out of date");
+    expect(markup).toContain("previous review");
+    expect(markup).toContain("Pending");
   });
 });
