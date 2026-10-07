@@ -1,78 +1,57 @@
-name: Deploy Cloudflare Workers
+name: Deploy Vidicy
 
 on:
   push:
     branches:
       - main
+  workflow_dispatch:
 
 jobs:
   deploy-agency:
+    if: github.repository_id == '1424743538'
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      deployments: write
-    name: Deploy Agency Worker
+      id-token: write
+    concurrency:
+      group: vidicy-agency-production
+      cancel-in-progress: false
+    name: Deploy Agency to Cloud Run
     steps:
       - name: Checkout
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v4
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v3
         with:
-          version: 10.27.0
+          project_id: eco-azimuth-441108-s4
+          workload_identity_provider: projects/600776052247/locations/global/workloadIdentityPools/github/providers/vidicy
+          service_account: vidicy-agency-deploy@eco-azimuth-441108-s4.iam.gserviceaccount.com
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: "pnpm"
+      - name: Set up Google Cloud CLI
+        uses: google-github-actions/setup-gcloud@v3
 
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-
-      - name: Set Agency D1 environment variables
+      - name: Build Agency container
         run: |
-          echo "AGENCY_D1_DATABASE_NAME=$(node apps/agency/scripts/get-db-name.mjs)" >> $GITHUB_ENV
-          echo "AGENCY_D1_DATABASE_ID=$(node apps/agency/scripts/get-db-id.mjs)" >> $GITHUB_ENV
+          gcloud builds submit . \
+            --project=eco-azimuth-441108-s4 \
+            --region=asia-southeast1 \
+            --config=apps/agency/cloudbuild.yaml \
+            --gcs-source-staging-dir=gs://eco-azimuth-441108-s4-vidicy-build-source/source \
+            --substitutions="_IMAGE_TAG=${{ github.sha }},COMMIT_SHA=${{ github.sha }}" \
+            --quiet
 
-      - name: Migrate local Agency D1 database
-        run: pnpm run db:migrate:dev:agency
-
-      - name: Validate Agency deploy bundle
-        run: pnpm --filter @vidicy/agency run deploy:dry-run
-        env:
-          DATABASE_ID: ${{ env.AGENCY_D1_DATABASE_ID }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          NEXT_PUBLIC_SITE_URL: https://vidicy.com
-          NEXT_PUBLIC_TURNSTILE_SITE_KEY: ${{ vars.AGENCY_NEXT_PUBLIC_TURNSTILE_SITE_KEY }}
-          NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: ${{ vars.AGENCY_NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY }}
-
-      - name: Run Agency DB migrations
-        # Assumes additive/backward-compatible D1 migrations; use a two-phase
-        # rollout instead if a migration is not backward-compatible.
+      - name: Deploy Agency container
+        # PostgreSQL schema changes need a separate reviewed migration before
+        # rollout. This job does not execute old D1 migrations.
         run: |
-          cd apps/agency
-          pnpm exec wrangler d1 migrations apply "${{ env.AGENCY_D1_DATABASE_NAME }}" --remote
-        env:
-          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-
-      - name: Deploy Agency
-        run: pnpm run deploy:agency
-        env:
-          DATABASE_ID: ${{ env.AGENCY_D1_DATABASE_ID }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          NEXT_PUBLIC_SITE_URL: https://vidicy.com
-          NEXT_PUBLIC_TURNSTILE_SITE_KEY: ${{ vars.AGENCY_NEXT_PUBLIC_TURNSTILE_SITE_KEY }}
-          NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: ${{ vars.AGENCY_NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY }}
-
-      - name: Purge Agency Cloudflare CDN cache
-        if: ${{ vars.AGENCY_CLOUDFLARE_ZONE_ID != '' }}
-        uses: nathanvaughn/actions-cloudflare-purge@master
-        with:
-          cf_zone: ${{ vars.AGENCY_CLOUDFLARE_ZONE_ID }}
-          cf_auth: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          IMAGE="asia-southeast1-docker.pkg.dev/eco-azimuth-441108-s4/vidicy/agency:${{ github.sha }}"
+          DIGEST="$(gcloud artifacts docker images describe "$IMAGE" --project=eco-azimuth-441108-s4 --format='value(image_summary.digest)')"
+          [[ "$DIGEST" =~ ^sha256:[a-f0-9]{64}$ ]] || { echo "Invalid container image digest" >&2; exit 1; }
+          gcloud run services update vidicy-agency \
+            --project=eco-azimuth-441108-s4 \
+            --region=asia-southeast1 \
+            --image="${IMAGE%:*}@${DIGEST}" \
+            --quiet

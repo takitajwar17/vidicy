@@ -92,6 +92,8 @@ tmp/
 .tmp/
 temp/
 backups/
+.gcp-migration/
+gha-creds-*.json
 
 # Misc
 *.pem
