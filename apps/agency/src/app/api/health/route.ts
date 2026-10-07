@@ -1,7 +1,7 @@
 import "server-only";
 
 import { NextResponse } from "next/server";
-import { getCloudflareContext } from "@opennextjs/cloudflare";
+import { getRuntimeContext } from "@/infra/runtime-context";
 import { getDB } from "@/db";
 import { sql } from "drizzle-orm";
 import { requireAdminRouteSession } from "@/app/api/_utils/request-auth";
@@ -16,9 +16,9 @@ interface HealthResponse {
   status: "healthy" | "degraded" | "unhealthy";
   timestamp: string;
   components: {
-    d1: ComponentStatus;
-    kv: ComponentStatus;
-    r2: ComponentStatus;
+    postgres: ComponentStatus;
+    memorystore: ComponentStatus;
+    cloudStorage: ComponentStatus;
   };
   version: string;
 }
@@ -34,29 +34,29 @@ export async function GET(): Promise<Response> {
 
   const timestamp = new Date().toISOString();
   const components: HealthResponse["components"] = {
-    d1: { status: "down", latencyMs: 0 },
-    kv: { status: "down", latencyMs: 0 },
-    r2: { status: "down", latencyMs: 0 },
+    postgres: { status: "down", latencyMs: 0 },
+    memorystore: { status: "down", latencyMs: 0 },
+    cloudStorage: { status: "down", latencyMs: 0 },
   };
 
   // --- D1 check: execute a trivial query ---
   const d1Start = Date.now();
   try {
     const db = getDB();
-    await db.run(sql`SELECT 1`);
-    components.d1 = { status: "ok", latencyMs: Date.now() - d1Start };
+    await db.execute(sql`SELECT 1`);
+    components.postgres = { status: "ok", latencyMs: Date.now() - d1Start };
   } catch (err) {
-    components.d1 = {
+    components.postgres = {
       status: "down",
       latencyMs: Date.now() - d1Start,
-      error: err instanceof Error ? err.message : "D1 unreachable",
+      error: err instanceof Error ? err.message : "PostgreSQL unreachable",
     };
   }
 
   // --- KV check: write, read, delete a canary key ---
   const kvStart = Date.now();
   try {
-    const { env } = await getCloudflareContext({ async: true });
+    const { env } = await getRuntimeContext({ async: true });
     const kv = env.APP_KV as KVNamespace | undefined;
 
     if (!kv) throw new Error("APP_KV binding not available");
@@ -68,30 +68,30 @@ export async function GET(): Promise<Response> {
 
     if (readBack !== canaryValue) throw new Error("KV read-back mismatch");
 
-    components.kv = { status: "ok", latencyMs: Date.now() - kvStart };
+    components.memorystore = { status: "ok", latencyMs: Date.now() - kvStart };
   } catch (err) {
-    components.kv = {
+    components.memorystore = {
       status: "down",
       latencyMs: Date.now() - kvStart,
-      error: err instanceof Error ? err.message : "KV unreachable",
+      error: err instanceof Error ? err.message : "Memorystore unreachable",
     };
   }
 
   // --- R2 check: list with an empty prefix (minimal operation) ---
   const r2Start = Date.now();
   try {
-    const { env } = await getCloudflareContext({ async: true });
+    const { env } = await getRuntimeContext({ async: true });
     const r2 = env.R2 as R2Bucket | undefined;
 
     if (!r2) throw new Error("R2 binding not available");
 
     await r2.list({ limit: 1 });
-    components.r2 = { status: "ok", latencyMs: Date.now() - r2Start };
+    components.cloudStorage = { status: "ok", latencyMs: Date.now() - r2Start };
   } catch (err) {
-    components.r2 = {
+    components.cloudStorage = {
       status: "down",
       latencyMs: Date.now() - r2Start,
-      error: err instanceof Error ? err.message : "R2 unreachable",
+      error: err instanceof Error ? err.message : "Cloud Storage unreachable",
     };
   }
 
