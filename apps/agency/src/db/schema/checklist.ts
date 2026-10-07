@@ -1,4 +1,4 @@
-import { sqliteTable, integer, text, index } from "drizzle-orm/sqlite-core";
+import { pgTable, integer, text, index, boolean } from "drizzle-orm/pg-core";
 import { type InferSelectModel } from "drizzle-orm";
 import { createId } from "@paralleldrive/cuid2";
 import { commonColumns } from "./_common";
@@ -16,15 +16,15 @@ export const CHECKLIST_ITEM_STATUS = {
 export const checklistItemStatusTuple = Object.values(CHECKLIST_ITEM_STATUS) as [string, ...string[]];
 
 // Checklist item table
-export const checklistItemTable = sqliteTable("checklist_item", {
+export const checklistItemTable = pgTable("checklist_item", {
   ...commonColumns,
   id: text().primaryKey().$defaultFn(() => `citem_${createId()}`).notNull(),
   applicationId: text().notNull().references(() => visaApplicationTable.id, { onDelete: 'cascade' }),
   applicantId: text().references(() => applicantTable.id, { onDelete: 'cascade' }),
-  documentName: text({ length: 255 }).notNull(),
-  description: text({ length: 1000 }).notNull(),
-  commonMistakes: text({ length: 1000 }),
-  isRequired: integer({ mode: "boolean" }).default(true).notNull(),
+  documentName: text().notNull(),
+  description: text().notNull(),
+  commonMistakes: text(),
+  isRequired: boolean().default(true).notNull(),
   status: text({ enum: checklistItemStatusTuple }).default(CHECKLIST_ITEM_STATUS.PENDING).notNull(),
   sortOrder: integer().default(0).notNull(),
 }, (table) => ([

@@ -1,0 +1,20 @@
+{
+  "version": "7",
+  "dialect": "postgresql",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "7",
+      "when": 1792349390472,
+      "tag": "0000_google_cloud_postgres",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1792352124069,
+      "tag": "0001_google_document_task_recovery",
+      "breakpoints": true
+    }
+  ]
+}

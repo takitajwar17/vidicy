@@ -1,6 +1,6 @@
 import { type InferSelectModel } from "drizzle-orm";
 import { createId } from "@paralleldrive/cuid2";
-import { index, integer, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
+import { index, integer, pgTable, text, uniqueIndex, timestamp, boolean, jsonb } from "drizzle-orm/pg-core";
 import { commonColumns } from "./_common";
 import { userTable } from "./user";
 import { visaApplicationTable } from "./visa-application";
@@ -73,18 +73,18 @@ export interface ClientReportActionItem {
   severity: "high" | "medium" | "low";
 }
 
-export const agencyTeamMemberTable = sqliteTable(
+export const agencyTeamMemberTable = pgTable(
   "agency_team_member",
 	{
 	  ...commonColumns,
 	  id: text().primaryKey().$defaultFn(() => `atm_${createId()}`).notNull(),
 	  userId: text().references(() => userTable.id, { onDelete: "set null" }),
-	  email: text({ length: 255 }),
+	  email: text(),
 	  role: text({ enum: agencyStaffRoleTuple }).default(AGENCY_STAFF_ROLE.MEMBER).notNull(),
 	  status: text({ enum: agencyStaffStatusTuple }).default(AGENCY_STAFF_STATUS.ACTIVE).notNull(),
 	  invitedBy: text().references(() => userTable.id, { onDelete: "set null" }),
-    invitedAt: integer({ mode: "timestamp" }),
-    joinedAt: integer({ mode: "timestamp" }),
+    invitedAt: timestamp({ withTimezone: true, mode: "date", precision: 3 }),
+    joinedAt: timestamp({ withTimezone: true, mode: "date", precision: 3 }),
 	},
 	(table) => [
 	  uniqueIndex("agency_team_member_user_unique_idx").on(table.userId),
@@ -95,17 +95,17 @@ export const agencyTeamMemberTable = sqliteTable(
 	],
   );
 
-export const agencyClientTable = sqliteTable(
+export const agencyClientTable = pgTable(
   "agency_client",
   {
     ...commonColumns,
     id: text().primaryKey().$defaultFn(() => `acl_${createId()}`).notNull(),
-    name: text({ length: 255 }).notNull(),
-    email: text({ length: 255 }),
-    phone: text({ length: 100 }),
-    companyName: text({ length: 255 }),
-    country: text({ length: 100 }),
-    notes: text({ length: 2000 }),
+    name: text().notNull(),
+    email: text(),
+    phone: text(),
+    companyName: text(),
+    country: text(),
+    notes: text(),
   },
   (table) => [
     index("agency_client_name_idx").on(table.name),
@@ -113,7 +113,7 @@ export const agencyClientTable = sqliteTable(
   ],
 );
 
-export const reviewIssueTable = sqliteTable(
+export const reviewIssueTable = pgTable(
   "review_issue",
   {
     ...commonColumns,
@@ -122,20 +122,20 @@ export const reviewIssueTable = sqliteTable(
     applicantId: text().references(() => applicantTable.id, { onDelete: "cascade" }),
     checklistItemId: text().references(() => checklistItemTable.id, { onDelete: "set null" }),
     documentId: text().references(() => uploadedDocumentTable.id, { onDelete: "set null" }),
-    title: text({ length: 255 }).notNull(),
-    description: text({ length: 2000 }).notNull(),
-    recommendation: text({ length: 2000 }),
-    category: text({ length: 100 }).notNull().default("document"),
+    title: text().notNull(),
+    description: text().notNull(),
+    recommendation: text(),
+    category: text().notNull().default("document"),
     severity: text({ enum: reviewIssueSeverityTuple }).default(REVIEW_ISSUE_SEVERITY.MEDIUM).notNull(),
     status: text({ enum: reviewIssueStatusTuple }).default(REVIEW_ISSUE_STATUS.OPEN).notNull(),
     source: text({ enum: reviewIssueSourceTuple }).default(REVIEW_ISSUE_SOURCE.REVIEWER).notNull(),
     confidence: integer(),
-    clientVisible: integer({ mode: "boolean" }).default(true).notNull(),
+    clientVisible: boolean().default(true).notNull(),
     assignedToId: text().references(() => userTable.id, { onDelete: "set null" }),
     createdById: text().references(() => userTable.id, { onDelete: "set null" }),
     // Reviewer confirmation time. AI-cleared findings use null so a returning
     // finding can reopen; updatedAt records when the AI cleared it.
-    resolvedAt: integer({ mode: "timestamp" }),
+    resolvedAt: timestamp({ withTimezone: true, mode: "date", precision: 3 }),
   },
   (table) => [
     index("review_issue_app_id_idx").on(table.applicationId),
@@ -146,17 +146,17 @@ export const reviewIssueTable = sqliteTable(
   ],
 );
 
-export const clientReportTable = sqliteTable(
+export const clientReportTable = pgTable(
   "client_report",
   {
     ...commonColumns,
     id: text().primaryKey().$defaultFn(() => `crep_${createId()}`).notNull(),
     applicationId: text().notNull().references(() => visaApplicationTable.id, { onDelete: "cascade" }),
     status: text({ enum: clientReportDeliveryStatusTuple }).default(CLIENT_REPORT_DELIVERY_STATUS.DRAFT).notNull(),
-    summary: text({ length: 4000 }).notNull(),
-    actionItems: text({ mode: "json" }).notNull().$type<ClientReportActionItem[]>(),
+    summary: text().notNull(),
+    actionItems: jsonb().notNull().$type<ClientReportActionItem[]>(),
     createdById: text().references(() => userTable.id, { onDelete: "set null" }),
-    sentAt: integer({ mode: "timestamp" }),
+    sentAt: timestamp({ withTimezone: true, mode: "date", precision: 3 }),
   },
   (table) => [
     index("client_report_app_id_idx").on(table.applicationId),

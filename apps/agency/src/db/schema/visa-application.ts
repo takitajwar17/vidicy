@@ -1,4 +1,4 @@
-import { sqliteTable, integer, text, index } from "drizzle-orm/sqlite-core";
+import { pgTable, integer, text, index, timestamp, jsonb } from "drizzle-orm/pg-core";
 import { type InferSelectModel } from "drizzle-orm";
 import { createId } from "@paralleldrive/cuid2";
 import { commonColumns } from "./_common";
@@ -67,46 +67,46 @@ export const CLIENT_REPORT_STATUS = {
 export const clientReportStatusTuple = Object.values(CLIENT_REPORT_STATUS) as [string, ...string[]];
 
 // Visa application table
-export const visaApplicationTable = sqliteTable("visa_application", {
+export const visaApplicationTable = pgTable("visa_application", {
   ...commonColumns,
   id: text().primaryKey().$defaultFn(() => `vapp_${createId()}`).notNull(),
   userId: text().notNull().references(() => userTable.id, { onDelete: 'cascade' }),
-  homeCountry: text({ length: 100 }).notNull(),
-  currentCountry: text({ length: 100 }).notNull(),
-  destinationCountry: text({ length: 100 }).notNull(),
-  visaType: text({ length: 100 }).notNull(),
-  embassy: text({ length: 255 }).notNull(),
+  homeCountry: text().notNull(),
+  currentCountry: text().notNull(),
+  destinationCountry: text().notNull(),
+  visaType: text().notNull(),
+  embassy: text().notNull(),
   status: text({ enum: visaApplicationStatusTuple }).default(VISA_APPLICATION_STATUS.DRAFT).notNull(),
   riskLevel: text({ enum: riskLevelTuple }),
   readinessScore: integer(),
-  trashedAt: integer({ mode: "timestamp" }),
+  trashedAt: timestamp({ withTimezone: true, mode: "date", precision: 3 }),
   // Collaboration workspace fields — always populated for new rows; .notNull() with
   // safe defaults ensures queries never need null-coalescing fallbacks.
-  name: text({ length: 255 }).notNull().default(""),
-  settings: text({ length: 10000 }).notNull().default("{}"),
+  name: text().notNull().default(""),
+  settings: text().notNull().default("{}"),
   // Checklist generation metadata — canonical typed alternatives to the legacy settings blob
-  checklistSource: text({ length: 50 }),
-  checklistGeneratedAt: integer({ mode: "timestamp" }),
-  checklistCitations: text({ mode: 'json' }).$type<string[]>(),
+  checklistSource: text(),
+  checklistGeneratedAt: timestamp({ withTimezone: true, mode: "date", precision: 3 }),
+  checklistCitations: jsonb().$type<string[]>(),
   // Outcome tracking — recorded after the embassy issues a real decision
   actualOutcome: text({ enum: visaOutcomeTuple }),
-  outcomeDate: integer({ mode: "timestamp" }),
-  outcomeNotes: text({ length: 1000 }),
+  outcomeDate: timestamp({ withTimezone: true, mode: "date", precision: 3 }),
+  outcomeNotes: text(),
   // Agency workflow fields. The database table name is retained for backward
   // compatibility, but authenticated agency surfaces treat this row as a client case.
-  caseNumber: text({ length: 40 }).unique(),
-  clientId: text({ length: 255 }),
-  clientName: text({ length: 255 }),
-  clientEmail: text({ length: 255 }),
-  clientPhone: text({ length: 100 }),
+  caseNumber: text().unique(),
+  clientId: text(),
+  clientName: text(),
+  clientEmail: text(),
+  clientPhone: text(),
   agencyStatus: text({ enum: agencyCaseStatusTuple }).default(AGENCY_CASE_STATUS.INTAKE).notNull(),
   priority: text({ enum: agencyCasePriorityTuple }).default(AGENCY_CASE_PRIORITY.NORMAL).notNull(),
   assignedReviewerId: text().references(() => userTable.id, { onDelete: "set null" }),
-  intakeSource: text({ length: 80 }).default("manual").notNull(),
-  submittedAt: integer({ mode: "timestamp" }),
-  dueAt: integer({ mode: "timestamp" }),
-  reviewCompletedAt: integer({ mode: "timestamp" }),
-  finalSubmissionAt: integer({ mode: "timestamp" }),
+  intakeSource: text().default("manual").notNull(),
+  submittedAt: timestamp({ withTimezone: true, mode: "date", precision: 3 }),
+  dueAt: timestamp({ withTimezone: true, mode: "date", precision: 3 }),
+  reviewCompletedAt: timestamp({ withTimezone: true, mode: "date", precision: 3 }),
+  finalSubmissionAt: timestamp({ withTimezone: true, mode: "date", precision: 3 }),
   clientReportStatus: text({ enum: clientReportStatusTuple }).default(CLIENT_REPORT_STATUS.NOT_STARTED).notNull(),
 }, (table) => ([
   index('visa_app_user_id_idx').on(table.userId),

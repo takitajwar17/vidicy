@@ -1,4 +1,4 @@
-import { sqliteTable, integer, text, index } from "drizzle-orm/sqlite-core";
+import { pgTable, integer, text, index, timestamp, jsonb } from "drizzle-orm/pg-core";
 import { type InferSelectModel } from "drizzle-orm";
 import { createId } from "@paralleldrive/cuid2";
 import { visaApplicationTable, riskLevelTuple, scoreConfidenceTuple } from "./visa-application";
@@ -59,7 +59,7 @@ export function isSupportedDocumentMimeType(mimeType: string): boolean {
 }
 
 // Uploaded document table
-export const uploadedDocumentTable = sqliteTable(
+export const uploadedDocumentTable = pgTable(
   "uploaded_document",
   {
     id: text()
@@ -71,11 +71,11 @@ export const uploadedDocumentTable = sqliteTable(
       .references(() => visaApplicationTable.id, { onDelete: "cascade" }),
     applicantId: text().references(() => applicantTable.id, { onDelete: "cascade" }),
     checklistItemId: text().references(() => checklistItemTable.id, { onDelete: "set null" }),
-    fileName: text({ length: 255 }).notNull(),
-    fileKey: text({ length: 500 }).notNull(),
+    fileName: text().notNull(),
+    fileKey: text().notNull(),
     fileSize: integer().notNull(),
-    mimeType: text({ length: 100 }).notNull(),
-    uploadedAt: integer({ mode: "timestamp" })
+    mimeType: text().notNull(),
+    uploadedAt: timestamp({ withTimezone: true, mode: "date", precision: 3 })
       .$defaultFn(() => new Date())
       .notNull(),
     chunkCount: integer().default(0).notNull(),
@@ -85,14 +85,17 @@ export const uploadedDocumentTable = sqliteTable(
     indexingStatus: text({ enum: documentIndexingStatusTuple })
       .default(DOCUMENT_INDEXING_STATUS.QUEUED)
       .notNull(),
-    extractionMethod: text({ length: 100 }),
-    extractedAt: integer({ mode: "timestamp" }),
-    indexingAttemptedAt: integer({ mode: "timestamp" }),
+    // Bound automatic recovery across task retries and service restarts.
+    processingRecoveryCount: integer().default(0).notNull(),
+    processingRecoveryBucket: text(),
+    extractionMethod: text(),
+    extractedAt: timestamp({ withTimezone: true, mode: "date", precision: 3 }),
+    indexingAttemptedAt: timestamp({ withTimezone: true, mode: "date", precision: 3 }),
     pageCount: integer(),
-    imageDescription: text({ length: 2000 }),
-    extractionPayload: text({ mode: "json" }).$type<DocumentExtractionPayload | null>(),
+    imageDescription: text(),
+    extractionPayload: jsonb().$type<DocumentExtractionPayload | null>(),
     // Normalized extracted text from the file (truncated to ~50k chars).
-    textContent: text({ length: 50000 }),
+    textContent: text(),
   },
   (table) => [
     index("uploaded_doc_app_id_idx").on(table.applicationId),
@@ -116,7 +119,7 @@ export const uploadedDocumentTable = sqliteTable(
 );
 
 // Document evaluation table
-export const documentEvaluationTable = sqliteTable(
+export const documentEvaluationTable = pgTable(
   "document_evaluation",
   {
     id: text()
@@ -129,11 +132,11 @@ export const documentEvaluationTable = sqliteTable(
     applicantId: text().references(() => applicantTable.id, { onDelete: "cascade" }),
     overallScore: integer().notNull(),
     riskLevel: text({ enum: riskLevelTuple }).notNull(),
-    summary: text({ length: 2000 }).notNull(),
-    redFlags: text({ mode: "json" }).notNull().$type<string[]>(),
-    strengths: text({ mode: "json" }).notNull().$type<string[]>(),
-    recommendations: text({ mode: "json" }).notNull().$type<string[]>(),
-    itemFeedback: text({ mode: "json" }).$type<
+    summary: text().notNull(),
+    redFlags: jsonb().notNull().$type<string[]>(),
+    strengths: jsonb().notNull().$type<string[]>(),
+    recommendations: jsonb().notNull().$type<string[]>(),
+    itemFeedback: jsonb().$type<
       Record<
         string,
         {
@@ -171,7 +174,7 @@ export const documentEvaluationTable = sqliteTable(
      * Used by incremental evaluation to skip re-evaluating unchanged documents on re-runs.
      * Null on evaluations created before this column was added.
      */
-    docSnapshots: text({ mode: "json" }).$type<Record<string, string>>(),
+    docSnapshots: jsonb().$type<Record<string, string>>(),
     /**
      * Ensemble scoring confidence level — only set for borderline scores (within ±12 of
      * the visa-type threshold). A second adversarial AI pass is run and the two scores are
@@ -187,8 +190,8 @@ export const documentEvaluationTable = sqliteTable(
      * Legacy AI-generated preview Q&A retained for older evaluations.
      * JSON: { question: string, answer: string }
      */
-    atlasPreview: text({ mode: "json" }).$type<{ question: string; answer: string }>(),
-    createdAt: integer({ mode: "timestamp" })
+    atlasPreview: jsonb().$type<{ question: string; answer: string }>(),
+    createdAt: timestamp({ withTimezone: true, mode: "date", precision: 3 })
       .$defaultFn(() => new Date())
       .notNull(),
   },

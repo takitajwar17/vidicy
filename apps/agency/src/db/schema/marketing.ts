@@ -1,5 +1,5 @@
 import { type InferSelectModel } from "drizzle-orm";
-import { integer, index, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
+import { index, pgTable, text, uniqueIndex, timestamp, boolean, jsonb } from "drizzle-orm/pg-core";
 import { createId } from "@paralleldrive/cuid2";
 
 import { commonColumns } from "./_common";
@@ -42,35 +42,35 @@ export const MARKETING_SEND_STATUS = {
 
 export const marketingSendStatusTuple = Object.values(MARKETING_SEND_STATUS) as [string, ...string[]];
 
-export const marketingContactTable = sqliteTable("marketing_contact", {
+export const marketingContactTable = pgTable("marketing_contact", {
   ...commonColumns,
   id: text().primaryKey().$defaultFn(() => `mct_${createId()}`).notNull(),
   userId: text().notNull().references(() => userTable.id, { onDelete: "cascade" }),
-  email: text({ length: 255 }).notNull(),
-  resendContactId: text({ length: 255 }),
-  subscribedOnboarding: integer({ mode: "boolean" }).default(true).notNull(),
-  subscribedPostPurchase: integer({ mode: "boolean" }).default(true).notNull(),
-  subscribedWinback: integer({ mode: "boolean" }).default(true).notNull(),
-  lastSyncedAt: integer({ mode: "timestamp" }),
+  email: text().notNull(),
+  resendContactId: text(),
+  subscribedOnboarding: boolean().default(true).notNull(),
+  subscribedPostPurchase: boolean().default(true).notNull(),
+  subscribedWinback: boolean().default(true).notNull(),
+  lastSyncedAt: timestamp({ withTimezone: true, mode: "date", precision: 3 }),
 }, (table) => ([
   uniqueIndex("marketing_contact_user_unique_idx").on(table.userId),
   uniqueIndex("marketing_contact_email_unique_idx").on(table.email),
   uniqueIndex("marketing_contact_resend_contact_unique_idx").on(table.resendContactId),
 ]));
 
-export const marketingSequenceEnrollmentTable = sqliteTable("marketing_sequence_enrollment", {
+export const marketingSequenceEnrollmentTable = pgTable("marketing_sequence_enrollment", {
   ...commonColumns,
   id: text().primaryKey().$defaultFn(() => `mseq_${createId()}`).notNull(),
   userId: text().notNull().references(() => userTable.id, { onDelete: "cascade" }),
   applicationId: text().references(() => visaApplicationTable.id, { onDelete: "cascade" }),
   sequence: text({ enum: marketingSequenceTuple }).notNull(),
-  stepKey: text({ length: 255 }).notNull(),
+  stepKey: text().notNull(),
   status: text({ enum: marketingEnrollmentStatusTuple }).default(MARKETING_ENROLLMENT_STATUS.ACTIVE).notNull(),
-  enteredAt: integer({ mode: "timestamp" }).$defaultFn(() => new Date()).notNull(),
-  nextSendAt: integer({ mode: "timestamp" }).notNull(),
-  lastSentAt: integer({ mode: "timestamp" }),
-  completedAt: integer({ mode: "timestamp" }),
-  exitReason: text({ length: 255 }),
+  enteredAt: timestamp({ withTimezone: true, mode: "date", precision: 3 }).$defaultFn(() => new Date()).notNull(),
+  nextSendAt: timestamp({ withTimezone: true, mode: "date", precision: 3 }).notNull(),
+  lastSentAt: timestamp({ withTimezone: true, mode: "date", precision: 3 }),
+  completedAt: timestamp({ withTimezone: true, mode: "date", precision: 3 }),
+  exitReason: text(),
 }, (table) => ([
   index("marketing_enrollment_user_idx").on(table.userId),
   index("marketing_enrollment_application_idx").on(table.applicationId),
@@ -78,30 +78,30 @@ export const marketingSequenceEnrollmentTable = sqliteTable("marketing_sequence_
   index("marketing_enrollment_next_send_idx").on(table.nextSendAt),
 ]));
 
-export const marketingEmailSendTable = sqliteTable("marketing_email_send", {
+export const marketingEmailSendTable = pgTable("marketing_email_send", {
   ...commonColumns,
   id: text().primaryKey().$defaultFn(() => `msend_${createId()}`).notNull(),
   enrollmentId: text().notNull().references(() => marketingSequenceEnrollmentTable.id, { onDelete: "cascade" }),
   sequence: text({ enum: marketingSequenceTuple }).notNull(),
-  stepKey: text({ length: 255 }).notNull(),
-  resendBroadcastId: text({ length: 255 }),
-  resendSegmentId: text({ length: 255 }),
+  stepKey: text().notNull(),
+  resendBroadcastId: text(),
+  resendSegmentId: text(),
   status: text({ enum: marketingSendStatusTuple }).default(MARKETING_SEND_STATUS.PENDING).notNull(),
-  sentAt: integer({ mode: "timestamp" }),
+  sentAt: timestamp({ withTimezone: true, mode: "date", precision: 3 }),
 }, (table) => ([
   index("marketing_send_enrollment_idx").on(table.enrollmentId),
   index("marketing_send_status_idx").on(table.status),
   uniqueIndex("marketing_send_broadcast_unique_idx").on(table.resendBroadcastId),
 ]));
 
-export const marketingEventTable = sqliteTable("marketing_event", {
+export const marketingEventTable = pgTable("marketing_event", {
   ...commonColumns,
   id: text().primaryKey().$defaultFn(() => `mevt_${createId()}`).notNull(),
   userId: text().notNull().references(() => userTable.id, { onDelete: "cascade" }),
   applicationId: text().references(() => visaApplicationTable.id, { onDelete: "cascade" }),
   type: text({ enum: marketingEventTypeTuple }).notNull(),
-  payload: text({ mode: "json" }).$type<Record<string, unknown>>(),
-  occurredAt: integer({ mode: "timestamp" }).$defaultFn(() => new Date()).notNull(),
+  payload: jsonb().$type<Record<string, unknown>>(),
+  occurredAt: timestamp({ withTimezone: true, mode: "date", precision: 3 }).$defaultFn(() => new Date()).notNull(),
 }, (table) => ([
   index("marketing_event_user_idx").on(table.userId),
   index("marketing_event_application_idx").on(table.applicationId),

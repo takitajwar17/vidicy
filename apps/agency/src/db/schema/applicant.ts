@@ -1,4 +1,4 @@
-import { sqliteTable, integer, text, index, uniqueIndex } from "drizzle-orm/sqlite-core";
+import { pgTable, integer, text, index, uniqueIndex, boolean } from "drizzle-orm/pg-core";
 import { type InferSelectModel } from "drizzle-orm";
 import { createId } from "@paralleldrive/cuid2";
 import { commonColumns } from "./_common";
@@ -28,34 +28,34 @@ export const APPLICANT_ROLE = {
 export const applicantRoleTuple = Object.values(APPLICANT_ROLE) as [string, ...string[]];
 
 // Applicant table — one per person in the visa application
-export const applicantTable = sqliteTable("applicant", {
+export const applicantTable = pgTable("applicant", {
   ...commonColumns,
   id: text().primaryKey().$defaultFn(() => `appl_${createId()}`).notNull(),
   applicationId: text().notNull().references(() => visaApplicationTable.id, { onDelete: 'cascade' }),
-  name: text({ length: 255 }).notNull(),
+  name: text().notNull(),
   relationship: text({ enum: applicantRelationshipTuple }).notNull(),
   /**
    * Legacy applicant role. Agency reviewers work from agency_team_member;
    * applicant rows keep this value for older records and compatibility.
    */
   role: text({ enum: applicantRoleTuple }).notNull().default(APPLICANT_ROLE.OWNER),
-  dateOfBirth: text({ length: 20 }),
-  passportNumber: text({ length: 100 }),
+  dateOfBirth: text(),
+  passportNumber: text(),
   /** Nationality / passport-issuing country for this specific applicant */
-  nationality: text({ length: 100 }),
+  nationality: text(),
   readinessScore: integer(),
   riskLevel: text({ enum: riskLevelTuple }),
-  email: text({ length: 255 }),
+  email: text(),
   /** Set once a user account is linked to this applicant */
   userId: text().references(() => userTable.id, { onDelete: 'set null' }),
   // Per-applicant visa history
-  approvedBefore: integer({ mode: "boolean" }),
-  approvedVisaType: text({ length: 100 }),
-  approvedYear: text({ length: 10 }),
-  rejectedBefore: integer({ mode: "boolean" }),
-  rejectedVisaType: text({ length: 100 }),
-  rejectedYear: text({ length: 10 }),
-  rejectedReason: text({ length: 500 }),
+  approvedBefore: boolean(),
+  approvedVisaType: text(),
+  approvedYear: text(),
+  rejectedBefore: boolean(),
+  rejectedVisaType: text(),
+  rejectedYear: text(),
+  rejectedReason: text(),
 }, (table) => ([
   index('applicant_app_id_idx').on(table.applicationId),
   index('applicant_user_id_idx').on(table.userId),

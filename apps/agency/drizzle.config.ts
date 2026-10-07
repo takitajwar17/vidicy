@@ -1,43 +1,19 @@
-import { defineConfig } from 'drizzle-kit';
-import fs from "node:fs";
-import path from "node:path";
-
-function getLocalD1DB() {
-  try {
-    const basePath = path.resolve(".wrangler/state/v3/d1");
-    const dbFile = fs
-      .readdirSync(basePath, { encoding: "utf-8", recursive: true })
-      .find((f) => f.endsWith(".sqlite"));
-
-    if (!dbFile) {
-      throw new Error(`.sqlite file not found in ${basePath}`);
-    }
-
-    const url = path.resolve(basePath, dbFile);
-    return url;
-  } catch (err) {
-    console.error(err)
-
-    return null;
-  }
-}
+import { defineConfig } from "drizzle-kit";
 
 export default defineConfig({
-  out: './src/db/migrations',
-  schema: './src/db/schema/index.ts',
-  dialect: 'sqlite',
-  ...(process.env.NODE_ENV === "production"
-    ? {
-      driver: "d1-http",
-      dbCredentials: {
-        accountId: process.env.CLOUDFLARE_ACCOUNT_ID,
-        databaseId: process.env.DATABASE_ID,
-        token: process.env.CLOUDFLARE_API_TOKEN,
-      },
-    }
+  // Keep the D1 migration history separate and unchanged.
+  out: "./src/db/postgres-migrations",
+  schema: "./src/db/schema/index.ts",
+  dialect: "postgresql",
+  ...(process.env.DATABASE_URL
+    ? { dbCredentials: { url: process.env.DATABASE_URL } }
     : {
-      dbCredentials: {
-        url: getLocalD1DB(),
-      },
-    }),
+        dbCredentials: {
+          host: process.env.PGHOST ?? "localhost",
+          port: Number(process.env.PGPORT ?? 5432),
+          database: process.env.PGDATABASE ?? "vidicy",
+          user: process.env.PGUSER ?? "postgres",
+          password: process.env.PGPASSWORD ?? "",
+        },
+      }),
 });

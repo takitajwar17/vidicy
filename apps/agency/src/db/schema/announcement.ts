@@ -1,13 +1,6 @@
 import { type InferSelectModel } from "drizzle-orm";
 import { createId } from "@paralleldrive/cuid2";
-import {
-  AnySQLiteColumn,
-  integer,
-  index,
-  sqliteTable,
-  text,
-  uniqueIndex,
-} from "drizzle-orm/sqlite-core";
+import { AnyPgColumn, integer, index, pgTable, text, uniqueIndex, timestamp, boolean, jsonb } from "drizzle-orm/pg-core";
 import { commonColumns } from "./_common";
 import { userTable } from "./user";
 import type { AnnouncementAttachment } from "@/lib/announcements";
@@ -34,7 +27,7 @@ export const announcementPriorityTuple = Object.values(ANNOUNCEMENT_PRIORITY) as
   ...string[],
 ];
 
-export const announcementPostTable = sqliteTable(
+export const announcementPostTable = pgTable(
   "announcement_post",
   {
     ...commonColumns,
@@ -45,25 +38,25 @@ export const announcementPostTable = sqliteTable(
     authorId: text()
       .notNull()
       .references(() => userTable.id, { onDelete: "cascade" }),
-    title: text({ length: 255 }).notNull(),
-    body: text({ length: 20000 }).notNull(),
-    attachments: text({ mode: "json" }).$type<AnnouncementAttachment[]>(),
-    ctaLabel: text({ length: 80 }),
-    ctaUrl: text({ length: 2048 }),
-    embedTitle: text({ length: 120 }),
-    embedUrl: text({ length: 2048 }),
+    title: text().notNull(),
+    body: text().notNull(),
+    attachments: jsonb().$type<AnnouncementAttachment[]>(),
+    ctaLabel: text(),
+    ctaUrl: text(),
+    embedTitle: text(),
+    embedUrl: text(),
     type: text({ enum: announcementTypeTuple }).notNull().default(ANNOUNCEMENT_TYPE.ANNOUNCEMENT),
     priority: text({ enum: announcementPriorityTuple })
       .notNull()
       .default(ANNOUNCEMENT_PRIORITY.NORMAL),
-    pinned: integer({ mode: "boolean" }).notNull().default(false),
-    commentsEnabled: integer({ mode: "boolean" }).notNull().default(true),
-    pollSingleChoice: integer({ mode: "boolean" }).notNull().default(true),
-    pollNamedVotes: integer({ mode: "boolean" }).notNull().default(true),
-    pollAllowVoteChange: integer({ mode: "boolean" }).notNull().default(true),
-    pollCloseAt: integer({ mode: "timestamp" }),
-    emailNotificationSent: integer({ mode: "boolean" }).notNull().default(false),
-    publishedAt: integer({ mode: "timestamp" })
+    pinned: boolean().notNull().default(false),
+    commentsEnabled: boolean().notNull().default(true),
+    pollSingleChoice: boolean().notNull().default(true),
+    pollNamedVotes: boolean().notNull().default(true),
+    pollAllowVoteChange: boolean().notNull().default(true),
+    pollCloseAt: timestamp({ withTimezone: true, mode: "date", precision: 3 }),
+    emailNotificationSent: boolean().notNull().default(false),
+    publishedAt: timestamp({ withTimezone: true, mode: "date", precision: 3 })
       .$defaultFn(() => new Date())
       .notNull(),
   },
@@ -76,7 +69,7 @@ export const announcementPostTable = sqliteTable(
   ],
 );
 
-export const announcementPollOptionTable = sqliteTable(
+export const announcementPollOptionTable = pgTable(
   "announcement_poll_option",
   {
     ...commonColumns,
@@ -87,13 +80,13 @@ export const announcementPollOptionTable = sqliteTable(
     postId: text()
       .notNull()
       .references(() => announcementPostTable.id, { onDelete: "cascade" }),
-    label: text({ length: 255 }).notNull(),
+    label: text().notNull(),
     sortOrder: integer().notNull().default(0),
   },
   (table) => [index("announcement_poll_option_post_idx").on(table.postId)],
 );
 
-export const announcementPollVoteTable = sqliteTable(
+export const announcementPollVoteTable = pgTable(
   "announcement_poll_vote",
   {
     ...commonColumns,
@@ -122,7 +115,7 @@ export const announcementPollVoteTable = sqliteTable(
   ],
 );
 
-export const announcementUpvoteTable = sqliteTable(
+export const announcementUpvoteTable = pgTable(
   "announcement_upvote",
   {
     ...commonColumns,
@@ -143,7 +136,7 @@ export const announcementUpvoteTable = sqliteTable(
   ],
 );
 
-export const announcementCommentTable = sqliteTable(
+export const announcementCommentTable = pgTable(
   "announcement_comment",
   {
     ...commonColumns,
@@ -157,10 +150,10 @@ export const announcementCommentTable = sqliteTable(
     userId: text()
       .notNull()
       .references(() => userTable.id, { onDelete: "cascade" }),
-    parentId: text().references((): AnySQLiteColumn => announcementCommentTable.id, {
+    parentId: text().references((): AnyPgColumn => announcementCommentTable.id, {
       onDelete: "cascade",
     }),
-    body: text({ length: 5000 }).notNull(),
+    body: text().notNull(),
   },
   (table) => [
     index("announcement_comment_post_idx").on(table.postId),
@@ -169,7 +162,7 @@ export const announcementCommentTable = sqliteTable(
   ],
 );
 
-export const announcementReadTable = sqliteTable(
+export const announcementReadTable = pgTable(
   "announcement_read",
   {
     ...commonColumns,
@@ -183,7 +176,7 @@ export const announcementReadTable = sqliteTable(
     userId: text()
       .notNull()
       .references(() => userTable.id, { onDelete: "cascade" }),
-    readAt: integer({ mode: "timestamp" })
+    readAt: timestamp({ withTimezone: true, mode: "date", precision: 3 })
       .$defaultFn(() => new Date())
       .notNull(),
   },

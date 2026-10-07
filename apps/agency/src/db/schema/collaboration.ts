@@ -1,4 +1,4 @@
-import { sqliteTable, integer, text, index, uniqueIndex } from "drizzle-orm/sqlite-core";
+import { pgTable, integer, text, index, uniqueIndex, timestamp, jsonb } from "drizzle-orm/pg-core";
 import { type InferSelectModel } from "drizzle-orm";
 import { createId } from "@paralleldrive/cuid2";
 import { commonColumns } from "./_common";
@@ -6,7 +6,7 @@ import { userTable } from "./user";
 import { visaApplicationTable } from "./visa-application";
 
 // Application membership table
-export const applicationMembershipTable = sqliteTable("application_membership", {
+export const applicationMembershipTable = pgTable("application_membership", {
   ...commonColumns,
   id: text().primaryKey().$defaultFn(() => `amem_${createId()}`).notNull(),
   applicationId: text().notNull().references(() => visaApplicationTable.id, { onDelete: 'cascade' }),
@@ -16,9 +16,9 @@ export const applicationMembershipTable = sqliteTable("application_membership", 
   // Flag to indicate if this is a system role
   isSystemRole: integer().default(1).notNull(),
   invitedBy: text().references(() => userTable.id, { onDelete: 'set null' }),
-  invitedAt: integer({ mode: "timestamp" }),
-  joinedAt: integer({ mode: "timestamp" }),
-  expiresAt: integer({ mode: "timestamp" }),
+  invitedAt: timestamp({ withTimezone: true, mode: "date", precision: 3 }),
+  joinedAt: timestamp({ withTimezone: true, mode: "date", precision: 3 }),
+  expiresAt: timestamp({ withTimezone: true, mode: "date", precision: 3 }),
   isActive: integer().default(1).notNull(),
 }, (table) => ([
   index('app_membership_app_id_idx').on(table.applicationId),
@@ -27,16 +27,16 @@ export const applicationMembershipTable = sqliteTable("application_membership", 
 ]));
 
 // Application role table
-export const applicationRoleTable = sqliteTable("application_role", {
+export const applicationRoleTable = pgTable("application_role", {
   ...commonColumns,
   id: text().primaryKey().$defaultFn(() => `arole_${createId()}`).notNull(),
   applicationId: text().notNull().references(() => visaApplicationTable.id, { onDelete: 'cascade' }),
-  name: text({ length: 255 }).notNull(),
-  description: text({ length: 1000 }),
+  name: text().notNull(),
+  description: text(),
   // Store permissions as a JSON array of permission keys
-  permissions: text({ mode: 'json' }).notNull().$type<string[]>(),
+  permissions: jsonb().notNull().$type<string[]>(),
   // A JSON field for storing UI-specific settings like color, icon, etc.
-  metadata: text({ length: 5000 }),
+  metadata: text(),
   // Optional flag to mark some roles as non-editable
   isEditable: integer().default(1).notNull(),
 }, (table) => ([
@@ -45,19 +45,19 @@ export const applicationRoleTable = sqliteTable("application_role", {
 ]));
 
 // Application invitation table
-export const applicationInvitationTable = sqliteTable("application_invitation", {
+export const applicationInvitationTable = pgTable("application_invitation", {
   ...commonColumns,
   id: text().primaryKey().$defaultFn(() => `ainv_${createId()}`).notNull(),
   applicationId: text().notNull().references(() => visaApplicationTable.id, { onDelete: 'cascade' }),
-  email: text({ length: 255 }).notNull(),
+  email: text().notNull(),
   // This can be either a system role or a custom role ID
   roleId: text().notNull(),
   // Flag to indicate if this is a system role
   isSystemRole: integer().default(1).notNull(),
-  token: text({ length: 255 }).notNull().unique(),
+  token: text().notNull().unique(),
   invitedBy: text().notNull().references(() => userTable.id, { onDelete: 'cascade' }),
-  expiresAt: integer({ mode: "timestamp" }).notNull(),
-  acceptedAt: integer({ mode: "timestamp" }),
+  expiresAt: timestamp({ withTimezone: true, mode: "date", precision: 3 }).notNull(),
+  acceptedAt: timestamp({ withTimezone: true, mode: "date", precision: 3 }),
   acceptedBy: text().references(() => userTable.id, { onDelete: 'set null' }),
 }, (table) => ([
   index('app_invitation_app_id_idx').on(table.applicationId),

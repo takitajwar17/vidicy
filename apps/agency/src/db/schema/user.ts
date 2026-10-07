@@ -1,4 +1,4 @@
-import { sqliteTable, integer, text, index } from "drizzle-orm/sqlite-core";
+import { pgTable, text, index, timestamp } from "drizzle-orm/pg-core";
 import { type InferSelectModel } from "drizzle-orm";
 import { createId } from "@paralleldrive/cuid2";
 import { commonColumns } from "./_common";
@@ -11,37 +11,23 @@ export const ROLES_ENUM = {
 
 const roleTuple = Object.values(ROLES_ENUM) as [string, ...string[]];
 
-export const userTable = sqliteTable("user", {
+export const userTable = pgTable("user", {
   ...commonColumns,
   id: text().primaryKey().$defaultFn(() => `usr_${createId()}`).notNull(),
-  firstName: text({
-    length: 255,
-  }),
-  lastName: text({
-    length: 255,
-  }),
-  email: text({
-    length: 255,
-  }).unique(),
+  firstName: text(),
+  lastName: text(),
+  email: text().unique(),
   passwordHash: text(),
   role: text({
     enum: roleTuple,
   }).default(ROLES_ENUM.USER).notNull(),
-  emailVerified: integer({
-    mode: "timestamp",
-  }),
-  signUpIpAddress: text({
-    length: 100,
-  }),
-  googleAccountId: text({
-    length: 255,
-  }),
+  emailVerified: timestamp({ withTimezone: true, mode: "date", precision: 3 }),
+  signUpIpAddress: text(),
+  googleAccountId: text(),
   /**
    * This can either be an absolute or relative path to an image
    */
-  avatar: text({
-    length: 600,
-  }),
+  avatar: text(),
 }, (table) => ([
   index('email_idx').on(table.email),
   index('google_account_id_idx').on(table.googleAccountId),
