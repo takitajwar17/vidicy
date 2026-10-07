@@ -7,7 +7,7 @@ import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { authorizeApplicationRouteAccess } from "@/app/api/_utils/application-route-auth";
 import { requireRouteSession } from "@/app/api/_utils/request-auth";
 import { getDB } from "@/db";
-import { invalidateAgencyReview } from "@/server/agency-review";
+import { getAgencyReviewInvalidationQueries } from "@/server/agency-review";
 import {
   applicantTable,
   uploadedDocumentTable,
@@ -251,47 +251,53 @@ export async function handleDocumentUploadRoute({
       metadata: { applicationId: applicationIdValue, mimeType: normalizedMimeType },
     });
 
-    const [insertedDocument] = await db
-      .insert(uploadedDocumentTable)
-      .values({
-        applicationId: applicationIdValue,
-        applicantId: applicantId || null,
-        checklistItemId: checklistItemIdValue,
-        fileName: file.name,
-        fileKey,
-        fileSize: file.size,
-        mimeType: normalizedMimeType,
-        chunkCount: 0,
-        extractionStatus: DOCUMENT_EXTRACTION_STATUS.QUEUED,
-        indexingStatus: DOCUMENT_INDEXING_STATUS.QUEUED,
-        pageCount: pdfPageValidation.pageCount,
-      })
-      .returning();
-
-    await invalidateAgencyReview({ db, applicationId: applicationIdValue });
-
-    await recordMarketingEvent({
-      db,
-      type: MARKETING_EVENT_TYPE.DOCUMENT_UPLOADED,
-      userId: verifiedSession.user.id,
-      applicationId: applicationIdValue,
-      payload: {
-        documentId: insertedDocument.id,
-        checklistItemId: checklistItemIdValue,
-      },
-    });
-
-    await db
-      .update(checklistItemTable)
-      .set({ status: CHECKLIST_ITEM_STATUS.UPLOADED })
-      .where(
-        and(
-          eq(checklistItemTable.id, checklistItemIdValue),
-          eq(checklistItemTable.applicationId, applicationIdValue),
+    const [[insertedDocument]] = await db.batch([
+      db
+        .insert(uploadedDocumentTable)
+        .values({
+          applicationId: applicationIdValue,
+          applicantId: applicantId || null,
+          checklistItemId: checklistItemIdValue,
+          fileName: file.name,
+          fileKey,
+          fileSize: file.size,
+          mimeType: normalizedMimeType,
+          chunkCount: 0,
+          extractionStatus: DOCUMENT_EXTRACTION_STATUS.QUEUED,
+          indexingStatus: DOCUMENT_INDEXING_STATUS.QUEUED,
+          pageCount: pdfPageValidation.pageCount,
+        })
+        .returning(),
+      db
+        .update(checklistItemTable)
+        .set({ status: CHECKLIST_ITEM_STATUS.UPLOADED })
+        .where(
+          and(
+            eq(checklistItemTable.id, checklistItemIdValue),
+            eq(checklistItemTable.applicationId, applicationIdValue),
+          ),
         ),
-      );
+      ...getAgencyReviewInvalidationQueries({ db, applicationId: applicationIdValue }),
+    ]);
 
     ctx.waitUntil(queueDocumentExtraction({ documentId: insertedDocument.id }));
+    ctx.waitUntil(
+      recordMarketingEvent({
+        db,
+        type: MARKETING_EVENT_TYPE.DOCUMENT_UPLOADED,
+        userId: verifiedSession.user.id,
+        applicationId: applicationIdValue,
+        payload: {
+          documentId: insertedDocument.id,
+          checklistItemId: checklistItemIdValue,
+        },
+      }).catch((error) =>
+        logger.error("Failed to record document upload event", {
+          error,
+          documentId: insertedDocument.id,
+        }),
+      ),
+    );
 
     return NextResponse.json({
       success: true,

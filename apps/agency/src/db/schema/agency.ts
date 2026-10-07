@@ -133,6 +133,8 @@ export const reviewIssueTable = sqliteTable(
     clientVisible: integer({ mode: "boolean" }).default(true).notNull(),
     assignedToId: text().references(() => userTable.id, { onDelete: "set null" }),
     createdById: text().references(() => userTable.id, { onDelete: "set null" }),
+    // Reviewer confirmation time. AI-cleared findings use null so a returning
+    // finding can reopen; updatedAt records when the AI cleared it.
     resolvedAt: integer({ mode: "timestamp" }),
   },
   (table) => [

@@ -30,15 +30,9 @@ import {
   documentEvaluationTable,
   APPLICATION_PERMISSIONS,
   DOCUMENT_INDEXING_STATUS,
-  VISA_APPLICATION_STATUS,
-  AGENCY_CASE_STATUS,
-  CLIENT_REPORT_STATUS,
   MARKETING_EVENT_TYPE,
 } from "@/db/schema";
-import {
-  invalidateAgencyReview, isEvaluationCurrent, newestDocumentOrder,
-  newestEvaluationOrder, syncAgencyReviewIssues,
-} from "@/server/agency-review";
+import { newestDocumentOrder, newestEvaluationOrder, publishAgencyReview } from "@/server/agency-review";
 import { recordMarketingEvent } from "@/server/marketing/events";
 
 // ---------------------------------------------------------------------------
@@ -1329,74 +1323,16 @@ Return JSON with this exact structure:
     // Persist evaluation and update application/applicant scores
     // ---------------------------------------------------------------------------
 
-    // Store the review history before publishing scores or tracked issues.
-    const [evaluation] = await db
-      .insert(documentEvaluationTable)
-      .values({
-        applicationId: application.id,
-        applicantId: input.applicantId,
-        overallScore: evaluationData.overallScore,
-        riskLevel: evaluationData.riskLevel,
-        summary: evaluationData.summary,
-        redFlags: evaluationData.redFlags ?? [],
-        strengths: evaluationData.strengths ?? [],
-        recommendations: evaluationData.recommendations ?? [],
-        itemFeedback: evaluationData.itemFeedback ?? {},
-        docSnapshots,
-        scoreConfidence,
-        ensembleDivergence,
-      })
-      .returning();
-
-    // A corrected upload can finish while the AI is running. Keep that review as
-    // history, but do not publish its score or findings against newer evidence.
-    const currentDocuments = await db.query.uploadedDocumentTable.findMany({
-      where: eq(uploadedDocumentTable.applicationId, application.id),
-      orderBy: newestDocumentOrder,
+    const evaluation = await publishAgencyReview({
+      db, applicationId: application.id, userId: session.userId,
+      evaluation: {
+        applicationId: application.id, applicantId: input.applicantId,
+        overallScore: evaluationData.overallScore, riskLevel: evaluationData.riskLevel,
+        summary: evaluationData.summary, redFlags: evaluationData.redFlags ?? [],
+        strengths: evaluationData.strengths ?? [], recommendations: evaluationData.recommendations ?? [],
+        itemFeedback: evaluationData.itemFeedback ?? {}, docSnapshots, scoreConfidence, ensembleDivergence,
+      },
     });
-    if (!isEvaluationCurrent({ evaluation, checklistItems, documents: currentDocuments })) {
-      await invalidateAgencyReview({ db, applicationId: application.id });
-      throw new ZSAError(
-        "PRECONDITION_FAILED",
-        "The documents changed during review. Run review again.",
-      );
-    }
-    // Issue synchronization is required; do not report a completed review if it fails.
-    await syncAgencyReviewIssues({
-      db,
-      applicationId: application.id,
-      evaluation,
-      userId: session.userId,
-    });
-    await invalidateAgencyReview({ db, applicationId: application.id });
-
-    // Non-fatal: update denormalized scores on applicant and application
-    await Promise.all([
-      db
-        .update(applicantTable)
-        .set({
-          readinessScore: evaluationData.overallScore,
-          riskLevel: evaluationData.riskLevel,
-        })
-        .where(eq(applicantTable.id, input.applicantId))
-        .catch((err) => logger.error("Failed to update applicant score after evaluation", { applicantId: input.applicantId, error: err,
-          }),
-        ),
-      db
-        .update(visaApplicationTable)
-        .set({
-	          riskLevel: evaluationData.riskLevel,
-	          readinessScore: evaluationData.overallScore,
-	          status: VISA_APPLICATION_STATUS.IN_PROGRESS,
-          reviewCompletedAt: null,
-	          agencyStatus: AGENCY_CASE_STATUS.IN_REVIEW,
-	          clientReportStatus: CLIENT_REPORT_STATUS.DRAFT,
-	        })
-        .where(eq(visaApplicationTable.id, application.id))
-        .catch((err) => logger.error("Failed to update application status after evaluation", { applicationId: application.id, error: err,
-          }),
-        ),
-    ]);
 
     await recordMarketingEvent({
       db,
@@ -1408,20 +1344,8 @@ Return JSON with this exact structure:
         riskLevel: evaluationData.riskLevel,
         overallScore: evaluationData.overallScore,
       },
-    });
+    }).catch((error) => logger.error("Failed to record review event", { applicationId: application.id, error }));
 
-    // Recheck after publication so a concurrent upload cannot restore an old score.
-    const finalDocuments = await db.query.uploadedDocumentTable.findMany({
-      where: eq(uploadedDocumentTable.applicationId, application.id),
-      orderBy: newestDocumentOrder,
-    });
-    if (!isEvaluationCurrent({ evaluation, checklistItems, documents: finalDocuments })) {
-      await invalidateAgencyReview({ db, applicationId: application.id });
-      throw new ZSAError(
-        "PRECONDITION_FAILED",
-        "The documents changed during review. Run review again.",
-      );
-    }
     revalidatePath(`/dashboard/${application.id}`);
     revalidatePath("/dashboard");
     revalidatePath("/dashboard/issues");

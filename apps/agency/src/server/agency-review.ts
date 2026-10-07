@@ -1,5 +1,6 @@
 import "server-only";
 
+import type { BatchItem } from "drizzle-orm/batch";
 import { and, desc, eq, sql } from "drizzle-orm";
 import { ZSAError } from "zsa";
 import { getDB } from "@/db";
@@ -58,48 +59,63 @@ export function isEvaluationCurrent({
   });
 }
 
-export async function invalidateAgencyReports({ db, applicationId }: ReviewContext) {
-  await db
-    .update(clientReportTable)
-    .set({ status: CLIENT_REPORT_DELIVERY_STATUS.DRAFT })
-    .where(
-      and(
-        eq(clientReportTable.applicationId, applicationId),
-        eq(clientReportTable.status, CLIENT_REPORT_DELIVERY_STATUS.READY),
+export function getAgencyReportInvalidationQueries({ db, applicationId }: ReviewContext) {
+  return [
+    db
+      .update(clientReportTable)
+      .set({ status: CLIENT_REPORT_DELIVERY_STATUS.DRAFT })
+      .where(
+        and(
+          eq(clientReportTable.applicationId, applicationId),
+          eq(clientReportTable.status, CLIENT_REPORT_DELIVERY_STATUS.READY),
+        ),
       ),
-    );
-  await db
-    .update(visaApplicationTable)
-    .set({ clientReportStatus: CLIENT_REPORT_STATUS.DRAFT })
-    .where(eq(visaApplicationTable.id, applicationId));
+    db
+      .update(visaApplicationTable)
+      .set({ clientReportStatus: CLIENT_REPORT_STATUS.DRAFT })
+      .where(eq(visaApplicationTable.id, applicationId)),
+  ] as const;
 }
 
-export async function invalidateAgencyReview({ db, applicationId }: ReviewContext) {
-  await db
-    .update(visaApplicationTable)
-    .set({
-      status: VISA_APPLICATION_STATUS.IN_PROGRESS,
-      agencyStatus: AGENCY_CASE_STATUS.IN_REVIEW,
-      reviewCompletedAt: null,
-      readinessScore: null,
-      riskLevel: null,
-      clientReportStatus: CLIENT_REPORT_STATUS.DRAFT,
-    })
-    .where(eq(visaApplicationTable.id, applicationId));
-  await db
-    .update(applicantTable)
-    .set({ readinessScore: null, riskLevel: null })
-    .where(eq(applicantTable.applicationId, applicationId));
-  await invalidateAgencyReports({ db, applicationId });
+export async function invalidateAgencyReports(context: ReviewContext) {
+  await context.db.batch(getAgencyReportInvalidationQueries(context));
 }
 
-export async function syncAgencyReviewIssues({
+export function getAgencyReviewInvalidationQueries({ db, applicationId }: ReviewContext) {
+  return [
+    db
+      .update(visaApplicationTable)
+      .set({
+        status: VISA_APPLICATION_STATUS.IN_PROGRESS,
+        agencyStatus: AGENCY_CASE_STATUS.IN_REVIEW,
+        reviewCompletedAt: null,
+        readinessScore: null,
+        riskLevel: null,
+        clientReportStatus: CLIENT_REPORT_STATUS.DRAFT,
+      })
+      .where(eq(visaApplicationTable.id, applicationId)),
+    db
+      .update(applicantTable)
+      .set({ readinessScore: null, riskLevel: null })
+      .where(eq(applicantTable.applicationId, applicationId)),
+    ...getAgencyReportInvalidationQueries({ db, applicationId }),
+  ] as const;
+}
+
+export async function invalidateAgencyReview(context: ReviewContext) {
+  await context.db.batch(getAgencyReviewInvalidationQueries(context));
+}
+
+async function getAgencyReviewIssueChanges({
   db,
   applicationId,
   evaluation,
   userId,
 }: ReviewContext & {
-  evaluation: typeof documentEvaluationTable.$inferSelect;
+  evaluation: Pick<
+    typeof documentEvaluationTable.$inferSelect,
+    "applicantId" | "docSnapshots" | "itemFeedback" | "redFlags"
+  >;
   userId: string;
 }) {
   const [items, documents, existingIssues] = await Promise.all([
@@ -184,6 +200,7 @@ export async function syncAgencyReviewIssues({
     });
   }
 
+  const changes: BatchItem<"sqlite">[] = [];
   const retainedIds = new Set<string>();
   let createdCount = 0;
   for (const finding of findings) {
@@ -200,26 +217,31 @@ export async function syncAgencyReviewIssues({
       // Preserve a reviewer decision for unchanged evidence. New evidence reopens it.
       const changed =
         (existing.documentId ?? null) !== (finding.documentId ?? null) ||
-        existing.description !== finding.description;
-      await db
-        .update(reviewIssueTable)
-        .set({
-          ...finding,
-          status: changed ? REVIEW_ISSUE_STATUS.OPEN : existing.status,
-          resolvedAt: changed ? null : existing.resolvedAt,
-        })
-        .where(eq(reviewIssueTable.id, existing.id));
+        existing.description !== finding.description ||
+        // A finding cleared by AI has no reviewer resolution time. If it returns,
+        // reopen it instead of treating it as a reviewer-confirmed resolution.
+        (existing.status === REVIEW_ISSUE_STATUS.RESOLVED && !existing.resolvedAt);
+      changes.push(
+        db
+          .update(reviewIssueTable)
+          .set({
+            ...finding,
+            status: changed ? REVIEW_ISSUE_STATUS.OPEN : existing.status,
+            resolvedAt: changed ? null : existing.resolvedAt,
+          })
+          .where(eq(reviewIssueTable.id, existing.id)),
+      );
     } else {
-      await db
-        .insert(reviewIssueTable)
-        .values({
+      changes.push(
+        db.insert(reviewIssueTable).values({
           ...finding,
           source: REVIEW_ISSUE_SOURCE.AI,
           status: REVIEW_ISSUE_STATUS.OPEN,
           clientVisible: true,
           assignedToId: userId,
           createdById: userId,
-        });
+        }),
+      );
       createdCount += 1;
     }
   }
@@ -229,13 +251,91 @@ export async function syncAgencyReviewIssues({
       !retainedIds.has(issue.id) &&
       isOpenReviewIssueStatus(issue.status)
     ) {
-      await db
-        .update(reviewIssueTable)
-        .set({ status: REVIEW_ISSUE_STATUS.RESOLVED, resolvedAt: new Date() })
-        .where(eq(reviewIssueTable.id, issue.id));
+      changes.push(
+        db
+          .update(reviewIssueTable)
+          .set({ status: REVIEW_ISSUE_STATUS.RESOLVED, resolvedAt: null })
+          .where(eq(reviewIssueTable.id, issue.id)),
+      );
     }
   }
+  return { changes, createdCount };
+}
+
+export async function syncAgencyReviewIssues(
+  context: Parameters<typeof getAgencyReviewIssueChanges>[0],
+) {
+  const { changes, createdCount } = await getAgencyReviewIssueChanges(context);
+  if (changes.length) await context.db.batch([changes[0], ...changes.slice(1)]);
   return { createdCount };
+}
+
+export async function publishAgencyReview({
+  db,
+  applicationId,
+  userId,
+  evaluation,
+}: ReviewContext & {
+  userId: string;
+  evaluation: Omit<
+    typeof documentEvaluationTable.$inferInsert,
+    "id" | "createdAt" | "applicantId"
+  > & { applicantId: string };
+}) {
+  const review = {
+    ...evaluation,
+    docSnapshots: evaluation.docSnapshots ?? null,
+    itemFeedback: evaluation.itemFeedback ?? null,
+  };
+  const { changes } = await getAgencyReviewIssueChanges({
+    db,
+    applicationId,
+    userId,
+    evaluation: review,
+  });
+  // Publish the score, issue list, and report status together. A failed write must
+  // never expose a completed evaluation without its tracked findings.
+  const [[savedEvaluation]] = await db.batch([
+    db.insert(documentEvaluationTable).values(evaluation).returning(),
+    ...changes,
+    db
+      .update(applicantTable)
+      .set({ readinessScore: evaluation.overallScore, riskLevel: evaluation.riskLevel })
+      .where(
+        and(
+          eq(applicantTable.id, evaluation.applicantId),
+          eq(applicantTable.applicationId, applicationId),
+        ),
+      ),
+    db
+      .update(visaApplicationTable)
+      .set({
+        readinessScore: evaluation.overallScore,
+        riskLevel: evaluation.riskLevel,
+        status: VISA_APPLICATION_STATUS.IN_PROGRESS,
+        agencyStatus: AGENCY_CASE_STATUS.IN_REVIEW,
+        reviewCompletedAt: null,
+      })
+      .where(eq(visaApplicationTable.id, applicationId)),
+    ...getAgencyReportInvalidationQueries({ db, applicationId }),
+  ]);
+  const [checklistItems, documents] = await Promise.all([
+    db.query.checklistItemTable.findMany({
+      where: eq(checklistItemTable.applicationId, applicationId),
+    }),
+    db.query.uploadedDocumentTable.findMany({
+      where: eq(uploadedDocumentTable.applicationId, applicationId),
+      orderBy: newestDocumentOrder,
+    }),
+  ]);
+  if (!isEvaluationCurrent({ evaluation: savedEvaluation, checklistItems, documents })) {
+    await invalidateAgencyReview({ db, applicationId });
+    throw new ZSAError(
+      "PRECONDITION_FAILED",
+      "The documents changed during review. Run review again.",
+    );
+  }
+  return savedEvaluation;
 }
 
 export async function requireCurrentAgencyReview({

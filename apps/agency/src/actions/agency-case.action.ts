@@ -36,6 +36,7 @@ import { logger } from "@/infra/logger";
 import { sendAgencyTeamAccessEmail } from "@/utils/email";
 import {
   invalidateAgencyReports,
+  getAgencyReportInvalidationQueries,
   newestEvaluationOrder,
   requireCurrentAgencyReview,
   markAgencyCaseReady,
@@ -370,33 +371,35 @@ export const addReviewIssueAction = createServerAction()
     const db = getDB();
     await requireAgencyCase({ db, applicationId: input.applicationId });
 
-    const [issue] = await db
-      .insert(reviewIssueTable)
-      .values({
-        applicationId: input.applicationId,
-        title: input.title,
-        description: input.description,
-        recommendation: input.recommendation || null,
-        severity: input.severity,
-        source: REVIEW_ISSUE_SOURCE.REVIEWER,
-        status: REVIEW_ISSUE_STATUS.OPEN,
-        category: "reviewer_note",
-        clientVisible: input.clientVisible,
-        assignedToId: session.userId,
-        createdById: session.userId,
-      })
-      .returning();
+    const [[issue]] = await db.batch([
+      db
+        .insert(reviewIssueTable)
+        .values({
+          applicationId: input.applicationId,
+          title: input.title,
+          description: input.description,
+          recommendation: input.recommendation || null,
+          severity: input.severity,
+          source: REVIEW_ISSUE_SOURCE.REVIEWER,
+          status: REVIEW_ISSUE_STATUS.OPEN,
+          category: "reviewer_note",
+          clientVisible: input.clientVisible,
+          assignedToId: session.userId,
+          createdById: session.userId,
+        })
+        .returning(),
 
-    await db
-      .update(visaApplicationTable)
-      .set({
-        agencyStatus: AGENCY_CASE_STATUS.IN_REVIEW,
-        status: VISA_APPLICATION_STATUS.IN_PROGRESS,
-        reviewCompletedAt: null,
-      })
-      .where(eq(visaApplicationTable.id, input.applicationId));
+      db
+        .update(visaApplicationTable)
+        .set({
+          agencyStatus: AGENCY_CASE_STATUS.IN_REVIEW,
+          status: VISA_APPLICATION_STATUS.IN_PROGRESS,
+          reviewCompletedAt: null,
+        })
+        .where(eq(visaApplicationTable.id, input.applicationId)),
 
-    await invalidateAgencyReports({ db, applicationId: input.applicationId });
+      ...getAgencyReportInvalidationQueries({ db, applicationId: input.applicationId }),
+    ]);
 
     revalidatePath(`/dashboard/${input.applicationId}`);
     revalidatePath("/dashboard");
@@ -427,29 +430,33 @@ export const updateReviewIssueStatusAction = createServerAction()
     }
     await requireAgencyCase({ db, applicationId: issue.applicationId });
 
-    await db
-      .update(reviewIssueTable)
-      .set({
-        status: input.status,
-        resolvedAt:
-          input.status === REVIEW_ISSUE_STATUS.RESOLVED ||
-          input.status === REVIEW_ISSUE_STATUS.DISMISSED
-            ? new Date()
-            : null,
-      })
-      .where(eq(reviewIssueTable.id, input.issueId));
-
-    await invalidateAgencyReports({ db, applicationId: issue.applicationId });
-    if (isOpenReviewIssueStatus(input.status)) {
-      await db
-        .update(visaApplicationTable)
+    await db.batch([
+      db
+        .update(reviewIssueTable)
         .set({
-          agencyStatus: AGENCY_CASE_STATUS.IN_REVIEW,
-          status: VISA_APPLICATION_STATUS.IN_PROGRESS,
-          reviewCompletedAt: null,
+          status: input.status,
+          resolvedAt:
+            input.status === REVIEW_ISSUE_STATUS.RESOLVED ||
+            input.status === REVIEW_ISSUE_STATUS.DISMISSED
+              ? new Date()
+              : null,
         })
-        .where(eq(visaApplicationTable.id, issue.applicationId));
-    }
+        .where(eq(reviewIssueTable.id, input.issueId)),
+
+      ...getAgencyReportInvalidationQueries({ db, applicationId: issue.applicationId }),
+      ...(isOpenReviewIssueStatus(input.status)
+        ? [
+            db
+              .update(visaApplicationTable)
+              .set({
+                agencyStatus: AGENCY_CASE_STATUS.IN_REVIEW,
+                status: VISA_APPLICATION_STATUS.IN_PROGRESS,
+                reviewCompletedAt: null,
+              })
+              .where(eq(visaApplicationTable.id, issue.applicationId)),
+          ]
+        : []),
+    ]);
     revalidatePath(`/dashboard/${issue.applicationId}`);
     revalidatePath("/dashboard");
     revalidatePath("/dashboard/issues");
