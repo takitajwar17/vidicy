@@ -1,6 +1,6 @@
 import "server-only";
 
-import { getCloudflareContext } from "@opennextjs/cloudflare";
+import { getRuntimeContext } from "@/infra/runtime-context";
 import { headers } from "next/headers";
 
 import { getUserFromDB } from "@/utils/auth";
@@ -59,7 +59,7 @@ export interface KVSession {
 export const CURRENT_SESSION_VERSION = 11;
 
 async function getKV() {
-  const { env } = getCloudflareContext();
+  const { env } = getRuntimeContext();
   return env.NEXT_INC_CACHE_KV;
 }
 
@@ -77,7 +77,7 @@ export async function createKVSession({
   unreadSupportTicketsCount,
   adminUnreadSupportTicketsCount,
 }: CreateKVSessionParams): Promise<KVSession> {
-  const { cf } = getCloudflareContext();
+  const { cf } = getRuntimeContext();
   const headersList = await headers();
   const kv = await getKV();
 

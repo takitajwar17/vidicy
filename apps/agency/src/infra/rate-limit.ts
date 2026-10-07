@@ -1,5 +1,5 @@
 import "server-only";
-import { getCloudflareContext } from "@opennextjs/cloudflare";
+import { getRuntimeContext } from "@/infra/runtime-context";
 import * as ipaddr from "ipaddr.js";
 
 interface RateLimitOptions {
@@ -50,7 +50,7 @@ export async function checkRateLimit({
   key: string;
   options: RateLimitOptions;
 }): Promise<RateLimitResult> {
-  const { env } = getCloudflareContext();
+  const { env } = getRuntimeContext();
   const now = Math.floor(Date.now() / 1000);
 
   if (!env?.NEXT_INC_CACHE_KV) {

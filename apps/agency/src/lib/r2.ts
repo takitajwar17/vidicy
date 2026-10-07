@@ -1,6 +1,6 @@
 import "server-only"
 
-import { getCloudflareContext } from "@opennextjs/cloudflare"
+import { getRuntimeContext } from "@/infra/runtime-context"
 
 import { MAX_DOCUMENT_FILE_SIZE } from "@/constants"
 import { logger } from "@/infra/logger"
@@ -9,11 +9,11 @@ import { logger } from "@/infra/logger"
 export const MAX_FILE_SIZE_BYTES = MAX_DOCUMENT_FILE_SIZE
 
 /**
- * Returns the R2 bucket binding from Cloudflare context.
+ * Returns the Cloud Storage adapter through the shared runtime context.
  * Throws if R2 is not available.
  */
 export async function getR2Bucket(): Promise<R2Bucket> {
-  const { env } = await getCloudflareContext({ async: true })
+  const { env } = await getRuntimeContext({ async: true })
   if (!env.R2) {
     throw new Error("R2 binding unavailable")
   }

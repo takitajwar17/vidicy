@@ -1,6 +1,6 @@
 import "server-only";
 
-import { getCloudflareContext } from "@opennextjs/cloudflare";
+import { getRuntimeContext } from "@/infra/runtime-context";
 import { logger } from "@/infra/logger";
 
 /**
@@ -52,7 +52,7 @@ async function trackUsageAsync({
 }): Promise<void> {
   let kv: KVNamespace | undefined;
   try {
-    const { env } = getCloudflareContext();
+    const { env } = getRuntimeContext();
     kv = env.APP_KV as KVNamespace | undefined;
   } catch {
     return; // local dev — no KV
@@ -97,7 +97,7 @@ export async function getUserUsage({
 }): Promise<number> {
   let kv: KVNamespace | undefined;
   try {
-    const { env } = await getCloudflareContext({ async: true });
+    const { env } = await getRuntimeContext({ async: true });
     kv = env.APP_KV as KVNamespace | undefined;
   } catch {
     return 0;

@@ -1,5 +1,5 @@
 import "server-only";
-import { getCloudflareContext } from "@opennextjs/cloudflare";
+import { getRuntimeContext } from "@/infra/runtime-context";
 import { logger } from "@/infra/logger";
 import { RATE_LIMIT_WINDOW_SECONDS } from "@/constants";
 import { ZSAError } from "zsa";
@@ -19,7 +19,7 @@ import { ZSAError } from "zsa";
 export async function checkActionRateLimit(action: string, userId: string, limit: number): Promise<void> {
   let kv: KVNamespace | undefined;
   try {
-    const { env } = getCloudflareContext();
+    const { env } = getRuntimeContext();
     kv = env.APP_KV as KVNamespace | undefined;
   } catch { /* not in Workers context — skip rate limiting in local dev */ }
 
