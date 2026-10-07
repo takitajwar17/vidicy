@@ -181,7 +181,7 @@ export function MetricCard({
       <CardContent className="flex items-center gap-4 p-5">
         <span
           className={cn(
-            "flex h-12 w-12 shrink-0 items-center justify-center rounded-xl",
+            "flex h-10 w-10 shrink-0 items-center justify-center rounded-full",
             toneClass,
           )}
         >

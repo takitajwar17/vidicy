@@ -104,3 +104,12 @@ backups/
 test-results/
 playwright-report/
 apps/agency/output
+
+# Local documentation
+docs/
+
+# Local reports and SEO research
+/security/
+/seo/
+/apps/agency/security/
+/apps/agency/seo/
