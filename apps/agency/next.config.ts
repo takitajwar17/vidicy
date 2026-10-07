@@ -1,19 +1,23 @@
 import type { NextConfig } from "next";
 
 import withBundleAnalyzer from "@next/bundle-analyzer";
-import { initOpenNextCloudflareForDev } from "@opennextjs/cloudflare";
+import path from "node:path";
 
 const isDevelopment = process.env.NODE_ENV === "development";
-
-// The OpenNext Cloudflare dev shim is only needed for `next dev`.
-// Keeping it out of production builds avoids coupling config evaluation to dev-only bindings.
-if (isDevelopment) {
-  initOpenNextCloudflareForDev();
-}
 
 const skipTypeScriptChecks = process.env.SKIP_TYPESCRIPT_CHECKS === "true";
 
 const nextConfig: NextConfig = {
+  output: "standalone",
+  outputFileTracingIncludes: {
+    "/*": [
+      "./node_modules/@google-cloud/tasks/build/protos/**/*",
+      "../../node_modules/.pnpm/@google-cloud+tasks@*/node_modules/@google-cloud/tasks/build/protos/**/*",
+      "../../node_modules/.pnpm/google-gax@*/node_modules/google-gax/build/protos/**/*",
+      "../../node_modules/.pnpm/@napi-rs+canvas-*@*/node_modules/@napi-rs/canvas-*/**/*",
+    ],
+  },
+  outputFileTracingRoot: path.resolve(import.meta.dirname, "../.."),
   distDir: isDevelopment ? ".next-dev" : ".next",
   images: {
     remotePatterns: [
@@ -31,8 +35,9 @@ const nextConfig: NextConfig = {
     ],
   },
   typedRoutes: true,
-  serverExternalPackages: ["winston", "winston-daily-rotate-file"],
+  serverExternalPackages: ["winston", "winston-daily-rotate-file", "@google-cloud/tasks", "@google-cloud/storage", "@google/genai", "google-auth-library", "pg", "redis", "@sentry/node", "@napi-rs/canvas"],
   typescript: {
+    tsconfigPath: "tsconfig.build.json",
     ignoreBuildErrors: skipTypeScriptChecks,
   },
   experimental: {

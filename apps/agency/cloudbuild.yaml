@@ -1,0 +1,25 @@
+steps:
+  - id: build-agency
+    name: gcr.io/cloud-builders/docker
+    args:
+      - build
+      - --file=apps/agency/Dockerfile
+      - --tag=asia-southeast1-docker.pkg.dev/eco-azimuth-441108-s4/vidicy/agency:${_IMAGE_TAG}
+      - --build-arg=NEXT_PUBLIC_SITE_URL=https://vidicy-agency-vw6akohvja-as.a.run.app
+      - --build-arg=NEXT_PUBLIC_TURNSTILE_SITE_KEY=0x4AAAAAACY3QEqdhpl26JyY
+      - .
+
+serviceAccount: projects/eco-azimuth-441108-s4/serviceAccounts/vidicy-agency-build@eco-azimuth-441108-s4.iam.gserviceaccount.com
+
+images:
+  - asia-southeast1-docker.pkg.dev/eco-azimuth-441108-s4/vidicy/agency:${_IMAGE_TAG}
+
+substitutions:
+  # CI supplies its commit SHA; a manual submission may override _IMAGE_TAG.
+  _IMAGE_TAG: ${COMMIT_SHA:-$BUILD_ID}
+
+options:
+  dynamicSubstitutions: true
+  logging: CLOUD_LOGGING_ONLY
+
+timeout: 1800s
