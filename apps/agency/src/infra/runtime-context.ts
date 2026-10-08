@@ -2,7 +2,7 @@ import "server-only";
 
 import { after } from "next/server";
 import { createGoogleStorageBucket } from "@/infra/google/storage";
-import { createGoogleKV } from "@/infra/google/kv";
+import { appKV, createGoogleKV } from "@/infra/google/kv";
 import { createGoogleVectorIndex } from "@/infra/google/vector-search";
 import { logger } from "@/infra/logger";
 
@@ -10,7 +10,7 @@ import { logger } from "@/infra/logger";
 // services are Google Cloud services. The compatibility cast is kept here only.
 const bindings = {
   R2: createGoogleStorageBucket(),
-  APP_KV: createGoogleKV({ namespace: "vidicy:app:" }),
+  APP_KV: appKV,
   NEXT_INC_CACHE_KV: createGoogleKV({ namespace: "vidicy:cache:" }),
   VECTORIZE: createGoogleVectorIndex(),
 };

@@ -2,6 +2,7 @@ import "server-only";
 
 import { getRuntimeContext } from "@/infra/runtime-context";
 import { logger } from "@/infra/logger";
+import { appKV } from "@/infra/google/kv";
 
 /**
  * Usage event types tracked across the application.
@@ -37,8 +38,13 @@ export function trackUsage({
   event: UsageEvent;
   metadata?: Record<string, unknown>;
 }): void {
-  // Fire and forget — never await this in the caller
-  void trackUsageAsync({ userId, event, metadata });
+  const work = trackUsageAsync({ userId, event, metadata });
+  try {
+    getRuntimeContext().ctx.waitUntil(work);
+  } catch {
+    // Outside a request, the task still catches and logs its own failures.
+    void work;
+  }
 }
 
 async function trackUsageAsync({
@@ -50,32 +56,17 @@ async function trackUsageAsync({
   event: UsageEvent;
   metadata?: Record<string, unknown>;
 }): Promise<void> {
-  let kv: KVNamespace | undefined;
-  try {
-    const { env } = getRuntimeContext();
-    kv = env.APP_KV as KVNamespace | undefined;
-  } catch {
-    return; // local dev — no KV
-  }
-
-  if (!kv) return;
-
   const now = new Date();
   const dayKey = `usage:${event}:${userId}:${now.toISOString().slice(0, 10)}`;
   const monthKey = `usage:${event}:${userId}:${now.toISOString().slice(0, 7)}`;
 
   try {
-    const [dayVal, monthVal] = await Promise.all([
-      kv.get(dayKey, "json") as Promise<number | null>,
-      kv.get(monthKey, "json") as Promise<number | null>,
-    ]);
-
     await Promise.all([
-      kv.put(dayKey, JSON.stringify((dayVal ?? 0) + 1), { expirationTtl: USAGE_TTL_SECONDS }),
-      kv.put(monthKey, JSON.stringify((monthVal ?? 0) + 1), { expirationTtl: USAGE_TTL_SECONDS }),
+      appKV.increment({ key: dayKey, expirationTtl: USAGE_TTL_SECONDS }),
+      appKV.increment({ key: monthKey, expirationTtl: USAGE_TTL_SECONDS }),
     ]);
 
-    // Structured usage log for Cloudflare observability pipeline
+    // Structured usage log for the application monitoring pipeline.
     logger.info("usage_event", { event, userId, metadata });
   } catch (err) {
     logger.warn("Usage tracking KV error (non-fatal)", { event, userId, error: err });
@@ -95,17 +86,7 @@ export async function getUserUsage({
   event: UsageEvent;
   period: string;
 }): Promise<number> {
-  let kv: KVNamespace | undefined;
-  try {
-    const { env } = await getRuntimeContext({ async: true });
-    kv = env.APP_KV as KVNamespace | undefined;
-  } catch {
-    return 0;
-  }
-
-  if (!kv) return 0;
-
   const key = `usage:${event}:${userId}:${period}`;
-  const val = await kv.get(key, "json") as number | null;
+  const val = await appKV.get<number>(key, "json");
   return val ?? 0;
 }

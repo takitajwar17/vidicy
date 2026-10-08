@@ -22,6 +22,7 @@ export interface GoogleKVListResult {
 
 /** String and JSON operations used by sessions, tokens, rate limits and caches. */
 export interface GoogleKVNamespace {
+  increment(options: { key: string; expirationTtl: number }): Promise<number>;
   get(key: string): Promise<string | null>;
   get<T = unknown>(key: string, type: "json" | { type: "json"; cacheTtl?: number }): Promise<T | null>;
   get(key: string, type: "text" | { type: "text"; cacheTtl?: number }): Promise<string | null>;
@@ -116,6 +117,17 @@ export function createGoogleKV({ namespace }: { namespace: string }): GoogleKVNa
 
   return {
     get: getValue,
+    async increment({ key, expirationTtl }) {
+      if (!Number.isInteger(expirationTtl) || expirationTtl < 1) throw new Error("Invalid counter expiration");
+      const redis = await getRedis();
+      // Increment and expiry must be one operation, including concurrent events.
+      const result = await redis.sendCommand([
+        "EVAL", "local count = redis.call('INCR', KEYS[1]); redis.call('EXPIRE', KEYS[1], ARGV[1]); return count",
+        "1", `${namespace}${key}`, String(expirationTtl),
+      ]);
+      if (typeof result !== "number") throw new Error("Invalid counter result");
+      return result;
+    },
     async put(key, value, options = {}) {
       const redis = await getRedis();
       const fullKey = `${namespace}${key}`;
@@ -178,3 +190,5 @@ export function createGoogleKV({ namespace }: { namespace: string }): GoogleKVNa
     },
   };
 }
+
+export const appKV = createGoogleKV({ namespace: "vidicy:app:" });

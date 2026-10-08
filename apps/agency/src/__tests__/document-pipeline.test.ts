@@ -5,7 +5,7 @@ import { ensureDocumentExtraction, indexExtractedDocument } from "@/services/doc
 
 const {
   mockGetDB,
-  mockGetCloudflareContext,
+  mockGetRuntimeContext,
   mockGetR2Bucket,
   mockGetFromR2,
   mockGetPdfPageCount,
@@ -17,7 +17,7 @@ const {
   mockGetOpenAIClient,
 } = vi.hoisted(() => ({
   mockGetDB: vi.fn(),
-  mockGetCloudflareContext: vi.fn(),
+  mockGetRuntimeContext: vi.fn(),
   mockGetR2Bucket: vi.fn(),
   mockGetFromR2: vi.fn(),
   mockGetPdfPageCount: vi.fn(),
@@ -33,8 +33,8 @@ vi.mock("@/db", () => ({
   getDB: mockGetDB,
 }))
 
-vi.mock("@opennextjs/cloudflare", () => ({
-  getCloudflareContext: mockGetCloudflareContext,
+vi.mock("@/infra/runtime-context", () => ({
+  getRuntimeContext: mockGetRuntimeContext,
 }))
 
 vi.mock("@/lib/r2", () => ({
@@ -161,7 +161,7 @@ describe("document pipeline service", () => {
     })
     mockGetPdfPageCount.mockResolvedValue(2)
     mockExtractPdfMetadata.mockResolvedValue({ pageCount: 2 })
-    mockGetCloudflareContext.mockResolvedValue({
+    mockGetRuntimeContext.mockResolvedValue({
       env: {
         VECTORIZE: {
           upsert: vi.fn().mockResolvedValue(undefined),
@@ -170,9 +170,9 @@ describe("document pipeline service", () => {
     })
     mockGetOpenAIClient.mockReturnValue({
       embeddings: {
-        create: vi.fn().mockResolvedValue({
-          data: [{ embedding: [0.1, 0.2, 0.3] }],
-        }),
+        create: vi.fn(async ({ input }: { input: string[] }) => ({
+          data: input.map(() => ({ embedding: [0.1, 0.2, 0.3] })),
+        })),
       },
     })
   })
@@ -556,12 +556,12 @@ describe("document pipeline service", () => {
       chunkCount: 0,
     })
     expect(mockGetOpenAIClient).not.toHaveBeenCalled()
-    expect(mockGetCloudflareContext).not.toHaveBeenCalled()
+    expect(mockGetRuntimeContext).not.toHaveBeenCalled()
   })
 
   it("indexes stored text even when extraction status is not completed", async () => {
     const vectorizeUpsert = vi.fn().mockResolvedValue(undefined)
-    mockGetCloudflareContext.mockResolvedValue({
+    mockGetRuntimeContext.mockResolvedValue({
       env: {
         VECTORIZE: {
           upsert: vectorizeUpsert,
@@ -605,4 +605,32 @@ describe("document pipeline service", () => {
     expect(vectorizeUpsert).toHaveBeenCalledTimes(1)
     expect(mockGetOpenAIClient).toHaveBeenCalledTimes(1)
   })
+
+  it.each([
+    ["long internal spaces", "START" + " ".repeat(6500) + "TAIL_MARKER"],
+    ["one long paragraph", "a".repeat(11_990) + "TAIL_MARKER"],
+    ["overlap between large paragraphs", "a".repeat(3100) + "\n\n" + "b".repeat(3090) + "TAIL_MARKER"],
+  ])("indexes all text within the chunk limit: %s", async (_name, textContent) => {
+    const upsert = vi.fn().mockResolvedValue(undefined)
+    mockGetRuntimeContext.mockReturnValue({ env: { VECTORIZE: { upsert } } })
+    const document: MockDocumentRecord = {
+      id: "long_doc", applicationId: "app_1", fileKey: "file-key",
+      fileName: "statement.pdf", mimeType: "application/pdf", textContent,
+      extractionStatus: "completed", indexingStatus: "queued", extractionMethod: "pdf",
+      extractedAt: new Date(), indexingAttemptedAt: null, pageCount: 1,
+      imageDescription: null, extractionPayload: null, chunkCount: 0,
+    }
+    mockGetDB.mockReturnValue(createMockDatabase(document).db)
+
+    const result = await indexExtractedDocument({ documentId: document.id })
+
+    expect(result.success).toBe(true)
+    const vectors = upsert.mock.calls[0][0] as Array<{ metadata: { content: string } }>
+    expect(vectors.length).toBeGreaterThan(1)
+    expect(vectors.every(vector => vector.metadata.content.length > 0 && vector.metadata.content.length <= 3200)).toBe(true)
+    expect(vectors.at(-1)?.metadata.content).toContain("TAIL_MARKER")
+    const embeddings = mockGetOpenAIClient.mock.results[0].value.embeddings.create
+    expect(embeddings.mock.calls[0][0].input).toEqual(vectors.map(vector => vector.metadata.content))
+  })
+
 })

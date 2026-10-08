@@ -100,25 +100,12 @@ function chunkText(text: string): Array<PipelineTextChunk> {
 
   if (paragraphs.length === 0) return []
 
+  const content = paragraphs.join("\n\n")
   const chunks: Array<PipelineTextChunk> = []
-  let current = ""
-  let chunkIndex = 0
-
-  for (const paragraph of paragraphs) {
-    if (current.length + paragraph.length + 2 > MAX_CHARS && current.length > 0) {
-      chunks.push({ content: current.trim(), index: chunkIndex++ })
-      current = current.slice(-OVERLAP_CHARS).trimStart() + "\n\n" + paragraph
-    } else {
-      current += (current ? "\n\n" : "") + paragraph
-    }
-  }
-
-  if (current.trim()) {
-    chunks.push({ content: current.trim(), index: chunkIndex })
-  }
-
-  if (chunks.length === 0 && text.trim()) {
-    chunks.push({ content: text.trim(), index: 0 })
+  for (let start = 0; start < content.length; start += MAX_CHARS - OVERLAP_CHARS) {
+    const window = content.slice(start, start + MAX_CHARS).trim()
+    if (window) chunks.push({ content: window, index: chunks.length })
+    if (start + MAX_CHARS >= content.length) break
   }
 
   return chunks
