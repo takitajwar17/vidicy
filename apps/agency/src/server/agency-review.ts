@@ -26,9 +26,9 @@ interface ReviewContext {
   applicationId: string;
 }
 
-// Use rowid to order uploads that have the same one-second D1 timestamp.
-export const newestDocumentOrder = [desc(uploadedDocumentTable.uploadedAt), desc(sql`rowid`)];
-export const newestEvaluationOrder = [desc(documentEvaluationTable.createdAt), desc(sql`rowid`)];
+// IDs provide a stable order when PostgreSQL timestamps are equal.
+export const newestDocumentOrder = [desc(uploadedDocumentTable.uploadedAt), desc(uploadedDocumentTable.id)];
+export const newestEvaluationOrder = [desc(documentEvaluationTable.createdAt), desc(documentEvaluationTable.id)];
 
 export function isEvaluationCurrent({
   evaluation,
@@ -43,7 +43,7 @@ export function isEvaluationCurrent({
     | null
     | undefined;
   checklistItems: Pick<typeof checklistItemTable.$inferSelect, "id" | "applicantId">[];
-  // Documents must be ordered newest first, including the rowid tie-break above.
+  // Documents must be ordered newest first, including the stable ID tie-break above.
   documents: Pick<typeof uploadedDocumentTable.$inferSelect, "id" | "checklistItemId">[];
 }) {
   if (!evaluation?.docSnapshots || !evaluation.itemFeedback) return false;
@@ -200,7 +200,7 @@ async function getAgencyReviewIssueChanges({
     });
   }
 
-  const changes: BatchItem<"sqlite">[] = [];
+  const changes: BatchItem<"pg">[] = [];
   const retainedIds = new Set<string>();
   let createdCount = 0;
   for (const finding of findings) {
@@ -420,7 +420,7 @@ export async function markAgencyCaseReady({
     .where(
       and(
         eq(visaApplicationTable.id, applicationId),
-        sql`${visaApplicationTable.updateCounter} IS ${application.updateCounter}`,
+        sql`${visaApplicationTable.updateCounter} IS NOT DISTINCT FROM ${application.updateCounter}`,
       ),
     )
     .returning({ id: visaApplicationTable.id });

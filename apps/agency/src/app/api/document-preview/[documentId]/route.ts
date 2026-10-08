@@ -2,7 +2,7 @@ import "server-only";
 
 import { NextResponse } from "next/server";
 import { eq } from "drizzle-orm";
-import { getCloudflareContext } from "@opennextjs/cloudflare";
+import { getRuntimeContext } from "@/infra/runtime-context";
 
 import { authorizeApplicationRouteAccess } from "@/app/api/_utils/application-route-auth";
 import { requireRouteSession } from "@/app/api/_utils/request-auth";
@@ -53,7 +53,7 @@ export async function GET(
     }
 
     // 5. Fetch from R2
-    const { env } = await getCloudflareContext({ async: true });
+    const { env } = await getRuntimeContext({ async: true });
     const object = await env.R2.get(doc.fileKey);
 
     if (!object) {

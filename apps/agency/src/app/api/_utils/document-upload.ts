@@ -2,7 +2,7 @@ import "server-only";
 
 import { NextResponse } from "next/server";
 import { and, eq } from "drizzle-orm";
-import { getCloudflareContext } from "@opennextjs/cloudflare";
+import { getRuntimeContext } from "@/infra/runtime-context";
 
 import { authorizeApplicationRouteAccess } from "@/app/api/_utils/application-route-auth";
 import { requireRouteSession } from "@/app/api/_utils/request-auth";
@@ -21,7 +21,7 @@ import {
 import { logger, logAlert } from "@/infra/logger";
 import { trackUsage, USAGE_EVENTS } from "@/infra/usage-tracking";
 import { buildR2Key, MAX_FILE_SIZE_BYTES, uploadToR2 } from "@/lib/r2";
-import { queueDocumentExtraction } from "@/services/document-pipeline";
+import { enqueueDocumentExtraction } from "@/infra/google/document-tasks";
 import { getPdfPageCount, MAX_PDF_PAGE_COUNT } from "@/services/pdf-parser";
 import { recordMarketingEvent } from "@/server/marketing/events";
 
@@ -210,7 +210,7 @@ export async function handleDocumentUploadRoute({
       return pdfPageValidation.response;
     }
 
-    const { env, ctx } = await getCloudflareContext({ async: true });
+    const { env, ctx } = await getRuntimeContext({ async: true });
 
     if (!env.R2) {
       return NextResponse.json(
@@ -280,7 +280,7 @@ export async function handleDocumentUploadRoute({
       ...getAgencyReviewInvalidationQueries({ db, applicationId: applicationIdValue }),
     ]);
 
-    ctx.waitUntil(queueDocumentExtraction({ documentId: insertedDocument.id }));
+    await enqueueDocumentExtraction({ documentId: insertedDocument.id });
     ctx.waitUntil(
       recordMarketingEvent({
         db,

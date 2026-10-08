@@ -1,6 +1,6 @@
 import "server-only";
 
-import { and, desc, eq, inArray, isNotNull, isNull, like, ne, or } from "drizzle-orm";
+import { and, desc, eq, inArray, isNotNull, isNull, ilike, ne, or } from "drizzle-orm";
 
 import { getDB } from "@/db";
 import {
@@ -151,7 +151,7 @@ async function getApplicantSearchMatches(query: string): Promise<{
 
   const db = getDB();
   const applicants = await db.query.applicantTable.findMany({
-    where: like(applicantTable.name, `%${query}%`),
+    where: ilike(applicantTable.name, `%${query}%`),
     columns: {
       id: true,
       applicationId: true,
@@ -173,11 +173,11 @@ async function getApplicationSearchMatches(query: string): Promise<string[]> {
     where: and(
       ...getAgencyCaseFilters(),
       or(
-        like(visaApplicationTable.caseNumber, `%${query}%`),
-        like(visaApplicationTable.clientName, `%${query}%`),
-        like(visaApplicationTable.clientEmail, `%${query}%`),
-        like(visaApplicationTable.destinationCountry, `%${query}%`),
-        like(visaApplicationTable.visaType, `%${query}%`),
+        ilike(visaApplicationTable.caseNumber, `%${query}%`),
+        ilike(visaApplicationTable.clientName, `%${query}%`),
+        ilike(visaApplicationTable.clientEmail, `%${query}%`),
+        ilike(visaApplicationTable.destinationCountry, `%${query}%`),
+        ilike(visaApplicationTable.visaType, `%${query}%`),
       ),
     ),
     columns: {
@@ -276,11 +276,11 @@ export async function getAgencyCaseRows({
   }
   if (query) {
     const queryFilters = [
-      like(visaApplicationTable.caseNumber, `%${query}%`),
-      like(visaApplicationTable.clientName, `%${query}%`),
-      like(visaApplicationTable.clientEmail, `%${query}%`),
-      like(visaApplicationTable.destinationCountry, `%${query}%`),
-      like(visaApplicationTable.visaType, `%${query}%`),
+      ilike(visaApplicationTable.caseNumber, `%${query}%`),
+      ilike(visaApplicationTable.clientName, `%${query}%`),
+      ilike(visaApplicationTable.clientEmail, `%${query}%`),
+      ilike(visaApplicationTable.destinationCountry, `%${query}%`),
+      ilike(visaApplicationTable.visaType, `%${query}%`),
     ];
 
     if (applicantMatches.applicationIds.length) {
@@ -706,10 +706,10 @@ export async function getAgencyClientsWithCounts({
   const query = normalizeSearchQuery(rawQuery);
   const clientFilters = query
     ? or(
-        like(agencyClientTable.name, `%${query}%`),
-        like(agencyClientTable.email, `%${query}%`),
-        like(agencyClientTable.phone, `%${query}%`),
-        like(agencyClientTable.country, `%${query}%`),
+        ilike(agencyClientTable.name, `%${query}%`),
+        ilike(agencyClientTable.email, `%${query}%`),
+        ilike(agencyClientTable.phone, `%${query}%`),
+        ilike(agencyClientTable.country, `%${query}%`),
       )
     : undefined;
   const [clients, cases] = await Promise.all([
@@ -761,12 +761,12 @@ export async function getAgencyDocuments({
 
   if (query) {
     const queryFilters = [
-      like(uploadedDocumentTable.fileName, `%${query}%`),
-      like(uploadedDocumentTable.mimeType, `%${query}%`),
-      like(visaApplicationTable.caseNumber, `%${query}%`),
-      like(visaApplicationTable.clientName, `%${query}%`),
-      like(visaApplicationTable.destinationCountry, `%${query}%`),
-      like(visaApplicationTable.visaType, `%${query}%`),
+      ilike(uploadedDocumentTable.fileName, `%${query}%`),
+      ilike(uploadedDocumentTable.mimeType, `%${query}%`),
+      ilike(visaApplicationTable.caseNumber, `%${query}%`),
+      ilike(visaApplicationTable.clientName, `%${query}%`),
+      ilike(visaApplicationTable.destinationCountry, `%${query}%`),
+      ilike(visaApplicationTable.visaType, `%${query}%`),
     ];
 
     if (applicantMatches.applicationIds.length) {
@@ -833,9 +833,9 @@ export async function getAgencyReviewIssueRows({
 
   if (query) {
     const queryFilters = [
-      like(reviewIssueTable.title, `%${query}%`),
-      like(reviewIssueTable.description, `%${query}%`),
-      like(reviewIssueTable.recommendation, `%${query}%`),
+      ilike(reviewIssueTable.title, `%${query}%`),
+      ilike(reviewIssueTable.description, `%${query}%`),
+      ilike(reviewIssueTable.recommendation, `%${query}%`),
     ];
 
     if (applicantMatches.applicationIds.length) {

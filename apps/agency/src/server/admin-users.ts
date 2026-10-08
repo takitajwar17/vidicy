@@ -1,6 +1,6 @@
 import "server-only";
 
-import { like, sql } from "drizzle-orm";
+import { ilike, sql } from "drizzle-orm";
 
 import { PAGE_SIZE_OPTIONS } from "@/app/(admin)/admin/admin-constants";
 import { getDB } from "@/db";
@@ -26,7 +26,7 @@ export async function getAdminUsersPage({
   const offset = (safePage - 1) * safePageSize;
   const normalizedEmailFilter = emailFilter.trim();
   const whereClause = normalizedEmailFilter
-    ? like(userTable.email, `%${normalizedEmailFilter.replace(/[%_\\]/g, "\\$&")}%`)
+    ? ilike(userTable.email, `%${normalizedEmailFilter.replace(/[%_\\]/g, "\\$&")}%`)
     : undefined;
 
   const [[{ count }], users] = await Promise.all([

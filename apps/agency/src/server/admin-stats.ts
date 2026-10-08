@@ -16,7 +16,7 @@ import {
   SUPPORT_TICKET_STATUS,
 } from "@/db/schema";
 import { eq, sql, gte, isNull, isNotNull, desc, and, not } from "drizzle-orm";
-import { getCloudflareContext } from "@opennextjs/cloudflare";
+import { getRuntimeContext } from "@/infra/runtime-context";
 import { USAGE_EVENTS } from "@/infra/usage-tracking";
 
 // ---------------------------------------------------------------------------
@@ -232,7 +232,7 @@ export async function getPlatformStats(): Promise<PlatformStats> {
     db.select({ priority: supportTicketTable.priority, count: sql<number>`count(*)` })
       .from(supportTicketTable).groupBy(supportTicketTable.priority),
     db.select({
-      avg: sql<number>`avg((julianday(${supportTicketTable.resolvedAt}, 'unixepoch') - julianday(${supportTicketTable.createdAt}, 'unixepoch')) * 24)`,
+      avg: sql<number>`avg(extract(epoch from (${supportTicketTable.resolvedAt} - ${supportTicketTable.createdAt})) / 3600)`,
     }).from(supportTicketTable).where(isNotNull(supportTicketTable.resolvedAt)),
 
 	    // Agency team
@@ -252,12 +252,12 @@ export async function getPlatformStats(): Promise<PlatformStats> {
       .from(enterpriseInquiryTable).groupBy(enterpriseInquiryTable.status),
 
     // Growth: last 14 days
-    db.select({ day: sql<string>`date(${userTable.createdAt}, 'unixepoch')`.as("day"), count: sql<number>`count(*)` })
+    db.select({ day: sql<string>`to_char(${userTable.createdAt} AT TIME ZONE 'UTC', 'YYYY-MM-DD')`.as("day"), count: sql<number>`count(*)` })
       .from(userTable).where(gte(userTable.createdAt, fourteenDaysAgo))
-      .groupBy(sql`date(${userTable.createdAt}, 'unixepoch')`).orderBy(sql`day asc`),
-    db.select({ day: sql<string>`date(${visaApplicationTable.createdAt}, 'unixepoch')`.as("day"), count: sql<number>`count(*)` })
+      .groupBy(sql`to_char(${userTable.createdAt} AT TIME ZONE 'UTC', 'YYYY-MM-DD')`).orderBy(sql`day asc`),
+    db.select({ day: sql<string>`to_char(${visaApplicationTable.createdAt} AT TIME ZONE 'UTC', 'YYYY-MM-DD')`.as("day"), count: sql<number>`count(*)` })
       .from(visaApplicationTable).where(gte(visaApplicationTable.createdAt, fourteenDaysAgo))
-      .groupBy(sql`date(${visaApplicationTable.createdAt}, 'unixepoch')`).orderBy(sql`day asc`),
+      .groupBy(sql`to_char(${visaApplicationTable.createdAt} AT TIME ZONE 'UTC', 'YYYY-MM-DD')`).orderBy(sql`day asc`),
   ]);
 
   // Merge growth data
@@ -356,30 +356,30 @@ interface ComponentHealth {
 export interface SystemHealth {
   status: "healthy" | "degraded" | "unhealthy";
   timestamp: string;
-  components: { d1: ComponentHealth; kv: ComponentHealth; r2: ComponentHealth };
+  components: { postgres: ComponentHealth; memorystore: ComponentHealth; cloudStorage: ComponentHealth };
   version: string;
 }
 
 export async function getSystemHealth(): Promise<SystemHealth> {
   const timestamp = new Date().toISOString();
   const components: SystemHealth["components"] = {
-    d1: { status: "down", latencyMs: 0 },
-    kv: { status: "down", latencyMs: 0 },
-    r2: { status: "down", latencyMs: 0 },
+    postgres: { status: "down", latencyMs: 0 },
+    memorystore: { status: "down", latencyMs: 0 },
+    cloudStorage: { status: "down", latencyMs: 0 },
   };
 
   const d1Start = Date.now();
   try {
     const db = getDB();
-    await db.run(sql`SELECT 1`);
-    components.d1 = { status: "ok", latencyMs: Date.now() - d1Start };
+    await db.execute(sql`SELECT 1`);
+    components.postgres = { status: "ok", latencyMs: Date.now() - d1Start };
   } catch (err) {
-    components.d1 = { status: "down", latencyMs: Date.now() - d1Start, error: err instanceof Error ? err.message : "D1 unreachable" };
+    components.postgres = { status: "down", latencyMs: Date.now() - d1Start, error: err instanceof Error ? err.message : "PostgreSQL unreachable" };
   }
 
   const kvStart = Date.now();
   try {
-    const { env } = await getCloudflareContext({ async: true });
+    const { env } = await getRuntimeContext({ async: true });
     const kv = env.APP_KV as KVNamespace | undefined;
     if (!kv) throw new Error("APP_KV binding not available");
     const canary = Date.now().toString();
@@ -387,20 +387,20 @@ export async function getSystemHealth(): Promise<SystemHealth> {
     const readBack = await kv.get("_admin_health_check");
     await kv.delete("_admin_health_check");
     if (readBack !== canary) throw new Error("KV read-back mismatch");
-    components.kv = { status: "ok", latencyMs: Date.now() - kvStart };
+    components.memorystore = { status: "ok", latencyMs: Date.now() - kvStart };
   } catch (err) {
-    components.kv = { status: "down", latencyMs: Date.now() - kvStart, error: err instanceof Error ? err.message : "KV unreachable" };
+    components.memorystore = { status: "down", latencyMs: Date.now() - kvStart, error: err instanceof Error ? err.message : "Memorystore unreachable" };
   }
 
   const r2Start = Date.now();
   try {
-    const { env } = await getCloudflareContext({ async: true });
+    const { env } = await getRuntimeContext({ async: true });
     const r2 = env.R2 as R2Bucket | undefined;
     if (!r2) throw new Error("R2 binding not available");
     await r2.list({ limit: 1 });
-    components.r2 = { status: "ok", latencyMs: Date.now() - r2Start };
+    components.cloudStorage = { status: "ok", latencyMs: Date.now() - r2Start };
   } catch (err) {
-    components.r2 = { status: "down", latencyMs: Date.now() - r2Start, error: err instanceof Error ? err.message : "R2 unreachable" };
+    components.cloudStorage = { status: "down", latencyMs: Date.now() - r2Start, error: err instanceof Error ? err.message : "Cloud Storage unreachable" };
   }
 
   const statuses = Object.values(components).map((c) => c.status);
@@ -427,7 +427,7 @@ export async function getUsageMetrics(): Promise<UsageMetrics> {
 
   let kv: KVNamespace | undefined;
   try {
-    const { env } = await getCloudflareContext({ async: true });
+    const { env } = await getRuntimeContext({ async: true });
     kv = env.APP_KV as KVNamespace | undefined;
   } catch { return { today, thisMonth }; }
   if (!kv) return { today, thisMonth };

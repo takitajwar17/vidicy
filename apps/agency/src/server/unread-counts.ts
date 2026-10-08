@@ -1,5 +1,5 @@
 import "server-only";
-import { getCloudflareContext } from "@opennextjs/cloudflare";
+import { getRuntimeContext } from "@/infra/runtime-context";
 
 const TTL = 60; // seconds
 
@@ -9,7 +9,7 @@ function userKey(userId: string) {
 const ADMIN_KEY = "unread:admin";
 
 async function getKV() {
-  const { env } = getCloudflareContext();
+  const { env } = getRuntimeContext();
   return env.NEXT_INC_CACHE_KV ?? null;
 }
 

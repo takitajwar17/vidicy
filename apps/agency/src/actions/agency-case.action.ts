@@ -537,7 +537,7 @@ export const generateClientReportAction = createServerAction()
       .where(
         and(
           eq(visaApplicationTable.id, input.applicationId),
-          sql`${visaApplicationTable.updateCounter} IS ${original.updateCounter}`,
+          sql`${visaApplicationTable.updateCounter} IS NOT DISTINCT FROM ${original.updateCounter}`,
         ),
       )
       .returning({ id: visaApplicationTable.id });

@@ -1,7 +1,7 @@
 import "server-only";
 
 import { NextResponse } from "next/server";
-import { getCloudflareContext } from "@opennextjs/cloudflare";
+import { getRuntimeContext } from "@/infra/runtime-context";
 import { withRateLimit } from "@/infra/with-rate-limit";
 import { logger, logAlert } from "@/infra/logger";
 import ms from "ms";
@@ -36,7 +36,7 @@ export async function POST(request: Request) {
       );
     }
 
-    const { env } = await getCloudflareContext({ async: true });
+    const { env } = await getRuntimeContext({ async: true });
     if (!env.R2) {
       return NextResponse.json(
         { error: "Storage unavailable. Please try again later." },

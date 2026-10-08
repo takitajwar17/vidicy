@@ -44,8 +44,8 @@ export async function deleteApplication({ applicationId }: { applicationId: stri
   // Clean up R2 objects and Vectorize embeddings — non-fatal; log on failure but don't block the response
   if (docsToDelete.length > 0) {
     try {
-      const { getCloudflareContext } = await import("@opennextjs/cloudflare");
-      const { env } = await getCloudflareContext({ async: true });
+      const { getRuntimeContext } = await import("@/infra/runtime-context");
+      const { env } = await getRuntimeContext({ async: true });
 
       const deletions: Promise<unknown>[] = [];
 
@@ -102,8 +102,8 @@ export async function deleteApplicationAsAdmin({ applicationId }: { applicationI
 
   if (docsToDelete.length > 0) {
     try {
-      const { getCloudflareContext } = await import("@opennextjs/cloudflare");
-      const { env } = await getCloudflareContext({ async: true });
+      const { getRuntimeContext } = await import("@/infra/runtime-context");
+      const { env } = await getRuntimeContext({ async: true });
       const deletions: Promise<unknown>[] = [];
 
       if (env.R2) {
@@ -248,8 +248,8 @@ export async function adminDeleteUser({ userId }: { userId: string }) {
 
   if (allScreenshotKeys.length > 0) {
     try {
-      const { getCloudflareContext } = await import("@opennextjs/cloudflare");
-      const { env } = await getCloudflareContext({ async: true });
+      const { getRuntimeContext } = await import("@/infra/runtime-context");
+      const { env } = await getRuntimeContext({ async: true });
       if (env.R2) {
         await Promise.all(allScreenshotKeys.map((key) => env.R2!.delete(key)));
       }

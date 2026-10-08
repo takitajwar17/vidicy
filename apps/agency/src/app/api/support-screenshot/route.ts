@@ -2,7 +2,7 @@ import "server-only";
 
 import { NextResponse } from "next/server";
 import { eq, inArray } from "drizzle-orm";
-import { getCloudflareContext } from "@opennextjs/cloudflare";
+import { getRuntimeContext } from "@/infra/runtime-context";
 import { logger } from "@/infra/logger";
 import { CACHE_MAX_AGE_1_HOUR } from "@/constants";
 import { getDB } from "@/db";
@@ -62,7 +62,7 @@ export async function GET(request: Request) {
       }
     }
 
-    const { env } = await getCloudflareContext({ async: true });
+    const { env } = await getRuntimeContext({ async: true });
 
     if (!env.R2) {
       return NextResponse.json({ error: "Storage unavailable" }, { status: 503 });

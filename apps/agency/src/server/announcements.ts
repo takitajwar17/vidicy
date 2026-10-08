@@ -19,7 +19,7 @@ import { sendAnnouncementNotificationEmail } from "@/utils/email";
 import { logger } from "@/infra/logger";
 import { sendEmailBestEffort } from "@/lib/best-effort-email";
 import { announcementCreateInputSchema } from "@/lib/announcement-schemas";
-import { and, count, desc, eq, inArray, isNotNull, isNull, like, or, sql } from "drizzle-orm";
+import { and, count, desc, eq, inArray, isNotNull, isNull, ilike, or, sql } from "drizzle-orm";
 import { ZSAError } from "zsa";
 
 export async function getAnnouncementsUnreadCountForUser(userId: string) {
@@ -64,8 +64,8 @@ export async function getAnnouncementsFeed(params?: {
   if (params?.q) {
     whereClauses.push(
       or(
-        like(announcementPostTable.title, `%${params.q}%`),
-        like(announcementPostTable.body, `%${params.q}%`),
+        ilike(announcementPostTable.title, `%${params.q}%`),
+        ilike(announcementPostTable.body, `%${params.q}%`),
       ),
     );
   }
@@ -218,6 +218,8 @@ export async function getAnnouncementsFeed(params?: {
     posts: posts.map((post) => ({
       ...post,
       isRead: post.isRead > 0,
+      upvotesCount: Number(post.upvotesCount),
+      commentsCount: Number(post.commentsCount),
       hasUpvoted: post.hasUpvoted > 0,
       pollOptions: (pollOptionsByPostId.get(post.id) ?? [])
         .map((opt) => {
