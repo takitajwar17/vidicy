@@ -19,6 +19,7 @@
     "build:analyze": "ANALYZE=true next build",
     "start": "next start",
     "lint": "eslint src --quiet",
+    "typecheck": "next typegen && tsc --noEmit --incremental false",
     "format": "prettier --write src",
     "format:check": "prettier --check src",
     "test": "vitest run --exclude 'src/__tests__/eval/**'",

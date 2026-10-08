@@ -21,13 +21,13 @@ describe("package script naming", () => {
     expect(scripts["worker:preview"]).toBeDefined();
   });
 
-  it("routes the user-facing deploy scripts through the explicit worker scripts", () => {
+  it("uses Google Cloud deployment and local Next.js preview", () => {
     const pkg = readPackageJson();
     const scripts = pkg.scripts ?? {};
 
-    expect(scripts["deploy:dry-run"]).toContain("pnpm run worker:build");
-    expect(scripts.deploy).toBe("pnpm run worker:deploy");
-    expect(scripts.preview).toBe("pnpm run worker:preview");
+    expect(scripts["deploy:dry-run"]).toBe("pnpm run build");
+    expect(scripts.deploy).toBe("node scripts/google-deploy.mjs");
+    expect(scripts.preview).toBe("pnpm run start");
   });
 
   it("does not rely on a generated-worker postbuild rewrite", () => {

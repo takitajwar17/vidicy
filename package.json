@@ -11,6 +11,7 @@
     "build": "pnpm -r run build",
     "build:agency": "pnpm --filter @vidicy/agency run build",
     "lint": "pnpm -r run lint",
+    "typecheck": "pnpm -r run typecheck",
     "lint:agency": "pnpm --filter @vidicy/agency run lint",
     "test": "pnpm -r run test",
     "test:agency": "pnpm --filter @vidicy/agency run test",

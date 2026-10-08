@@ -41,6 +41,8 @@ Use pnpm. Run these commands from the repository root:
 - Database workflow tests use `apps/agency/src/__tests__/helpers/postgres.ts`.
   They need `pg_config` on PATH and `initdb` and `pg_ctl` in its binary directory.
   Use the temporary test cluster; do not connect tests to an application database.
+- Redis integration tests need `redis-server` and `redis-cli`. They use a private
+  Unix socket with no TCP listener. Do not connect them to application Redis.
 - Mock cloud access through `@/infra/runtime-context`, not the retired OpenNext module.
 - Report checks run, failures, and checks not run. Do not claim browser or live-service
   verification from unit tests or a successful build.
