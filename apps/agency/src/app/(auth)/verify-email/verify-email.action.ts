@@ -1,7 +1,7 @@
 "use server";
 
 import "server-only";
-import { getCloudflareContext } from "@opennextjs/cloudflare";
+import { getRuntimeContext } from "@/infra/runtime-context";
 import { getVerificationTokenKey } from "@/utils/auth-utils";
 import { getDB } from "@/db";
 import { userTable } from "@/db/schema";
@@ -19,7 +19,7 @@ export const verifyEmailAction = createServerAction()
   .handler(async ({ input }) => {
     return withRateLimit(
       async () => {
-        const { env } = getCloudflareContext();
+        const { env } = getRuntimeContext();
 
         if (!env?.NEXT_INC_CACHE_KV) {
           throw new Error("Can't connect to KV store");

@@ -9,7 +9,7 @@ import { hashPassword } from "@/infra/password-hasher";
 import { createSession, generateSessionToken, setSessionTokenCookie, canSignUp } from "@/utils/auth";
 import { eq } from "drizzle-orm";
 import { createId } from "@paralleldrive/cuid2";
-import { getCloudflareContext } from "@opennextjs/cloudflare";
+import { getRuntimeContext } from "@/infra/runtime-context";
 import { getVerificationTokenKey } from "@/utils/auth-utils";
 import { sendNewUserSignupNotificationEmail, sendVerificationEmail } from "@/utils/email";
 import { withRateLimit, RATE_LIMITS } from "@/infra/with-rate-limit";
@@ -39,7 +39,7 @@ export const signUpAction = createServerAction()
         }
 
         const db = getDB();
-        const { env } = getCloudflareContext();
+        const { env } = getRuntimeContext();
 
         if (await isTurnstileEnabled()) {
           if (!input.captchaToken) {

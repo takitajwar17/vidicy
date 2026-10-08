@@ -1,6 +1,6 @@
 import { Metadata } from "next";
 import { notFound } from "next/navigation";
-import { getCloudflareContext } from "@opennextjs/cloudflare";
+import { getRuntimeContext } from "@/infra/runtime-context";
 import ResetPasswordClientComponent from "./reset-password.client";
 import { getResetTokenKey } from "@/utils/auth-utils";
 
@@ -20,7 +20,7 @@ export default async function ResetPasswordPage({
     return notFound();
   }
 
-  const { env } = getCloudflareContext();
+  const { env } = getRuntimeContext();
 
   if (!env?.NEXT_INC_CACHE_KV) {
     throw new Error("Can't connect to KV store");

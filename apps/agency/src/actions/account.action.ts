@@ -86,8 +86,8 @@ export const deleteAccountAction = createServerAction()
     // Best-effort R2 cleanup for all support screenshots
     if (allScreenshotKeys.length > 0) {
       try {
-        const { getCloudflareContext } = await import("@opennextjs/cloudflare");
-        const { env } = await getCloudflareContext({ async: true });
+        const { getRuntimeContext } = await import("@/infra/runtime-context");
+        const { env } = await getRuntimeContext({ async: true });
         if (env.R2) {
           await Promise.all(allScreenshotKeys.map((key) => env.R2!.delete(key)));
         }

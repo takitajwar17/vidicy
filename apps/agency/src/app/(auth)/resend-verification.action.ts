@@ -3,7 +3,7 @@
 import { createServerAction, ZSAError } from "zsa";
 import { getSessionFromCookie } from "@/utils/auth";
 import { createId } from "@paralleldrive/cuid2";
-import { getCloudflareContext } from "@opennextjs/cloudflare";
+import { getRuntimeContext } from "@/infra/runtime-context";
 import { getVerificationTokenKey } from "@/utils/auth-utils";
 import { sendVerificationEmail } from "@/utils/email";
 import { withRateLimit, RATE_LIMITS } from "@/infra/with-rate-limit";
@@ -31,7 +31,7 @@ export const resendVerificationAction = createServerAction()
           );
         }
 
-        const { env } = getCloudflareContext();
+        const { env } = getRuntimeContext();
 
         // Generate verification token
         const verificationToken = createId();
