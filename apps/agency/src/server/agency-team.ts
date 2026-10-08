@@ -74,20 +74,6 @@ export async function ensureAgencyTeamMembership(
 	    return null;
 	  }
 
-	  const [teamCount] = await db.select({ total: count() }).from(agencyTeamMemberTable);
-
-	  if ((teamCount?.total ?? 0) === 0) {
-	    await db.insert(agencyTeamMemberTable).values({
-	      userId: user.id,
-	      email: email ?? user.id,
-	      role: AGENCY_STAFF_ROLE.ADMIN,
-	      status: AGENCY_STAFF_STATUS.ACTIVE,
-	      joinedAt: new Date(),
-	    });
-
-	    return { role: AGENCY_STAFF_ROLE.ADMIN, isAdmin: true };
-	  }
-
 	  if (user.role === ROLES_ENUM.ADMIN) {
 	    await db.insert(agencyTeamMemberTable).values({
 	      userId: user.id,

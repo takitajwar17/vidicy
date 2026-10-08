@@ -15,7 +15,7 @@ export default async function SupportPage() {
 
   return (
     <div className="flex flex-col h-svh overflow-hidden">
-      <UserInboxClient initialTickets={tickets as any} totalCount={totalCount} />
+      <UserInboxClient initialTickets={tickets} totalCount={totalCount} />
     </div>
   );
 }

@@ -24,10 +24,10 @@ export default async function AdminSupportPage({
   return (
     <div className="flex flex-col h-screen h-svh overflow-hidden">
       <SupportInboxClient
-        initialTickets={allTickets as any}
+        initialTickets={allTickets}
         totalCount={totalCount}
         initialSelectedId={id}
-        initialSelectedTicket={initialSelectedTicket as any}
+        initialSelectedTicket={initialSelectedTicket}
       />
     </div>
   )

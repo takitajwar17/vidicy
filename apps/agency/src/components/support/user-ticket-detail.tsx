@@ -9,6 +9,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { useServerAction } from "zsa-react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
+import type { Route } from "next"
 import { toast } from "sonner"
 import { cn } from "@/lib/utils"
 import { addSupportMessageAction, markTicketAsViewedAction } from "@/actions/support.action"
@@ -24,9 +25,9 @@ interface UploadedScreenshot {
 }
 
 interface UserTicketDetailProps {
-  ticket: SupportTicket & { messages: SupportMessage[] }
+  ticket: SupportTicket & { messages: (SupportMessage & { user?: { firstName: string | null; lastName: string | null } | null })[] }
   onBack?: () => void
-  backHref?: string
+  backHref?: Route
 }
 
 function getStatusBadgeClass(status: string) {
@@ -193,7 +194,7 @@ export function UserTicketDetail({ ticket, onBack, backHref }: UserTicketDetailP
       <div className="h-14 px-4 lg:px-6 bg-card border-b flex items-center gap-3 shrink-0 z-10">
         {backHref ? (
           <Button variant="ghost" size="icon" className="h-8 w-8 -ml-1" asChild>
-            <Link href={backHref as any} aria-label="Back to tickets">
+            <Link href={backHref} aria-label="Back to tickets">
               <ChevronLeftIcon className="h-4 w-4" />
             </Link>
           </Button>
@@ -290,7 +291,7 @@ export function UserTicketDetail({ ticket, onBack, backHref }: UserTicketDetailP
           }
 
           // Admin messages stay left-aligned to separate support replies from user replies.
-          const adminUser = (msg as any).user as { firstName?: string | null; lastName?: string | null } | undefined
+          const adminUser = msg.user
           const adminInitials = adminUser
             ? `${adminUser.firstName?.[0] ?? ""}${adminUser.lastName?.[0] ?? ""}`.toUpperCase() || "ST"
             : "ST"

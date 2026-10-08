@@ -18,6 +18,7 @@ import { revalidatePath } from "next/cache";
 import ms from "ms";
 import { getSessionFromCookie } from "@/utils/auth";
 import { headers } from "next/headers";
+import { supportTicketStatusTuple, supportTicketCategoryTuple } from "@/db/schema";
 
 const submitTicketSchema = z.object({
   subject: z.string().min(1, "Subject is required").max(255, "Subject is too long"),
@@ -104,8 +105,8 @@ export const deleteTicketAction = createServerAction()
   });
 
 const getAllTicketsSchema = z.object({
-  status: z.string().optional(),
-  category: z.string().optional(),
+  status: z.string().optional().transform(value => value === "all" ? undefined : value).pipe(z.enum(supportTicketStatusTuple).optional()),
+  category: z.string().optional().transform(value => value === "all" ? undefined : value).pipe(z.enum(supportTicketCategoryTuple).optional()),
   page: z.number().min(1).default(1),
 });
 

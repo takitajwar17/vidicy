@@ -39,6 +39,8 @@ import { updateTicketStatusAction, deleteTicketAction, addSupportMessageAction, 
 
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import type { SupportTicket, SupportMessage } from "@/db/schema"
+import { z } from "zod"
+import { supportTicketCategoryTuple, supportTicketStatusTuple, supportTicketPriorityTuple } from "@/db/schema"
 
 interface UploadedScreenshot {
   fileKey: string
@@ -285,9 +287,11 @@ export function TicketDetail({ ticket, onBack }: TicketDetailProps) {
           <div className="flex flex-col gap-1">
             <span className="text-xs font-semibold uppercase text-muted-foreground tracking-wider ml-0.5">Category</span>
             <Select value={category} onValueChange={(val) => {
-              const newCategory = val as any
+              const parsed = z.enum(supportTicketCategoryTuple).safeParse(val)
+              if (!parsed.success) return
+              const newCategory = parsed.data
               setCategory(newCategory)
-              executeSave({ ticketId: ticket.id, status: status as any, priority: priority as any, category: newCategory, adminNote })
+              executeSave({ ticketId: ticket.id, status: status, priority: priority, category: newCategory, adminNote })
             }}>
               <SelectTrigger className="h-8 w-auto min-w-[120px] text-xs font-medium border-border/60 bg-muted/20 hover:bg-muted/40 transition-colors shadow-xs">
                 <SelectValue />
@@ -305,9 +309,11 @@ export function TicketDetail({ ticket, onBack }: TicketDetailProps) {
           <div className="flex flex-col gap-1">
             <span className="text-xs font-semibold uppercase text-muted-foreground tracking-wider ml-0.5">Status</span>
             <Select value={status} onValueChange={(val) => {
-              const newStatus = val as any
+              const parsed = z.enum(supportTicketStatusTuple).safeParse(val)
+              if (!parsed.success) return
+              const newStatus = parsed.data
               setStatus(newStatus)
-              executeSave({ ticketId: ticket.id, status: newStatus, priority: priority as any, category: category as any, adminNote })
+              executeSave({ ticketId: ticket.id, status: newStatus, priority: priority, category: category, adminNote })
             }}>
               <SelectTrigger className="h-8 w-auto min-w-[120px] text-xs font-medium border-border/60 bg-muted/20 hover:bg-muted/40 transition-colors shadow-xs">
                 <SelectValue />
@@ -324,9 +330,11 @@ export function TicketDetail({ ticket, onBack }: TicketDetailProps) {
           <div className="flex flex-col gap-1">
             <span className="text-xs font-semibold uppercase text-muted-foreground tracking-wider ml-0.5">Priority</span>
             <Select value={priority} onValueChange={(val) => {
-              const newPriority = val as any
+              const parsed = z.enum(supportTicketPriorityTuple).safeParse(val)
+              if (!parsed.success) return
+              const newPriority = parsed.data
               setPriority(newPriority)
-              executeSave({ ticketId: ticket.id, status: status as any, priority: newPriority, category: category as any, adminNote })
+              executeSave({ ticketId: ticket.id, status: status, priority: newPriority, category: category, adminNote })
             }}>
               <SelectTrigger className="h-8 w-auto min-w-[120px] text-xs font-medium border-border/60 bg-muted/20 hover:bg-muted/40 transition-colors shadow-xs">
                 <SelectValue />
@@ -461,7 +469,7 @@ export function TicketDetail({ ticket, onBack }: TicketDetailProps) {
             onChange={(e) => setAdminNote(e.target.value)} 
             className="bg-transparent border-none text-sm w-full focus:outline-none placeholder:text-muted-foreground/40 font-medium py-1" 
             placeholder="Add internal reminders or notes..." 
-            onBlur={() => executeSave({ ticketId: ticket.id, status: status as any, priority: priority as any, category: category as any, adminNote })}
+            onBlur={() => executeSave({ ticketId: ticket.id, status: status, priority: priority, category: category, adminNote })}
           />
         </div>
 

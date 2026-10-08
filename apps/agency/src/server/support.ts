@@ -9,13 +9,14 @@ import {
   SUPPORT_TICKET_STATUS,
   userTable,
 } from "@/db/schema";
-import { eq, desc, asc, and, inArray, count, or, gt, isNull, isNotNull } from "drizzle-orm";
+import { eq, desc, asc, and, inArray, count, or, gt, isNull, isNotNull, sql } from "drizzle-orm";
 import { sendSupportTicketAdminNotification, sendSupportTicketReplyNotification, sendSupportTicketUserReplyNotification } from "@/utils/email";
 import { deleteFromR2, getR2Bucket } from "@/lib/r2";
 import { logger } from "@/infra/logger";
 import { ZSAError } from "zsa";
 import { SUPPORT_TICKETS_PER_PAGE } from "@/constants";
 import { invalidateUnreadCount, invalidateAdminUnreadCount } from "@/server/unread-counts";
+import { isSupportScreenshotOwnedBy, validateSupportScreenshots } from "@/server/support-attachments";
 import { sendEmailBestEffort } from "@/lib/best-effort-email";
 
 export async function submitSupportTicket({
@@ -28,13 +29,17 @@ export async function submitSupportTicket({
 }: {
   subject: string;
   description: string;
-  category: string;
+  category: typeof supportTicketTable.$inferInsert.category;
   screenshotUrls?: string[];
   userAgent?: string;
   ipAddress?: string;
 }) {
   const session = await getSessionFromCookie();
   if (!session) throw new ZSAError("NOT_AUTHORIZED", "You must be signed in to submit a support ticket");
+
+  const validatedScreenshots = await validateSupportScreenshots({
+    keys: screenshotUrls, userId: session.user.id, isAdmin: session.user.role === "admin",
+  });
 
   const db = getDB();
 
@@ -45,7 +50,7 @@ export async function submitSupportTicket({
       subject,
       description,
       category,
-      screenshotUrls: screenshotUrls && screenshotUrls.length > 0 ? screenshotUrls : null,
+      screenshotUrls: validatedScreenshots,
       userAgent: userAgent || null,
       ipAddress: ipAddress || null,
       lastUpdatedAt: new Date(),
@@ -279,8 +284,8 @@ export async function getAllSupportTicketSummaries({
   category,
   page = 1,
 }: {
-  status?: string;
-  category?: string;
+  status?: typeof supportTicketTable.$inferInsert.status;
+  category?: typeof supportTicketTable.$inferInsert.category;
   page?: number;
 }) {
   await requireAdmin();
@@ -349,8 +354,8 @@ export async function getAllSupportTickets({
   category,
   page = 1,
 }: {
-  status?: string;
-  category?: string;
+  status?: typeof supportTicketTable.$inferInsert.status;
+  category?: typeof supportTicketTable.$inferInsert.category;
   page?: number;
 }) {
   await requireAdmin();
@@ -427,9 +432,9 @@ export async function updateTicketStatus({
   adminNote,
 }: {
   ticketId: string;
-  status?: string;
-  priority?: string;
-  category?: string;
+  status?: typeof supportTicketTable.$inferInsert.status;
+  priority?: typeof supportTicketTable.$inferInsert.priority;
+  category?: typeof supportTicketTable.$inferInsert.category;
   adminNote?: string;
 }) {
   await requireAdmin();
@@ -516,26 +521,39 @@ export async function deleteTicket({ ticketId }: { ticketId: string }) {
   });
   if (!existing) throw new ZSAError("NOT_FOUND", "Ticket not found");
 
-  // Collect all screenshot R2 keys from ticket and its messages
   const messages = await db.query.supportMessageTable.findMany({
     where: eq(supportMessageTable.ticketId, ticketId),
-    columns: { screenshotUrls: true },
+    columns: { screenshotUrls: true, userId: true },
   });
-
-  const r2Keys: string[] = [
-    ...(existing.screenshotUrls ?? []),
-    ...messages.flatMap(m => m.screenshotUrls ?? []),
+  const attachments = [
+    ...(existing.screenshotUrls ?? []).map(fileKey => ({ fileKey, userId: existing.userId })),
+    ...messages.flatMap(message => (message.screenshotUrls ?? []).map(fileKey => ({ fileKey, userId: message.userId }))),
   ];
 
   await db.delete(supportTicketTable).where(eq(supportTicketTable.id, ticketId));
 
-  // Clean up R2 objects (non-fatal — DB record is already deleted)
-  if (r2Keys.length > 0) {
+  // Stored fields may predate ownership checks. Validate each key and skip
+  // uploads with existing references in another ticket or message.
+  if (attachments.length > 0) {
     try {
-      const r2 = await getR2Bucket();
-      await deleteFromR2(r2, r2Keys);
+      const bucket = await getR2Bucket();
+      const keys = new Set<string>();
+      for (const { fileKey, userId } of attachments) {
+        if (!fileKey.startsWith("support-screenshots/") || keys.has(fileKey)) continue;
+        if (!isSupportScreenshotOwnedBy({ fileKey, userId, object: await bucket.head(fileKey) })) continue;
+        const [otherTicket, otherMessage] = await Promise.all([
+          db.query.supportTicketTable.findFirst({
+            where: sql`${supportTicketTable.screenshotUrls} @> ${JSON.stringify([fileKey])}::jsonb`, columns: { id: true },
+          }),
+          db.query.supportMessageTable.findFirst({
+            where: sql`${supportMessageTable.screenshotUrls} @> ${JSON.stringify([fileKey])}::jsonb`, columns: { id: true },
+          }),
+        ]);
+        if (!otherTicket && !otherMessage) keys.add(fileKey);
+      }
+      await deleteFromR2(bucket, [...keys]);
     } catch (cleanupError) {
-      logger.error("R2 cleanup failed for support ticket screenshots — orphaned files may remain", { ticketId, r2Keys, cleanupError });
+      logger.error("Support screenshot cleanup failed", { ticketId, error: cleanupError });
     }
   }
 }
@@ -647,6 +665,10 @@ export async function addSupportMessage({
     }
   }
 
+  const validatedScreenshots = await validateSupportScreenshots({
+    keys: screenshotUrls, userId: session.user.id, isAdmin,
+  });
+
   const [message] = await db
     .insert(supportMessageTable)
     .values({
@@ -654,7 +676,7 @@ export async function addSupportMessage({
       userId: session.user.id,
       content,
       isAdminReply: isAdmin && isAdminReply,
-      screenshotUrls: screenshotUrls && screenshotUrls.length > 0 ? screenshotUrls : null,
+      screenshotUrls: validatedScreenshots,
     })
     .returning();
 

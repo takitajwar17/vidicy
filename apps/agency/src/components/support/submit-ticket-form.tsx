@@ -68,7 +68,7 @@ export function SubmitTicketForm({ onSuccess }: SubmitTicketFormProps = {}) {
     formState: { errors },
   } = useForm<FormValues>({
     resolver: zodResolver(schema),
-    defaultValues: { subject: "", description: "" } as any,
+    defaultValues: { subject: "", description: "" },
   })
 
   const description = watch("description")

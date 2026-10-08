@@ -21,16 +21,7 @@ import {
 } from "@/components/ui/collapsible"
 import { getAllTicketsAction, getSupportTicketDetailAction } from "@/actions/support.action"
 
-type TicketSummaryWithMeta = SupportTicket & {
-  userFirstName: string | null
-  userLastName: string | null
-  userEmail: string | null
-  userAvatar: string | null
-  lastMessageContent: string | null
-  lastMessageIsAdminReply: boolean | null
-  lastMessageIsSystemMessage: boolean | null
-  messageSearchText: string
-}
+type TicketSummaryWithMeta = Awaited<ReturnType<typeof import("@/server/support").getAllSupportTicketSummaries>>["tickets"][number];
 
 type TicketDetailWithMeta = SupportTicket & {
   userFirstName: string | null

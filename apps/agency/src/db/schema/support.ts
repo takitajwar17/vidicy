@@ -13,7 +13,7 @@ export const SUPPORT_TICKET_CATEGORY = {
   OTHER: 'other',
 } as const;
 
-export const supportTicketCategoryTuple = Object.values(SUPPORT_TICKET_CATEGORY) as [string, ...string[]];
+export const supportTicketCategoryTuple = Object.values(SUPPORT_TICKET_CATEGORY) as [(typeof SUPPORT_TICKET_CATEGORY)[keyof typeof SUPPORT_TICKET_CATEGORY], ...(typeof SUPPORT_TICKET_CATEGORY)[keyof typeof SUPPORT_TICKET_CATEGORY][]];
 
 // Support ticket statuses
 export const SUPPORT_TICKET_STATUS = {
@@ -23,7 +23,7 @@ export const SUPPORT_TICKET_STATUS = {
   CLOSED: 'closed',
 } as const;
 
-export const supportTicketStatusTuple = Object.values(SUPPORT_TICKET_STATUS) as [string, ...string[]];
+export const supportTicketStatusTuple = Object.values(SUPPORT_TICKET_STATUS) as [(typeof SUPPORT_TICKET_STATUS)[keyof typeof SUPPORT_TICKET_STATUS], ...(typeof SUPPORT_TICKET_STATUS)[keyof typeof SUPPORT_TICKET_STATUS][]];
 
 // Support ticket priorities
 export const SUPPORT_TICKET_PRIORITY = {
@@ -32,7 +32,7 @@ export const SUPPORT_TICKET_PRIORITY = {
   HIGH: 'high',
 } as const;
 
-export const supportTicketPriorityTuple = Object.values(SUPPORT_TICKET_PRIORITY) as [string, ...string[]];
+export const supportTicketPriorityTuple = Object.values(SUPPORT_TICKET_PRIORITY) as [(typeof SUPPORT_TICKET_PRIORITY)[keyof typeof SUPPORT_TICKET_PRIORITY], ...(typeof SUPPORT_TICKET_PRIORITY)[keyof typeof SUPPORT_TICKET_PRIORITY][]];
 
 // Support ticket table
 export const supportTicketTable = pgTable("support_ticket", {

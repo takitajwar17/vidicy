@@ -3,6 +3,7 @@ import "server-only";
 import { NextResponse } from "next/server";
 import { eq, inArray } from "drizzle-orm";
 import { getRuntimeContext } from "@/infra/runtime-context";
+import { isSupportScreenshotOwnedBy } from "@/server/support-attachments";
 import { logger } from "@/infra/logger";
 import { CACHE_MAX_AGE_1_HOUR } from "@/constants";
 import { getDB } from "@/db";
@@ -25,52 +26,36 @@ export async function GET(request: Request) {
     }
 
     const isAdmin = session.user.role === "admin";
-
-    // Non-admins can only view screenshots they own or that belong to their own tickets
-    if (!isAdmin) {
-      const ownPrefix = `support-screenshots/${session.user.id}/`;
-      const adminPrefix = "support-screenshots/admin/";
-
-      if (fileKey.startsWith(ownPrefix)) {
-        // always allowed: caller's own support-screenshots/{userId}/...
-      } else if (fileKey.startsWith(adminPrefix)) {
-        // only allow admin-prefixed screenshots that are attached to this user's ticket thread
-        const db = getDB();
-        const userTickets = await db.query.supportTicketTable.findMany({
-          where: eq(supportTicketTable.userId, session.user.id),
-          columns: { id: true, screenshotUrls: true },
-        });
-
-        let hasAccess = userTickets.some((ticket) => ticket.screenshotUrls?.includes(fileKey));
-
-        if (!hasAccess) {
-          const ticketIds = userTickets.map((ticket) => ticket.id);
-          if (ticketIds.length > 0) {
-            const messages = await db.query.supportMessageTable.findMany({
-              where: inArray(supportMessageTable.ticketId, ticketIds),
-              columns: { screenshotUrls: true },
-            });
-            hasAccess = messages.some((message) => message.screenshotUrls?.includes(fileKey));
-          }
-        }
-
-        if (!hasAccess) {
-          return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-        }
-      } else {
-        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-      }
+    const ownPrefix = `support-screenshots/${session.user.id}/`;
+    if (!isAdmin && !fileKey.startsWith(ownPrefix) && !fileKey.startsWith("support-screenshots/admin/")) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
-
     const { env } = await getRuntimeContext({ async: true });
-
-    if (!env.R2) {
-      return NextResponse.json({ error: "Storage unavailable" }, { status: 503 });
-    }
-
+    if (!env.R2) return NextResponse.json({ error: "Storage unavailable" }, { status: 503 });
     const object = await env.R2.get(fileKey);
-    if (!object) {
-      return NextResponse.json({ error: "Not found" }, { status: 404 });
+    if (!object) return NextResponse.json({ error: "Not found" }, { status: 404 });
+
+    if (!isAdmin) {
+      let hasAccess = fileKey.startsWith(ownPrefix)
+        && isSupportScreenshotOwnedBy({ fileKey, object, userId: session.user.id });
+      if (!hasAccess && fileKey.startsWith("support-screenshots/admin/")) {
+        const db = getDB();
+        const tickets = await db.query.supportTicketTable.findMany({
+          where: eq(supportTicketTable.userId, session.user.id),
+          columns: { id: true, userId: true, screenshotUrls: true },
+        });
+        hasAccess = tickets.some(ticket => ticket.screenshotUrls?.includes(fileKey)
+          && isSupportScreenshotOwnedBy({ fileKey, object, userId: ticket.userId }));
+        if (!hasAccess && tickets.length > 0) {
+          const messages = await db.query.supportMessageTable.findMany({
+            where: inArray(supportMessageTable.ticketId, tickets.map(ticket => ticket.id)),
+            columns: { screenshotUrls: true, userId: true },
+          });
+          hasAccess = messages.some(message => message.screenshotUrls?.includes(fileKey)
+            && isSupportScreenshotOwnedBy({ fileKey, object, userId: message.userId }));
+        }
+      }
+      if (!hasAccess) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
     const bytes = await object.arrayBuffer();

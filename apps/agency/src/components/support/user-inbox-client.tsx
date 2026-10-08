@@ -24,12 +24,7 @@ import {
   getUserTicketsAction,
 } from "@/actions/support.action";
 
-export type UserTicketSummary = SupportTicket & {
-  lastMessageContent: string | null;
-  lastMessageIsAdminReply: boolean | null;
-  lastMessageIsSystemMessage: boolean | null;
-  messageSearchText: string;
-};
+export type UserTicketSummary = Awaited<ReturnType<typeof import("@/server/support").getUserSupportTicketSummaries>>["tickets"][number];
 
 export type UserTicketDetailData = SupportTicket & {
   messages: SupportMessage[];
