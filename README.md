@@ -1,254 +1,245 @@
-<div align="center">
-  <h1>Vidicy</h1>
-  <p><strong>A production-ready SaaS built on the Edge with Next.js 16 and Cloudflare Workers</strong></p>
-  
-  <p>
-    <a href="https://nextjs.org/"><img src="https://img.shields.io/badge/Next.js-16-black?style=flat-square&logo=next.js" alt="Next.js 16" /></a>
-    <a href="https://workers.cloudflare.com/"><img src="https://img.shields.io/badge/Cloudflare-Workers-F38020?style=flat-square&logo=cloudflare" alt="Cloudflare Workers" /></a>
-    <a href="https://www.typescriptlang.org/"><img src="https://img.shields.io/badge/TypeScript-Ready-3178C6?style=flat-square&logo=typescript" alt="TypeScript" /></a>
-    <a href="https://tailwindcss.com/"><img src="https://img.shields.io/badge/Tailwind-CSS-38B2AC?style=flat-square&logo=tailwind-css" alt="Tailwind CSS" /></a>
-  </p>
-</div>
+# Vidicy
 
-<br />
+AI document review for visa agencies.
 
-## Overview
+Vidicy helps agency staff manage visa cases, collect documents, review AI findings, and track corrections before submission. The agency keeps control of the review. An AI evaluation does not determine a visa outcome.
 
-Vidicy is an intelligent platform designed to help users prepare, evaluate, and perfect their visa applications. Built as a high-performance Edge application, it runs entirely on Cloudflare Workers using OpenNext.
+The application is in `apps/agency`. It runs on Node.js and Cloud Run.
 
-The platform provides users with **smart document checklists**, **AI-powered readiness evaluations**, and an **expert chatbot (Atlas)** to analyze their documents, highlight risks, and suggest improvements before they apply for their visas.
+This README is the entry point for developers and technical reviewers. The [technical reference](apps/agency/README.md) covers service contracts, identities, failure handling, recovery, and dated deployment observations.
 
-Production deploys are triggered from GitHub Actions on pushes to `main`.
+## Contents
 
-## Core Features
+- [Agency workflow](#agency-workflow)
+- [Technology and services](#technology-and-services)
+- [System architecture](#system-architecture)
+- [AI configuration](#ai-configuration)
+- [Runtime configuration](#runtime-configuration)
+- [Commands](#commands)
+- [Deployment](#deployment)
+- [Technical documentation](#technical-documentation)
+- [Code map](#code-map)
 
-- **Robust Authentication:** Email/Password and Google OAuth, powered by Lucia Auth.
-- **Multi-tenancy & Teams:** Team-based architecture with system/custom roles, JSON-stored granular permissions, and complete tenant isolation.
-- **Credit-based Billing:** Seamless Stripe integration for credit packages, monthly allocations, and full transaction history tracking.
-- **AI-Powered Visa Tools:**
-  - **Smart Checklists:** Dynamically generated document requirements based on destination and visa type.
-  - **AI Evaluation:** Automated document review scoring, risk factor identification, and actionable recommendations.
-  - **Atlas Chat:** An AI assistant that knows the user's specific application and documents, ready to answer questions and provide interview tips.
-- **Admin Support Desk:** A built-in ticketing system for user inquiries and enterprise leads.
-- **Edge Native:** Runs globally on Cloudflare Workers, utilizing D1 (SQLite), KV (Sessions/Caching), and R2 (File Storage).
+## Agency workflow
 
-## Tech Stack
+1. Create a case with the applicant, destination, visa type, and travel details.
+2. Generate a document checklist for that case.
+3. Upload PDFs or images and assign each file to a checklist requirement.
+4. Extract document content and run an AI evaluation.
+5. Review the findings. Resolve or dismiss tracked issues and check case readiness.
+6. Replace or correct documents when needed. Document changes invalidate affected evaluations and reports.
 
-### Frontend
+The dashboard has views for applications, clients, documents, issues, reports, and staff. It also includes support tickets, announcements, account settings, and an admin area.
 
-- **Framework:** [Next.js 16](https://nextjs.org/) (App Router, React Server Components)
-- **Styling:** [Tailwind CSS v4](https://tailwindcss.com/)
-- **Components:** [Shadcn UI](https://ui.shadcn.com/) (built on Radix UI) & HeroUI
-- **State Management:** [Zustand](https://zustand-demo.pmnd.rs/) (client state) & [NUQS](https://nuqs.47ng.com/) (URL search params)
-- **Emails:** [React Email](https://react.email/)
+### Implementation limits
 
-### Backend & Infrastructure
+- The reports page lists stored client reports. Report generation and review finalization actions exist, but their `AgencyCaseToolbar` component is not mounted in the current case page. Report export and delivery are not complete user flows.
+- Document chat endpoints remain in the code. Atlas is not a separate step in the current agency case interface.
 
-- **Deployment:** [OpenNext](https://opennext.js.org/) on Cloudflare Workers
-- **Database:** Cloudflare D1 (Serverless SQLite) with [Drizzle ORM](https://orm.drizzle.team/)
-- **Storage:** Cloudflare R2 (Object Storage) & Cloudflare KV (Key-Value)
-- **Authentication:** Lucia Auth + KV-based session management
+## Technology and services
 
----
+| Area | Current implementation |
+| --- | --- |
+| Web application | Next.js 16.1.6, React 19, TypeScript, App Router |
+| Interface | Tailwind CSS 4, Radix UI components, Zustand, nuqs |
+| Application hosting | Cloud Run with a standalone Next.js container |
+| Database | Cloud SQL for PostgreSQL, `pg`, and Drizzle ORM |
+| Documents and screenshots | Cloud Storage |
+| Sessions, tokens, rate limits, and caches | Redis through the Memorystore adapter |
+| Document context search | Vertex AI Vector Search |
+| Document processing jobs | Cloud Tasks with authenticated internal HTTP routes |
+| Recovery jobs | An internal document reconciliation route for Cloud Scheduler |
+| Authentication | Email/password and Google OAuth; sessions stored in Redis |
+| Email | Resend and React Email templates |
+| CAPTCHA | Cloudflare Turnstile, when enabled |
+| Error reporting | Sentry for Node.js |
+| Runtime secrets | Secret Manager references injected into Cloud Run |
+| Build and release | GitHub Actions, Cloud Build, and Artifact Registry |
+| Operations | Cloud Logging for platform/build logs; application JSON logs and Sentry |
 
-## Getting Started
+## System architecture
 
-### Prerequisites
-
-Ensure you have the following installed on your machine:
-
-- [Node.js](https://nodejs.org/en/) 22.x
-- [pnpm](https://pnpm.io/) 10.x (via Corepack is recommended)
-- Optional: `nvm` or another Node version manager if you want to consume the repo’s `.nvmrc` version hint automatically.
-- Optional: a global [Wrangler CLI](https://developers.cloudflare.com/workers/wrangler/install-and-update/) install. The repo already pins `wrangler` in `devDependencies`, and the documented `pnpm` scripts use that version.
-
-The repo includes `.nvmrc` and `package.json` `engines` to document the expected Node major as 22.
-
-### 1. Clone & Install dependencies
-
-```bash
-git clone https://github.com/your-username/vdc-mvp.git
-cd vdc-mvp
-corepack enable
-# Optional, if you use nvm:
-nvm use
-pnpm install
+```mermaid
+flowchart TB
+    Staff[Agency staff browser] --> App
+    subgraph Cloud[Cloud services]
+        App[Cloud Run / Next.js]
+        SQL[(Cloud SQL / PostgreSQL)]
+        Redis[(Memorystore / Redis)]
+        Files[(Cloud Storage)]
+        Tasks[Cloud Tasks]
+        Scheduler[Cloud Scheduler]
+        Models[Gemini through Vertex AI]
+        Search[Vertex AI Vector Search]
+        Secrets[Secret Manager]
+        App --> SQL
+        App --> Redis
+        App --> Files
+        App --> Tasks
+        Tasks -->|OIDC extraction request| App
+        Scheduler -->|OIDC reconciliation request| App
+        App --> Models
+        App --> Search
+        Secrets -->|Versioned runtime settings| App
+    end
+    App --> Providers[OpenAI / Perplexity / Resend / Turnstile]
 ```
 
-### 2. Environment Setup
+### Data and request flow
 
-Create `.env` from the shipped example for plain `pnpm dev` and repo-local tooling:
+The server checks the user's session and case permission before accepting a document. It writes the file to Cloud Storage, commits its database record and checklist/review changes, then awaits Cloud Tasks acceptance before returning upload success.
 
-```bash
-cp .env.example .env
+Cloud Tasks calls an authenticated internal route on the same service. The route acquires a PostgreSQL lock for the document, extracts content, and indexes document chunks. Cloud Scheduler identifies old or failed work and reserves bounded recovery attempts. PostgreSQL remains authoritative for document identity and case state; vector results are checked against it before use.
+
+These steps are separate service operations. File storage, SQL commit, and queue creation are not one atomic transaction. The [sequence diagram and failure map](apps/agency/README.md#system-boundaries) describe what can remain after a partial failure.
+
+### Why the services fit this implementation
+
+| Service | Role in this code | Technical boundary |
+| --- | --- | --- |
+| Cloud Run | Hosts the standalone Next.js server and processing routes | Web requests and document tasks share instance resources |
+| Cloud SQL | Stores related case data and supports atomic SQL batches and advisory locks | Pool sizes and revision count determine connection pressure |
+| Cloud Storage | Stores source files and larger vector metadata | Object generations identify bytes; storage writes do not join SQL transactions |
+| Memorystore | Supplies TTL-based sessions, tokens, counters, and caches | Connection loss can affect user access; the current rate-limit sequence is not atomic |
+| Cloud Tasks | Delivers work outside the original upload request | Delivery can repeat; handlers need locks, stable IDs, and reusable state |
+| Cloud Scheduler | Starts periodic recovery and metadata cleanup | Recovery is bounded and can require operator action |
+| Vertex AI models | Extract document content and produce structured review output | Provider access, schema checks, model quality, and request deadlines are separate concerns |
+| Vertex AI Vector Search | Retrieves filtered document context | Serving updates are asynchronous; database identity checks protect retrieval |
+| Secret Manager and IAM | Supply runtime credentials and restrict machine access | User OAuth, runtime ADC, deployment federation, and task OIDC are different identity paths |
+
+See the [service-by-service reference](apps/agency/README.md#cloud-run) for the implementation details and source links. The [observed deployment profile](apps/agency/README.md#observed-deployment-profile) records actual settings from 19 October 2026. Those settings can change independently of this repository.
+
+## AI configuration
+
+These are the model IDs requested by the checked-in code. The project must have access to the configured models and services.
+
+| Task | Provider and configured model |
+| --- | --- |
+| Document extraction | Vertex AI: `gemini-3.8-flash` |
+| Document evaluation | Vertex AI: `gemini-4-argon` |
+| Checklist research | Perplexity: `sonar-pro` |
+| Structured checklist generation | OpenAI: `gpt-4o` |
+| Document embeddings | OpenAI: `text-embedding-3-small`, with 1,536 dimensions |
+| Evaluation translation | OpenAI: `gpt-4.1-mini` |
+| Document chat | OpenAI: `gpt-5.4`, with `gpt-4.1` as fallback |
+
+PDF extraction first tries native text extraction. It then tries Gemini when needed. OpenAI extraction fallback uses `gpt-4.1`, then `gpt-4.1-mini`.
+
+`GEMINI_DOCUMENT_EXTRACTION=false` disables Gemini extraction. `OPENAI_DOCUMENT_EXTRACTION_FALLBACK=false` disables the OpenAI extraction fallback. Both paths are enabled by default outside tests. Document evaluation uses Vertex AI and does not switch to OpenAI when the provider fails.
+
+Model constants are in [gemini.ts](apps/agency/src/lib/gemini.ts). Extraction is in [pdf-parser.ts](apps/agency/src/services/pdf-parser.ts). Evaluation is in [gemini-evaluation.ts](apps/agency/src/lib/gemini-evaluation.ts).
+
+## Runtime configuration
+
+The application requires PostgreSQL, Redis, Cloud Storage, Vertex AI, and Cloud Tasks. Provision these services and grant the Cloud Run service identity the required access before deployment. The repository does not provision a complete cloud environment.
+
+Configure the service with `NEXT_PUBLIC_SITE_URL`, `GOOGLE_CLOUD_PROJECT`, `GOOGLE_CLOUD_LOCATION`, `GOOGLE_CLOUD_REGION`, and `GCS_DOCUMENT_BUCKET`. Set `DATABASE_URL` or the standard `PGHOST`, `PGPORT`, `PGDATABASE`, `PGUSER`, and `PGPASSWORD` variables for PostgreSQL, and `REDIS_URL` for Redis. Cloud Run can use a Cloud SQL socket path in `PGHOST`.
+
+The cloud service adapters use Application Default Credentials from the Cloud Run service identity. Store private provider values in Secret Manager and inject them into the service configuration.
+
+Configure these values for the features you use:
+
+| Feature | Environment variables |
+| --- | --- |
+| Google OAuth | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` |
+| Turnstile | `NEXT_PUBLIC_TURNSTILE_SITE_KEY`, `TURNSTILE_SECRET_KEY` |
+| OpenAI | `OPENAI_API_KEY` |
+| Perplexity | `PERPLEXITY_API_KEY` |
+| Email | `RESEND_API_KEY`, `EMAIL_FROM`, `EMAIL_FROM_NAME`; optional `EMAIL_REPLY_TO` |
+| Error reporting | `SENTRY_DSN` |
+| Vector search | `VERTEX_VECTOR_INDEX`, `VERTEX_VECTOR_INDEX_ENDPOINT`, `VERTEX_VECTOR_DEPLOYED_INDEX_ID`, `VERTEX_VECTOR_PUBLIC_ENDPOINT_DOMAIN` |
+| Document tasks | `GOOGLE_CLOUD_SERVICE_ACCOUNT`, `DOCUMENT_TASK_BASE_URL` |
+| SQL diagnostics | Optional `DB_SQL_LOG=true` |
+
+Google OAuth uses `${NEXT_PUBLIC_SITE_URL}/sso/google/callback`. Register that exact callback in the OAuth client. Add the application hostname to Turnstile when CAPTCHA is enabled.
+
+The vector index and endpoint must be in the same project and region. The index must accept 1,536-dimensional embeddings.
+
+Document uploads queue extraction work in `vidicy-document-extraction`. `DOCUMENT_TASK_BASE_URL` must be an HTTPS `run.app` origin. It is both the task destination and the OIDC audience. `GOOGLE_CLOUD_SERVICE_ACCOUNT` identifies the account permitted to call the internal routes.
+
+### Schema changes
+
+Generate named PostgreSQL migrations with `pnpm db:generate:agency <name>`. Review the generated SQL and metadata, then apply the schema change to the intended database before deploying code that requires it. Database schema changes are separate from the image release.
+
+## Commands
+
+Run these from the repository root:
+
+| Command | Effect |
+| --- | --- |
+| `pnpm dev` | Start the agency development server on port 3002 |
+| `pnpm build` | Build the workspace application |
+| `pnpm lint` | Run the application ESLint command |
+| `pnpm test` | Run the standard Vitest suite; exclude model evaluation suites |
+| `pnpm db:generate:agency <name>` | Generate a named PostgreSQL migration |
+| `pnpm db:migrate:dev:agency` | Apply PostgreSQL migrations to the configured target |
+| `pnpm --filter @vidicy/agency run build:analyze` | Build with bundle analysis |
+| `PORT=3002 pnpm --filter @vidicy/agency run preview` | Serve an existing production build with Next.js |
+| `pnpm --filter @vidicy/agency run email:dev` | Open the email preview server on port 3003 |
+| `pnpm --filter @vidicy/agency run eval` | Run the separate model evaluation suites |
+| `pnpm deploy:agency` | Build and deploy the container to the configured Cloud Run service |
+| `pnpm --filter @vidicy/agency run deploy:google:build` | Build and publish the container without deploying it |
+
+`preview` serves an existing production Next.js build.
+
+## Deployment
+
+The [deployment workflow](.github/workflows/deploy.yml) runs on pushes to `main` and on manual dispatch. It:
+
+1. Authenticates with Workload Identity Federation.
+2. Builds the application container with [Cloud Build](apps/agency/cloudbuild.yaml).
+3. Pushes the image to Artifact Registry.
+4. Updates the Cloud Run service using the immutable image digest.
+
+The checked-in workflow and manual deployment script target project `eco-azimuth-441108-s4`, region `asia-southeast1`, and service `vidicy-agency`. The workflow also restricts deployment to the configured GitHub repository ID. Review these settings before using a different repository or project.
+
+The release updates only the container image. It preserves the service identity, network attachments, runtime variables, secrets, and access policy. Database migrations are a separate release step; the workflow does not apply them.
+
+Cloud Tasks calls `/api/internal/document-extraction`. Cloud Scheduler can call `/api/internal/document-reconciliation` to recover pending work. Both routes check the caller's Google identity token. Their queues, schedules, permissions, and service configuration must already exist.
+
+`/api/health` checks PostgreSQL, Redis, and Cloud Storage. It requires an admin session.
+
+## Technical documentation
+
+The [technical reference](apps/agency/README.md) covers architecture, design choices, service behavior, and reliability evidence. Service-specific sources are linked next to the relevant explanation.
+
+| Question | Reference |
+| --- | --- |
+| What happens between upload and completed indexing? | [System boundaries and sequence](apps/agency/README.md#system-boundaries) |
+| What is deployed, and what is only configured in source? | [Dated deployment observations](apps/agency/README.md#observed-deployment-profile) |
+| How do SQL transactions, Redis TTLs, and object generations work here? | [SQL](apps/agency/README.md#cloud-sql-for-postgresql), [Redis](apps/agency/README.md#memorystore-for-redis), [Storage](apps/agency/README.md#cloud-storage) |
+| How are duplicate jobs and failed uploads handled? | [Task delivery and reconciliation](apps/agency/README.md#cloud-tasks-and-cloud-scheduler) |
+| How are AI output and retrieved document context checked? | [Gemini](apps/agency/README.md#gemini-on-vertex-ai), [Vector Search](apps/agency/README.md#vertex-ai-vector-search) |
+| Which identity can access which service? | [Identity, IAM, and secrets](apps/agency/README.md#identity-iam-and-secrets) |
+| How is a container built, released, or rolled back? | [Release contract](apps/agency/README.md#build-release-and-rollback) |
+| What should operators measure or investigate? | [Monitoring and SLOs](apps/agency/README.md#monitoring-and-service-objectives), [recovery](apps/agency/README.md#recovery-procedures) |
+| Where does document data go, and how long can it remain? | [Location and retention](apps/agency/README.md#data-location-and-retention) |
+| What limits processing capacity and cost? | [Capacity and cost controls](apps/agency/README.md#capacity-and-cost-controls) |
+| What is incomplete or still needs an operating decision? | [Current limits](apps/agency/README.md#current-limits-and-follow-up-work) |
+
+The documentation distinguishes source behavior, observed service settings, and recommended controls. It does not treat an architecture diagram, a managed service, or a successful container build as proof of measured availability, accuracy, load capacity, or disaster recovery.
+
+## Code map
+
+```text
+apps/agency/
+  src/
+    actions/                Case, checklist, evaluation, and account actions
+    app/                    Public pages, dashboard, case workspace, and API routes
+    components/agency/      Case document desk, issue controls, and shared agency UI
+    db/schema/              Current PostgreSQL schema
+    db/postgres-migrations/ PostgreSQL migrations and Drizzle metadata
+    infra/google/           Storage, Redis, vectors, task delivery, and service authentication
+    infra/runtime-context.ts Cloud service interfaces
+    lib/                    Model clients and shared application helpers
+    server/                 Agency queries, issue synchronization, and readiness rules
+    services/               PDF extraction and document processing
+    __tests__/              Unit cases, route cases, and model evaluation suites
+  scripts/                  Deployment and maintenance tools
+  Dockerfile                Cloud Run application image
+  cloudbuild.yaml           Cloud Build configuration
 ```
-
-If you plan to run `pnpm preview` or any direct Wrangler-backed local flow, also create `.dev.vars`:
-
-```bash
-cp .dev.vars.example .dev.vars
-```
-
-Use the files as follows:
-
-- `.env` is the input for `pnpm dev` and basic repo-local tooling.
-- `.dev.vars` is only needed for Cloudflare-backed preview/testing (`pnpm preview` and direct Wrangler flows).
-- `wrangler.jsonc` `vars` are for committed, non-sensitive Worker values.
-- Put preview/runtime secrets in `.dev.vars` locally and in Cloudflare Worker secrets when deployed, not in committed `vars`.
-- If you run remote Cloudflare deploy or remote Wrangler tooling from your machine, export `CLOUDFLARE_ACCOUNT_ID`, `CLOUDFLARE_API_TOKEN`, and `DATABASE_ID` in your shell or load them with a tool such as `direnv`. The documented `pnpm` deploy/Wrangler commands do not automatically ingest `.env`.
-
-For a basic local run, the baseline values are:
-
-- `NEXT_PUBLIC_SITE_URL`
-- `NEXT_PUBLIC_APP_URL`
-
-Everything else in the examples is either a deploy credential or an optional integration. Leave it blank until you actually need that feature.
-
-### Cloudflare Deploy & Remote Tooling
-
-- `CLOUDFLARE_ACCOUNT_ID`, `CLOUDFLARE_API_TOKEN`, and `DATABASE_ID` for production Drizzle, remote D1 tooling, and deploy flows.
-- Provide them in your shell environment for direct `pnpm deploy*`, `wrangler`, or other remote Cloudflare commands.
-
-### Optional Integrations
-
-Only add these when you enable the feature:
-
-- `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` for Google SSO.
-- `NEXT_PUBLIC_TURNSTILE_SITE_KEY` and `TURNSTILE_SECRET_KEY` for captcha-protected auth flows.
-- `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY`, `STRIPE_SECRET_KEY`, and `STRIPE_WEBHOOK_SECRET` for Stripe checkout and webhook handling.
-- `RESEND_API_KEY` and `RESEND_WEBHOOK_SECRET` for outbound email and inbound email-suppression webhooks.
-- `EMAIL_FROM`, `EMAIL_FROM_NAME`, `EMAIL_REPLY_TO`, and `SENTRY_DSN` for sender identity and observability.
-- `OPENAI_API_KEY` and `PERPLEXITY_API_KEY` for AI features.
-
-Optional diagnostics:
-
-- `DB_SQL_LOG=true` to enable SQL query logging.
-
-Deploy/release note: the default release path applies remote D1 migrations before code deploy. That assumes backward-compatible, additive schema changes. Breaking schema changes still need a two-phase rollout: deploy code that supports both shapes, migrate, then remove the old path in a later deploy.
-
-### 3. Database Setup (Cloudflare D1)
-
-The application uses Cloudflare D1 locally via Wrangler. The schema source of truth lives under `src/db/schema/`; `src/db/schema.ts` is only the compatibility barrel.
-
-```bash
-pnpm db:migrate:dev
-```
-
-Schema-change workflow:
-
-1. Edit the relevant files under `src/db/schema/`.
-2. Run `pnpm db:generate <name>`.
-3. Review and commit the generated SQL migration plus the matching `src/db/migrations/meta/*` changes.
-4. Run `pnpm db:migrate:dev` for local D1.
-5. Remote D1 migrations are applied manually during release, not through a dedicated repo script.
-
-### 4. Cloudflare Bindings (Types)
-
-Generate TypeScript definitions for your Cloudflare environment variables and bindings:
-
-```bash
-pnpm cf-typegen
-```
-
-Run this after pulling or making `wrangler.jsonc` binding changes.
-
-### 5. Start Local Development
-
-For standard UI and App Router iteration, start a plain Next.js dev server:
-
-```bash
-pnpm dev:agency
-```
-
-This serves the agency app at [http://localhost:3002](http://localhost:3002).
-
-For Cloudflare-backed local preview/testing, use:
-
-```bash
-pnpm preview
-```
-
-Use `pnpm preview` when you need the built Worker runtime and Cloudflare bindings locally, such as D1/KV/R2-dependent behavior, webhook handling, or other binding-dependent flows.
-
----
-
-## Essential Commands
-
-| Command                   | Description                                                                                                     |
-| ------------------------- | --------------------------------------------------------------------------------------------------------------- |
-| `pnpm dev`                | Starts the plain local Next.js development server (`next dev`).                                                 |
-| `pnpm build`              | Builds the Next.js application.                                                                                 |
-| `pnpm build:analyze`      | Builds the application and outputs a bundle analysis.                                                           |
-| `pnpm db:generate [name]` | Generates a new Drizzle migration file based on schema changes.                                                 |
-| `pnpm db:migrate:dev`     | Applies pending migrations to the local Cloudflare D1 database.                                                 |
-| `pnpm cf-typegen`         | Generates TypeScript interfaces for Cloudflare bindings defined in `wrangler.jsonc`. Run after binding changes. |
-| `pnpm email:dev`          | Starts the React Email preview server on port 3001.                                                             |
-| `pnpm worker:build`       | Builds the generated Cloudflare Worker and applies the repo’s post-build worker patch step.                     |
-| `pnpm worker:preview`     | Builds the Worker and runs the Cloudflare-backed local preview.                                                 |
-| `pnpm worker:deploy`      | Code deploy only: builds and deploys the Worker without local/remote migration orchestration.                   |
-| `pnpm preview`            | Compatibility alias for `pnpm worker:preview`.                                                                  |
-| `pnpm deploy`             | Compatibility alias for `pnpm worker:deploy`.                                                                   |
-| `pnpm deploy:dry-run`     | Dry-run deploy: builds the Worker and produces a deployable bundle without publishing.                          |
-| `pnpm build:prod`         | Compatibility alias for `pnpm deploy:dry-run`.                                                                  |
-
----
-
-## Architecture & Conventions
-
-### Database & ORM
-
-- We use **Drizzle ORM** with Cloudflare D1.
-- **Important:** Cloudflare D1 currently does not support database transactions via Drizzle.
-- IDs are auto-generated via CUID2 at the schema level. Never pass IDs manually when inserting records using `db.insert().values()`.
-
-### Cloudflare Context
-
-To access Cloudflare bindings (KV, D1, R2, Environment Variables) inside Next.js API routes or Server Components, use the provided context utility:
-
-```typescript
-import { getCloudflareContext } from "@/utils/cf-context";
-
-const { env, cf, ctx } = getCloudflareContext();
-```
-
-### Cloudflare Bindings
-
-The deployed Worker expects the following bindings for full feature parity:
-
-- `APP_D1` is the app-facing D1 binding inside application code. The checked-in Worker entry maps it to Wrangler's `NEXT_TAG_CACHE_D1` binding, which OpenNext still uses for tag-cache integration.
-- `NEXT_INC_CACHE_KV` is the Next.js incremental cache KV binding.
-- `NEXT_CACHE_DO_QUEUE` is the Durable Object queue binding used by OpenNext.
-- `ASSETS` is the static asset binding for the Worker bundle.
-- `WORKER_SELF_REFERENCE` is the internal service binding for the Worker itself.
-- `APP_KV` is the app KV namespace used by session/cache-related features.
-- `R2` is the document storage bucket binding.
-- `VECTORIZE` is the embeddings/index binding used by AI features.
-
-These bindings are declared in `wrangler.jsonc`; run `pnpm cf-typegen` after config changes if you need updated generated types.
-
-### Authentication
-
-- **Server Components:** Retrieve the active session using `getSessionFromCookie()` from `src/utils/auth.ts`.
-- **Client Components:** Retrieve the active session using `useSessionStore((state) => state.session)` from `src/state/session.ts`.
-
----
-
-## Contributing
-
-1. Create a new branch for your feature (`git checkout -b feature/amazing-feature`)
-2. Commit your changes (`git commit -m 'Add amazing feature'`)
-3. Push to the branch (`git push origin feature/amazing-feature`)
-4. Open a Pull Request
-
-**Coding Guidelines:**
-
-- Prefer React Server Components (RSC) to reduce client JavaScript.
-- Limit the use of `'use client'`, `useEffect`, and `useState`.
-- Format code via Prettier/ESLint rules before committing.
-- Do not add packages arbitrarily; use `pnpm` and check `package.json` for existing libraries first.
-
----
 
 ## License
 
-This project is licensed under the MIT License.
+[MIT](LICENSE). Keep the license and its attribution when distributing the source.

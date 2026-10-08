@@ -1,254 +1,663 @@
-<div align="center">
-  <h1>Vidicy</h1>
-  <p><strong>A production-ready SaaS built on the Edge with Next.js 16 and Cloudflare Workers</strong></p>
-  
-  <p>
-    <a href="https://nextjs.org/"><img src="https://img.shields.io/badge/Next.js-16-black?style=flat-square&logo=next.js" alt="Next.js 16" /></a>
-    <a href="https://workers.cloudflare.com/"><img src="https://img.shields.io/badge/Cloudflare-Workers-F38020?style=flat-square&logo=cloudflare" alt="Cloudflare Workers" /></a>
-    <a href="https://www.typescriptlang.org/"><img src="https://img.shields.io/badge/TypeScript-Ready-3178C6?style=flat-square&logo=typescript" alt="TypeScript" /></a>
-    <a href="https://tailwindcss.com/"><img src="https://img.shields.io/badge/Tailwind-CSS-38B2AC?style=flat-square&logo=tailwind-css" alt="Tailwind CSS" /></a>
-  </p>
-</div>
+# Vidicy: technical reference
 
-<br />
+This reference is for engineers who maintain, deploy, or review the agency application. It assumes knowledge of HTTP, Node.js, SQL, and cloud service accounts. Use the [main README](../../README.md) for the product workflow and runtime configuration.
 
-## Overview
+**Review date:** 19 October 2026. Source baseline: `cecf7d8b`. Service observations below came from read-only service configuration queries on that date. They are not desired-state infrastructure definitions or performance measurements.
 
-Vidicy is an intelligent platform designed to help users prepare, evaluate, and perfect their visa applications. Built as a high-performance Edge application, it runs entirely on Cloudflare Workers using OpenNext.
+## How to read this reference
 
-The platform provides users with **smart document checklists**, **AI-powered readiness evaluations**, and an **expert chatbot (Atlas)** to analyze their documents, highlight risks, and suggest improvements before they apply for their visas.
+Each section connects a service to its role, code, operating contract, and limits. **Implemented** describes source behavior. **Observed** describes dated service settings. **Recommended** identifies an operating practice that this review did not establish as implemented. The design notes explain current technical consequences; they do not invent a historical decision process.
 
-Production deploys are triggered from GitHub Actions on pushes to `main`.
+## Contents
 
-## Core Features
+- [System boundaries](#system-boundaries)
+- [Observed deployment profile](#observed-deployment-profile)
+- [Cloud Run](#cloud-run)
+- [Cloud SQL for PostgreSQL](#cloud-sql-for-postgresql)
+- [Cloud Storage](#cloud-storage)
+- [Memorystore for Redis](#memorystore-for-redis)
+- [Cloud Tasks and Cloud Scheduler](#cloud-tasks-and-cloud-scheduler)
+- [Gemini on Vertex AI](#gemini-on-vertex-ai)
+- [Vertex AI Vector Search](#vertex-ai-vector-search)
+- [Identity, IAM, and secrets](#identity-iam-and-secrets)
+- [Build, release, and rollback](#build-release-and-rollback)
+- [Monitoring and service objectives](#monitoring-and-service-objectives)
+- [Recovery procedures](#recovery-procedures)
+- [Data location and retention](#data-location-and-retention)
+- [Capacity and cost controls](#capacity-and-cost-controls)
+- [Configuration and code map](#configuration-and-code-map)
+- [Current limits and follow-up work](#current-limits-and-follow-up-work)
 
-- **Robust Authentication:** Email/Password and Google OAuth, powered by Lucia Auth.
-- **Multi-tenancy & Teams:** Team-based architecture with system/custom roles, JSON-stored granular permissions, and complete tenant isolation.
-- **Credit-based Billing:** Seamless Stripe integration for credit packages, monthly allocations, and full transaction history tracking.
-- **AI-Powered Visa Tools:**
-  - **Smart Checklists:** Dynamically generated document requirements based on destination and visa type.
-  - **AI Evaluation:** Automated document review scoring, risk factor identification, and actionable recommendations.
-  - **Atlas Chat:** An AI assistant that knows the user's specific application and documents, ready to answer questions and provide interview tips.
-- **Admin Support Desk:** A built-in ticketing system for user inquiries and enterprise leads.
-- **Edge Native:** Runs globally on Cloudflare Workers, utilizing D1 (SQLite), KV (Sessions/Caching), and R2 (File Storage).
+## Terms used here
 
-## Tech Stack
+| Term | Meaning |
+| --- | --- |
+| ADC | Application Default Credentials: how the cloud client libraries obtain their configured identity |
+| IAM | Identity and Access Management: policies that grant access to cloud resources |
+| OIDC | OpenID Connect: the signed identity-token format used for machine calls here |
+| VPC | Virtual Private Cloud: the network path for configured private resources |
+| TTL | Time to live: when a Redis value expires |
+| PITR | Point-in-time recovery: database recovery to a supported earlier time |
+| CRC32C | A checksum used to detect transfer corruption |
 
-### Frontend
+## System boundaries
 
-- **Framework:** [Next.js 16](https://nextjs.org/) (App Router, React Server Components)
-- **Styling:** [Tailwind CSS v4](https://tailwindcss.com/)
-- **Components:** [Shadcn UI](https://ui.shadcn.com/) (built on Radix UI) & HeroUI
-- **State Management:** [Zustand](https://zustand-demo.pmnd.rs/) (client state) & [NUQS](https://nuqs.47ng.com/) (URL search params)
-- **Emails:** [React Email](https://react.email/)
+One Next.js service handles the web interface, server actions, document APIs, and internal processing routes. PostgreSQL and Cloud Storage hold authoritative case data and document bytes.
 
-### Backend & Infrastructure
+| Information | Authoritative store | Derived or temporary representation |
+| --- | --- | --- |
+| Cases, applicants, checklist assignments, findings, and report state | PostgreSQL | Page models and cached counts |
+| Uploaded document bytes | Cloud Storage | Parsed text and rendered page images |
+| Extracted text and processing state | PostgreSQL | Embeddings and retrieved snippets |
+| Searchable document chunks | PostgreSQL text is the source; the search index is derived | Vertex vectors and Cloud Storage metadata objects |
+| Sessions, auth tokens, rate-limit counters, and caches | Redis for the active value | Cookies contain session references |
+| Work delivery | Cloud Tasks for queued work; PostgreSQL for document progress | Scheduler identifies work that needs recovery |
 
-- **Deployment:** [OpenNext](https://opennext.js.org/) on Cloudflare Workers
-- **Database:** Cloudflare D1 (Serverless SQLite) with [Drizzle ORM](https://orm.drizzle.team/)
-- **Storage:** Cloudflare R2 (Object Storage) & Cloudflare KV (Key-Value)
-- **Authentication:** Lucia Auth + KV-based session management
+A PostgreSQL transaction cannot commit a Cloud Storage write or a Cloud Tasks request. The upload path therefore has explicit partial-failure states.
 
----
+```mermaid
+sequenceDiagram
+    participant Staff as Agency staff
+    participant App as Next.js on Cloud Run
+    participant GCS as Cloud Storage
+    participant DB as PostgreSQL
+    participant Tasks as Cloud Tasks
+    participant Worker as Internal extraction route
+    participant AI as Gemini / OpenAI
+    participant Search as Vertex Vector Search
+    Staff->>App: Upload file and checklistItemId
+    App->>App: Check session, case access, type, size, and assignment
+    App->>GCS: Save document bytes
+    App->>DB: Commit document row, checklist state, and review invalidation
+    App->>Tasks: Await creation of a named extraction task
+    Tasks-->>App: Task accepted or already exists
+    App-->>Staff: Return documentId
+    Tasks->>Worker: POST documentId and version with OIDC token
+    Worker->>Worker: Verify token and acquire document lock
+    Worker->>GCS: Read the stored file
+    Worker->>AI: Extract content and create embeddings as needed
+    Worker->>DB: Save extraction and indexing state
+    Worker->>Search: Upsert derived document vectors
+    Worker-->>Tasks: 204 on success, 503 when another attempt is needed
+```
 
-## Getting Started
+The arrows summarize the successful path. Extraction and indexing update their own status fields at several points. They are not one distributed transaction. The [upload handler](src/app/api/_utils/document-upload.ts) and [pipeline](src/services/document-pipeline.ts) define the exact order.
 
-### Prerequisites
+### HTTP interfaces
 
-Ensure you have the following installed on your machine:
+| Route | Caller contract | Result |
+| --- | --- | --- |
+| `POST /api/documents/upload/pdf` | App session and case permission; multipart `file`, `applicationId`, `checklistItemId`; optional `applicantId` must match the case/requirement | Accepted upload returns `documentId`, name, and size after enqueue acceptance |
+| `POST /api/documents/upload/image` | Same ownership contract; JPEG or PNG file | Same accepted-upload shape |
+| `GET /api/document-preview/[documentId]` | App session and case permission; optional `download=1` | Authorized byte stream or missing/denied response |
+| `POST /api/internal/document-extraction` | Verified machine OIDC token; JSON `{ documentId, version }` | 204 when this attempt is complete or obsolete; retryable processing failures use 503 |
+| `POST /api/internal/document-reconciliation` | Verified machine OIDC token; no document payload required | Recovery/cleanup summary; 503 on recorded work failures |
+| `GET /api/health` | Admin session | Component status and latency; can perform a Redis canary write |
 
-- [Node.js](https://nodejs.org/en/) 22.x
-- [pnpm](https://pnpm.io/) 10.x (via Corepack is recommended)
-- Optional: `nvm` or another Node version manager if you want to consume the repo’s `.nvmrc` version hint automatically.
-- Optional: a global [Wrangler CLI](https://developers.cloudflare.com/workers/wrangler/install-and-update/) install. The repo already pins `wrangler` in `devDependencies`, and the documented `pnpm` scripts use that version.
+The upload handler uses 400 for invalid input and 503 for explicit storage failure. An unexpected failure, including an enqueue failure after SQL commit, reaches its generic 500 response. Authentication and authorization helpers can reject a request before these operations. The task worker has a separate status contract described below.
 
-The repo includes `.nvmrc` and `package.json` `engines` to document the expected Node major as 22.
+### Design choices and consequences
 
-### 1. Clone & Install dependencies
+| Implemented choice | Technical effect | Consequence to account for |
+| --- | --- | --- |
+| Web and task routes share one Cloud Run service | Reuses application code, service configuration, and database access | Processing and interactive requests share instance capacity |
+| Queue work before returning upload success | Avoids acknowledging a job that was only scheduled in process memory | Queue failure can occur after the file and database row exist |
+| Use PostgreSQL as the document authority | Search results can be checked against current case and document state | Retrieval requires database access as well as a healthy vector endpoint |
+| Use named tasks, document locks, and stored results | Reduces duplicate processing during retries | External calls can still repeat across crash or acknowledgement boundaries |
+| Deploy by container digest | Selects an exact image artifact | It does not prove vulnerability policy, provenance verification, or schema compatibility |
+
+## Observed deployment profile
+
+These settings were inspected on **19 October 2026**. Recheck them before a capacity or availability decision.
+
+| Resource | Observed configuration | Meaning |
+| --- | --- | --- |
+| Cloud Run | `asia-southeast1`; second-generation runtime; 2 vCPUs; 2 GiB; port 8080 | One regional application service |
+| Cloud Run request limits | Concurrency 8; request timeout 1,800 seconds; revision maximum 3 instances | Configured request capacity, not a user-count or throughput benchmark |
+| Network | VPC access configured; egress `private-ranges-only` | Private destinations use the VPC route |
+| Public entry | Ingress `all`; platform invoker IAM check disabled | User routes rely on app authentication; internal routes require verified OIDC tokens |
+| Cloud SQL | PostgreSQL 16; `db-custom-1-3840`; zonal | A regional HA standby was not configured in this observation |
+| SQL backup configuration | Automated backups enabled; retention configured for 7 backups | PITR enablement and restore performance were not established by this review |
+| Redis | Redis 7.2; Basic tier; 1 GiB; direct peering; AUTH enabled | Redis has a single primary in this tier; transport encryption was disabled |
+| Cloud Storage | Regional Standard storage; uniform bucket access; public access prevention enforced | Document access is through application authorization and service credentials |
+| Storage recovery | Soft delete retention 604,800 seconds, or 7 days | Logical deletion can precede physical expiry |
+| Cloud Tasks | 2 dispatches/second; 3 concurrent dispatches; `maxAttempts=5`; backoff 10–300 seconds | Queue dispatch and retry settings are separate from application recovery claims |
+| Cloud Scheduler | Every 5 minutes, UTC; enabled; OIDC configured | Calls the reconciliation route |
+| Secret injection | Numbered Secret Manager versions referenced by environment variables | Rotation requires an explicit configuration/revision process |
+| Identities | Runtime and document-task caller use the same service account | These are separate roles in the flow, but not separate accounts in this profile |
+
+The repository's image-only deployment preserves these service settings. It does not recreate them. No availability percentage, latency target, recovery time, or supported agency count follows from this table.
+
+### Read-only configuration inspection
+
+These examples read configuration; they do not provision or update services. Replace the project, region, service, and queue when inspecting another environment. They select configuration/status fields and do not request secret payloads.
 
 ```bash
-git clone https://github.com/your-username/vdc-mvp.git
-cd vdc-mvp
-corepack enable
-# Optional, if you use nvm:
-nvm use
-pnpm install
+gcloud run services describe vidicy-agency \
+  --project=eco-azimuth-441108-s4 \
+  --region=asia-southeast1 \
+  --format='yaml(status.latestReadyRevisionName,status.traffic)'
+
+gcloud tasks queues describe vidicy-document-extraction \
+  --project=eco-azimuth-441108-s4 \
+  --location=asia-southeast1 \
+  --format='yaml(state,rateLimits,retryConfig)'
+
+gcloud scheduler jobs list \
+  --project=eco-azimuth-441108-s4 \
+  --location=asia-southeast1 \
+  --format='table(name,schedule,timeZone,state)'
+
+gcloud sql instances list \
+  --project=eco-azimuth-441108-s4 \
+  --format='table(name,region,databaseVersion,settings.tier,settings.availabilityType)'
 ```
 
-### 2. Environment Setup
+Full service configuration can contain literal environment values. Use selected fields or a redacted configuration export for shared operational records. A cloud configuration read verifies the settings returned at that time; it does not verify the affected user journey.
 
-Create `.env` from the shipped example for plain `pnpm dev` and repo-local tooling:
+## Cloud Run
 
-```bash
-cp .env.example .env
+### Container and request lifecycle
+
+**Implemented:** [Dockerfile](Dockerfile) uses Node.js 22 on Debian Bookworm. It installs pnpm 10.27.0, builds Next.js standalone output, and runs `apps/agency/server.js` as the `node` user. The server listens on `0.0.0.0` and port 8080. The [container runtime contract](https://docs.cloud.google.com/run/docs/container-contract) defines port, request, and file-system requirements.
+
+[Next.js configuration](next.config.ts) includes the task SDK protocol files and native canvas dependencies in standalone tracing. These files are needed for task delivery and PDF page rendering.
+
+`getRuntimeContext()` provides access to the cloud service adapters. Its `ctx.waitUntil()` uses Next.js `after()` for short follow-up work. Document extraction uses Cloud Tasks so it has a durable delivery record. See [runtime-context.ts](src/infra/runtime-context.ts).
+
+Cloud Run request timeout, Cloud Tasks dispatch deadline, and per-model timeout are different settings. A route's `maxDuration` export does not configure the deployed Cloud Run service. The observed service timeout and extraction task deadline are both 1,800 seconds; model calls have shorter deadlines.
+
+### Concurrency and network access
+
+Concurrency is the number of requests an instance can serve at once. It is not the number of active users. PDF rendering, buffered uploads, SQL connections, and model requests compete for the same resources.
+
+Private Redis connectivity needs the configured VPC route. The [Direct VPC egress guide](https://docs.cloud.google.com/run/docs/configuring/vpc-direct-vpc) explains the network, subnet, and egress controls. This inspection established VPC access, but did not treat every network attachment as source-managed configuration. External OpenAI, Perplexity, Resend, and Turnstile calls also need outbound connectivity.
+
+## Cloud SQL for PostgreSQL
+
+**Implemented:** [db/index.ts](src/db/index.ts) creates one shared `pg.Pool` for ordinary database work per Node.js process. It accepts `DATABASE_URL` or the standard `PG*` variables. `PGPOOL_MAX` defaults to 5; the observed deployment sets it to 8. The pool waits up to 10 seconds for a connection and releases idle connections after 30 seconds.
+
+The production schema is [db/schema](src/db/schema/index.ts). Drizzle uses the PostgreSQL driver. JSON, timestamp, nullable-join, and `RETURNING` behavior stays in the driver.
+
+### Transactions and locks
+
+`db.batch()` checks out one connection, runs `BEGIN`, executes the supplied Drizzle queries, and commits or rolls back the group. `AsyncLocalStorage` routes those queries to the checked-out connection. Nested batches are rejected.
+
+The upload transaction creates the document row, updates its checklist item, and invalidates review state together. Review synchronization also checks document snapshots before accepting findings. See [agency-review.ts](src/server/agency-review.ts).
+
+The extraction route uses a **separate pool of 3 connections** for session-level PostgreSQL advisory locks. A lock identifies one document. Model inference does not hold a SQL transaction open. The connection remains checked out until the attempt ends. If lock release fails, the connection is discarded.
+
+### Connection budget
+
+A useful planning estimate is:
+
+```text
+ordinary application connections ~= active instances × (main pool + lock pool)
+observed single-revision estimate = 3 × (8 + 3) = 33
 ```
 
-If you plan to run `pnpm preview` or any direct Wrangler-backed local flow, also create `.dev.vars`:
+This is a planning estimate, not a hard ceiling. Allow for overlapping revisions, migrations, administrator connections, and brief scaling overshoot. See the guidance on [Cloud Run SQL connections](https://docs.cloud.google.com/sql/docs/postgres/connect-run), [connection management](https://docs.cloud.google.com/sql/docs/postgres/manage-connections), and [maximum-instance behavior](https://docs.cloud.google.com/run/docs/configuring/max-instances).
 
-```bash
-cp .dev.vars.example .dev.vars
+### Schema release contract
+
+[drizzle.config.ts](drizzle.config.ts) defines PostgreSQL schema generation. `pnpm db:generate <name>` generates a named migration. `pnpm db:migrate` applies the schema to the configured PostgreSQL database.
+
+The release workflow does not migrate the database. Review and apply schema changes separately. Use compatible schema changes when old and new revisions can serve traffic at the same time.
+
+## Cloud Storage
+
+**Implemented:** [storage.ts](src/infra/google/storage.ts) uses `@google-cloud/storage` and Application Default Credentials. It provides the object operations used by existing callers: `get`, `head`, `put`, `delete`, and paginated `list`.
+
+- Writes buffer the input, use `resumable: false`, and validate transfer integrity with CRC32C.
+- HTTP metadata and custom metadata are preserved through the adapter.
+- Reads first fetch metadata, then pin the byte stream to that object's generation. This avoids combining one generation's metadata with another generation's bytes.
+- A missing object becomes `null`. Deletes ignore a missing object.
+- List requests are paginated and limited to 1–1,000 entries.
+
+See the service contracts for [object consistency](https://docs.cloud.google.com/storage/docs/consistency) and [request preconditions](https://docs.cloud.google.com/storage/docs/request-preconditions). The adapter's generation-pinned read is not a conditional-write guarantee: `put()` does not expose generation-match preconditions, multipart upload, or range reads.
+
+### Upload and preview contract
+
+The document routes accept PDF, JPEG, and PNG uploads. The file limit is 10 MiB. The PDF limit is 40 pages when the upload page-count check can determine a count. A parse failure in that preliminary check does not prove that a PDF is valid or within the page limit; processing has further handling.
+
+Each upload must name a checklist item in the same case. The server checks applicant and checklist ownership before saving the file. Preview checks the active session and case permission, then streams the object through `/api/document-preview/[documentId]`. This path does not issue a public object URL. Its response permits private browser caching for one hour.
+
+Object creation, SQL commit, and queue creation are separate operations. A failure after object creation but before SQL insertion can leave an unreferenced object. The document reconciler searches database rows; it is not an object-orphan collector. See the [upload handler](src/app/api/_utils/document-upload.ts) and [preview route](src/app/api/document-preview/[documentId]/route.ts).
+
+## Memorystore for Redis
+
+**Implemented:** [kv.ts](src/infra/google/kv.ts) adapts the required KV operations to a shared Redis connection. Runtime prefixes separate application data (`vidicy:app:`) from session/cache data (`vidicy:cache:`). These prefixes are key namespaces, not separate tenant authorization boundaries.
+
+| KV operation | Redis behavior |
+| --- | --- |
+| `get` | `GET`, with optional JSON decoding |
+| `put` with relative expiry | `SET ... EX` |
+| `put` with absolute expiry | `SET ... EXAT` |
+| Expiry already reached | Delete the key |
+| `delete` | `DEL` |
+| `list` | `SCAN` with prefix filtering and an opaque cursor |
+
+The list cursor retains excess results because Redis `COUNT` is a hint. It is not a snapshot of keys during concurrent writes. Sessions use the cache namespace through `kv-session.ts`.
+
+Connection setup has a 10-second timeout, bounded reconnect backoff, and an offline command queue that is disabled. Redis loss can therefore affect sign-in, token validation, rate limits, and cached reads. The app cannot treat Redis as an optional performance layer.
+
+The observed Basic tier is a single primary. The [Redis tier explanation](https://docs.cloud.google.com/memorystore/docs/redis/faq) and [HA guide](https://docs.cloud.google.com/memorystore/docs/redis/high-availability-for-memorystore-for-redis) distinguish availability from durability; even replicated Redis can lose acknowledged writes during failover.
+
+**Current limit:** [rate-limit.ts](src/infra/rate-limit.ts) uses non-atomic read/check/write counters in Redis. A hard concurrent-request limit would need an atomic implementation.
+
+## Cloud Tasks and Cloud Scheduler
+
+### Delivery contract
+
+Cloud Tasks can redeliver work and does not promise FIFO execution. See [Cloud Tasks issues and limitations](https://docs.cloud.google.com/tasks/docs/common-pitfalls). Handlers must tolerate repeated work.
+
+[document-tasks.ts](src/infra/google/document-tasks.ts) creates a named HTTP task in `vidicy-document-extraction`:
+
+```text
+name suffix = SHA-256(JSON.stringify({ documentId, version }))
+body        = { documentId, version }
+target      = DOCUMENT_TASK_BASE_URL + /api/internal/document-extraction
+audience    = DOCUMENT_TASK_BASE_URL origin
+deadline    = 1,800 seconds
 ```
 
-Use the files as follows:
+The default version is `initial`. An existing task name is treated as an accepted enqueue. This deduplication is bounded by the queue's task-name retention behavior; it is not a permanent job ledger.
 
-- `.env` is the input for `pnpm dev` and basic repo-local tooling.
-- `.dev.vars` is only needed for Cloudflare-backed preview/testing (`pnpm preview` and direct Wrangler flows).
-- `wrangler.jsonc` `vars` are for committed, non-sensitive Worker values.
-- Put preview/runtime secrets in `.dev.vars` locally and in Cloudflare Worker secrets when deployed, not in committed `vars`.
-- If you run remote Cloudflare deploy or remote Wrangler tooling from your machine, export `CLOUDFLARE_ACCOUNT_ID`, `CLOUDFLARE_API_TOKEN`, and `DATABASE_ID` in your shell or load them with a tool such as `direnv`. The documented `pnpm` deploy/Wrangler commands do not automatically ingest `.env`.
+The upload handler awaits queue creation before returning success. A queue error after SQL commit returns an error to the client while the queued document row remains available for reconciliation. The implementation does not use a transactional outbox table.
 
-For a basic local run, the baseline values are:
+### Worker responses
 
-- `NEXT_PUBLIC_SITE_URL`
-- `NEXT_PUBLIC_APP_URL`
+The [extraction route](src/app/api/internal/document-extraction/route.ts) verifies identity before reading its bounded 4,096-byte JSON body. It acquires the document's advisory lock, checks that the document still exists, then runs extraction and indexing.
 
-Everything else in the examples is either a deploy credential or an optional integration. Leave it blank until you actually need that feature.
+| Condition | Response | Delivery meaning |
+| --- | --- | --- |
+| Missing or invalid identity token | 401 | Caller has not established identity |
+| Valid token from the wrong verified account | 403 | Caller is not permitted |
+| Invalid payload | 400 | Payload is not usable |
+| Document has been deleted | 204 | Acknowledge obsolete work |
+| Extraction and indexing succeed | 204 | Acknowledge this attempt |
+| Lock is held, processing fails, or a dependency is unavailable | 503 | Another attempt is needed |
 
-### Cloudflare Deploy & Remote Tooling
+The pipeline reuses stored extraction or a completed index when its state permits. A crash after an external model or index call but before recording its result can still cause repeated calls. No exactly-once model-execution guarantee is made.
 
-- `CLOUDFLARE_ACCOUNT_ID`, `CLOUDFLARE_API_TOKEN`, and `DATABASE_ID` for production Drizzle, remote D1 tooling, and deploy flows.
-- Provide them in your shell environment for direct `pnpm deploy*`, `wrangler`, or other remote Cloudflare commands.
+HTTP target tokens, task service accounts, and retry behavior are described in the [HTTP task guide](https://docs.cloud.google.com/tasks/docs/creating-http-target-tasks) and [queue configuration guide](https://docs.cloud.google.com/tasks/docs/configuring-queues). Retry delivery, SDK request retries, and application recovery are three separate mechanisms.
 
-### Optional Integrations
+### Bounded reconciliation
 
-Only add these when you enable the feature:
+The [reconciliation route](src/app/api/internal/document-reconciliation/route.ts) is a scheduled repair path. It checks:
 
-- `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` for Google SSO.
-- `NEXT_PUBLIC_TURNSTILE_SITE_KEY` and `TURNSTILE_SECRET_KEY` for captcha-protected auth flows.
-- `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY`, `STRIPE_SECRET_KEY`, and `STRIPE_WEBHOOK_SECRET` for Stripe checkout and webhook handling.
-- `RESEND_API_KEY` for outbound transactional email.
-- `EMAIL_FROM`, `EMAIL_FROM_NAME`, `EMAIL_REPLY_TO`, and `SENTRY_DSN` for sender identity and observability.
-- `OPENAI_API_KEY` and `PERPLEXITY_API_KEY` for AI features.
+- Uploads still queued after 2 minutes.
+- Extraction that is failed or still extracting after 10 minutes.
+- Completed or partial extraction with indexing queued after 2 minutes.
+- Failed or active indexing that has remained old for 10 minutes.
 
-Optional diagnostics:
+It excludes trashed cases, selects up to 30 documents, and enqueues in groups of 3. A database update reserves a recovery attempt atomically. Each document has up to 3 recovery claims and at most one claim per 15-minute bucket. A changing sort order reduces the chance that old failing records block newer records.
 
-- `DB_SQL_LOG=true` to enable SQL query logging.
+Recovery task versions include the time bucket. Three recovery claims do not mean three total model calls: a claimed task can have its own delivery attempts. Claim reservation can also be consumed by an enqueue failure. After the claim limit, an operator must investigate.
 
-Deploy/release note: the default release path applies remote D1 migrations before code deploy. That assumes backward-compatible, additive schema changes. Breaking schema changes still need a two-phase rollout: deploy code that supports both shapes, migrate, then remove the old path in a later deploy.
+The same route processes bounded vector metadata cleanup. It returns 503 if enqueue or cleanup work fails. The observed Scheduler runs every 5 minutes; the [Scheduler delivery contract](https://docs.cloud.google.com/scheduler/docs/overview) also allows duplicate invocation.
 
-### 3. Database Setup (Cloudflare D1)
+## Gemini on Vertex AI
 
-The application uses Cloudflare D1 locally via Wrangler. The schema source of truth lives under `src/db/schema/`; `src/db/schema.ts` is only the compatibility barrel.
+**Implemented:** [gemini.ts](src/lib/gemini.ts) creates a `GoogleGenAI` client with `vertexai: true`, a project, and a location. Location defaults to `global`. ADC is the normal identity source. The optional JSON credential override is used by this client only.
 
-```bash
-pnpm db:migrate:dev
+| Path | Model constant | Input and output contract |
+| --- | --- | --- |
+| Extraction | `gemini-3.8-flash` | Inline PDF or image bytes and an extraction prompt; low thinking level; plain text |
+| Evaluation | `gemini-4-argon` | Text and validated inline images; medium thinking level; JSON Schema output |
+
+The [model catalog](https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/google-models) and [release notes](https://ai.google.dev/gemini-api/docs/changelog) describe the model families. Project access, quota, supported location, and model lifecycle still need to be checked when changing a model ID. A public catalog entry does not verify a request from this deployment.
+
+### Extraction and evaluation controls
+
+[pdf-parser.ts](src/services/pdf-parser.ts) first tries native PDF text. Gemini is used when that path cannot extract content. The image path also tries Gemini. Each Gemini request has a 40-second client deadline and checks for empty output and an incomplete finish reason.
+
+[gemini-evaluation.ts](src/lib/gemini-evaluation.ts) requests `application/json` with `responseJsonSchema`. It reserves up to 8,192 extra output tokens for thinking, with a total cap of 32,768. It rejects unsupported remote image URLs, empty output, incomplete generation, and invalid JSON. The evaluation action then applies its Zod schemas and transforms.
+
+See the contracts for [structured output](https://docs.cloud.google.com/vertex-ai/generative-ai/docs/multimodal/control-generated-output) and the supported [JSON Schema fields](https://docs.cloud.google.com/java/docs/reference/google-cloud-vertexai/latest/com.google.cloud.vertexai.api.GenerationConfigOrBuilder). A valid response shape does not establish that a document finding is correct. Human review and application consistency checks remain necessary. Some runtime schema fields have fallback values, so parsing is not proof that all fields were supplied correctly.
+
+Extraction can fall back to OpenAI when enabled. Evaluation phases remain on Vertex AI and do not switch providers on a Vertex error. OpenAI still provides checklist structuring, translation, embeddings, and document chat; Perplexity still provides checklist research. The main README lists the exact configured IDs. If PDF-level extraction fails, the pipeline can render pages and run the enabled OpenAI page-extraction fallback in page order.
+
+### Queued extraction and synchronous review
+
+Cloud Tasks runs document extraction and indexing. The [evaluation server action](src/actions/evaluation.action.ts) separately awaits the review phases during the action request. It does not enqueue those evaluation phases as document extraction tasks. Queue retry/reconciliation therefore does not make a failed interactive evaluation an automatically retried background review.
+
+### Quality evidence
+
+The repository has separate evaluation suites and datasets under `src/__tests__/eval`. This documentation update did not run them or establish accuracy, recall, or review-time results. A model change should have a versioned dataset, prompt/schema version, failure examples, and a recorded result before it is described as an improvement.
+
+## Vertex AI Vector Search
+
+**Implemented:** [vector-search.ts](src/infra/google/vector-search.ts) uses the index/index-endpoint API. It calls `upsertDatapoints`, `removeDatapoints`, and `findNeighbors` through the authenticated service request helper.
+
+### Index contract
+
+- Dense vectors must contain exactly 1,536 finite values.
+- The configured index must use `COSINE_DISTANCE` and support streaming updates.
+- Index and endpoint resource names must specify the same project and region.
+- The deployed index ID and authenticated public endpoint domain are required.
+- Writes use batches of up to 100 vectors; deletions use up to 1,000 IDs.
+- Queries require an exact `applicationId` or `documentId` restriction and accept `topK` from 1 to 1,000.
+
+The [streaming index guide](https://docs.cloud.google.com/vertex-ai/docs/vector-search/update-rebuild-index) explains that deployment updates are asynchronous. Its [filtering guide](https://docs.cloud.google.com/vertex-ai/docs/vector-search/filtering) explains categorical restrictions. An acknowledged mutation does not mean every serving replica already reflects it.
+
+### Chunking and metadata
+
+The [document pipeline](src/services/document-pipeline.ts) stores up to 50,000 characters of extracted text. Chunking targets 3,200 characters with 320 characters of overlap, using paragraph boundaries. A single long paragraph can exceed the target; this is not a hard per-chunk bound.
+
+Embedding requests use OpenAI `text-embedding-3-small` in batches of up to 500 chunks, with a 25-second client deadline. A point ID is `${documentId}-${chunkIndex}`. Search metadata includes the case, document, chunk index, and up to 3,500 characters of chunk content.
+
+Metadata above the adapter's 2,048-byte threshold is stored as a content-addressed JSON object in Cloud Storage. The vector retains identity fields and a pointer. A new metadata version does not overwrite text behind a previously indexed point. This preserves the metadata supplied to the adapter; it does not remove the pipeline's upstream text and snippet limits.
+
+### Retrieval and deletion correctness
+
+The adapter fetches full datapoint metadata and checks each candidate against PostgreSQL. It rejects a deleted document, a trashed case, mismatched application identity, or a point ID that does not match the document/chunk format. Metadata object paths must match the expected document prefix and content hash format.
+
+[vectorize-query.ts](src/lib/vectorize-query.ts) first requests 6 document-scoped neighbors. If necessary, it requests 24 case-scoped neighbors and retains the requested document's chunks. Filtered or stale candidates can reduce the returned count; the adapter does not promise to return exactly `topK` results.
+
+After a point deletion is accepted, a manifest defers metadata cleanup for at least 24 hours. The scheduled cleaner checks that source documents no longer exist, processes up to 2 manifests per call, and retains failed work for a later attempt. User-facing authorization depends on the live database checks, not on waiting for the cleanup window to expire.
+
+## Identity, IAM, and secrets
+
+### Four identity paths
+
+| Identity path | How identity is established | Purpose and scope |
+| --- | --- | --- |
+| Agency user | Email/password or Google OAuth, followed by an app session | Application permissions control access to a case and its documents |
+| GitHub deployment | GitHub OIDC token exchanged through Workload Identity Federation | Impersonates the deployment service account for build and release work |
+| Running container | Attached Cloud Run service account through ADC | Calls Storage, Tasks, and Vertex APIs and accesses configured secrets |
+| Task or Scheduler caller | Google-issued OIDC ID token | Must match the internal route's audience and verified account email |
+
+An agency user's Google OAuth token is not the credential used to access the storage bucket or Vertex AI. The [service identity guide](https://docs.cloud.google.com/run/docs/securing/service-identity) explains deployment and runtime identities.
+
+### GitHub trust boundary
+
+The observed workload identity provider accepts GitHub tokens only when all three claims match:
+
+```text
+repository_id       = 1424743538
+repository_owner_id = 111155827
+ref                 = refs/heads/main
 ```
 
-Schema-change workflow:
+The issuer is `https://token.actions.githubusercontent.com`. The workflow also has a repository-ID guard. The job guard controls workflow execution; the provider condition controls the cloud credential exchange. Both must remain correct after repository moves or release-branch changes. See the [deployment federation guide](https://docs.cloud.google.com/iam/docs/workload-identity-federation-with-deployment-pipelines).
 
-1. Edit the relevant files under `src/db/schema/`.
-2. Run `pnpm db:generate <name>`.
-3. Review and commit the generated SQL migration plus the matching `src/db/migrations/meta/*` changes.
-4. Run `pnpm db:migrate:dev` for local D1.
-5. Remote D1 migrations are applied manually during release, not through a dedicated repo script.
+### Permission responsibilities
 
-### 4. Cloudflare Bindings (Types)
+The following table is a responsibility map, not a complete export of current IAM grants. Review resource scope when provisioning or changing an identity.
 
-Generate TypeScript definitions for your Cloudflare environment variables and bindings:
+| Identity | Capabilities it needs | Important boundary |
+| --- | --- | --- |
+| Deployment account | Submit builds, read the source-staging bucket, read image metadata, update the target Run service, and act as the configured build/runtime identities | Does not need unrestricted project ownership to perform these tasks |
+| Build account | Read staged source, write the image repository, and write build logs | Build inputs must not contain runtime credentials or private exports |
+| Runtime account | Read/write the document bucket, call the configured Vertex resources, enqueue document tasks, access selected secret versions, and connect to Cloud SQL | PostgreSQL login privileges and Redis AUTH are separate from service API IAM |
+| Task caller | Establish the OIDC identity permitted by the internal-route verifier | The enqueuer needs permission to use this identity; the task delivery service must be able to issue its token |
 
-```bash
-pnpm cf-typegen
+The runtime and task-caller roles share one account in the observed deployment. Separate accounts would be an architecture change, not a setting documented as already present here.
+
+### Internal endpoint authentication
+
+[internal-auth.ts](src/infra/google/internal-auth.ts) verifies token signature and audience with Google's OAuth library, then requires `email_verified=true` and an exact account-email match. Task-name, queue-name, and Scheduler headers are not identity evidence.
+
+`DOCUMENT_TASK_BASE_URL` accepts only an HTTPS `run.app` origin without a custom port, user information, query, fragment, or non-root path. The same origin is the task destination and OIDC audience.
+
+The public Cloud Run ingress and disabled platform invoker check make the application verifier important. A route is not network-private merely because its path starts with `/api/internal/`.
+
+### Secret Manager and build-time values
+
+The observed service injects database, Redis, AI-provider, OAuth, email, Turnstile, and Sentry settings through Secret Manager references. The inspected references use numbered versions. Secret values were not included in this document or printed during configuration review.
+
+[Secret Manager integration for Cloud Run](https://docs.cloud.google.com/run/docs/configuring/services/secrets) resolves environment-backed secrets at instance startup; numbered versions make the selected value explicit. A rotation procedure must update the reference, deploy a revision, and verify affected flows. Updating only the image does not select a new secret version automatically.
+
+`NEXT_PUBLIC_SITE_URL` and the Turnstile public site key are build arguments in `cloudbuild.yaml`. Next.js can compile public variables into client assets. A runtime environment change alone does not rebuild those assets. Private API keys belong in server-side secret configuration.
+
+The shared REST adapter uses ADC with the `cloud-platform` scope. IAM grants still determine its access. `GOOGLE_APPLICATION_CREDENTIALS_JSON` is a Gemini-client override; it does not configure Storage, Tasks, or the shared REST adapter.
+
+## Build, release, and rollback
+
+### Current release path
+
+```mermaid
+flowchart LR
+    Git[GitHub main] --> OIDC[GitHub OIDC]
+    OIDC --> WIF[Workload Identity Federation]
+    WIF --> Deploy[Deployment account]
+    Deploy --> Build[Cloud Build / build account]
+    Build --> Registry[Artifact Registry image]
+    Registry --> Digest[Resolve sha256 digest]
+    Digest --> Run[Cloud Run revision]
+    Secrets[Secret Manager references] --> Run
 ```
 
-Run this after pulling or making `wrangler.jsonc` binding changes.
+The [workflow](../../.github/workflows/deploy.yml) is the release entry point. It serializes agency production jobs with `cancel-in-progress: false`. The [Cloud Build configuration](cloudbuild.yaml) uses a dedicated build account, a 1,800-second build timeout, `CLOUD_LOGGING_ONLY`, and an `images` output for Artifact Registry. CI supplies `_IMAGE_TAG` from the commit SHA.
 
-### 5. Start Local Development
+The [deployment script](scripts/google-deploy.mjs) offers the same image build/update path for an operator. It validates the image tag and returned digest. `--build-only` publishes an image without updating Cloud Run.
 
-For standard UI and App Router iteration, start the plain Next.js dev server:
+The deploy step changes the image reference. It does not provision the database, bucket, queue, schedule, network, IAM policy, or runtime secrets. It also does not run database migrations, Vitest, ESLint, a load test, or a browser acceptance flow. The container build runs the Next.js build and its configured TypeScript check.
 
-```bash
-pnpm dev
-```
+The [Cloud Build to Cloud Run guide](https://docs.cloud.google.com/build/docs/deploying-builds/deploy-cloud-run) and [Artifact Registry integration](https://docs.cloud.google.com/artifact-registry/docs/integrate-cloud-run) describe the service boundaries used here.
 
-This runs `next dev -p 3002` and serves the app at [http://localhost:3002](http://localhost:3002).
+### Source and supply-chain boundaries
 
-For Cloudflare-backed local preview/testing, use:
+The build source archive and container context use separate exclusion rules. Both must exclude private credentials and application data.
 
-```bash
-pnpm preview
-```
+The pipeline selects a digest, but it does not have an explicit vulnerability-blocking step, Binary Authorization gate, or provenance-verification gate. Build provenance and SBOM availability are separate from enforcement. See [build provenance](https://docs.cloud.google.com/build/docs/securing-builds/generate-validate-build-provenance) and [build security insights](https://docs.cloud.google.com/build/docs/view-build-security-insights). These are extension points, not established deployment controls in this repository.
 
-Use `pnpm preview` when you need the built Worker runtime and Cloudflare bindings locally, such as D1/KV/R2-dependent behavior, webhook handling, or other binding-dependent flows.
+### Release evidence to retain
 
----
+For a release, record the commit SHA, workflow run, Cloud Build ID, image digest, ready revision, traffic allocation, relevant schema version, and runtime/secret configuration change. A ready revision establishes platform readiness; it does not establish a successful sign-in, upload, extraction, evaluation, or report flow.
 
-## Essential Commands
+The current workflow has no automated canary analysis or application-level rollback decision. **Recommended:** complete the user journeys affected by a release, then retain the result with the release record.
 
-| Command                   | Description                                                                                                     |
-| ------------------------- | --------------------------------------------------------------------------------------------------------------- |
-| `pnpm dev`                | Starts the plain local Next.js development server (`next dev`).                                                 |
-| `pnpm build`              | Builds the Next.js application.                                                                                 |
-| `pnpm build:analyze`      | Builds the application and outputs a bundle analysis.                                                           |
-| `pnpm db:generate [name]` | Generates a new Drizzle migration file based on schema changes.                                                 |
-| `pnpm db:migrate:dev`     | Applies pending migrations to the local Cloudflare D1 database.                                                 |
-| `pnpm cf-typegen`         | Generates TypeScript interfaces for Cloudflare bindings defined in `wrangler.jsonc`. Run after binding changes. |
-| `pnpm email:dev`          | Starts the React Email preview server on port 3001.                                                             |
-| `pnpm worker:build`       | Builds the generated Cloudflare Worker and applies the repo’s post-build worker patch step.                     |
-| `pnpm worker:preview`     | Builds the Worker and runs the Cloudflare-backed local preview.                                                 |
-| `pnpm worker:deploy`      | Code deploy only: builds and deploys the Worker without local/remote migration orchestration.                   |
-| `pnpm preview`            | Compatibility alias for `pnpm worker:preview`.                                                                  |
-| `pnpm deploy`             | Compatibility alias for `pnpm worker:deploy`.                                                                   |
-| `pnpm deploy:dry-run`     | Dry-run deploy: builds the Worker and produces a deployable bundle without publishing.                          |
-| `pnpm build:prod`         | Compatibility alias for `pnpm deploy:dry-run`.                                                                  |
+### Rollback procedure
 
----
+1. Select a previous revision with known-good application evidence.
+2. Confirm that its code supports the current database schema and secret versions.
+3. Route traffic to that revision using Cloud Run's revision controls.
+4. Check traffic, user access, upload processing, and dependency health.
+5. Record the incident and the configuration that served it.
 
-## Architecture & Conventions
+See [revision rollback and traffic migration](https://docs.cloud.google.com/run/docs/rollouts-rollbacks-traffic-migration). Traffic rollback does not reverse database migrations, object writes, model calls, or completed task effects. Returning to an old image can require a separate data-recovery decision.
 
-### Database & ORM
+## Monitoring and service objectives
 
-- We use **Drizzle ORM** with Cloudflare D1.
-- **Important:** Cloudflare D1 currently does not support database transactions via Drizzle.
-- IDs are auto-generated via CUID2 at the schema level. Never pass IDs manually when inserting records using `db.insert().values()`.
+### What is present
 
-### Cloudflare Context
+- Cloud Build sends build logs to Cloud Logging.
+- The production logger emits JSON through stdout/stderr. Most ordinary entries use `level`; alert entries also include `severity` and `alertCategory`.
+- Sentry initializes for Node.js when `SENTRY_DSN` is set. Its configured trace sample rate is 0.05.
+- The admin-only `/api/health` route queries PostgreSQL, writes/reads/deletes a Redis canary, and lists a storage object page.
+- Document rows hold extraction/indexing status and recovery counters.
 
-To access Cloudflare bindings (KV, D1, R2, Environment Variables) inside Next.js API routes or Server Components, use the provided context utility:
+The health route is an active dependency diagnostic. It returns 200 for healthy or degraded status and 503 only when all three checked components are down. It is not an unauthenticated startup probe, an end-to-end user check, or an availability SLI by itself.
 
-```typescript
-import { getCloudflareContext } from "@/utils/cf-context";
+The [Cloud Run logging guide](https://docs.cloud.google.com/run/docs/logging) documents JSON `severity` and `logging.googleapis.com/trace`. The current logger does not consistently emit the trace-correlation field. JSON logs alone do not establish complete request-to-task tracing.
 
-const { env, cf, ctx } = getCloudflareContext();
-```
+### Recommended signals
 
-### Cloudflare Bindings
+Use [latency, traffic, errors, and saturation](https://sre.google/sre-book/monitoring-distributed-systems/) as core service signals. Apply them to actual agency journeys:
 
-The deployed Worker expects the following bindings for full feature parity:
+| Journey or resource | Signal to collect | Diagnostic use |
+| --- | --- | --- |
+| Sign-in and case access | Success ratio and successful/failed request latency | Separate auth configuration failures from infrastructure failures |
+| Upload | Accepted requests, failures by stage, upload size, and latency | Detect storage, database, and enqueue failures |
+| Processing | Queue wait plus processing time; age of queued work | Detect a stalled or under-provisioned pipeline |
+| Model requests | Provider, model, status, latency, tokens, and retries | Distinguish quota errors from invalid input or provider failures |
+| SQL | Active connections, pool wait, transaction errors, storage, CPU | Detect connection pressure and database limits |
+| Redis | Memory, evictions, connections, command failures | Detect session loss and cache pressure |
+| Vector search | Upsert/query errors, valid returned neighbors, and rejected stale candidates | Detect index drift and retrieval degradation |
+| Recovery | Claim counts, exhausted documents, and cleanup backlog | Find work that needs operator action |
 
-- `APP_D1` is the app-facing D1 binding inside application code. The checked-in Worker entry maps it to Wrangler's `NEXT_TAG_CACHE_D1` binding, which OpenNext still uses for tag-cache integration.
-- `NEXT_INC_CACHE_KV` is the Next.js incremental cache KV binding.
-- `NEXT_CACHE_DO_QUEUE` is the Durable Object queue binding used by OpenNext.
-- `ASSETS` is the static asset binding for the Worker bundle.
-- `WORKER_SELF_REFERENCE` is the internal service binding for the Worker itself.
-- `APP_KV` is the app KV namespace used by session/cache-related features.
-- `R2` is the document storage bucket binding.
-- `VECTORIZE` is the embeddings/index binding used by AI features.
+These are proposed monitoring requirements. This repository does not define a complete Cloud Monitoring dashboard, alert policy, or distributed trace pipeline for them.
 
-These bindings are declared in `wrangler.jsonc`; run `pnpm cf-typegen` after config changes if you need updated generated types.
+### SLI and SLO definitions
 
-### Authentication
+A service-level indicator (SLI) measures a user-visible outcome. A service-level objective (SLO) sets its target and time window. The following are candidate definitions, not measured targets:
 
-- **Server Components:** Retrieve the active session using `getSessionFromCookie()` from `src/utils/auth.ts`.
-- **Client Components:** Retrieve the active session using `useSessionStore((state) => state.session)` from `src/state/session.ts`.
+| Candidate SLI | Definition to implement | Decision still required |
+| --- | --- | --- |
+| Interactive availability | Successful eligible agency requests / all eligible agency requests | Routes, error classification, measurement point, target, and review window |
+| Processing timeliness | Eligible accepted uploads that reach the required completed state within `T` / eligible accepted uploads | Meaning of partial/skipped results, `T`, target, and treatment of provider incidents |
+| Review validity | Displayed current reviews whose snapshots match the latest assigned documents | Sampling/measurement method and treatment of stale reports |
 
----
+For each SLO, record its owner, source query, scope, exclusions, target, window, rationale, error-budget action, and review date. The [example SLO document](https://sre.google/workbook/slo-document/) shows this structure. Do not substitute queue enqueue counts for completed document outcomes. The source includes evaluation datasets, but this documentation work establishes no accuracy, latency, uptime, or throughput result.
 
-## Contributing
+## Recovery procedures
 
-1. Create a new branch for your feature (`git checkout -b feature/amazing-feature`)
-2. Commit your changes (`git commit -m 'Add amazing feature'`)
-3. Push to the branch (`git push origin feature/amazing-feature`)
-4. Open a Pull Request
+### Failure map
 
-**Coding Guidelines:**
+| Failure | Persisted state that can remain | Current recovery or next investigation |
+| --- | --- | --- |
+| Storage write fails | No document row from this upload | Fix storage access or availability; the client can retry |
+| SQL commit fails after storage succeeds | An unreferenced storage object | Investigate the failed write and object ownership; no general orphan collector is established |
+| Enqueue fails after SQL commit | A document row in queued state | Scheduler can reserve a recovery enqueue; inspect queue permissions and response errors |
+| A task is delivered twice concurrently | One document plus competing attempts | Advisory lock allows one active attempt; another receives 503 |
+| A process stops during model work | Old extraction/indexing state | Queue retry and later reconciliation can resume; an external call may repeat |
+| A document is deleted before its task starts | Obsolete task | Worker returns 204 |
+| Vector mutation succeeds before replicas catch up | Search results can lag | PostgreSQL existence/identity checks reject invalid candidates |
+| Model quota or provider failure persists | Failed work and growing task age | Review quotas and provider errors; inspect bounded recovery claims |
+| Redis is unavailable | Session/token operations can fail | Restore connectivity or the service; session data loss can require sign-in again |
+| A new image fails | New and previous revisions may both exist | Use a schema-compatible revision rollback |
 
-- Prefer React Server Components (RSC) to reduce client JavaScript.
-- Limit the use of `'use client'`, `useEffect`, and `useState`.
-- Format code via Prettier/ESLint rules before committing.
-- Do not add packages arbitrarily; use `pnpm` and check `package.json` for existing libraries first.
+### Investigate a processing backlog
 
----
+1. Identify a document by its ID, case, upload time, extraction status, indexing status, and recovery count. Do not paste its document content into operational logs.
+2. Check queue state and current retry/dispatch settings. Check whether the Scheduler job is enabled and reaches the expected route.
+3. Use the document ID to inspect route logs. Classify 401/403 as identity failures and 503 by lock, dependency, or processing failure.
+4. Confirm the storage object and database row still refer to the same document. Check Vertex/model access and SQL/Redis connectivity.
+5. If recovery claims are exhausted, resolve the cause before a reviewed requeue or correction. No production repair CLI or safe counter-reset procedure is established by this README.
 
-## License
+The task's ID is a hash, not the plain document ID. Use task payload metadata with appropriate access. The reconciler's summary is not a ledger of completed documents.
 
-This project is licensed under the MIT License.
+### Backup and restore responsibilities
+
+| Data | Recovery requirement | Established evidence |
+| --- | --- | --- |
+| PostgreSQL | Defined backup retention, tested restore, and an explicit PITR decision | Automated backups and a retention count of 7 observed; no restore drill or measured recovery objective in this review |
+| Storage objects | Restore the required bytes/generation and reconnect valid document references | Seven-day soft delete observed |
+| Redis | Restore available data or expire sessions and rebuild derived state as appropriate | Basic tier observed; recovery behavior depends on what was lost |
+| Vector index | Rebuild from authorized stored text/metadata and validate model dimensions and filters | Derived index adapter exists; an automated full rebuild/restore drill is not established |
+| Runtime configuration | Recover identities, secret references, network attachments, queue, and schedule settings | Existing service configuration; no complete declarative environment definition in the repository |
+
+The service guides distinguish [Cloud SQL HA](https://docs.cloud.google.com/sql/docs/postgres/high-availability), [backups and PITR](https://docs.cloud.google.com/sql/docs/postgres/backup-recovery/pitr), and [storage soft delete](https://docs.cloud.google.com/storage/docs/soft-delete). Backups are not an HA standby. Soft delete is not a complete cross-service restore plan.
+
+**Recommended:** establish a recovery point objective (acceptable data loss) and recovery time objective (acceptable restoration time), then measure a restore drill. Neither value is claimed here. Check case references, report validity, vector filters, and pending jobs after a restore.
+
+## Data location and retention
+
+The observed application, SQL, Redis, and document bucket are in Singapore (`asia-southeast1`). The Gemini client defaults to the **global** endpoint. The [model location guide](https://docs.cloud.google.com/vertex-ai/generative-ai/docs/learn/locations) distinguishes endpoint choice from data-residency guarantees. A regional application service does not establish that all AI processing remains in that region.
+
+| Destination | Data the current integration can send |
+| --- | --- |
+| Gemini through Vertex | PDF/image bytes for extraction; selected document text and inline images for evaluation |
+| OpenAI | Extracted chunk text for embeddings; checklist inputs; evaluation translation; chat context; fallback document extraction when enabled |
+| Perplexity | Checklist research inputs |
+| Resend | Recipient addresses and email content |
+| Sentry | Captured errors and attached application context |
+
+The task and REST helpers avoid raw token and SDK-payload logging on their failure paths. The general application logger accepts metadata, and some older call sites pass error objects. Complete redaction, audit-event coverage, and downstream retention must be reviewed as separate controls. This document makes no compliance certification or zero-retention claim.
+
+Case access checks, a deletion marker, vector removal, metadata cleanup, object soft delete, and backup expiry are different events. Document each retention period before promising an erasure timeline. Browser-private preview caching can also retain a previously delivered response until its cache lifetime ends.
+
+## Capacity and cost controls
+
+The important capacity boundaries are instance resources/concurrency, SQL pools, Redis memory, queue concurrency, model quotas, and the vector serving index. The observed queue allows 3 simultaneous dispatches across the queue. A configured 3-instance revision at concurrency 8 suggests 24 HTTP slots under ordinary conditions; it is not a benchmark of 24 users or 24 simultaneous extraction jobs.
+
+| Driver | What to observe or control |
+| --- | --- |
+| Cloud Run | CPU/memory use, request duration, minimum instances, concurrency, and maximum instances |
+| Cloud SQL | Instance size, connection budget, storage, backups, and HA choice |
+| Redis | Provisioned memory/tier and eviction behavior |
+| Vertex vector serving | Index size, deployed capacity, metadata fetches, mutations, and rebuilds |
+| Gemini and other model calls | Tokens, image/page count, retries, fallback calls, and completed-result reuse |
+| Cloud Storage | Stored source files, metadata versions, operations, soft-deleted bytes, and transfer |
+| Build and observability | Image storage, build time, source archives, log retention, and trace volume |
+
+The [cost optimization guidance](https://docs.cloud.google.com/architecture/framework/cost-optimization) connects these choices to workload demand. No cost-per-case estimate is established here. Model changes can affect quality, latency, and retry cost together; compare them on the same workload.
+
+**Recommended:** record a cost baseline, set a budget/notification policy, and review cost per completed case and per processed page. Ordinary [alerts-only budgets](https://docs.cloud.google.com/billing/docs/how-to/budgets) notify; they do not themselves cap usage. Confirm the specific budget product and any enforcement before calling it a spend limit.
+
+## Configuration and code map
+
+### Configuration contracts
+
+| Setting | Contract and consumer |
+| --- | --- |
+| `GOOGLE_CLOUD_PROJECT` | Project used by the Gemini client, storage client, and task queue path |
+| `GOOGLE_CLOUD_LOCATION` | Generative model location; defaults to `global` |
+| `GOOGLE_CLOUD_REGION` | Task region; defaults to `asia-southeast1`; does not relocate existing storage, SQL, or vector resources |
+| `DATABASE_URL` or `PGHOST`, `PGPORT`, `PGDATABASE`, `PGUSER`, `PGPASSWORD` | PostgreSQL connection; production can use the attached Cloud SQL socket |
+| `PGPOOL_MAX` | Main database pool limit; default 5 |
+| `REDIS_URL` | Redis connection URL; secret reference in the observed service |
+| `GCS_DOCUMENT_BUCKET` | Document and vector metadata bucket |
+| `VERTEX_VECTOR_INDEX` | `projects/PROJECT/locations/REGION/indexes/NUMBER` |
+| `VERTEX_VECTOR_INDEX_ENDPOINT` | Matching `projects/PROJECT/locations/REGION/indexEndpoints/NUMBER` |
+| `VERTEX_VECTOR_DEPLOYED_INDEX_ID` | Deployed index identifier used in neighbor queries |
+| `VERTEX_VECTOR_PUBLIC_ENDPOINT_DOMAIN` | Authenticated serving domain ending in `.vdb.vertexai.goog` |
+| `GOOGLE_CLOUD_SERVICE_ACCOUNT` | Permitted task/Scheduler OIDC account email |
+| `DOCUMENT_TASK_BASE_URL` | Canonical HTTPS `run.app` origin used as destination and audience |
+| `NEXT_PUBLIC_SITE_URL` | Canonical app origin, OAuth callback prefix, and public build configuration |
+| `GEMINI_DOCUMENT_EXTRACTION` | Set `false` or `0` to disable the Gemini extraction path |
+| `OPENAI_DOCUMENT_EXTRACTION_FALLBACK` | Set `false` or `0` to disable OpenAI extraction fallback |
+| `GOOGLE_APPLICATION_CREDENTIALS_JSON` | Optional Gemini-only credential override; ADC remains the shared cloud service adapter credential path |
+| `SENTRY_DSN`, `DB_SQL_LOG`, `LOG_LEVEL` | Error reporting and diagnostic controls |
+
+A queue, vector index, bucket, SQL instance, secret reference, and model entitlement must exist; an environment variable does not create any of them.
+
+### Source entry points
+
+| Concern | Source |
+| --- | --- |
+| Runtime service access | [runtime-context.ts](src/infra/runtime-context.ts) |
+| ADC and bounded REST retries | [google/auth.ts](src/infra/google/auth.ts) |
+| PostgreSQL and transactional batches | [db/index.ts](src/db/index.ts) |
+| Object storage | [google/storage.ts](src/infra/google/storage.ts) |
+| Redis namespace adapter | [google/kv.ts](src/infra/google/kv.ts) |
+| Task creation and lock pool | [google/document-tasks.ts](src/infra/google/document-tasks.ts) |
+| OIDC verifier | [google/internal-auth.ts](src/infra/google/internal-auth.ts) |
+| Task worker | [document-extraction route](src/app/api/internal/document-extraction/route.ts) |
+| Recovery and cleanup | [document-reconciliation route](src/app/api/internal/document-reconciliation/route.ts) |
+| Vector adapter and cleanup | [google/vector-search.ts](src/infra/google/vector-search.ts) |
+| PDF extraction | [pdf-parser.ts](src/services/pdf-parser.ts) |
+| Model selection and evaluation | [gemini.ts](src/lib/gemini.ts), [gemini-evaluation.ts](src/lib/gemini-evaluation.ts) |
+| Document state and embedding pipeline | [document-pipeline.ts](src/services/document-pipeline.ts) |
+| Review snapshot validity and issue synchronization | [agency-review.ts](src/server/agency-review.ts) |
+| Container and release | [Dockerfile](Dockerfile), [cloudbuild.yaml](cloudbuild.yaml), [workflow](../../.github/workflows/deploy.yml) |
+
+### Commands from this directory
+
+| Command | Effect |
+| --- | --- |
+| `pnpm dev` | Start Next.js on port 3002 |
+| `pnpm build` | Build the application |
+| `pnpm start` | Serve the production build; use `PORT` to select a port |
+| `pnpm lint` | Run ESLint |
+| `pnpm test` | Run the standard Vitest suite |
+| `pnpm eval` | Run separate model evaluation suites |
+| `pnpm db:generate <name>` | Generate a named PostgreSQL migration |
+| `pnpm db:migrate` | Apply PostgreSQL migrations to the configured target |
+| `pnpm email:dev` | Start the email preview server on port 3003 |
+| `pnpm deploy` | Build and deploy to the configured cloud project |
+| `pnpm deploy:google:build` | Build and publish the image without updating the service |
+
+## Current limits and follow-up work
+
+| Area | Current boundary | Evidence or next decision needed |
+| --- | --- | --- |
+| Infrastructure reproduction | Release scripts update an existing service | A complete versioned provisioning definition is not present |
+| Regional availability | Zonal SQL and Basic Redis were observed | Make an explicit HA decision based on required user outcomes |
+| Transport and secrets | Secret injection uses versioned references; observed Redis transport encryption is disabled | Review transport requirements and rotate through an explicit release procedure |
+| Rate limiting | Redis-backed read/check/write remains non-atomic | Define and implement any required hard concurrency guarantee |
+| Cross-service writes | No distributed transaction or transactional outbox | Account for object orphans, enqueue failures, and duplicate external effects |
+| Processing recovery | Three bounded recovery claims plus queue retries | Define an operator-owned response after exhaustion |
+| Observability | Logs, Sentry, and health diagnostics exist | SLOs, complete trace correlation, and checked-in alert/dashboard definitions are not established |
+| Disaster recovery | Backup and soft-delete configuration observed | Verify PITR, define recovery objectives, and record restore drills |
+| Release enforcement | Image digest selected | No explicit test, canary-analysis, vulnerability, or attestation gate in the release workflow |
+| AI quality and location | Schema checks and configured models exist; generative endpoint defaults global | Record evaluated quality and review processing-location requirements |
+| Reports and reviewer controls | Report list/actions exist; the case toolbar is not mounted | Report export/delivery and toolbar reachability remain incomplete |
+
+These are documentation findings and operating decisions. This update does not provision resources, change policies, run tests, deploy code, or claim that the recommended controls are installed.
+
+## Documentation maintenance
+
+Review this reference when a cloud service adapter, schema, model ID, internal endpoint, deployment identity, or service setting changes. Update the source baseline and the observation date separately. Retain the distinction between code defaults, deployed settings, measured outcomes, and recommended work. Keep secret values and source documents out of documentation examples.

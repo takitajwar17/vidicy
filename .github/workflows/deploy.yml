@@ -40,7 +40,7 @@ jobs:
             --region=asia-southeast1 \
             --config=apps/agency/cloudbuild.yaml \
             --gcs-source-staging-dir=gs://eco-azimuth-441108-s4-vidicy-build-source/source \
-            --substitutions="_IMAGE_TAG=${{ github.sha }},COMMIT_SHA=${{ github.sha }}" \
+            --substitutions="_IMAGE_TAG=${{ github.sha }}" \
             --quiet
 
       - name: Deploy Agency container
