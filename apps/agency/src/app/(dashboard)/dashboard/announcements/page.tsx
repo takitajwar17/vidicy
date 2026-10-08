@@ -23,7 +23,7 @@ export default async function AnnouncementsPage() {
       title="Announcements"
       description="Product updates, maintenance notes, and internal messages for the review desk."
     >
-      <AnnouncementsFeedClient initialFeed={feed as any} isAdmin={session.user.role === "admin"} />
+      <AnnouncementsFeedClient initialFeed={feed} isAdmin={session.user.role === "admin"} />
     </AgencyPageShell>
   );
 }

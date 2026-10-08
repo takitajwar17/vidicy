@@ -126,13 +126,14 @@ type CommentTreeProps = {
   comments: AnnouncementComment[];
   postId: string;
   isAdmin: boolean;
-  onReply: (postId: string, body: string, parentId?: string) => Promise<unknown>;
+  onReply: (postId: string, body: string, parentId?: string) => Promise<boolean>;
   onDelete: (commentId: string) => Promise<unknown>;
 };
 
 function CommentTree({ comments, postId, isAdmin, onReply, onDelete }: CommentTreeProps) {
   const [replyOpenFor, setReplyOpenFor] = useState<string | null>(null);
   const [replyBody, setReplyBody] = useState("");
+  const [isReplyPending, setIsReplyPending] = useState(false);
   const commentsByParent = useMemo(() => {
     const map = new Map<string | null, AnnouncementComment[]>();
 
@@ -213,6 +214,8 @@ function CommentTree({ comments, postId, isAdmin, onReply, onDelete }: CommentTr
                   <div className="space-y-2 rounded-2xl border bg-muted/20 p-3">
                     <Textarea
                       value={replyBody}
+                      maxLength={5000}
+                      disabled={isReplyPending}
                       onChange={(e) => setReplyBody(e.target.value)}
                       placeholder="Write a reply"
                       className="min-h-24 border-0 bg-transparent px-0 shadow-none focus-visible:ring-0"
@@ -232,11 +235,17 @@ function CommentTree({ comments, postId, isAdmin, onReply, onDelete }: CommentTr
                       <Button
                         size="sm"
                         className="rounded-full"
-                        disabled={!trimmedReplyBody}
+                        disabled={!trimmedReplyBody || isReplyPending}
                         onClick={async () => {
-                          await onReply(postId, trimmedReplyBody, comment.id);
-                          setReplyBody("");
-                          setReplyOpenFor(null);
+                          setIsReplyPending(true);
+                          try {
+                            if (await onReply(postId, trimmedReplyBody, comment.id)) {
+                              setReplyBody("");
+                              setReplyOpenFor(null);
+                            }
+                          } finally {
+                            setIsReplyPending(false);
+                          }
                         }}
                       >
                         Post reply
@@ -269,13 +278,14 @@ function PostCard({
   isAdmin: boolean;
   onUpvote: (postId: string) => void;
   onVote: (postId: string, optionIds: string[]) => void;
-  onComment: (postId: string, body: string) => Promise<unknown>;
-  onReply: (postId: string, body: string, parentId?: string) => Promise<unknown>;
+  onComment: (postId: string, body: string) => Promise<boolean>;
+  onReply: (postId: string, body: string, parentId?: string) => Promise<boolean>;
   onDeleteComment: (commentId: string) => Promise<unknown>;
   onMarkRead: (postId: string) => void;
 }) {
   const [commentComposerOpen, setCommentComposerOpen] = useState(false);
   const [commentText, setCommentText] = useState("");
+  const [isCommentPending, setIsCommentPending] = useState(false);
   const [selectedPollOptionIds, setSelectedPollOptionIds] = useState(() =>
     post.pollOptions.filter((option) => option.hasVoted).map((option) => option.id),
   );
@@ -634,6 +644,8 @@ function PostCard({
               <div className="space-y-3 rounded-2xl border bg-muted/20 p-3">
                 <Textarea
                   value={commentText}
+                  maxLength={5000}
+                  disabled={isCommentPending}
                   onChange={(e) => setCommentText(e.target.value)}
                   placeholder="Share your feedback, ask a question, or add more context"
                   className="min-h-24 border-0 bg-transparent px-0 shadow-none focus-visible:ring-0"
@@ -653,11 +665,17 @@ function PostCard({
                   <Button
                     size="sm"
                     className="rounded-full px-4"
-                    disabled={!trimmedCommentText}
+                    disabled={!trimmedCommentText || isCommentPending}
                     onClick={async () => {
-                      await onComment(post.id, trimmedCommentText);
-                      setCommentText("");
-                      setCommentComposerOpen(false);
+                      setIsCommentPending(true);
+                      try {
+                        if (await onComment(post.id, trimmedCommentText)) {
+                          setCommentText("");
+                          setCommentComposerOpen(false);
+                        }
+                      } finally {
+                        setIsCommentPending(false);
+                      }
                     }}
                   >
                     Post comment
@@ -758,7 +776,7 @@ export function AnnouncementsFeedClient({
     });
 
     return refreshFeed({
-      q: overrides?.q ?? (search || undefined),
+      q: (overrides?.q ?? search) || undefined,
       type: resolvedType === "all" ? undefined : resolvedType,
       pinnedOnly: overrides?.pinnedOnly ?? pinnedOnly,
       dateFrom: resolvedDates.dateFrom,
@@ -777,7 +795,7 @@ export function AnnouncementsFeedClient({
     setDateFrom("");
     setDateTo("");
     void refresh({
-      q: undefined,
+      q: "",
       type: "all",
       pinnedOnly: false,
       dateFrom: "",
@@ -807,7 +825,15 @@ export function AnnouncementsFeedClient({
     onSuccess() {
       void refresh();
     },
+    onError({ err }) {
+      toast.error(err.message || "Failed to post comment");
+    },
   });
+
+  async function submitComment(input: { postId: string; body: string; parentId?: string }) {
+    const [, error] = await addComment(input);
+    return !error;
+  }
 
   const { execute: votePoll } = useServerAction(voteOnAnnouncementPollAction, {
     onSuccess() {
@@ -842,9 +868,9 @@ export function AnnouncementsFeedClient({
                 isAdmin={isAdmin}
                 onUpvote={(postId: string) => toggleUpvote({ postId })}
                 onVote={(postId: string, optionIds: string[]) => votePoll({ postId, optionIds })}
-                onComment={(postId: string, body: string) => addComment({ postId, body })}
+                onComment={(postId: string, body: string) => submitComment({ postId, body })}
                 onReply={(postId: string, body: string, parentId?: string) =>
-                  addComment({ postId, body, parentId })
+                  submitComment({ postId, body, parentId })
                 }
                 onDeleteComment={(commentId: string) => deleteComment({ commentId })}
                 onMarkRead={(postId: string) => markRead({ postId })}

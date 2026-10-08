@@ -49,7 +49,7 @@ export async function getAnnouncementsUnreadCountForUser(userId: string) {
 
 export async function getAnnouncementsFeed(params?: {
   q?: string;
-  type?: string;
+  type?: typeof announcementPostTable.$inferSelect.type;
   pinnedOnly?: boolean;
   dateFrom?: Date;
   dateTo?: Date;
@@ -246,8 +246,8 @@ export async function createAnnouncement(input: {
   attachments?: Array<{ label: string; url: string }>;
   cta?: { label: string; url: string } | null;
   embed?: { title?: string | null; url: string } | null;
-  type: string;
-  priority: string;
+  type: typeof announcementPostTable.$inferInsert.type;
+  priority: typeof announcementPostTable.$inferInsert.priority;
   pinned?: boolean;
   commentsEnabled?: boolean;
   pollSingleChoice?: boolean;

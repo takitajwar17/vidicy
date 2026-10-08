@@ -14,7 +14,7 @@ export const ANNOUNCEMENT_TYPE = {
   ACTION_REQUIRED: "action_required",
 } as const;
 
-export const announcementTypeTuple = Object.values(ANNOUNCEMENT_TYPE) as [string, ...string[]];
+export const announcementTypeTuple = Object.values(ANNOUNCEMENT_TYPE) as [(typeof ANNOUNCEMENT_TYPE)[keyof typeof ANNOUNCEMENT_TYPE], ...(typeof ANNOUNCEMENT_TYPE)[keyof typeof ANNOUNCEMENT_TYPE][]];
 
 export const ANNOUNCEMENT_PRIORITY = {
   NORMAL: "normal",
@@ -23,8 +23,8 @@ export const ANNOUNCEMENT_PRIORITY = {
 } as const;
 
 export const announcementPriorityTuple = Object.values(ANNOUNCEMENT_PRIORITY) as [
-  string,
-  ...string[],
+  (typeof ANNOUNCEMENT_PRIORITY)[keyof typeof ANNOUNCEMENT_PRIORITY],
+  ...(typeof ANNOUNCEMENT_PRIORITY)[keyof typeof ANNOUNCEMENT_PRIORITY][],
 ];
 
 export const announcementPostTable = pgTable(
