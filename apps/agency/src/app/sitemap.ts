@@ -35,12 +35,6 @@ const STATIC_SITEMAP_ENTRIES: StaticSitemapEntry[] = [
     priority: 0.6,
   },
   {
-    path: "/pilot-access",
-    lastModified: "2026-10-18",
-    changeFrequency: "monthly",
-    priority: 0.45,
-  },
-  {
     path: "/privacy",
     lastModified: "2026-10-02",
     changeFrequency: "yearly",
