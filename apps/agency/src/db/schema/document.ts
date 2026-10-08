@@ -1,4 +1,4 @@
-import { pgTable, integer, text, index, timestamp, jsonb } from "drizzle-orm/pg-core";
+import { pgTable, integer, bigint, text, index, timestamp, jsonb } from "drizzle-orm/pg-core";
 import { type InferSelectModel } from "drizzle-orm";
 import { createId } from "@paralleldrive/cuid2";
 import { visaApplicationTable, riskLevelTuple, scoreConfidenceTuple } from "./visa-application";
@@ -62,6 +62,8 @@ export function isSupportedDocumentMimeType(mimeType: string): boolean {
 export const uploadedDocumentTable = pgTable(
   "uploaded_document",
   {
+    // CUIDs are random. Use insertion order to resolve equal upload timestamps.
+    uploadSequence: bigint({ mode: "number" }).generatedAlwaysAsIdentity(),
     id: text()
       .primaryKey()
       .$defaultFn(() => `udoc_${createId()}`)

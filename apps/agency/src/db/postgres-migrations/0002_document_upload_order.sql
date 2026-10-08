@@ -1,0 +1,1 @@
+ALTER TABLE "uploaded_document" ADD COLUMN "uploadSequence" bigint NOT NULL GENERATED ALWAYS AS IDENTITY (sequence name "uploaded_document_uploadSequence_seq" INCREMENT BY 1 MINVALUE 1 MAXVALUE 9223372036854775807 START WITH 1 CACHE 1);

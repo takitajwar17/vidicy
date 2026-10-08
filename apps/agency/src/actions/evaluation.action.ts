@@ -42,32 +42,6 @@ const evaluateDocumentsSchema = z.object({
 });
 
 const EVALUATION_TRANSLATION_MODEL = "gpt-4.1-mini";
-// Retain the existing action helper contract while all evaluation calls use
-// Vertex AI. OpenAI is used only for translation and embeddings below.
-export async function createEvaluationCompletionWithFallback({
-  systemPrompt,
-  userContent,
-  schemaName,
-  schema,
-  maxTokens,
-}: {
-  openai?: OpenAI;
-  systemPrompt: string;
-  userContent: OpenAI.ChatCompletionUserMessageParam["content"];
-  schemaName: string;
-  schema: Record<string, unknown>;
-  maxTokens: number;
-}) {
-  const content = await createGeminiEvaluation({
-    systemPrompt,
-    userContent,
-    schemaName,
-    schema,
-    maxTokens,
-  });
-  return { choices: [{ message: { content } }] };
-}
-
 // ---------------------------------------------------------------------------
 // Zod schemas for validating AI responses — .catch() on each field means a
 // bad AI response degrades gracefully instead of throwing.
@@ -401,173 +375,109 @@ function getDocumentDimension(documentName: string): { dimension: string; signal
   };
 }
 
-export const evaluateDocumentsAction = createServerAction()
-  .input(evaluateDocumentsSchema)
-  .handler(async ({ input }) => {
-    const session = await requireApplicationPermission(input.applicationId, APPLICATION_PERMISSIONS.ACCESS_APPLICATION);
-    await checkActionRateLimit("evaluateDocuments", session.userId, 10);
-    trackUsage({ userId: session.userId, event: USAGE_EVENTS.EVALUATION_RUN, metadata: { applicationId: input.applicationId } });
+interface EvaluationEvidenceInput {
+  applicationId: string;
+  checklistItems: (typeof checklistItemTable.$inferSelect)[];
+  uploadedDocuments: (typeof uploadedDocumentTable.$inferSelect)[];
+  previousEvaluation: typeof documentEvaluationTable.$inferSelect | undefined;
+  openai: OpenAI;
+}
 
-    const db = getDB();
+async function loadEvaluationEvidence({
+  applicationId,
+  checklistItems,
+  uploadedDocuments,
+  previousEvaluation,
+  openai,
+}: EvaluationEvidenceInput) {
+  // ---------------------------------------------------------------------------
+  // Build a map: checklistItemId → latest uploaded document for that item
+  // ---------------------------------------------------------------------------
 
-    // ---------------------------------------------------------------------------
-    // Load application, applicant, checklist items, and uploaded documents
-    // ---------------------------------------------------------------------------
-
-    const [application, applicant] = await Promise.all([
-      db.query.visaApplicationTable.findFirst({
-        where: eq(visaApplicationTable.id, input.applicationId),
-      }),
-      db.query.applicantTable.findFirst({
-        where: and(
-          eq(applicantTable.id, input.applicantId),
-          eq(applicantTable.applicationId, input.applicationId)
-        ),
-      }),
-    ]);
-
-    if (!application) {
-      throw new ZSAError("NOT_FOUND", "Application not found");
+  // Group uploaded documents by checklistItemId (latest first due to orderBy uploadedAt desc)
+  const docByChecklistItem = new Map<string, (typeof uploadedDocuments)[0]>();
+  for (const doc of uploadedDocuments) {
+    if (doc.checklistItemId && !docByChecklistItem.has(doc.checklistItemId)) {
+      docByChecklistItem.set(doc.checklistItemId, doc);
     }
+  }
 
-    if (!applicant) {
-      throw new ZSAError("NOT_FOUND", "Applicant not found");
-    }
+  // ---------------------------------------------------------------------------
+  // Fetch text content for documents that were uploaded but not yet extracted.
+  // PDFs and image files use Gemini extraction, with the existing native PDF
+  // extraction and OpenAI extraction fallback retained by the shared pipeline.
+  // ---------------------------------------------------------------------------
 
-    // Reads can be parallelised safely — also fetch the previous evaluation for incremental reuse
-    const [checklistItems, uploadedDocuments, previousEvaluation] = await Promise.all([
-      db.query.checklistItemTable.findMany({
-        where: and(
-          eq(checklistItemTable.applicationId, application.id),
-          eq(checklistItemTable.applicantId, input.applicantId)
-        ),
-        orderBy: [asc(checklistItemTable.sortOrder)],
-      }),
-      db.query.uploadedDocumentTable.findMany({
-        where: and(
-          eq(uploadedDocumentTable.applicationId, application.id),
-          eq(uploadedDocumentTable.applicantId, input.applicantId)
-        ),
-        orderBy: newestDocumentOrder,
-      }),
-      db.query.documentEvaluationTable.findFirst({
-        where: and(
-          eq(documentEvaluationTable.applicationId, application.id),
-          eq(documentEvaluationTable.applicantId, input.applicantId)
-        ),
-        orderBy: newestEvaluationOrder,
-      }),
-    ]);
+  let r2Bucket: R2Bucket | null = null;
+  let vectorize: VectorizeIndex | null = null;
+  try {
+    const { env } = await getRuntimeContext({ async: true });
+    r2Bucket = env.R2 ?? null;
+    vectorize = env.VECTORIZE ?? null;
+  } catch {
+    // Storage or search may be unavailable in local development.
+  }
 
-    if (checklistItems.length === 0) {
-      throw new ZSAError("NOT_FOUND", "No checklist items exist to evaluate for this application.");
-    }
+  // Fetch missing text content in parallel through the shared extraction service.
+  // This keeps evaluation aligned with the upload-time extraction pipeline and
+  // persists any on-demand extraction result back onto the document record.
+  const textByDocId = new Map<string, string>();
 
-    if (uploadedDocuments.length === 0) {
-      throw new ZSAError(
-        "PRECONDITION_FAILED",
-        "Please upload at least one document before running an evaluation."
-      );
-    }
-
-    const openai = getOpenAIClient();
-
-    // ---------------------------------------------------------------------------
-    // Application context string — injected into every per-document prompt
-    // ---------------------------------------------------------------------------
-    const applicationContext = `Visa type: ${application.visaType}
-Applicant country (passport): ${application.homeCountry}
-Currently residing in: ${application.currentCountry}
-Destination country: ${application.destinationCountry}
-Embassy: ${application.embassy}
-Applicant name: ${sanitizeForPrompt(applicant.name, 200)} (${applicant.relationship})`;
-
-    // ---------------------------------------------------------------------------
-    // Build a map: checklistItemId → latest uploaded document for that item
-    // ---------------------------------------------------------------------------
-
-    // Group uploaded documents by checklistItemId (latest first due to orderBy uploadedAt desc)
-    const docByChecklistItem = new Map<string, typeof uploadedDocuments[0]>();
-    for (const doc of uploadedDocuments) {
-      if (doc.checklistItemId && !docByChecklistItem.has(doc.checklistItemId)) {
-        docByChecklistItem.set(doc.checklistItemId, doc);
+  await Promise.all(
+    [...docByChecklistItem.values()].map(async (doc) => {
+      if (doc.textContent) {
+        // Already extracted by the background pipeline — use cached value
+        textByDocId.set(doc.id, doc.textContent);
+        return;
       }
-    }
 
-    // ---------------------------------------------------------------------------
-    // Fetch text content for documents that were uploaded but not yet extracted.
-    // PDFs and image files use Gemini extraction, with the existing native PDF
-    // extraction and OpenAI extraction fallback retained by the shared pipeline.
-    // ---------------------------------------------------------------------------
+      try {
+        const extraction = await ensureDocumentExtraction({
+          documentId: doc.id,
+        });
 
-    let r2Bucket: R2Bucket | null = null;
-    let vectorize: VectorizeIndex | null = null;
-    try {
-      const { env } = await getRuntimeContext({ async: true });
-      r2Bucket = env.R2 ?? null;
-      vectorize = env.VECTORIZE ?? null;
-    } catch {
-      // Storage or search may be unavailable in local development.
-    }
+        if (extraction.success && extraction.textContent) {
+          textByDocId.set(doc.id, extraction.textContent);
+        }
+      } catch (err) {
+        logger.warn("On-demand text extraction failed", { documentId: doc.id, error: err });
+      }
+    }),
+  );
 
-    // Fetch missing text content in parallel through the shared extraction service.
-    // This keeps evaluation aligned with the upload-time extraction pipeline and
-    // persists any on-demand extraction result back onto the document record.
-    const textByDocId = new Map<string, string>();
+  // ---------------------------------------------------------------------------
+  // Language translation — for documents whose language was detected as non-English
+  // in a prior evaluation run, pre-translate before Phase 1 so the AI evaluates
+  // English text and returns accurate scores. On a first-time evaluation the Phase 1
+  // prompt instructs the AI to translate internally (zero extra API calls).
+  // ---------------------------------------------------------------------------
 
+  const translatedTextByDocId = new Map<string, string>();
+
+  const docsNeedingTranslation = [...docByChecklistItem.entries()].filter(([itemId, doc]) => {
+    const rawText = textByDocId.get(doc.id) ?? "";
+    if (rawText.trim().length === 0) return false;
+    const prevLang = (
+      previousEvaluation?.itemFeedback?.[itemId] as
+        | { extractedFields?: { language?: string } }
+        | undefined
+    )?.extractedFields?.language;
+    return prevLang && prevLang !== "en" && prevLang !== "unknown";
+  });
+
+  if (docsNeedingTranslation.length > 0) {
     await Promise.all(
-      [...docByChecklistItem.values()].map(async (doc) => {
-        if (doc.textContent) {
-          // Already extracted by the background pipeline — use cached value
-          textByDocId.set(doc.id, doc.textContent);
-          return;
-        }
-
-        try {
-          const extraction = await ensureDocumentExtraction({
-            documentId: doc.id,
-          });
-
-          if (extraction.success && extraction.textContent) {
-            textByDocId.set(doc.id, extraction.textContent);
-          }
-        } catch (err) {
-          logger.warn("On-demand text extraction failed", { documentId: doc.id, error: err });
-        }
-      })
-    );
-
-    // ---------------------------------------------------------------------------
-    // Language translation — for documents whose language was detected as non-English
-    // in a prior evaluation run, pre-translate before Phase 1 so the AI evaluates
-    // English text and returns accurate scores. On a first-time evaluation the Phase 1
-    // prompt instructs the AI to translate internally (zero extra API calls).
-    // ---------------------------------------------------------------------------
-
-    const translatedTextByDocId = new Map<string, string>();
-
-    const docsNeedingTranslation = [...docByChecklistItem.entries()].filter(([itemId, doc]) => {
-      const rawText = textByDocId.get(doc.id) ?? "";
-      if (rawText.trim().length === 0) return false;
-      const prevLang = (
-        previousEvaluation?.itemFeedback?.[itemId] as
-          | { extractedFields?: { language?: string } }
-          | undefined
-      )?.extractedFields?.language;
-      return prevLang && prevLang !== "en" && prevLang !== "unknown";
-    });
-
-    if (docsNeedingTranslation.length > 0) {
-      await Promise.all(
-        docsNeedingTranslation.map(async ([itemId, doc]) => {
-          const rawText = textByDocId.get(doc.id) ?? "";
-          const prevLang = (
+      docsNeedingTranslation.map(async ([itemId, doc]) => {
+        const rawText = textByDocId.get(doc.id) ?? "";
+        const prevLang =
+          (
             previousEvaluation!.itemFeedback![itemId] as
               | { extractedFields?: { language?: string } }
               | undefined
           )?.extractedFields?.language ?? "unknown";
-          try {
-            const response = await openai.chat.completions.create({
+        try {
+          const response = await openai.chat.completions.create(
+            {
               model: EVALUATION_TRANSLATION_MODEL,
               messages: [
                 {
@@ -577,249 +487,325 @@ Applicant name: ${sanitizeForPrompt(applicant.name, 200)} (${applicant.relations
               ],
               temperature: 0,
               max_tokens: AI_MAX_TOKENS_LARGE,
-            }, { signal: AbortSignal.timeout(AI_TIMEOUT_CHAT_MS) });
-            const translated = response.choices[0].message.content?.trim();
-            if (translated) {
-              translatedTextByDocId.set(doc.id, translated);
-              logger.info("Document translated to English", { documentId: doc.id, fromLanguage: prevLang });
-            }
-          } catch (err) {
-            logger.warn("Document translation failed", { documentId: doc.id, language: prevLang, error: err });
-          }
-        })
-      );
-    }
-
-    // ---------------------------------------------------------------------------
-    // Vectorize retrieval — for indexed documents, fetch semantically relevant
-    // chunks instead of blindly slicing the first 8 000 raw characters.
-    // For a 20-page bank statement this retrieves the most relevant pages rather
-    // than always reading only the header. Falls back gracefully if unavailable.
-    // ---------------------------------------------------------------------------
-
-    const relevantChunksByItemId = new Map<string, string>();
-
-    if (vectorize) {
-      // Only query for documents that have been fully indexed
-      const vectorizedItems = checklistItems.filter((item) => {
-        const doc = docByChecklistItem.get(item.id);
-        return (
-          doc &&
-          doc.indexingStatus === DOCUMENT_INDEXING_STATUS.COMPLETED &&
-          (doc.chunkCount ?? 0) > 0
-        );
-      });
-
-      if (vectorizedItems.length > 0) {
-        try {
-          // One batch embedding call — one query text per indexed document
-          const queryTexts = vectorizedItems.map(
-            (item) => `${item.documentName}: ${(item.description ?? "").slice(0, 400)}`
+            },
+            { signal: AbortSignal.timeout(AI_TIMEOUT_CHAT_MS) },
           );
-          const embedResp = await openai.embeddings.create({
+          const translated = response.choices[0].message.content?.trim();
+          if (translated) {
+            translatedTextByDocId.set(doc.id, translated);
+            logger.info("Document translated to English", {
+              documentId: doc.id,
+              fromLanguage: prevLang,
+            });
+          }
+        } catch (err) {
+          logger.warn("Document translation failed", {
+            documentId: doc.id,
+            language: prevLang,
+            error: err,
+          });
+        }
+      }),
+    );
+  }
+
+  // ---------------------------------------------------------------------------
+  // Vectorize retrieval — for indexed documents, fetch semantically relevant
+  // chunks instead of blindly slicing the first 8 000 raw characters.
+  // For a 20-page bank statement this retrieves the most relevant pages rather
+  // than always reading only the header. Falls back gracefully if unavailable.
+  // ---------------------------------------------------------------------------
+
+  const relevantChunksByItemId = new Map<string, string>();
+
+  if (vectorize) {
+    // Only query for documents that have been fully indexed
+    const vectorizedItems = checklistItems.filter((item) => {
+      const doc = docByChecklistItem.get(item.id);
+      return (
+        doc &&
+        doc.indexingStatus === DOCUMENT_INDEXING_STATUS.COMPLETED &&
+        (doc.chunkCount ?? 0) > 0
+      );
+    });
+
+    if (vectorizedItems.length > 0) {
+      try {
+        // One batch embedding call — one query text per indexed document
+        const queryTexts = vectorizedItems.map(
+          (item) => `${item.documentName}: ${(item.description ?? "").slice(0, 400)}`,
+        );
+        const embedResp = await openai.embeddings.create(
+          {
             model: "text-embedding-3-small",
             input: queryTexts,
-          }, { signal: AbortSignal.timeout(AI_TIMEOUT_EMBEDDING_MS) });
+          },
+          { signal: AbortSignal.timeout(AI_TIMEOUT_EMBEDDING_MS) },
+        );
 
-          // Parallel Vectorize queries — each scoped to its own documentId
-          const vz = vectorize;
-          await Promise.all(
-            vectorizedItems.map(async (item, i) => {
-              const doc = docByChecklistItem.get(item.id)!;
-              const chunks = await queryDocumentChunksFromVectorize({
-                vectorize: vz,
-                queryVector: embedResp.data[i].embedding,
-                applicationId: application.id,
-                documentId: doc.id,
-              });
+        // Parallel Vectorize queries — each scoped to its own documentId
+        const vz = vectorize;
+        await Promise.all(
+          vectorizedItems.map(async (item, i) => {
+            const doc = docByChecklistItem.get(item.id)!;
+            const chunks = await queryDocumentChunksFromVectorize({
+              vectorize: vz,
+              queryVector: embedResp.data[i].embedding,
+              applicationId,
+              documentId: doc.id,
+            });
 
-              if (chunks.length > 0) {
-                // Concatenate up to ~6 000 chars of semantically relevant content
-                let combined = "";
-                for (const chunk of chunks) {
-                  if (combined.length + chunk.length > AI_MAX_COMBINED_TEXT_LENGTH) break;
-                  combined += (combined ? "\n\n---\n\n" : "") + chunk;
-                }
-                relevantChunksByItemId.set(item.id, combined);
+            if (chunks.length > 0) {
+              // Concatenate up to ~6 000 chars of semantically relevant content
+              let combined = "";
+              for (const chunk of chunks) {
+                if (combined.length + chunk.length > AI_MAX_COMBINED_TEXT_LENGTH) break;
+                combined += (combined ? "\n\n---\n\n" : "") + chunk;
               }
-            })
-          );
+              relevantChunksByItemId.set(item.id, combined);
+            }
+          }),
+        );
 
-          logger.info("Vectorize: retrieved relevant chunks", { retrieved: relevantChunksByItemId.size, total: vectorizedItems.length });
-        } catch (err) {
-          logger.warn("Vectorize retrieval failed, falling back to raw text head", { error: err });
-        }
+        logger.info("Vectorize: retrieved relevant chunks", {
+          retrieved: relevantChunksByItemId.size,
+          total: vectorizedItems.length,
+        });
+      } catch (err) {
+        logger.warn("Vectorize retrieval failed, falling back to raw text head", { error: err });
       }
     }
+  }
 
-    // ---------------------------------------------------------------------------
-    // Vision data loading — fetch document bytes from R2 and produce base64
-    // image data URLs for Gemini multimodal analysis.
-    //   - Image uploads (JPEG/PNG/WebP): encoded directly, zero conversion needed.
-    //   - PDFs: first 3 pages rendered via PDF.js + OffscreenCanvas (Workers native).
-    //     Falls back silently to empty images if rendering is unsupported.
-    // Runs in parallel with no blocking dependency on text extraction.
-    // ---------------------------------------------------------------------------
+  // ---------------------------------------------------------------------------
+  // Vision data loading — fetch document bytes from R2 and produce base64
+  // image data URLs for Gemini multimodal analysis.
+  //   - Image uploads (JPEG/PNG/WebP): encoded directly, zero conversion needed.
+  //   - PDFs: first 3 pages rendered via PDF.js + OffscreenCanvas (Workers native).
+  //     Falls back silently to empty images if rendering is unsupported.
+  // Runs in parallel with no blocking dependency on text extraction.
+  // ---------------------------------------------------------------------------
 
-    const visionDataByDocId = new Map<string, string[]>();
-    const metadataByDocId = new Map<string, PdfMetadataSignals>();
+  const visionDataByDocId = new Map<string, string[]>();
+  const metadataByDocId = new Map<string, PdfMetadataSignals>();
 
-    if (r2Bucket) {
-      await Promise.all(
-        [...docByChecklistItem.values()].map(async (doc) => {
-          // Only process image files and PDFs; skip other types (DOC, etc.)
-          const isImage = doc.mimeType.startsWith("image/");
-          const isPdf = doc.mimeType === "application/pdf";
-          if (!isImage && !isPdf) return;
+  if (r2Bucket) {
+    await Promise.all(
+      [...docByChecklistItem.values()].map(async (doc) => {
+        // Only process image files and PDFs; skip other types (DOC, etc.)
+        const isImage = doc.mimeType.startsWith("image/");
+        const isPdf = doc.mimeType === "application/pdf";
+        if (!isImage && !isPdf) return;
 
-          try {
-            const r2Object = await r2Bucket!.get(doc.fileKey);
-            if (!r2Object) return;
-            const arrayBuffer = await r2Object.arrayBuffer();
-            const bytes = new Uint8Array(arrayBuffer);
+        try {
+          const r2Object = await r2Bucket!.get(doc.fileKey);
+          if (!r2Object) return;
+          const arrayBuffer = await r2Object.arrayBuffer();
+          const bytes = new Uint8Array(arrayBuffer);
 
-            // Vision extraction (parallel)
-            const [imagesResult, metaResult] = await Promise.all([
-              extractDocumentImages(doc.mimeType, bytes, 3),
-              isPdf ? extractPdfMetadata(bytes) : Promise.resolve(null),
-            ]);
+          // Vision extraction (parallel)
+          const [imagesResult, metaResult] = await Promise.all([
+            extractDocumentImages(doc.mimeType, bytes, 3),
+            isPdf ? extractPdfMetadata(bytes) : Promise.resolve(null),
+          ]);
 
-            if (imagesResult.success && imagesResult.images.length > 0) {
-              visionDataByDocId.set(doc.id, imagesResult.images);
-            }
-            if (metaResult) {
-              metadataByDocId.set(doc.id, metaResult);
-            }
-          } catch (err) {
-            logger.warn("Vision/metadata extraction failed", { documentId: doc.id, error: err });
+          if (imagesResult.success && imagesResult.images.length > 0) {
+            visionDataByDocId.set(doc.id, imagesResult.images);
           }
-        })
-      );
+          if (metaResult) {
+            metadataByDocId.set(doc.id, metaResult);
+          }
+        } catch (err) {
+          logger.warn("Vision/metadata extraction failed", { documentId: doc.id, error: err });
+        }
+      }),
+    );
 
-      if (visionDataByDocId.size > 0) {
-        logger.info("Vision: loaded images for documents", { count: visionDataByDocId.size });
-      }
+    if (visionDataByDocId.size > 0) {
+      logger.info("Vision: loaded images for documents", { count: visionDataByDocId.size });
     }
+  }
 
-    // ---------------------------------------------------------------------------
-    // PHASE 1: Per-document individual evaluation (parallel AI calls)
-    // ---------------------------------------------------------------------------
+  return {
+    docByChecklistItem,
+    textByDocId,
+    translatedTextByDocId,
+    relevantChunksByItemId,
+    visionDataByDocId,
+    metadataByDocId,
+  };
+}
 
-    const failedDocumentEvaluations = new Set<string>();
-    const perDocumentEvaluations: PerDocumentEvaluation[] = await Promise.all(
-      checklistItems.map(async (item): Promise<PerDocumentEvaluation> => {
-        const doc = docByChecklistItem.get(item.id);
-        const hasDocument = !!doc;
-        // Prefer pre-translated text when available (non-English docs identified from a prior eval)
-        const rawText = doc
-          ? (translatedTextByDocId.get(doc.id) ?? textByDocId.get(doc.id) ?? "")
-          : "";
-        const isTranslated = !!doc && translatedTextByDocId.has(doc.id);
-        const hasContent = rawText.trim().length > 0;
-        const visionImages = doc ? (visionDataByDocId.get(doc.id) ?? []) : [];
-        const hasVision = visionImages.length > 0;
+async function evaluateChecklistDocuments({
+  checklistItems,
+  evidence,
+  previousEvaluation,
+  applicationContext,
+}: {
+  checklistItems: EvaluationEvidenceInput["checklistItems"];
+  evidence: Awaited<ReturnType<typeof loadEvaluationEvidence>>;
+  previousEvaluation: EvaluationEvidenceInput["previousEvaluation"];
+  applicationContext: string;
+}) {
+  const {
+    docByChecklistItem,
+    textByDocId,
+    translatedTextByDocId,
+    relevantChunksByItemId,
+    visionDataByDocId,
+    metadataByDocId,
+  } = evidence;
+  // ---------------------------------------------------------------------------
+  // PHASE 1: Per-document individual evaluation (parallel AI calls)
+  // ---------------------------------------------------------------------------
 
-        // ---------------------------------------------------------------------------
-        // Incremental evaluation — skip the AI call if this document slot is unchanged
-        // since the last evaluation. Version key encodes document identity, text content
-        // availability, and vision availability — so newly-enabled vision triggers re-eval.
-        // ---------------------------------------------------------------------------
-        const currentVersionKey = getDocVersionKey(doc, hasContent, hasVision);
-        const prevFeedback = previousEvaluation?.docSnapshots?.[item.id] === currentVersionKey
+  const failedDocumentEvaluations = new Set<string>();
+  const perDocumentEvaluations: PerDocumentEvaluation[] = await Promise.all(
+    checklistItems.map(async (item): Promise<PerDocumentEvaluation> => {
+      const doc = docByChecklistItem.get(item.id);
+      const hasDocument = !!doc;
+      // Prefer pre-translated text when available (non-English docs identified from a prior eval)
+      const rawText = doc
+        ? (translatedTextByDocId.get(doc.id) ?? textByDocId.get(doc.id) ?? "")
+        : "";
+      const isTranslated = !!doc && translatedTextByDocId.has(doc.id);
+      const hasContent = rawText.trim().length > 0;
+      const visionImages = doc ? (visionDataByDocId.get(doc.id) ?? []) : [];
+      const hasVision = visionImages.length > 0;
+
+      // ---------------------------------------------------------------------------
+      // Incremental evaluation — skip the AI call if this document slot is unchanged
+      // since the last evaluation. Version key encodes document identity, text content
+      // availability, and vision availability — so newly-enabled vision triggers re-eval.
+      // ---------------------------------------------------------------------------
+      const currentVersionKey = getDocVersionKey(doc, hasContent, hasVision);
+      const prevFeedback =
+        previousEvaluation?.docSnapshots?.[item.id] === currentVersionKey
           ? previousEvaluation.itemFeedback?.[item.id]
           : undefined;
 
-        if (prevFeedback) {
-          return {
-            checklistItemId: item.id,
-            documentName: item.documentName,
-            isRequired: !!item.isRequired,
-            hasDocument,
-            hasContent,
-            status: (prevFeedback.status ?? "needs_review") as PerDocumentEvaluation["status"],
-            score: prevFeedback.score ?? 0,
-            issues: prevFeedback.issues ?? [],
-            strengths: prevFeedback.strengths ?? [],
-            feedback: prevFeedback.feedback ?? "",
-            confidence: (prevFeedback as { confidence?: number }).confidence ?? 70,
-            confidenceReason: (prevFeedback as { confidenceReason?: string }).confidenceReason ?? "Reused from previous evaluation.",
-            extractedFields: (prevFeedback as { extractedFields?: ExtractedFields }).extractedFields ?? { holderName: null, expiryDate: null, documentNumber: null, issuingAuthority: null, language: "unknown", dateRange: null },
-            contentExcerpt: rawText.slice(0, 3000),
-            reused: true,
-          };
+      if (prevFeedback) {
+        return {
+          checklistItemId: item.id,
+          documentName: item.documentName,
+          isRequired: !!item.isRequired,
+          hasDocument,
+          hasContent,
+          status: (prevFeedback.status ?? "needs_review") as PerDocumentEvaluation["status"],
+          score: prevFeedback.score ?? 0,
+          issues: prevFeedback.issues ?? [],
+          strengths: prevFeedback.strengths ?? [],
+          feedback: prevFeedback.feedback ?? "",
+          confidence: (prevFeedback as { confidence?: number }).confidence ?? 70,
+          confidenceReason:
+            (prevFeedback as { confidenceReason?: string }).confidenceReason ??
+            "Reused from previous evaluation.",
+          extractedFields: (prevFeedback as { extractedFields?: ExtractedFields })
+            .extractedFields ?? {
+            holderName: null,
+            expiryDate: null,
+            documentNumber: null,
+            issuingAuthority: null,
+            language: "unknown",
+            dateRange: null,
+          },
+          contentExcerpt: rawText.slice(0, 3000),
+          reused: true,
+        };
+      }
+
+      // Documents without any upload → evaluated as missing immediately (no AI call needed)
+      if (!hasDocument) {
+        return {
+          checklistItemId: item.id,
+          documentName: item.documentName,
+          isRequired: !!item.isRequired,
+          hasDocument: false,
+          hasContent: false,
+          status: "missing",
+          score: 0,
+          issues: [`${item.isRequired ? "Required" : "Optional"} document has not been uploaded.`],
+          strengths: [],
+          feedback: `No document has been uploaded for "${item.documentName}".`,
+          confidence: 100,
+          confidenceReason: "Document is absent; status is certain.",
+          extractedFields: {
+            holderName: null,
+            expiryDate: null,
+            documentNumber: null,
+            issuingAuthority: null,
+            language: "unknown",
+            dateRange: null,
+          },
+          contentExcerpt: "",
+        };
+      }
+
+      // Build the per-document evaluation prompt.
+      // Translated docs use rawText directly (Vectorize chunks are in the original language).
+      // For non-translated docs, prefer Vectorize chunks over the raw first 8 000 chars.
+      const relevantChunks = isTranslated ? undefined : relevantChunksByItemId.get(item.id);
+      const contentSection = relevantChunks
+        ? `DOCUMENT CONTENT (semantically relevant sections, ${relevantChunks.length} chars):\n${relevantChunks}`
+        : hasContent
+          ? `EXTRACTED DOCUMENT CONTENT${isTranslated ? " (machine-translated to English)" : ""} (first 8 000 characters):\n${rawText.slice(0, 8000)}`
+          : `DOCUMENT CONTENT: Unable to extract text from "${doc.fileName}". The file may be a scanned image or encrypted PDF. Evaluate based on file presence only.`;
+
+      // Build document integrity signals from PDF metadata (PDFs only)
+      const meta = doc ? metadataByDocId.get(doc.id) : undefined;
+      let metadataSection = "";
+      if (meta) {
+        const lines: string[] = [];
+        if (meta.creationDate) {
+          lines.push(`- Created: ${meta.creationDate.toISOString().slice(0, 10)}`);
         }
-
-        // Documents without any upload → evaluated as missing immediately (no AI call needed)
-        if (!hasDocument) {
-          return {
-            checklistItemId: item.id,
-            documentName: item.documentName,
-            isRequired: !!item.isRequired,
-            hasDocument: false,
-            hasContent: false,
-            status: "missing",
-            score: 0,
-            issues: [`${item.isRequired ? "Required" : "Optional"} document has not been uploaded.`],
-            strengths: [],
-            feedback: `No document has been uploaded for "${item.documentName}".`,
-            confidence: 100,
-            confidenceReason: "Document is absent; status is certain.",
-            extractedFields: { holderName: null, expiryDate: null, documentNumber: null, issuingAuthority: null, language: "unknown", dateRange: null },
-            contentExcerpt: "",
-          };
-        }
-
-        // Build the per-document evaluation prompt.
-        // Translated docs use rawText directly (Vectorize chunks are in the original language).
-        // For non-translated docs, prefer Vectorize chunks over the raw first 8 000 chars.
-        const relevantChunks = isTranslated ? undefined : relevantChunksByItemId.get(item.id);
-        const contentSection = relevantChunks
-          ? `DOCUMENT CONTENT (semantically relevant sections, ${relevantChunks.length} chars):\n${relevantChunks}`
-          : hasContent
-            ? `EXTRACTED DOCUMENT CONTENT${isTranslated ? " (machine-translated to English)" : ""} (first 8 000 characters):\n${rawText.slice(0, 8000)}`
-            : `DOCUMENT CONTENT: Unable to extract text from "${doc.fileName}". The file may be a scanned image or encrypted PDF. Evaluate based on file presence only.`;
-
-        // Build document integrity signals from PDF metadata (PDFs only)
-        const meta = doc ? metadataByDocId.get(doc.id) : undefined;
-        let metadataSection = "";
-        if (meta) {
-          const lines: string[] = [];
-          if (meta.creationDate) {
-            lines.push(`- Created: ${meta.creationDate.toISOString().slice(0, 10)}`);
-          }
-          if (meta.modDate && meta.isModified) {
-            lines.push(
-              `- Last modified: ${meta.modDate.toISOString().slice(0, 10)}` +
+        if (meta.modDate && meta.isModified) {
+          lines.push(
+            `- Last modified: ${meta.modDate.toISOString().slice(0, 10)}` +
               (meta.modificationGapDays !== null
                 ? ` (${meta.modificationGapDays} day${meta.modificationGapDays === 1 ? "" : "s"} after creation)`
-                : "")
-            );
-          }
-          if (meta.creator) lines.push(`- Authoring tool: "${meta.creator}"`);
-          if (meta.producer) lines.push(`- PDF renderer: "${meta.producer}"`);
-          if (meta.pageCount > 0) lines.push(`- Page count: ${meta.pageCount}`);
-          // Anomaly flags
-          if (meta.creationInFuture) lines.push(`- ⚠️ WARNING: Creation date is in the future — impossible for a genuine document`);
-          if (meta.hasNoMetadata) lines.push(`- ⚠️ WARNING: All metadata fields are empty — metadata may have been deliberately stripped`);
-          if (meta.isModified && meta.modificationGapDays !== null && meta.modificationGapDays > MODIFICATION_GAP_DAYS_THRESHOLD) {
-            lines.push(`- ⚠️ WARNING: Document was modified ${meta.modificationGapDays} days after creation — unusual for a freshly issued document`);
-          }
-          if (lines.length > 0) {
-            metadataSection = `\nDOCUMENT INTEGRITY SIGNALS (PDF metadata):\n${lines.join("\n")}\nConsider these signals when assessing document authenticity and confidence.\n`;
-          }
+                : ""),
+          );
         }
+        if (meta.creator) lines.push(`- Authoring tool: "${meta.creator}"`);
+        if (meta.producer) lines.push(`- PDF renderer: "${meta.producer}"`);
+        if (meta.pageCount > 0) lines.push(`- Page count: ${meta.pageCount}`);
+        // Anomaly flags
+        if (meta.creationInFuture)
+          lines.push(
+            `- ⚠️ WARNING: Creation date is in the future — impossible for a genuine document`,
+          );
+        if (meta.hasNoMetadata)
+          lines.push(
+            `- ⚠️ WARNING: All metadata fields are empty — metadata may have been deliberately stripped`,
+          );
+        if (
+          meta.isModified &&
+          meta.modificationGapDays !== null &&
+          meta.modificationGapDays > MODIFICATION_GAP_DAYS_THRESHOLD
+        ) {
+          lines.push(
+            `- ⚠️ WARNING: Document was modified ${meta.modificationGapDays} days after creation — unusual for a freshly issued document`,
+          );
+        }
+        if (lines.length > 0) {
+          metadataSection = `\nDOCUMENT INTEGRITY SIGNALS (PDF metadata):\n${lines.join("\n")}\nConsider these signals when assessing document authenticity and confidence.\n`;
+        }
+      }
 
-        const commonMistakesSection = item.commonMistakes
-          ? `Common mistakes to watch for:\n${item.commonMistakes}`
-          : "";
+      const commonMistakesSection = item.commonMistakes
+        ? `Common mistakes to watch for:\n${item.commonMistakes}`
+        : "";
 
-        // If document may be non-English and no pre-translation was done (first evaluation),
-        // the system prompt instructs the AI to translate before evaluating.
-        const perDocSystemPrompt = `You are a senior visa agency review specialist evaluating client documents before final submission. Focus on completeness, route-specific requirements, document quality, cross-file consistency, authenticity signals, and submission risk. Return ONLY valid JSON. If the document text is in a language other than English, translate the content to English before evaluating it.`;
+      // If document may be non-English and no pre-translation was done (first evaluation),
+      // the system prompt instructs the AI to translate before evaluating.
+      const perDocSystemPrompt = `You are a senior visa agency review specialist evaluating client documents before final submission. Focus on completeness, route-specific requirements, document quality, cross-file consistency, authenticity signals, and submission risk. Return ONLY valid JSON. If the document text is in a language other than English, translate the content to English before evaluating it.`;
 
-        const { dimension: docDimension, signals: docSignals } = getDocumentDimension(item.documentName);
+      const { dimension: docDimension, signals: docSignals } = getDocumentDimension(
+        item.documentName,
+      );
 
-        const perDocUserPrompt = `You are evaluating a document for an agency review desk before the application reaches final submission. Analyse this document carefully and return a structured JSON evaluation that a human reviewer can act on.
+      const perDocUserPrompt = `You are evaluating a document for an agency review desk before the application reaches final submission. Analyse this document carefully and return a structured JSON evaluation that a human reviewer can act on.
 
 APPLICATION CONTEXT:
 ${applicationContext}
@@ -865,193 +851,233 @@ Return JSON with this exact structure:
   }
 }`;
 
-        try {
-          // When vision images are available, send a multimodal message so Gemini
-          // can see the document directly — critical for scanned docs with no text.
-          const userMessageContent: OpenAI.ChatCompletionUserMessageParam["content"] =
-            visionImages.length > 0
-              ? [
-                  { type: "text", text: perDocUserPrompt },
-                  ...visionImages.map((url) => ({
-                    type: "image_url" as const,
-                    image_url: { url, detail: "high" as const },
-                  })),
-                ]
-              : perDocUserPrompt;
+      try {
+        // When vision images are available, send a multimodal message so Gemini
+        // can see the document directly — critical for scanned docs with no text.
+        const userMessageContent: OpenAI.ChatCompletionUserMessageParam["content"] =
+          visionImages.length > 0
+            ? [
+                { type: "text", text: perDocUserPrompt },
+                ...visionImages.map((url) => ({
+                  type: "image_url" as const,
+                  image_url: { url, detail: "high" as const },
+                })),
+              ]
+            : perDocUserPrompt;
 
-          const response = await createEvaluationCompletionWithFallback({
-            openai,
-            systemPrompt: perDocSystemPrompt,
-            userContent: userMessageContent,
-            schemaName: "per_document_evaluation",
-            schema: perDocJsonSchema as Record<string, unknown>,
-            maxTokens: AI_MAX_TOKENS_SMALL,
-          });
+        const response = await createGeminiEvaluation({
+          systemPrompt: perDocSystemPrompt,
+          userContent: userMessageContent,
+          schemaName: "per_document_evaluation",
+          schema: perDocJsonSchema as Record<string, unknown>,
+          maxTokens: AI_MAX_TOKENS_SMALL,
+        });
 
-          const raw = JSON.parse(response.choices[0].message.content || "{}");
-          // perDocAiResponseSchema uses .catch() on every field — parse never throws
-          const parsed = perDocAiResponseSchema.parse(raw);
+        const raw = JSON.parse(response);
+        // perDocAiResponseSchema uses .catch() on every field — parse never throws
+        const parsed = perDocAiResponseSchema.parse(raw);
 
-          // Auto-override confidence to 15 only when we have neither text nor vision.
-          // With vision available (even for scanned docs), let the AI report its own confidence.
-          const finalConfidence = (!hasContent && !hasVision) ? 15 : parsed.confidence;
-          const finalConfidenceReason = (!hasContent && !hasVision)
+        // Auto-override confidence to 15 only when we have neither text nor vision.
+        // With vision available (even for scanned docs), let the AI report its own confidence.
+        const finalConfidence = !hasContent && !hasVision ? 15 : parsed.confidence;
+        const finalConfidenceReason =
+          !hasContent && !hasVision
             ? "No text could be extracted; document may be a scanned image or encrypted PDF."
             : parsed.confidenceReason;
 
-          return {
-            checklistItemId: item.id,
-            documentName: item.documentName,
-            isRequired: !!item.isRequired,
-            hasDocument: true,
-            hasContent,
-            status: parsed.status,
-            score: parsed.score,
-            issues: parsed.issues,
-            strengths: parsed.strengths,
-            feedback: parsed.feedback,
-            confidence: finalConfidence,
-            confidenceReason: finalConfidenceReason,
-            extractedFields: parsed.extractedFields,
-            contentExcerpt: rawText.slice(0, 3000),
-          };
-        } catch (err) {
-          failedDocumentEvaluations.add(item.id);
-          logAlert("ai_api_failure", "Per-document evaluation failed", { checklistItemId: item.id, documentName: item.documentName, error: err });
-          // Non-fatal: fall back to a neutral evaluation so we don't block the whole suite
-          return {
-            checklistItemId: item.id,
-            documentName: item.documentName,
-            isRequired: !!item.isRequired,
-            hasDocument: true,
-            hasContent,
-            status: "needs_review",
-            score: 50,
-            issues: ["Vertex AI could not evaluate this document. Run the review again."],
-            strengths: [],
-            feedback: "Document was uploaded, but its Gemini review failed. Manual review is required until it can be evaluated.",
-            confidence: 0,
-            confidenceReason: "Vertex AI document evaluation failed.",
-            extractedFields: { holderName: null, expiryDate: null, documentNumber: null, issuingAuthority: null, language: "unknown", dateRange: null },
-            contentExcerpt: rawText.slice(0, 3000),
-          };
-        }
-      })
-    );
-
-    if (
-      failedDocumentEvaluations.size > 0 &&
-      perDocumentEvaluations.every((item) =>
-        !item.hasDocument || failedDocumentEvaluations.has(item.checklistItemId)
-      )
-    ) {
-      throw new ZSAError(
-        "INTERNAL_SERVER_ERROR",
-        "Vertex AI could not evaluate the uploaded documents. Please run the review again."
-      );
-    }
-
-    // ---------------------------------------------------------------------------
-    // Build docSnapshots — records what version of each document was just evaluated.
-    // Persisted with the evaluation so future re-runs can compare against it.
-    // ---------------------------------------------------------------------------
-
-    const docSnapshots: Record<string, string> = {};
-    for (const item of checklistItems) {
-      // A failed provider call must be retried rather than cached as a completed review.
-      if (failedDocumentEvaluations.has(item.id)) continue;
-      const doc = docByChecklistItem.get(item.id);
-      const rawText = doc ? (textByDocId.get(doc.id) ?? "") : "";
-      const hasVisionSnap = doc ? (visionDataByDocId.get(doc.id)?.length ?? 0) > 0 : false;
-      docSnapshots[item.id] = getDocVersionKey(doc, rawText.trim().length > 0, hasVisionSnap);
-    }
-
-    const reusedCount = perDocumentEvaluations.filter((e) => e.reused).length;
-    if (reusedCount > 0) {
-      logger.info("Incremental evaluation: reused unchanged documents", { reusedCount, totalItems: checklistItems.length });
-    }
-
-    // ---------------------------------------------------------------------------
-    // Cross-document consistency analysis — deterministic programmatic checks on
-    // structured fields extracted during Phase 1. These results are injected into
-    // the orchestrator so the AI doesn't need to re-derive them from raw text.
-    // ---------------------------------------------------------------------------
-
-    const consistencyIssues: string[] = [];
-    const today = new Date().toISOString().slice(0, 10); // "YYYY-MM-DD"
-
-    // Name consistency: compare holderName across all docs that provided one
-    const namedEvals = perDocumentEvaluations.filter(
-      (e) => e.hasDocument && e.extractedFields.holderName
-    );
-    if (namedEvals.length >= 2) {
-      const normalize = (name: string) =>
-        name.toLowerCase().replace(/[^a-z\s]/g, "").split(/\s+/).sort().join(" ");
-      const ref = namedEvals[0];
-      const refNorm = normalize(ref.extractedFields.holderName!);
-      for (const e of namedEvals.slice(1)) {
-        if (normalize(e.extractedFields.holderName!) !== refNorm) {
-          consistencyIssues.push(
-            `Name mismatch: "${ref.documentName}" shows "${ref.extractedFields.holderName}" but "${e.documentName}" shows "${e.extractedFields.holderName}"`
-          );
-        }
+        return {
+          checklistItemId: item.id,
+          documentName: item.documentName,
+          isRequired: !!item.isRequired,
+          hasDocument: true,
+          hasContent,
+          status: parsed.status,
+          score: parsed.score,
+          issues: parsed.issues,
+          strengths: parsed.strengths,
+          feedback: parsed.feedback,
+          confidence: finalConfidence,
+          confidenceReason: finalConfidenceReason,
+          extractedFields: parsed.extractedFields,
+          contentExcerpt: rawText.slice(0, 3000),
+        };
+      } catch (err) {
+        failedDocumentEvaluations.add(item.id);
+        logAlert("ai_api_failure", "Per-document evaluation failed", {
+          checklistItemId: item.id,
+          documentName: item.documentName,
+          error: err,
+        });
+        // Complete the parallel batch, then report the failed review below.
+        return {
+          checklistItemId: item.id,
+          documentName: item.documentName,
+          isRequired: !!item.isRequired,
+          hasDocument: true,
+          hasContent,
+          status: "needs_review",
+          score: 50,
+          issues: ["Vertex AI could not evaluate this document. Run the review again."],
+          strengths: [],
+          feedback:
+            "Document was uploaded, but its Gemini review failed. Manual review is required until it can be evaluated.",
+          confidence: 0,
+          confidenceReason: "Vertex AI document evaluation failed.",
+          extractedFields: {
+            holderName: null,
+            expiryDate: null,
+            documentNumber: null,
+            issuingAuthority: null,
+            language: "unknown",
+            dateRange: null,
+          },
+          contentExcerpt: rawText.slice(0, 3000),
+        };
       }
-    }
+    }),
+  );
 
-    // Expiry check: flag any document that is already expired
-    for (const e of perDocumentEvaluations) {
-      if (e.extractedFields.expiryDate && e.extractedFields.expiryDate < today) {
+  if (
+    failedDocumentEvaluations.size > 0 &&
+    perDocumentEvaluations.every(
+      (item) => !item.hasDocument || failedDocumentEvaluations.has(item.checklistItemId),
+    )
+  ) {
+    throw new ZSAError(
+      "INTERNAL_SERVER_ERROR",
+      "Vertex AI could not evaluate the uploaded documents. Please run the review again.",
+    );
+  }
+
+  if (failedDocumentEvaluations.size > 0) {
+    throw new ZSAError(
+      "INTERNAL_SERVER_ERROR",
+      "Some documents could not be evaluated. Run the review again.",
+    );
+  }
+
+  // ---------------------------------------------------------------------------
+  // Build docSnapshots — records what version of each document was just evaluated.
+  // Persisted with the evaluation so future re-runs can compare against it.
+  // ---------------------------------------------------------------------------
+
+  const docSnapshots: Record<string, string> = {};
+  for (const item of checklistItems) {
+    const doc = docByChecklistItem.get(item.id);
+    const rawText = doc ? (textByDocId.get(doc.id) ?? "") : "";
+    const hasVisionSnap = doc ? (visionDataByDocId.get(doc.id)?.length ?? 0) > 0 : false;
+    docSnapshots[item.id] = getDocVersionKey(doc, rawText.trim().length > 0, hasVisionSnap);
+  }
+
+  const reusedCount = perDocumentEvaluations.filter((e) => e.reused).length;
+  if (reusedCount > 0) {
+    logger.info("Incremental evaluation: reused unchanged documents", {
+      reusedCount,
+      totalItems: checklistItems.length,
+    });
+  }
+
+  return { perDocumentEvaluations, docSnapshots };
+}
+
+function buildOrchestratorPrompts({
+  checklistItems,
+  perDocumentEvaluations,
+  applicationContext,
+}: {
+  checklistItems: EvaluationEvidenceInput["checklistItems"];
+  perDocumentEvaluations: PerDocumentEvaluation[];
+  applicationContext: string;
+}) {
+  // ---------------------------------------------------------------------------
+  // Cross-document consistency analysis — deterministic programmatic checks on
+  // structured fields extracted during Phase 1. These results are injected into
+  // the orchestrator so the AI doesn't need to re-derive them from raw text.
+  // ---------------------------------------------------------------------------
+
+  const consistencyIssues: string[] = [];
+  const today = new Date().toISOString().slice(0, 10); // "YYYY-MM-DD"
+
+  // Name consistency: compare holderName across all docs that provided one
+  const namedEvals = perDocumentEvaluations.filter(
+    (e) => e.hasDocument && e.extractedFields.holderName,
+  );
+  if (namedEvals.length >= 2) {
+    const normalize = (name: string) =>
+      name
+        .toLowerCase()
+        .replace(/[^a-z\s]/g, "")
+        .split(/\s+/)
+        .sort()
+        .join(" ");
+    const ref = namedEvals[0];
+    const refNorm = normalize(ref.extractedFields.holderName!);
+    for (const e of namedEvals.slice(1)) {
+      if (normalize(e.extractedFields.holderName!) !== refNorm) {
         consistencyIssues.push(
-          `Expired document: "${e.documentName}" — expiry date ${e.extractedFields.expiryDate} is in the past`
+          `Name mismatch: "${ref.documentName}" shows "${ref.extractedFields.holderName}" but "${e.documentName}" shows "${e.extractedFields.holderName}"`,
         );
       }
     }
+  }
 
-    // Foreign language documents
-    const foreignLangDocs = perDocumentEvaluations.filter(
-      (e) =>
-        e.hasContent &&
-        e.extractedFields.language !== "unknown" &&
-        e.extractedFields.language !== "en"
-    );
+  // Expiry check: flag any document that is already expired
+  for (const e of perDocumentEvaluations) {
+    if (e.extractedFields.expiryDate && e.extractedFields.expiryDate < today) {
+      consistencyIssues.push(
+        `Expired document: "${e.documentName}" — expiry date ${e.extractedFields.expiryDate} is in the past`,
+      );
+    }
+  }
 
-    const consistencySection =
-      consistencyIssues.length > 0 || foreignLangDocs.length > 0
-        ? `\nPROGRAMMATIC CONSISTENCY CHECKS (pre-computed — treat as facts):\n${
-            consistencyIssues.map((i) => `⚠️  ${i}`).join("\n")
-          }${
-            foreignLangDocs.length > 0
-              ? `\n\nFOREIGN LANGUAGE DOCUMENTS DETECTED:\n${foreignLangDocs
-                  .map((e) => `- ${e.documentName}: language "${e.extractedFields.language}"`)
-                  .join("\n")}\nFactor language accessibility into your assessment.`
-              : ""
-          }`
-        : "\nPROGRAMMATIC CONSISTENCY CHECKS: ✓ No name mismatches, expiry issues, or foreign language documents detected.";
+  // Foreign language documents
+  const foreignLangDocs = perDocumentEvaluations.filter(
+    (e) =>
+      e.hasContent &&
+      e.extractedFields.language !== "unknown" &&
+      e.extractedFields.language !== "en",
+  );
 
-    // ---------------------------------------------------------------------------
-    // PHASE 2: Orchestrator — comprehensive evaluation across all documents
-    // ---------------------------------------------------------------------------
+  const consistencySection =
+    consistencyIssues.length > 0 || foreignLangDocs.length > 0
+      ? `\nPROGRAMMATIC CONSISTENCY CHECKS (pre-computed — treat as facts):\n${consistencyIssues
+          .map((i) => `⚠️  ${i}`)
+          .join("\n")}${
+          foreignLangDocs.length > 0
+            ? `\n\nFOREIGN LANGUAGE DOCUMENTS DETECTED:\n${foreignLangDocs
+                .map((e) => `- ${e.documentName}: language "${e.extractedFields.language}"`)
+                .join("\n")}\nFactor language accessibility into your assessment.`
+            : ""
+        }`
+      : "\nPROGRAMMATIC CONSISTENCY CHECKS: ✓ No name mismatches, expiry issues, or foreign language documents detected.";
 
-    const missingDocs = perDocumentEvaluations.filter((e) => !e.hasDocument && e.isRequired);
-    const documentEvalSummary = perDocumentEvaluations
-      .map((e) => {
-        const lines = [
-          `Document: ${e.documentName} (${e.isRequired ? "REQUIRED" : "optional"})`,
-          `  Status: ${e.status} | Score: ${e.score}/100 | Confidence: ${e.confidence}/100 | Has file: ${e.hasDocument} | Has readable content: ${e.hasContent}`,
-          e.issues.length > 0 ? `  Issues: ${e.issues.join("; ")}` : "",
-          e.strengths.length > 0 ? `  Strengths: ${e.strengths.join("; ")}` : "",
-          `  Feedback: ${e.feedback}`,
-          e.contentExcerpt
-            ? `  Content excerpt:\n${e.contentExcerpt.split("\n").map((l) => `    ${l}`).join("\n")}`
-            : "",
-        ].filter(Boolean);
-        return lines.join("\n");
-      })
-      .join("\n\n---\n\n");
+  // ---------------------------------------------------------------------------
+  // PHASE 2: Orchestrator — comprehensive evaluation across all documents
+  // ---------------------------------------------------------------------------
 
-    const orchestratorSystemPrompt = `You are a senior visa agency review lead conducting a holistic pre-submission review. Your job is to help the agency review more cases accurately by identifying missing documents, weak evidence, contradictions, and client follow-up actions. Return ONLY valid JSON.`;
+  const missingDocs = perDocumentEvaluations.filter((e) => !e.hasDocument && e.isRequired);
+  const documentEvalSummary = perDocumentEvaluations
+    .map((e) => {
+      const lines = [
+        `Document: ${e.documentName} (${e.isRequired ? "REQUIRED" : "optional"})`,
+        `  Status: ${e.status} | Score: ${e.score}/100 | Confidence: ${e.confidence}/100 | Has file: ${e.hasDocument} | Has readable content: ${e.hasContent}`,
+        e.issues.length > 0 ? `  Issues: ${e.issues.join("; ")}` : "",
+        e.strengths.length > 0 ? `  Strengths: ${e.strengths.join("; ")}` : "",
+        `  Feedback: ${e.feedback}`,
+        e.contentExcerpt
+          ? `  Content excerpt:\n${e.contentExcerpt
+              .split("\n")
+              .map((l) => `    ${l}`)
+              .join("\n")}`
+          : "",
+      ].filter(Boolean);
+      return lines.join("\n");
+    })
+    .join("\n\n---\n\n");
 
-    const orchestratorUserPrompt = `You are the final agency reviewer for this application. Review all per-document evaluations and produce a comprehensive readiness assessment using the framework below.
+  const orchestratorSystemPrompt = `You are a senior visa agency review lead conducting a holistic pre-submission review. Your job is to help the agency review more cases accurately by identifying missing documents, weak evidence, contradictions, and client follow-up actions. Return ONLY valid JSON.`;
+
+  const orchestratorUserPrompt = `You are the final agency reviewer for this application. Review all per-document evaluations and produce a comprehensive readiness assessment using the framework below.
 
 APPLICATION CONTEXT:
 ${applicationContext}
@@ -1159,132 +1185,250 @@ Return JSON with this exact structure:
   }
 }`;
 
-    let evaluationData: EvaluationData;
+  return { orchestratorSystemPrompt, orchestratorUserPrompt };
+}
 
+async function evaluateApplicationReadiness({
+  checklistItems,
+  perDocumentEvaluations,
+  orchestratorSystemPrompt,
+  orchestratorUserPrompt,
+  visaType,
+}: {
+  checklistItems: EvaluationEvidenceInput["checklistItems"];
+  perDocumentEvaluations: PerDocumentEvaluation[];
+  orchestratorSystemPrompt: string;
+  orchestratorUserPrompt: string;
+  visaType: string;
+}) {
+  let evaluationData: EvaluationData;
+
+  try {
+    const response = await createGeminiEvaluation({
+      systemPrompt: orchestratorSystemPrompt,
+      userContent: orchestratorUserPrompt,
+      schemaName: "orchestrator_evaluation",
+      schema: buildOrchestratorJsonSchema(checklistItems) as Record<string, unknown>,
+      maxTokens: AI_MAX_TOKENS_LARGE,
+    });
+
+    const raw = JSON.parse(response);
+    const result = orchestratorResponseSchema.safeParse(raw);
+
+    if (result.success) {
+      evaluationData = result.data;
+    } else {
+      // Response was valid JSON but wrong shape — degrade gracefully to Phase 1 aggregation
+      logger.warn(
+        "Orchestrator response failed schema validation, falling back to Phase 1 aggregation",
+        { issues: result.error.issues },
+      );
+      evaluationData = buildPhase1Fallback(perDocumentEvaluations);
+    }
+  } catch (error) {
+    // Network error, quota exceeded, JSON parse failure, etc. — Phase 1 results are preserved
+    logger.error("Orchestrator call failed, falling back to Phase 1 aggregation", { error });
+    evaluationData = buildPhase1Fallback(perDocumentEvaluations);
+  }
+
+  // Backfill itemFeedback with per-document evaluation data for any items the orchestrator missed
+  for (const perDoc of perDocumentEvaluations) {
+    if (!evaluationData.itemFeedback[perDoc.checklistItemId]) {
+      evaluationData.itemFeedback[perDoc.checklistItemId] = {
+        status:
+          perDoc.status === "missing" ? "missing" : perDoc.status === "ok" ? "ok" : "needs_review",
+        feedback: perDoc.feedback,
+        score: perDoc.score,
+        issues: perDoc.issues,
+        strengths: perDoc.strengths,
+        hasDocument: perDoc.hasDocument,
+        hasContent: perDoc.hasContent,
+        confidence: perDoc.confidence,
+        confidenceReason: perDoc.confidenceReason,
+      };
+    } else {
+      // Enrich orchestrator feedback with per-document fields if missing
+      const existing = evaluationData.itemFeedback[perDoc.checklistItemId];
+      evaluationData.itemFeedback[perDoc.checklistItemId] = {
+        ...existing,
+        score: existing.score ?? perDoc.score,
+        issues: existing.issues ?? perDoc.issues,
+        strengths: existing.strengths ?? perDoc.strengths,
+        hasDocument: perDoc.hasDocument,
+        hasContent: perDoc.hasContent,
+        // Always use Phase 1 confidence — the orchestrator doesn't re-read the raw doc
+        confidence: perDoc.confidence,
+        confidenceReason: perDoc.confidenceReason,
+      };
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // ENSEMBLE SCORING — adversarial second pass for borderline scores
+  // Only triggered when the primary score is within ±12 of the visa-type threshold.
+  // A devil's advocate prompt reframes the same data pessimistically. Comparing the
+  // two scores reveals how stable the evaluation is:
+  //   divergence < 8  → "high"     — both passes agree, keep primary score
+  //   divergence < 18 → "moderate" — minor disagreement, use average
+  //   divergence ≥ 18 → "low"      — significant disagreement, use average + warn
+  // ---------------------------------------------------------------------------
+
+  const readyThreshold = getReadyThreshold(visaType);
+  const borderlineMin = readyThreshold - 12;
+  const borderlineMax = readyThreshold + 12;
+  const isBorderline =
+    evaluationData.overallScore >= borderlineMin && evaluationData.overallScore <= borderlineMax;
+
+  let scoreConfidence: "high" | "moderate" | "low" | null = null;
+  let ensembleDivergence: number | null = null;
+
+  if (isBorderline) {
     try {
-      const response = await createEvaluationCompletionWithFallback({
-        openai,
-        systemPrompt: orchestratorSystemPrompt,
+      const adversarialSystemPrompt = `You are a highly skeptical agency review lead whose job is to stress-test this application before final submission. Using the same agency readiness framework, assume the worst interpretation of every ambiguous document, treat missing documents as deliberate omissions, and be strict about marginal evidence. Return ONLY valid JSON.`;
+
+      const adversarialResponse = await createGeminiEvaluation({
+        systemPrompt: adversarialSystemPrompt,
         userContent: orchestratorUserPrompt,
         schemaName: "orchestrator_evaluation",
         schema: buildOrchestratorJsonSchema(checklistItems) as Record<string, unknown>,
         maxTokens: AI_MAX_TOKENS_LARGE,
       });
 
-      const raw = JSON.parse(response.choices[0].message.content || "{}");
-      const result = orchestratorResponseSchema.safeParse(raw);
+      const adversarialRaw = JSON.parse(adversarialResponse);
+      const adversarialResult = orchestratorResponseSchema.safeParse(adversarialRaw);
 
-      if (result.success) {
-        evaluationData = result.data;
-      } else {
-        // Response was valid JSON but wrong shape — degrade gracefully to Phase 1 aggregation
-        logger.warn("Orchestrator response failed schema validation, falling back to Phase 1 aggregation", { issues: result.error.issues });
-        evaluationData = buildPhase1Fallback(perDocumentEvaluations);
-      }
-    } catch (error) {
-      // Network error, quota exceeded, JSON parse failure, etc. — Phase 1 results are preserved
-      logger.error("Orchestrator call failed, falling back to Phase 1 aggregation", { error });
-      evaluationData = buildPhase1Fallback(perDocumentEvaluations);
-    }
+      if (adversarialResult.success) {
+        const score1 = evaluationData.overallScore;
+        const score2 = adversarialResult.data.overallScore;
+        ensembleDivergence = Math.abs(score1 - score2);
 
-    // Backfill itemFeedback with per-document evaluation data for any items the orchestrator missed
-    for (const perDoc of perDocumentEvaluations) {
-      if (!evaluationData.itemFeedback[perDoc.checklistItemId]) {
-        evaluationData.itemFeedback[perDoc.checklistItemId] = {
-          status: perDoc.status === "missing" ? "missing" : perDoc.status === "ok" ? "ok" : "needs_review",
-          feedback: perDoc.feedback,
-          score: perDoc.score,
-          issues: perDoc.issues,
-          strengths: perDoc.strengths,
-          hasDocument: perDoc.hasDocument,
-          hasContent: perDoc.hasContent,
-          confidence: perDoc.confidence,
-          confidenceReason: perDoc.confidenceReason,
-        };
-      } else {
-        // Enrich orchestrator feedback with per-document fields if missing
-        const existing = evaluationData.itemFeedback[perDoc.checklistItemId];
-        evaluationData.itemFeedback[perDoc.checklistItemId] = {
-          ...existing,
-          score: existing.score ?? perDoc.score,
-          issues: existing.issues ?? perDoc.issues,
-          strengths: existing.strengths ?? perDoc.strengths,
-          hasDocument: perDoc.hasDocument,
-          hasContent: perDoc.hasContent,
-          // Always use Phase 1 confidence — the orchestrator doesn't re-read the raw doc
-          confidence: perDoc.confidence,
-          confidenceReason: perDoc.confidenceReason,
-        };
-      }
-    }
-
-    // ---------------------------------------------------------------------------
-    // ENSEMBLE SCORING — adversarial second pass for borderline scores
-    // Only triggered when the primary score is within ±12 of the visa-type threshold.
-    // A devil's advocate prompt reframes the same data pessimistically. Comparing the
-    // two scores reveals how stable the evaluation is:
-    //   divergence < 8  → "high"     — both passes agree, keep primary score
-    //   divergence < 18 → "moderate" — minor disagreement, use average
-    //   divergence ≥ 18 → "low"      — significant disagreement, use average + warn
-    // ---------------------------------------------------------------------------
-
-    const readyThreshold = getReadyThreshold(application.visaType);
-    const borderlineMin = readyThreshold - 12;
-    const borderlineMax = readyThreshold + 12;
-    const isBorderline =
-      evaluationData.overallScore >= borderlineMin &&
-      evaluationData.overallScore <= borderlineMax;
-
-    let scoreConfidence: "high" | "moderate" | "low" | null = null;
-    let ensembleDivergence: number | null = null;
-
-    if (isBorderline) {
-      try {
-    const adversarialSystemPrompt = `You are a highly skeptical agency review lead whose job is to stress-test this application before final submission. Using the same agency readiness framework, assume the worst interpretation of every ambiguous document, treat missing documents as deliberate omissions, and be strict about marginal evidence. Return ONLY valid JSON.`;
-
-        const adversarialResponse = await createEvaluationCompletionWithFallback({
-          openai,
-          systemPrompt: adversarialSystemPrompt,
-          userContent: orchestratorUserPrompt,
-          schemaName: "orchestrator_evaluation",
-          schema: buildOrchestratorJsonSchema(checklistItems) as Record<string, unknown>,
-          maxTokens: AI_MAX_TOKENS_LARGE,
-        });
-
-        const adversarialRaw = JSON.parse(adversarialResponse.choices[0].message.content || "{}");
-        const adversarialResult = orchestratorResponseSchema.safeParse(adversarialRaw);
-
-        if (adversarialResult.success) {
-          const score1 = evaluationData.overallScore;
-          const score2 = adversarialResult.data.overallScore;
-          ensembleDivergence = Math.abs(score1 - score2);
-
-          if (ensembleDivergence < 8) {
-            scoreConfidence = "high";
-            // Keep primary score unchanged
-          } else if (ensembleDivergence < 18) {
-            scoreConfidence = "moderate";
-            evaluationData = {
-              ...evaluationData,
-              overallScore: Math.round((score1 + score2) / 2),
-            };
-          } else {
-            scoreConfidence = "low";
-            evaluationData = {
-              ...evaluationData,
-              overallScore: Math.round((score1 + score2) / 2),
-            };
-          }
-
-          logger.info("Ensemble scoring complete", { score1, score2, ensembleDivergence, scoreConfidence, finalScore: evaluationData.overallScore });
+        if (ensembleDivergence < 8) {
+          scoreConfidence = "high";
+          // Keep primary score unchanged
+        } else if (ensembleDivergence < 18) {
+          scoreConfidence = "moderate";
+          evaluationData = {
+            ...evaluationData,
+            overallScore: Math.round((score1 + score2) / 2),
+          };
         } else {
-          logger.warn("Ensemble adversarial response failed schema validation — skipping ensemble");
+          scoreConfidence = "low";
+          evaluationData = {
+            ...evaluationData,
+            overallScore: Math.round((score1 + score2) / 2),
+          };
         }
-      } catch (ensembleError) {
-        // Non-fatal — primary score stands if ensemble fails
-        logger.warn("Ensemble pass failed — using primary score only", { error: ensembleError });
+
+        logger.info("Ensemble scoring complete", {
+          score1,
+          score2,
+          ensembleDivergence,
+          scoreConfidence,
+          finalScore: evaluationData.overallScore,
+        });
+      } else {
+        logger.warn("Ensemble adversarial response failed schema validation — skipping ensemble");
       }
+    } catch (ensembleError) {
+      // Non-fatal — primary score stands if ensemble fails
+      logger.warn("Ensemble pass failed — using primary score only", { error: ensembleError });
     }
+  }
+
+  return { evaluationData, scoreConfidence, ensembleDivergence };
+}
+
+export const evaluateDocumentsAction = createServerAction()
+  .input(evaluateDocumentsSchema)
+  .handler(async ({ input }) => {
+    const session = await requireApplicationPermission(input.applicationId, APPLICATION_PERMISSIONS.ACCESS_APPLICATION);
+    await checkActionRateLimit("evaluateDocuments", session.userId, 10);
+    trackUsage({ userId: session.userId, event: USAGE_EVENTS.EVALUATION_RUN, metadata: { applicationId: input.applicationId } });
+
+    const db = getDB();
+
+    // ---------------------------------------------------------------------------
+    // Load application, applicant, checklist items, and uploaded documents
+    // ---------------------------------------------------------------------------
+
+    const [application, applicant] = await Promise.all([
+      db.query.visaApplicationTable.findFirst({
+        where: eq(visaApplicationTable.id, input.applicationId),
+      }),
+      db.query.applicantTable.findFirst({
+        where: and(
+          eq(applicantTable.id, input.applicantId),
+          eq(applicantTable.applicationId, input.applicationId)
+        ),
+      }),
+    ]);
+
+    if (!application) {
+      throw new ZSAError("NOT_FOUND", "Application not found");
+    }
+
+    if (!applicant) {
+      throw new ZSAError("NOT_FOUND", "Applicant not found");
+    }
+
+    // Reads can be parallelised safely — also fetch the previous evaluation for incremental reuse
+    const [checklistItems, uploadedDocuments, previousEvaluation] = await Promise.all([
+      db.query.checklistItemTable.findMany({
+        where: and(
+          eq(checklistItemTable.applicationId, application.id),
+          eq(checklistItemTable.applicantId, input.applicantId)
+        ),
+        orderBy: [asc(checklistItemTable.sortOrder)],
+      }),
+      db.query.uploadedDocumentTable.findMany({
+        where: and(
+          eq(uploadedDocumentTable.applicationId, application.id),
+          eq(uploadedDocumentTable.applicantId, input.applicantId)
+        ),
+        orderBy: newestDocumentOrder,
+      }),
+      db.query.documentEvaluationTable.findFirst({
+        where: and(
+          eq(documentEvaluationTable.applicationId, application.id),
+          eq(documentEvaluationTable.applicantId, input.applicantId)
+        ),
+        orderBy: newestEvaluationOrder,
+      }),
+    ]);
+
+    if (checklistItems.length === 0) {
+      throw new ZSAError("NOT_FOUND", "No checklist items exist to evaluate for this application.");
+    }
+
+    if (uploadedDocuments.length === 0) {
+      throw new ZSAError(
+        "PRECONDITION_FAILED",
+        "Please upload at least one document before running an evaluation."
+      );
+    }
+
+    const openai = getOpenAIClient();
+
+    // ---------------------------------------------------------------------------
+    // Application context string — injected into every per-document prompt
+    // ---------------------------------------------------------------------------
+    const applicationContext = `Visa type: ${application.visaType}
+Applicant country (passport): ${application.homeCountry}
+Currently residing in: ${application.currentCountry}
+Destination country: ${application.destinationCountry}
+Embassy: ${application.embassy}
+Applicant name: ${sanitizeForPrompt(applicant.name, 200)} (${applicant.relationship})`;
+
+    const evidence = await loadEvaluationEvidence({
+      applicationId: application.id, checklistItems, uploadedDocuments, previousEvaluation, openai,
+    });
+    const { perDocumentEvaluations, docSnapshots } = await evaluateChecklistDocuments({
+      checklistItems, evidence, previousEvaluation, applicationContext,
+    });
+    const prompts = buildOrchestratorPrompts({ checklistItems, perDocumentEvaluations, applicationContext });
+    const { evaluationData, scoreConfidence, ensembleDivergence } = await evaluateApplicationReadiness({
+      checklistItems, perDocumentEvaluations, ...prompts, visaType: application.visaType,
+    });
 
     // ---------------------------------------------------------------------------
     // Persist evaluation and update application/applicant scores

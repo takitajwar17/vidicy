@@ -26,8 +26,8 @@ interface ReviewContext {
   applicationId: string;
 }
 
-// IDs provide a stable order when PostgreSQL timestamps are equal.
-export const newestDocumentOrder = [desc(uploadedDocumentTable.uploadedAt), desc(uploadedDocumentTable.id)];
+// Upload sequence resolves document timestamp ties. Evaluation IDs give a stable fallback.
+export const newestDocumentOrder = [desc(uploadedDocumentTable.uploadedAt), desc(uploadedDocumentTable.uploadSequence), desc(uploadedDocumentTable.id)];
 export const newestEvaluationOrder = [desc(documentEvaluationTable.createdAt), desc(documentEvaluationTable.id)];
 
 export function isEvaluationCurrent({
@@ -43,7 +43,7 @@ export function isEvaluationCurrent({
     | null
     | undefined;
   checklistItems: Pick<typeof checklistItemTable.$inferSelect, "id" | "applicantId">[];
-  // Documents must be ordered newest first, including the stable ID tie-break above.
+  // Documents must be ordered newest first, including the upload sequence above.
   documents: Pick<typeof uploadedDocumentTable.$inferSelect, "id" | "checklistItemId">[];
 }) {
   if (!evaluation?.docSnapshots || !evaluation.itemFeedback) return false;

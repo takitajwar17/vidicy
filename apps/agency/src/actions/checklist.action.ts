@@ -2,7 +2,7 @@
 
 import { createServerAction, ZSAError } from "zsa";
 import { z } from "zod";
-import { eq, and } from "drizzle-orm";
+import { eq, and, sql } from "drizzle-orm";
 import { getRuntimeContext } from "@/infra/runtime-context";
 import { getDB } from "@/db";
 import { getOpenAIClient, getPerplexityClient } from "@/lib/openai";
@@ -469,9 +469,6 @@ Mark isRequired: false only for truly optional documents. Required items first i
         `Ensure the document is current and matches the requirements exactly.`,
     }));
 
-    // D1 hard limit: 100 bound parameters per statement.
-    // Each checklist row has 12 columns → max 8 rows per batch (8×12=96 ≤ 100).
-    const BATCH_SIZE = 8;
     const rows = checklistItems.map((item) => ({
       applicationId: application.id,
       applicantId: applicant.id,
@@ -483,31 +480,20 @@ Mark isRequired: false only for truly optional documents. Required items first i
       sortOrder: item.sortOrder ?? 0,
     }));
 
-    // A second check covers another request that finished while the AI ran.
-    const savedItems = await db.query.checklistItemTable.findMany({
-      where: and(
-        eq(checklistItemTable.applicationId, application.id),
-        eq(checklistItemTable.applicantId, applicant.id),
-      ),
+    // Serialize only the final save. AI research stays outside the transaction.
+    const savedChecklist = await db.withTransaction(async () => {
+      await db.execute(sql`SELECT pg_advisory_xact_lock(hashtextextended(${`checklist:${application.id}:${applicant.id}`}, 0))`);
+      const savedItems = await db.query.checklistItemTable.findMany({
+        where: and(
+          eq(checklistItemTable.applicationId, application.id),
+          eq(checklistItemTable.applicantId, applicant.id),
+        ),
+      });
+      if (savedItems.length > 0) return { items: savedItems, inserted: false };
+      return { items: await db.insert(checklistItemTable).values(rows).returning(), inserted: true };
     });
-    if (savedItems.length > 0) return savedItems;
 
-    // D1 batches commit together, so a failed insert cannot leave a partial checklist.
-    const remainingBatches = [];
-    for (let i = BATCH_SIZE; i < rows.length; i += BATCH_SIZE) {
-      remainingBatches.push(
-        db
-          .insert(checklistItemTable)
-          .values(rows.slice(i, i + BATCH_SIZE))
-          .returning(),
-      );
-    }
-    const insertedItems = (
-      await db.batch([
-        db.insert(checklistItemTable).values(rows.slice(0, BATCH_SIZE)).returning(),
-        ...remainingBatches,
-      ])
-    ).flat();
+    if (!savedChecklist.inserted) return savedChecklist.items;
 
     // Persist checklist metadata to typed columns (canonical)
     try {
@@ -529,5 +515,5 @@ Mark isRequired: false only for truly optional documents. Required items first i
     }
 
     revalidatePath(`/dashboard/${application.id}`);
-    return insertedItems;
+    return savedChecklist.items;
   });

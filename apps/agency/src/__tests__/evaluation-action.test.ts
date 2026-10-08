@@ -1,5 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type OpenAI from "openai";
+import { ThinkingLevel } from "@google/genai";
+const { generateContent } = vi.hoisted(() => ({ generateContent: vi.fn() }));
+vi.mock("@/lib/gemini", () => ({
+  GEMINI_DOCUMENT_EVALUATION_MODEL: "gemini-evaluation-test",
+  getGeminiClient: () => ({ models: { generateContent } }),
+}));
 
 vi.mock("zsa", () => {
   class ZSAError extends Error {
@@ -39,23 +44,7 @@ vi.mock("@/infra/logger", () => ({
 }));
 
 import { isModelParameterCompatibilityError } from "@/lib/openai";
-import { createEvaluationCompletionWithFallback } from "@/actions/evaluation.action";
-
-function createMockOpenAI() {
-  const create = vi.fn();
-  const openai = {
-    chat: {
-      completions: {
-        create,
-      },
-    },
-  } as unknown as OpenAI;
-
-  return {
-    create,
-    openai,
-  };
-}
+import { createGeminiEvaluation } from "@/lib/gemini-evaluation";
 
 const testSchema = {
   type: "object",
@@ -91,89 +80,49 @@ describe("isModelParameterCompatibilityError", () => {
   });
 });
 
-describe("createEvaluationCompletionWithFallback", () => {
+describe("Vertex AI evaluation", () => {
+  const input = { systemPrompt: "system", userContent: "user", schemaName: "evaluation_test", schema: testSchema, maxTokens: 300 };
   beforeEach(() => {
-    vi.clearAllMocks();
+    vi.resetAllMocks();
+    generateContent.mockResolvedValue({ text: '{"ok":true}', candidates: [{ finishReason: "STOP" }] });
   });
 
-  it("omits temperature from the GPT-5.4 primary request", async () => {
-    const { create, openai } = createMockOpenAI();
-    create.mockResolvedValueOnce({
-      choices: [{ message: { content: "{\"ok\":true}" } }],
-    });
-
-    await createEvaluationCompletionWithFallback({
-      openai,
-      systemPrompt: "system",
-      userContent: "user",
-      schemaName: "evaluation_test",
-      schema: testSchema,
-      maxTokens: 300,
-    });
-
-    expect(create).toHaveBeenCalledTimes(1);
-    expect(create.mock.calls[0][0]).toMatchObject({
-      model: "gpt-5.4",
-      reasoning_effort: "medium",
-      max_completion_tokens: 300,
-      response_format: {
-        type: "json_schema",
-      },
-    });
-    expect(create.mock.calls[0][0]).not.toHaveProperty("temperature");
-  });
-
-  it("falls back to GPT-4o when GPT-5.4 returns a parameter compatibility 400", async () => {
-    const { create, openai } = createMockOpenAI();
-    create
-      .mockRejectedValueOnce({
-        status: 400,
-        message:
-          "Unsupported value: 'temperature' does not support 0 with this model. Only the default (1) value is supported.",
-      })
-      .mockResolvedValueOnce({
-        choices: [{ message: { content: "{\"ok\":true}" } }],
-      });
-
-    await createEvaluationCompletionWithFallback({
-      openai,
-      systemPrompt: "system",
-      userContent: "user",
-      schemaName: "evaluation_test",
-      schema: testSchema,
-      maxTokens: 300,
-    });
-
-    expect(create).toHaveBeenCalledTimes(2);
-    expect(create.mock.calls[1][0]).toMatchObject({
-      model: "gpt-4o",
-      temperature: 0,
-      max_tokens: 300,
-      response_format: {
-        type: "json_schema",
-      },
-    });
-  });
-
-  it("does not fall back for unrelated 400 errors", async () => {
-    const { create, openai } = createMockOpenAI();
-    const schemaError = {
-      status: 400,
-      message: "Invalid JSON schema: required property missing.",
-    };
-    create.mockRejectedValueOnce(schemaError);
-
-    await expect(
-      createEvaluationCompletionWithFallback({
-        openai,
-        systemPrompt: "system",
-        userContent: "user",
-        schemaName: "evaluation_test",
-        schema: testSchema,
-        maxTokens: 300,
+  it("uses the configured Vertex model and preserves the JSON schema", async () => {
+    await expect(createGeminiEvaluation(input)).resolves.toBe('{"ok":true}');
+    expect(generateContent).toHaveBeenCalledTimes(1);
+    expect(generateContent).toHaveBeenCalledWith({
+      model: "gemini-evaluation-test",
+      contents: [{ role: "user", parts: [{ text: "user" }] }],
+      config: expect.objectContaining({
+        systemInstruction: "system", responseMimeType: "application/json", responseJsonSchema: testSchema,
+        maxOutputTokens: 8492, thinkingConfig: { thinkingLevel: ThinkingLevel.MEDIUM },
       }),
-    ).rejects.toBe(schemaError);
+    });
+    expect(generateContent.mock.calls[0][0].config).not.toHaveProperty("temperature");
+  });
 
-    expect(create).toHaveBeenCalledTimes(1);
+  it("sends inline document images along with text", async () => {
+    await createGeminiEvaluation({ ...input, userContent: [
+      { type: "text", text: "Read this" }, { type: "image_url", image_url: { url: "data:image/jpeg;base64,YWJj" } },
+    ] });
+    expect(generateContent.mock.calls[0][0].contents[0].parts).toEqual([
+      { text: "Read this" }, { inlineData: { mimeType: "image/jpeg", data: "YWJj" } },
+    ]);
+  });
+
+  it("does not reroute a provider error", async () => {
+    const error = new Error("Provider unavailable");
+    generateContent.mockRejectedValue(error);
+    await expect(createGeminiEvaluation(input)).rejects.toBe(error);
+    expect(generateContent).toHaveBeenCalledTimes(1);
+  });
+
+  it.each([
+    { text: "", candidates: [{ finishReason: "STOP" }] },
+    { text: '{"ok":true}', candidates: [{ finishReason: "MAX_TOKENS" }] },
+    { text: "invalid json", candidates: [{ finishReason: "STOP" }] },
+  ])("rejects an incomplete or invalid evaluation: %j", async response => {
+    generateContent.mockResolvedValue(response);
+    await expect(createGeminiEvaluation(input)).rejects.toThrow();
   });
 });

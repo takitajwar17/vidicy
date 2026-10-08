@@ -1,38 +1,33 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const mockGetCloudflareContext = vi.fn();
-
-vi.mock("@opennextjs/cloudflare", () => ({
-  getCloudflareContext: mockGetCloudflareContext,
+const { constructed } = vi.hoisted(() => ({ constructed: vi.fn() }));
+vi.mock("pg", () => ({
+  Pool: class {
+    constructor(options: unknown) { constructed(options); }
+    on() {}
+  },
 }));
 
-describe("database binding contract", () => {
+describe("PostgreSQL configuration", () => {
   beforeEach(() => {
     vi.resetModules();
-    mockGetCloudflareContext.mockReset();
+    constructed.mockClear();
+    vi.stubEnv("DATABASE_URL", "");
+    vi.stubEnv("PGHOST", "");
+  });
+  afterEach(() => vi.unstubAllEnvs());
+
+  it("requires explicit PostgreSQL configuration", async () => {
+    const { getDB } = await import("@/db");
+    expect(() => getDB()).toThrow("Set DATABASE_URL or PGHOST");
+    expect(constructed).not.toHaveBeenCalled();
   });
 
-  it("mentions the primary D1 binding in the error message when the binding is missing", async () => {
-    mockGetCloudflareContext.mockReturnValue({
-      env: {},
-    });
-
+  it("uses one pool for repeated calls with Cloud SQL socket configuration", async () => {
+    vi.stubEnv("PGHOST", "/cloudsql/test-instance");
     const { getDB } = await import("@/db");
-
-    expect(() => getDB()).toThrow("APP_D1");
-  });
-
-  it("falls back to the OpenNext D1 binding when the app alias is unavailable", async () => {
-    const database = {} as D1Database;
-
-    mockGetCloudflareContext.mockReturnValue({
-      env: {
-        NEXT_TAG_CACHE_D1: database,
-      },
-    });
-
-    const { getDB } = await import("@/db");
-
-    expect(() => getDB()).not.toThrow();
+    expect(getDB()).toBe(getDB());
+    expect(constructed).toHaveBeenCalledTimes(1);
+    expect(constructed).toHaveBeenCalledWith(expect.objectContaining({ connectionTimeoutMillis: 10_000 }));
   });
 });

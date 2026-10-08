@@ -33,29 +33,15 @@ function createDatabase(pool: Pool) {
     logger: isSqlQueryLoggingEnabled(process.env.NODE_ENV, process.env.DB_SQL_LOG),
   });
 
-  async function batch<const T extends readonly BatchItem<"pg">[]>(queries: T): Promise<BatchResponse<T>> {
-    if (batchClient.getStore()) {
-      throw new Error("Nested database batches are not supported");
-    }
+  async function withTransaction<T>(operation: () => Promise<T>): Promise<T> {
+    if (batchClient.getStore()) throw new Error("Nested database transactions are not supported");
     const connection = await pool.connect();
     let isReleased = false;
     try {
       await connection.query("BEGIN");
-      const results = await batchClient.run(connection, async () => {
-        const values: unknown[] = [];
-        for (const query of queries) {
-          // Every supported Drizzle PostgreSQL query builder has execute().
-          // Keep the same query instance so defaults are evaluated only once.
-          const executable = query as ExecutableBatchQuery;
-          if (typeof executable.execute !== "function") {
-            throw new Error("Database batch requires executable Drizzle queries");
-          }
-          values.push(await executable.execute());
-        }
-        return values;
-      });
+      const result = await batchClient.run(connection, operation);
       await connection.query("COMMIT");
-      return results as BatchResponse<T>;
+      return result;
     } catch (error) {
       try {
         await connection.query("ROLLBACK");
@@ -63,7 +49,6 @@ function createDatabase(pool: Pool) {
         // Discard a broken connection; preserve the original query error.
         connection.release(true);
         isReleased = true;
-        throw error;
       }
       throw error;
     } finally {
@@ -71,7 +56,22 @@ function createDatabase(pool: Pool) {
     }
   }
 
-  return Object.assign(database, { batch });
+  async function batch<const T extends readonly BatchItem<"pg">[]>(queries: T): Promise<BatchResponse<T>> {
+    return withTransaction(async () => {
+      const values: unknown[] = [];
+      for (const query of queries) {
+        // Execute the original query so Drizzle evaluates defaults only once.
+        const executable = query as ExecutableBatchQuery;
+        if (typeof executable.execute !== "function") {
+          throw new Error("Database batch requires executable Drizzle queries");
+        }
+        values.push(await executable.execute());
+      }
+      return values as BatchResponse<T>;
+    });
+  }
+
+  return Object.assign(database, { batch, withTransaction });
 }
 
 // Retain the explicit legacy injection helper for D1 migration tools and old
