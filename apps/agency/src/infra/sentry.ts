@@ -1,5 +1,4 @@
-// Sentry is initialized per-request via withSentry() in the checked-in worker entry
-// (`worker.ts`). These re-exports provide
+// Sentry is initialized by the Node.js instrumentation entry. These exports provide
 // a clean import path for the rest of the app to capture errors and set context.
 export {
   captureException,
@@ -10,4 +9,4 @@ export {
   withScope,
   logger as sentryLogger,
   metrics as sentryMetrics,
-} from "@sentry/cloudflare";
+} from "@sentry/node";

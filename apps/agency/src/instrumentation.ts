@@ -1,6 +1,12 @@
 export async function register() {
-  // Sentry initialization happens per-request via the capture APIs.
-  // No global init needed — @sentry/cloudflare is designed for per-request lifecycle.
+  if (process.env.NEXT_RUNTIME === "nodejs" && process.env.SENTRY_DSN) {
+    const Sentry = await import("@sentry/node");
+    Sentry.init({
+      dsn: process.env.SENTRY_DSN,
+      environment: process.env.NODE_ENV,
+      tracesSampleRate: 0.05,
+    });
+  }
 }
 
 export function onRequestError(
