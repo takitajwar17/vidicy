@@ -204,9 +204,9 @@ export default async function StatusPage() {
                 </div>
                 <div className="grid gap-4 grid-cols-1 sm:grid-cols-3">
                   {([
-                    { key: "d1" as const, label: "D1 Database", icon: DatabaseIcon, desc: "Primary SQLite database" },
-                    { key: "kv" as const, label: "KV Store", icon: ServerIcon, desc: "Sessions & caching" },
-                    { key: "r2" as const, label: "R2 Storage", icon: HardDriveIcon, desc: "Document file storage" },
+                    { key: "postgres" as const, label: "PostgreSQL", icon: DatabaseIcon, desc: "Cloud SQL database" },
+                    { key: "memorystore" as const, label: "Memorystore", icon: ServerIcon, desc: "Sessions & caching" },
+                    { key: "cloudStorage" as const, label: "Cloud Storage", icon: HardDriveIcon, desc: "Document file storage" },
                   ]).map(({ key, label, icon: CompIcon, desc }) => {
                     const comp = health.components[key]
                     return (
@@ -561,7 +561,7 @@ export default async function StatusPage() {
 
               {/* ======== USAGE METRICS ======== */}
               <section>
-                <SectionHeader icon={BarChart3Icon} title="Usage Metrics (KV Tracked)" />
+                <SectionHeader icon={BarChart3Icon} title="Usage Metrics" />
                 <div className="grid gap-6 grid-cols-1 lg:grid-cols-2">
                   <Card>
                     <CardHeader>

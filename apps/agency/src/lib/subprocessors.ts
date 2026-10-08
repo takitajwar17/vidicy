@@ -5,7 +5,7 @@ export interface SubprocessorEntry {
   website: string;
 }
 
-export const SUBPROCESSORS_LAST_UPDATED = "October 14, 2026";
+export const SUBPROCESSORS_LAST_UPDATED = "October 18, 2026";
 
 export const SUBPROCESSORS: SubprocessorEntry[] = [
   {
@@ -22,7 +22,7 @@ export const SUBPROCESSORS: SubprocessorEntry[] = [
   },
   {
     name: "Cloudflare",
-    purpose: "Infrastructure, security, and performance services",
+    purpose: "Account-security checks and domain services",
     location: "Global",
     website: "https://www.cloudflare.com/",
   },
@@ -34,8 +34,8 @@ export const SUBPROCESSORS: SubprocessorEntry[] = [
   },
   {
     name: "Google",
-    purpose: "Authentication services",
-    location: "United States",
+    purpose: "Hosting, document storage, database, AI document processing, and authentication services",
+    location: "Global; primary application storage in Singapore",
     website: "https://google.com",
   },
   {

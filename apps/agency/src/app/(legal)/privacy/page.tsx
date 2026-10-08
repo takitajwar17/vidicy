@@ -169,7 +169,7 @@ export default function PrivacyPage() {
           <ul className="space-y-3">
             <ListItem>Personal data may be processed by automated document-processing providers in the United States.</ListItem>
             <ListItem>Personal data may be processed by requirement lookup providers in the United States.</ListItem>
-            <ListItem>Data may be stored and served through Cloudflare&apos;s globally distributed infrastructure.</ListItem>
+            <ListItem>Agency records and uploaded documents are stored on Google Cloud in Singapore. AI processing may take place in other regions.</ListItem>
             <ListItem>Email notifications may be processed by Resend in the United States.</ListItem>
           </ul>
           <p className="text-sm text-muted-foreground leading-relaxed mt-4">
@@ -202,8 +202,8 @@ export default function PrivacyPage() {
           </p>
           <ul className="space-y-3">
             {[
-              ["Encryption in transit:", "All data is transmitted over TLS (HTTPS)."],
-              ["Encryption at rest:", "Uploaded documents are stored in Cloudflare R2 with AES-256 server-side encryption. Database records in Cloudflare D1 are encrypted at the storage layer."],
+              ["Encryption in transit:", "Browser connections use HTTPS. Cloud SQL connections use an authenticated, encrypted connection."],
+              ["Encryption at rest:", "Uploaded documents are stored in private Cloud Storage buckets. Cloud Storage and Cloud SQL encrypt stored data."],
               ["Password security:", "Passwords are hashed using PBKDF2-SHA256 with 100,000 iterations and a 128-bit random salt. We use constant-time comparison to prevent timing attacks."],
               ["Session security:", "Session tokens use 256 bits of cryptographic entropy, are stored in httpOnly secure cookies, and automatically expire after 30 days. A maximum of 5 concurrent sessions per user is enforced."],
               ["Rate limiting:", "Authentication endpoints and API routes are protected by rate limiting to prevent brute-force attacks."],
@@ -216,7 +216,7 @@ export default function PrivacyPage() {
             ))}
           </ul>
           <p className="text-sm text-muted-foreground leading-relaxed mt-6">
-            Document embeddings stored in Cloudflare Vectorize are numerical vector representations that cannot be reverse-engineered to recover the original document text.
+            Document embeddings are stored in Vertex AI Vector Search. Associated text chunks are stored in index metadata or private Cloud Storage objects. Access is restricted to the application and authorized case members.
           </p>
         </section>
 
@@ -229,7 +229,7 @@ export default function PrivacyPage() {
             <ListItem><strong className="text-foreground">csrf-token</strong> — Cross-site request forgery protection (httpOnly, secure, 24-hour expiry).</ListItem>
           </ul>
           <p className="text-sm text-muted-foreground leading-relaxed mt-4">
-            We use Cloudflare Web Analytics for anonymous, aggregated performance metrics. This does not use cookies and does not track individual users.
+            We use operational logs and application monitoring to identify errors and measure service performance.
           </p>
           <p className="text-sm text-muted-foreground leading-relaxed mt-4">
             We do not use any advertising trackers, retargeting pixels, or third-party analytics that track individual users.
