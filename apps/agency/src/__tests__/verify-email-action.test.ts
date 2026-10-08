@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const {
-  mockGetCloudflareContext,
+  mockGetRuntimeContext,
   mockRecordMarketingEvent,
   mockUpdateAllSessionsOfUser,
   mockWithRateLimit,
@@ -11,7 +11,7 @@ const {
   mockSetUpdate,
   mockWhereUpdate,
 } = vi.hoisted(() => ({
-  mockGetCloudflareContext: vi.fn(),
+  mockGetRuntimeContext: vi.fn(),
   mockRecordMarketingEvent: vi.fn(),
   mockUpdateAllSessionsOfUser: vi.fn(),
   mockWithRateLimit: vi.fn(),
@@ -46,8 +46,8 @@ vi.mock("zsa", () => {
   };
 });
 
-vi.mock("@opennextjs/cloudflare", () => ({
-  getCloudflareContext: mockGetCloudflareContext,
+vi.mock("@/infra/runtime-context", () => ({
+  getRuntimeContext: mockGetRuntimeContext,
 }));
 
 vi.mock("@/server/marketing/events", () => ({
@@ -125,7 +125,7 @@ describe("verifyEmailAction behavior", () => {
     }));
     mockKvDelete.mockResolvedValue(undefined);
 
-    mockGetCloudflareContext.mockReturnValue({
+    mockGetRuntimeContext.mockReturnValue({
       env: {
         NEXT_INC_CACHE_KV: {
           get: mockKvGet,

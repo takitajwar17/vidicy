@@ -9,7 +9,7 @@ vi.mock("@/infra/csrf-token", () => ({
   generateCsrfTokenValue: mockGenerateCsrfTokenValue,
 }));
 
-import { config, middleware } from "@/middleware";
+import { middleware } from "@/middleware";
 import { CANONICAL_SITE_URL } from "@/constants";
 
 const originalAuthUnderConstruction = process.env.AUTH_UNDER_CONSTRUCTION;
@@ -36,11 +36,25 @@ describe("middleware", () => {
     }
   });
 
+  it("does not redirect a canonical host listed among the legacy domains", async () => {
+    vi.stubEnv("NEXT_PUBLIC_SITE_URL", "https://vidicy.com");
+    vi.resetModules();
+    try {
+      const configured = await import("@/middleware");
+      const response = await configured.middleware(new NextRequest("https://vidicy.com/sign-in"));
+      expect(response.status).toBe(200);
+      expect(response.headers.get("location")).toBeNull();
+    } finally {
+      vi.unstubAllEnvs();
+      vi.resetModules();
+    }
+  });
+
   it.each(["www.vidicy.com", "agency.vidicy.com"])("redirects the agency alias %s and preserves the path and query", async (hostname) => {
     const response = await middleware(new NextRequest(`https://${hostname}/docs?a=1`));
 
     expect(response.status).toBe(308);
-    expect(response.headers.get("location")).toBe("https://vidicy.com/docs?a=1");
+    expect(response.headers.get("location")).toBe(`${CANONICAL_SITE_URL}/docs?a=1`);
   });
 
   it("leaves canonical SEO metadata routes without a csrf cookie", async () => {
@@ -97,17 +111,17 @@ describe("middleware", () => {
     expect(response.cookies.get("csrf-token")?.value).toBe("csrf_token_value");
   });
 
-  it("redirects public auth traffic to the pilot access page when the gate is on", async () => {
+  it("ignores the retired construction gate for sign-up", async () => {
     process.env.AUTH_UNDER_CONSTRUCTION = "true";
     process.env.AUTH_GATE_BYPASS_TOKEN = "founder-token";
 
     const response = await middleware(new NextRequest(`${CANONICAL_SITE_URL}/sign-up`));
 
-    expect(response.status).toBe(307);
-    expect(response.headers.get("location")).toBe(`${CANONICAL_SITE_URL}/pilot-access`);
+    expect(response.status).toBe(200);
+    expect(response.headers.get("location")).toBeNull();
   });
 
-  it("sets a bypass cookie when the private auth access token is valid", async () => {
+  it("does not create a retired pilot access cookie", async () => {
     process.env.AUTH_UNDER_CONSTRUCTION = "true";
     process.env.AUTH_GATE_BYPASS_TOKEN = "founder-token";
 
@@ -115,9 +129,9 @@ describe("middleware", () => {
       new NextRequest(`${CANONICAL_SITE_URL}/sign-in?access=founder-token&redirect=%2Fdashboard`),
     );
 
-    expect(response.status).toBe(307);
-    expect(response.headers.get("location")).toBe(`${CANONICAL_SITE_URL}/sign-in?redirect=%2Fdashboard`);
-    expect(response.cookies.get("vidicy-auth-gate")?.value).toBe("founder-token");
+    expect(response.status).toBe(200);
+    expect(response.headers.get("location")).toBeNull();
+    expect(response.cookies.get("vidicy-auth-gate")).toBeUndefined();
   });
 
   it("allows the Google OAuth start route while the construction gate is on", async () => {

@@ -10,6 +10,7 @@ import { generateCsrfTokenValue } from "@/infra/csrf-token";
 
 const SEO_METADATA_PATHS = new Set(["/robots.txt", "/sitemap.xml", "/manifest.webmanifest"]);
 function getLegacySiteRedirectUrl(request: NextRequest): URL | null {
+  if (request.nextUrl.hostname === CANONICAL_SITE_DOMAIN) return null;
   if (!LEGACY_SITE_DOMAINS.includes(request.nextUrl.hostname as (typeof LEGACY_SITE_DOMAINS)[number])) {
     return null;
   }

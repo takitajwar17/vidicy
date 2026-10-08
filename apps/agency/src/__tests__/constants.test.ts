@@ -36,9 +36,8 @@ describe('Application Constants Consistency', () => {
       expect(() => new URL(SITE_URL)).not.toThrow()
     })
 
-    it('should have a fixed canonical site URL', () => {
-      expect(CANONICAL_SITE_URL).toBe('https://vidicy.com')
-      expect(CANONICAL_SITE_DOMAIN).toBe('vidicy.com')
+    it('should derive the canonical domain from the configured site URL', () => {
+      expect(CANONICAL_SITE_URL).toBe((process.env.NEXT_PUBLIC_SITE_URL || 'https://vidicy-agency-vw6akohvja-as.a.run.app').replace(/\/$/, ''))
       expect(new URL(CANONICAL_SITE_URL).hostname).toBe(CANONICAL_SITE_DOMAIN)
     })
 

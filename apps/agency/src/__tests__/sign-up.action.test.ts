@@ -7,7 +7,7 @@ const {
   mockGenerateSessionToken,
   mockSetSessionTokenCookie,
   mockCanSignUp,
-  mockGetCloudflareContext,
+  mockGetRuntimeContext,
   mockCreateId,
   mockSendVerificationEmail,
   mockSendNewUserSignupNotificationEmail,
@@ -26,7 +26,7 @@ const {
   mockGenerateSessionToken: vi.fn(),
   mockSetSessionTokenCookie: vi.fn(),
   mockCanSignUp: vi.fn(),
-  mockGetCloudflareContext: vi.fn(),
+  mockGetRuntimeContext: vi.fn(),
   mockCreateId: vi.fn(),
   mockSendVerificationEmail: vi.fn(),
   mockSendNewUserSignupNotificationEmail: vi.fn(),
@@ -87,8 +87,8 @@ vi.mock("@paralleldrive/cuid2", () => ({
   createId: mockCreateId,
 }));
 
-vi.mock("@opennextjs/cloudflare", () => ({
-  getCloudflareContext: mockGetCloudflareContext,
+vi.mock("@/infra/runtime-context", () => ({
+  getRuntimeContext: mockGetRuntimeContext,
 }));
 
 vi.mock("@/utils/email", () => ({
@@ -159,7 +159,7 @@ describe("signUpAction", () => {
     mockLinkApplicantRecordsByEmail.mockResolvedValue(undefined);
     mockGetPostAuthRedirectPath.mockReturnValue("/pending-verification");
     mockKvPut.mockResolvedValue(undefined);
-    mockGetCloudflareContext.mockReturnValue({
+    mockGetRuntimeContext.mockReturnValue({
       env: {
         NEXT_INC_CACHE_KV: {
           put: mockKvPut,

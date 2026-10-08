@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 
+import { CANONICAL_SITE_URL } from "@/constants";
 import { GET, HEAD } from "@/app/agent-markdown/route";
 
 describe("agent markdown route", () => {
@@ -15,7 +16,7 @@ describe("agent markdown route", () => {
     expect(body).toContain("title: Vidicy Agency");
     expect(body).toContain("# Vidicy Agency");
     expect(body).toContain("Check passports, forms, bank statements");
-    expect(body).toContain("https://vidicy.com/sign-in");
+    expect(body).toContain(`${CANONICAL_SITE_URL}/sign-in`);
   });
 
   it("returns headers without a body for HEAD requests", async () => {

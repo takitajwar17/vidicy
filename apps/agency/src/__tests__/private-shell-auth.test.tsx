@@ -172,9 +172,9 @@ describe("private shell auth boundaries", () => {
     mockEnsureAgencyTeamMembership.mockResolvedValueOnce(null);
 
     await expect(DashboardLayout({ children: <div /> })).rejects.toThrow(
-      "REDIRECT:/pilot-access",
+      "NOT_FOUND",
     );
-    expect(mockRedirect).toHaveBeenCalledWith("/pilot-access");
+    expect(mockNotFound).toHaveBeenCalled();
   });
 
   it("redirects the workspace shell when the verified user is not agency staff", async () => {
@@ -185,8 +185,8 @@ describe("private shell auth boundaries", () => {
         children: <div />,
         params: Promise.resolve({ appId: "vapp_123" }),
       }),
-    ).rejects.toThrow("REDIRECT:/pilot-access");
-    expect(mockRedirect).toHaveBeenCalledWith("/pilot-access");
+    ).rejects.toThrow("NOT_FOUND");
+    expect(mockNotFound).toHaveBeenCalled();
   });
 
   it("uses the shared session-only helper in the support shell", async () => {

@@ -13,6 +13,7 @@ vi.mock('unpdf', () => ({
   getDocumentProxy: vi.fn(),
   extractText: vi.fn(),
   getResolvedPDFJS: vi.fn(),
+  createIsomorphicCanvasFactory: vi.fn(),
 }))
 
 async function getUnpdfMocks() {
@@ -81,6 +82,8 @@ describe('extractTextFromPdf', () => {
       const { getDocument } = createPdfRenderMocks({ totalPages: 3 })
 
       getResolvedPDFJS.mockResolvedValue({ getDocument } as never)
+      const unpdf = await import("unpdf")
+      vi.mocked(unpdf.getDocumentProxy).mockImplementation(async () => getDocument().promise as never)
 
       await expect(getPdfPageCount(new Uint8Array([1, 2, 3]))).resolves.toBe(3)
     })
@@ -90,6 +93,8 @@ describe('extractTextFromPdf', () => {
       const { getDocument, getPage } = createPdfRenderMocks({ totalPages: 3 })
 
       getResolvedPDFJS.mockResolvedValue({ getDocument } as never)
+      const unpdf = await import("unpdf")
+      vi.mocked(unpdf.getDocumentProxy).mockImplementation(async () => getDocument().promise as never)
       globalThis.OffscreenCanvas = class {
         getContext() {
           return {}

@@ -64,7 +64,6 @@ describe("shared public site shell", () => {
     expect(markup).toContain('href="/about"');
     expect(markup).toContain(">About<");
     expect(marketingTopBarLinks.map((link) => link.label)).toEqual([
-      "For individuals",
       "FAQ",
       "Enterprise",
       "About",

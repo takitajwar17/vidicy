@@ -1,5 +1,6 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
+import robots from "@/app/robots";
 import { describe, expect, it } from "vitest";
 
 import {
@@ -10,18 +11,10 @@ import {
 
 describe("public robots.txt", () => {
   it("declares a validator-safe crawl policy", () => {
-    const body = readFileSync(join(process.cwd(), "public/robots.txt"), "utf-8");
-
-    expect(body).toContain("User-agent: *");
-    expect(body).not.toContain("Content-Signal:");
-    expect(body).toContain("Allow: /");
-
-    for (const path of PUBLIC_ROBOTS_DISALLOW_PATHS) {
-      expect(body).toContain(`Disallow: ${path}`);
-    }
-
-    expect(body).toContain(`Host: ${CANONICAL_SITE_DOMAIN}`);
-    expect(body).toContain(`Sitemap: ${CANONICAL_SITE_URL}/sitemap.xml`);
+    const policy = robots();
+    expect(policy.rules).toEqual({ userAgent: "*", allow: "/", disallow: [...PUBLIC_ROBOTS_DISALLOW_PATHS] });
+    expect(policy.host).toBe(CANONICAL_SITE_DOMAIN);
+    expect(policy.sitemap).toBe(`${CANONICAL_SITE_URL}/sitemap.xml`);
   });
 
   it("keeps private route-group layouts noindexed", () => {

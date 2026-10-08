@@ -8,7 +8,6 @@ const expectedPublicStaticUrls = [
   `${CANONICAL_SITE_URL}/faq`,
   `${CANONICAL_SITE_URL}/enterprise`,
   `${CANONICAL_SITE_URL}/about`,
-  `${CANONICAL_SITE_URL}/pilot-access`,
   `${CANONICAL_SITE_URL}/privacy`,
   `${CANONICAL_SITE_URL}/terms`,
   `${CANONICAL_SITE_URL}/subprocessors`,
@@ -23,6 +22,7 @@ describe("sitemap metadata route", () => {
       expect(urls.has(url)).toBe(true);
     });
 
+    expect(urls.has(`${CANONICAL_SITE_URL}/pilot-access`)).toBe(false);
     expect(urls.has(`${CANONICAL_SITE_URL}/sign-in`)).toBe(false);
     expect(urls.has(`${CANONICAL_SITE_URL}/sign-up`)).toBe(false);
     expect(urls.has(`${CANONICAL_SITE_URL}/dashboard`)).toBe(false);

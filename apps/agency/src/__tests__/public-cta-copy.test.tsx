@@ -20,7 +20,6 @@ vi.mock("next/navigation", async () => {
 });
 
 import EnterprisePage from "@/app/(marketing)/enterprise/page";
-import PilotAccessPage from "@/app/(marketing)/pilot-access/page";
 import LegalLayout from "@/app/(legal)/layout";
 import TermsPage from "@/app/(legal)/terms/page";
 import MarketingLayout from "@/app/(marketing)/layout";
@@ -51,20 +50,21 @@ describe("public CTA copy", () => {
     const enterpriseMarkup = renderToStaticMarkup(
       <MarketingLayout><EnterprisePage /></MarketingLayout>,
     );
-    const pilotAccessMarkup = renderToStaticMarkup(
-      <MarketingLayout><PilotAccessPage /></MarketingLayout>,
-    );
     const termsMarkup = renderToStaticMarkup(<LegalLayout><TermsPage /></LegalLayout>);
 
-    for (const markup of [enterpriseMarkup, pilotAccessMarkup, termsMarkup]) {
+    for (const markup of [enterpriseMarkup, termsMarkup]) {
       expect(markup).not.toContain(SHARED_PRE_FOOTER_HEADING);
       expect(markup).not.toContain("Get My Free Review");
       expect(markup).not.toContain("Compare Plans");
     }
 
     expect(enterpriseMarkup).not.toContain("Ready to check your documents?");
-    expect(pilotAccessMarkup).not.toContain("Start your first application");
     expect(termsMarkup).not.toContain("Questions about these terms?");
+  });
+
+  it("redirects the retired pilot page to sign-in", async () => {
+    const { default: PilotAccessPage } = await import("@/app/(marketing)/pilot-access/page");
+    expect(() => PilotAccessPage()).toThrow("NEXT_REDIRECT");
   });
 
   it("removes generic page-local and shared pre-footer CTA components", () => {
