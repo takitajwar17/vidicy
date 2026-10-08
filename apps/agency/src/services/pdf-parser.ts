@@ -2,7 +2,8 @@ import "server-only"
 import { logger } from "@/infra/logger"
 import { AI_TIMEOUT_CHAT_MS } from "@/constants"
 import { getOpenAIClient, isModelAvailabilityError, isTimeoutLikeAIError } from "@/lib/openai"
-import { getGeminiClient } from "@/lib/gemini"
+import { ThinkingLevel } from "@google/genai"
+import { GEMINI_DOCUMENT_EXTRACTION_MODEL, getGeminiClient } from "@/lib/gemini"
 import { buildGeminiDocumentPrompt, GEMINI_DOCUMENT_EMPTY_SENTINEL } from "@/lib/gemini-document"
 
 /**
@@ -123,9 +124,14 @@ function buildPdfPageImageExtractionPrompt(): string {
 }
 
 async function loadPdfJsDocument(bytes: Uint8Array) {
-  const { getResolvedPDFJS } = await import("unpdf")
-  const { getDocument } = await getResolvedPDFJS()
-  return getDocument({ data: bytes }).promise
+  const { DOMMatrix, ImageData, Path2D } = await import("@napi-rs/canvas")
+  const graphics = globalThis as unknown as Record<string, unknown>
+  graphics.DOMMatrix ??= DOMMatrix
+  graphics.ImageData ??= ImageData
+  graphics.Path2D ??= Path2D
+  const { createIsomorphicCanvasFactory, getDocumentProxy } = await import("unpdf")
+  const CanvasFactory = await createIsomorphicCanvasFactory(() => import("@napi-rs/canvas"))
+  return getDocumentProxy(bytes, { CanvasFactory })
 }
 
 async function extractTextFromPdfNative(bytes: Uint8Array): Promise<PdfParseResult> {
@@ -221,23 +227,28 @@ async function callGeminiTextExtraction({
   mimeType: "application/pdf" | `image/${string}`
 }): Promise<PdfParseResult> {
   const gemini = getGeminiClient()
-  const response = await Promise.race([
-    gemini.models.generateContent({
-      model: "gemini-2.5-flash",
-      contents: [
-        {
-          inlineData: {
-            data: bufferToBase64(bytes),
-            mimeType,
-          },
+  const response = await gemini.models.generateContent({
+    model: GEMINI_DOCUMENT_EXTRACTION_MODEL,
+    contents: [
+      {
+        inlineData: {
+          data: bufferToBase64(bytes),
+          mimeType,
         },
-        buildGeminiDocumentPrompt({ mimeType }),
-      ],
-    }),
-    new Promise<never>((_, reject) =>
-      setTimeout(() => reject(new Error("Gemini document extraction timed out")), AI_TIMEOUT_CHAT_MS),
-    ),
-  ])
+      },
+      buildGeminiDocumentPrompt({ mimeType }),
+    ],
+    config: {
+      thinkingConfig: { thinkingLevel: ThinkingLevel.LOW },
+      abortSignal: AbortSignal.timeout(AI_TIMEOUT_CHAT_MS),
+      httpOptions: { timeout: AI_TIMEOUT_CHAT_MS },
+    },
+  })
+
+  const candidate = response.candidates?.[0]
+  if (candidate?.finishReason && candidate.finishReason !== "STOP") {
+    throw new Error(`Gemini document extraction did not complete: ${candidate.finishReason}`)
+  }
 
   const raw = response.text?.trim() ?? ""
   if (!raw || raw === GEMINI_DOCUMENT_EMPTY_SENTINEL) {
@@ -262,7 +273,7 @@ async function extractTextWithGemini({
     const result = await callGeminiTextExtraction({ bytes, mimeType })
     logger.info("Recovered document text with Gemini document extraction", {
       provider: "vertex-ai",
-      model: "gemini-2.5-flash",
+      model: GEMINI_DOCUMENT_EXTRACTION_MODEL,
       mimeType,
     })
     return result
@@ -423,13 +434,14 @@ export async function renderPdfPagesForExtraction({
         const scale = Math.min(1200 / defaultViewport.width, 2.0)
         const viewport = page.getViewport({ scale })
 
-        const canvas = new OffscreenCanvas(
+        const { createCanvas } = await import("@napi-rs/canvas")
+        const canvas = createCanvas(
           Math.round(viewport.width),
           Math.round(viewport.height),
         )
         const context = canvas.getContext("2d")
         if (!context) {
-          throw new Error("OffscreenCanvas 2D context unavailable")
+          throw new Error("PDF canvas 2D context unavailable")
         }
 
         await page.render({
@@ -438,9 +450,7 @@ export async function renderPdfPagesForExtraction({
           viewport,
         }).promise
 
-        const blob = await canvas.convertToBlob({ type: "image/jpeg", quality: 0.85 })
-        const arrayBuffer = await blob.arrayBuffer()
-        const base64 = bufferToBase64(new Uint8Array(arrayBuffer))
+        const base64 = canvas.toBuffer("image/jpeg", 85).toString("base64")
 
         pages.push({
           pageNumber,
@@ -589,7 +599,12 @@ export async function extractPdfMetadata(bytes: Uint8Array): Promise<PdfMetadata
   }
 
   try {
-    const { getResolvedPDFJS } = await import("unpdf")
+    const { DOMMatrix, ImageData, Path2D } = await import("@napi-rs/canvas")
+  const graphics = globalThis as unknown as Record<string, unknown>
+  graphics.DOMMatrix ??= DOMMatrix
+  graphics.ImageData ??= ImageData
+  graphics.Path2D ??= Path2D
+  const { getResolvedPDFJS } = await import("unpdf")
     const { getDocument } = await getResolvedPDFJS()
 
     const pdf = await getDocument({ data: bytes }).promise
@@ -636,7 +651,7 @@ export interface DocumentImagesResult {
  * Extracts visual representations of a document for GPT-4o Vision analysis.
  *
  * - Image files (JPEG, PNG, WebP, GIF): encoded as base64 data URLs directly.
- * - PDF files: first `maxPages` pages rendered to JPEG via PDF.js + OffscreenCanvas.
+ * - PDF files: first `maxPages` pages rendered to JPEG via PDF.js and the Node canvas.
  *   Falls back gracefully to { images: [], success: false } if rendering is not
  *   supported in the current runtime (e.g. local Next.js dev without canvas).
  *
@@ -662,7 +677,7 @@ export async function extractDocumentImages(
     }
   }
 
-  // --- PDFs: render pages via PDF.js + OffscreenCanvas ---
+  // --- PDFs: render pages via PDF.js and the Node canvas ---
   if (mimeType !== "application/pdf") {
     return { images: [], success: false, pageCount: 0, error: `Unsupported MIME type: ${mimeType}` }
   }

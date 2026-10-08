@@ -3,7 +3,7 @@ import "server-only";
 import { NextResponse } from "next/server";
 import { and, asc, desc, eq } from "drizzle-orm";
 import type OpenAI from "openai";
-import { getCloudflareContext } from "@opennextjs/cloudflare";
+import { getRuntimeContext } from "@/infra/runtime-context";
 
 import {
   getOpenAIClient,
@@ -357,7 +357,7 @@ export async function POST(request: Request) {
 
     let documentContext = "";
     try {
-      const { env } = getCloudflareContext();
+      const { env } = getRuntimeContext();
       if (env.VECTORIZE) {
         const queryEmbeddingResponse = await openai.embeddings.create(
           {

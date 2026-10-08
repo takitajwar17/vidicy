@@ -1,14 +1,14 @@
-import { getCloudflareContext } from "@opennextjs/cloudflare"
+import { getRuntimeContext } from "@/infra/runtime-context"
 import OpenAI from "openai"
 import { PERPLEXITY_API_BASE_URL } from "@/constants"
 
 function resolveApiKey(cfEnvKey: string, processEnvKey: string): string | undefined {
   let apiKey: string | undefined
   try {
-    const { env } = getCloudflareContext()
+    const { env } = getRuntimeContext()
     apiKey = (env as unknown as Record<string, string | undefined>)[cfEnvKey]
   } catch {
-    // Not running inside a Cloudflare Workers context (e.g. local Next.js dev)
+    // Runtime context is unavailable; use the local process environment
   }
   return apiKey || process.env[processEnvKey]
 }

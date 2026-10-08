@@ -1,7 +1,7 @@
 import "server-only"
 
 import { eq } from "drizzle-orm"
-import { getCloudflareContext } from "@opennextjs/cloudflare"
+import { getRuntimeContext } from "@/infra/runtime-context"
 
 import { AI_TIMEOUT_EMBEDDING_MS } from "@/constants"
 import { getDB } from "@/db"
@@ -844,7 +844,7 @@ export async function indexExtractedDocument({
     }
 
     const openai = getOpenAIClient()
-    const { env } = await getCloudflareContext({ async: true })
+    const { env } = await getRuntimeContext({ async: true })
 
     if (!env.VECTORIZE) {
       await db

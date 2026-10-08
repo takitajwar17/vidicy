@@ -1,16 +1,18 @@
 import "server-only"
 import { GoogleGenAI } from "@google/genai"
-import { getCloudflareContext } from "@opennextjs/cloudflare"
+import { getRuntimeContext } from "@/infra/runtime-context"
 
 const DEFAULT_VERTEX_LOCATION = "global"
+export const GEMINI_DOCUMENT_EXTRACTION_MODEL = "gemini-3.8-flash"
+export const GEMINI_DOCUMENT_EVALUATION_MODEL = "gemini-4-argon"
 
 function getConfigValue(name: string): string | undefined {
   try {
-    const { env } = getCloudflareContext()
+    const { env } = getRuntimeContext()
     const value = (env as unknown as Record<string, unknown>)[name]
     if (typeof value === "string" && value.trim()) return value
   } catch {
-    // Local Next.js development uses process.env and ADC.
+    // Local Next.js development and Cloud Run use process.env and ADC.
   }
 
   const value = process.env[name]

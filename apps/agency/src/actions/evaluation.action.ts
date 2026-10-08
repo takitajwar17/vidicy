@@ -4,14 +4,11 @@ import { createServerAction, ZSAError } from "zsa";
 import { z } from "zod";
 import type OpenAI from "openai";
 import { eq, and, asc } from "drizzle-orm";
-import { getCloudflareContext } from "@opennextjs/cloudflare";
+import { getRuntimeContext } from "@/infra/runtime-context";
 import { getDB } from "@/db";
-import {
-  getOpenAIClient,
-  isModelAvailabilityError,
-  isModelParameterCompatibilityError,
-  isTimeoutLikeAIError,
-} from "@/lib/openai";
+import { getOpenAIClient } from "@/lib/openai";
+import { createGeminiEvaluation } from "@/lib/gemini-evaluation";
+import { GEMINI_DOCUMENT_EVALUATION_MODEL } from "@/lib/gemini";
 import { queryDocumentChunksFromVectorize } from "@/lib/vectorize-query";
 import { AI_MAX_TOKENS_LARGE, AI_MAX_TOKENS_SMALL, AI_MAX_COMBINED_TEXT_LENGTH, MODIFICATION_GAP_DAYS_THRESHOLD, AI_TIMEOUT_CHAT_MS, AI_TIMEOUT_EMBEDDING_MS } from "@/constants";
 import { requireApplicationPermission } from "@/utils/application-auth";
@@ -45,77 +42,30 @@ const evaluateDocumentsSchema = z.object({
 });
 
 const EVALUATION_TRANSLATION_MODEL = "gpt-4.1-mini";
-const EVALUATION_ANALYSIS_PRIMARY_MODEL = "gpt-5.4";
-const EVALUATION_ANALYSIS_FALLBACK_MODEL = "gpt-4o";
-const EVALUATION_ANALYSIS_REASONING_EFFORT = "medium" as const;
-
+// Retain the existing action helper contract while all evaluation calls use
+// Vertex AI. OpenAI is used only for translation and embeddings below.
 export async function createEvaluationCompletionWithFallback({
-  openai,
   systemPrompt,
   userContent,
   schemaName,
   schema,
   maxTokens,
 }: {
-  openai: OpenAI;
+  openai?: OpenAI;
   systemPrompt: string;
   userContent: OpenAI.ChatCompletionUserMessageParam["content"];
   schemaName: string;
   schema: Record<string, unknown>;
   maxTokens: number;
 }) {
-  try {
-    return await openai.chat.completions.create({
-      model: EVALUATION_ANALYSIS_PRIMARY_MODEL,
-      reasoning_effort: EVALUATION_ANALYSIS_REASONING_EFFORT,
-      messages: [
-        { role: "system", content: systemPrompt },
-        { role: "user", content: userContent },
-      ],
-      response_format: {
-        type: "json_schema",
-        json_schema: {
-          name: schemaName,
-          strict: true,
-          schema,
-        },
-      },
-      max_completion_tokens: maxTokens,
-    }, { signal: AbortSignal.timeout(AI_TIMEOUT_CHAT_MS) });
-  } catch (primaryError) {
-    const shouldFallback =
-      isModelAvailabilityError({ error: primaryError, model: EVALUATION_ANALYSIS_PRIMARY_MODEL }) ||
-      isModelParameterCompatibilityError({ error: primaryError }) ||
-      isTimeoutLikeAIError({ error: primaryError });
-
-    if (!shouldFallback) {
-      throw primaryError;
-    }
-
-    logger.warn("Primary evaluation model unavailable, retrying fallback model", {
-      primaryModel: EVALUATION_ANALYSIS_PRIMARY_MODEL,
-      fallbackModel: EVALUATION_ANALYSIS_FALLBACK_MODEL,
-      error: primaryError,
-    });
-
-    return openai.chat.completions.create({
-      model: EVALUATION_ANALYSIS_FALLBACK_MODEL,
-      messages: [
-        { role: "system", content: systemPrompt },
-        { role: "user", content: userContent },
-      ],
-      response_format: {
-        type: "json_schema",
-        json_schema: {
-          name: schemaName,
-          strict: true,
-          schema,
-        },
-      },
-      temperature: 0,
-      max_tokens: maxTokens,
-    }, { signal: AbortSignal.timeout(AI_TIMEOUT_CHAT_MS) });
-  }
+  const content = await createGeminiEvaluation({
+    systemPrompt,
+    userContent,
+    schemaName,
+    schema,
+    maxTokens,
+  });
+  return { choices: [{ message: { content } }] };
 }
 
 // ---------------------------------------------------------------------------
@@ -172,9 +122,9 @@ const orchestratorResponseSchema = z.object({
 type EvaluationData = z.infer<typeof orchestratorResponseSchema>;
 
 // ---------------------------------------------------------------------------
-// JSON Schema objects for OpenAI Structured Outputs (strict: true).
+// JSON Schema objects for Vertex AI structured output (responseJsonSchema).
 // These mirror the Zod schemas above in JSON Schema format. All properties are
-// required and additionalProperties: false — required for strict mode.
+// required and additionalProperties: false to keep the response shape stable.
 // The Zod schemas remain as the runtime validation + transform layer.
 // ---------------------------------------------------------------------------
 
@@ -293,7 +243,8 @@ interface PerDocumentEvaluation {
 /**
  * Computes a stable version key for a document slot.
  * Changes when: a new file is uploaded (new doc.id) or text content
- * becomes available for the first time (hasContent flag flips).
+ * becomes available for the first time (hasContent flag flips), or the
+ * evaluation model changes.
  * Unchanged slots produce the same key across re-runs, allowing the
  * evaluator to skip redundant AI calls.
  */
@@ -303,7 +254,7 @@ function getDocVersionKey(
   hasVision: boolean,
 ): string {
   if (!doc) return "missing";
-  return `${doc.id}:${hasContent ? "1" : "0"}:${hasVision ? "1" : "0"}`;
+  return `${doc.id}:${GEMINI_DOCUMENT_EVALUATION_MODEL}:${hasContent ? "1" : "0"}:${hasVision ? "1" : "0"}`;
 }
 
 /**
@@ -545,18 +496,18 @@ Applicant name: ${sanitizeForPrompt(applicant.name, 200)} (${applicant.relations
 
     // ---------------------------------------------------------------------------
     // Fetch text content for documents that were uploaded but not yet extracted.
-    // For PDFs we use native extraction + OpenAI fallback (for scanned docs).
-    // For image files we use OpenAI extraction directly.
+    // PDFs and image files use Gemini extraction, with the existing native PDF
+    // extraction and OpenAI extraction fallback retained by the shared pipeline.
     // ---------------------------------------------------------------------------
 
     let r2Bucket: R2Bucket | null = null;
     let vectorize: VectorizeIndex | null = null;
     try {
-      const { env } = await getCloudflareContext({ async: true });
+      const { env } = await getRuntimeContext({ async: true });
       r2Bucket = env.R2 ?? null;
       vectorize = env.VECTORIZE ?? null;
     } catch {
-      // Not in Cloudflare Workers context (local dev)
+      // Storage or search may be unavailable in local development.
     }
 
     // Fetch missing text content in parallel through the shared extraction service.
@@ -703,7 +654,7 @@ Applicant name: ${sanitizeForPrompt(applicant.name, 200)} (${applicant.relations
 
     // ---------------------------------------------------------------------------
     // Vision data loading — fetch document bytes from R2 and produce base64
-    // image data URLs for GPT-4o Vision analysis.
+    // image data URLs for Gemini multimodal analysis.
     //   - Image uploads (JPEG/PNG/WebP): encoded directly, zero conversion needed.
     //   - PDFs: first 3 pages rendered via PDF.js + OffscreenCanvas (Workers native).
     //     Falls back silently to empty images if rendering is unsupported.
@@ -754,6 +705,7 @@ Applicant name: ${sanitizeForPrompt(applicant.name, 200)} (${applicant.relations
     // PHASE 1: Per-document individual evaluation (parallel AI calls)
     // ---------------------------------------------------------------------------
 
+    const failedDocumentEvaluations = new Set<string>();
     const perDocumentEvaluations: PerDocumentEvaluation[] = await Promise.all(
       checklistItems.map(async (item): Promise<PerDocumentEvaluation> => {
         const doc = docByChecklistItem.get(item.id);
@@ -914,7 +866,7 @@ Return JSON with this exact structure:
 }`;
 
         try {
-          // When vision images are available, send a multimodal message so GPT-4o
+          // When vision images are available, send a multimodal message so Gemini
           // can see the document directly — critical for scanned docs with no text.
           const userMessageContent: OpenAI.ChatCompletionUserMessageParam["content"] =
             visionImages.length > 0
@@ -964,6 +916,7 @@ Return JSON with this exact structure:
             contentExcerpt: rawText.slice(0, 3000),
           };
         } catch (err) {
+          failedDocumentEvaluations.add(item.id);
           logAlert("ai_api_failure", "Per-document evaluation failed", { checklistItemId: item.id, documentName: item.documentName, error: err });
           // Non-fatal: fall back to a neutral evaluation so we don't block the whole suite
           return {
@@ -974,17 +927,29 @@ Return JSON with this exact structure:
             hasContent,
             status: "needs_review",
             score: 50,
-            issues: ["Could not fully evaluate this document due to a processing error."],
+            issues: ["Vertex AI could not evaluate this document. Run the review again."],
             strengths: [],
-            feedback: "Document was uploaded but could not be fully evaluated at this time.",
+            feedback: "Document was uploaded, but its Gemini review failed. Manual review is required until it can be evaluated.",
             confidence: 0,
-            confidenceReason: "Evaluation failed due to a processing error.",
+            confidenceReason: "Vertex AI document evaluation failed.",
             extractedFields: { holderName: null, expiryDate: null, documentNumber: null, issuingAuthority: null, language: "unknown", dateRange: null },
             contentExcerpt: rawText.slice(0, 3000),
           };
         }
       })
     );
+
+    if (
+      failedDocumentEvaluations.size > 0 &&
+      perDocumentEvaluations.every((item) =>
+        !item.hasDocument || failedDocumentEvaluations.has(item.checklistItemId)
+      )
+    ) {
+      throw new ZSAError(
+        "INTERNAL_SERVER_ERROR",
+        "Vertex AI could not evaluate the uploaded documents. Please run the review again."
+      );
+    }
 
     // ---------------------------------------------------------------------------
     // Build docSnapshots — records what version of each document was just evaluated.
@@ -993,6 +958,8 @@ Return JSON with this exact structure:
 
     const docSnapshots: Record<string, string> = {};
     for (const item of checklistItems) {
+      // A failed provider call must be retried rather than cached as a completed review.
+      if (failedDocumentEvaluations.has(item.id)) continue;
       const doc = docByChecklistItem.get(item.id);
       const rawText = doc ? (textByDocId.get(doc.id) ?? "") : "";
       const hasVisionSnap = doc ? (visionDataByDocId.get(doc.id)?.length ?? 0) > 0 : false;

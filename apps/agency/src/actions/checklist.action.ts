@@ -3,7 +3,7 @@
 import { createServerAction, ZSAError } from "zsa";
 import { z } from "zod";
 import { eq, and } from "drizzle-orm";
-import { getCloudflareContext } from "@opennextjs/cloudflare";
+import { getRuntimeContext } from "@/infra/runtime-context";
 import { getDB } from "@/db";
 import { getOpenAIClient, getPerplexityClient } from "@/lib/openai";
 import { requireApplicationPermission } from "@/utils/application-auth";
@@ -175,7 +175,7 @@ export const generateChecklistAction = createServerAction()
 
     let kv: KVNamespace | undefined;
     try {
-      const { env } = getCloudflareContext();
+      const { env } = getRuntimeContext();
       kv = env.APP_KV as KVNamespace | undefined;
     } catch {
       /* not in Workers context */

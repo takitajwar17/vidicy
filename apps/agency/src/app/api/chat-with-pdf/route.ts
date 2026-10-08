@@ -2,7 +2,7 @@ import "server-only";
 
 import { NextResponse } from "next/server";
 import { and, asc, desc, eq } from "drizzle-orm";
-import { getCloudflareContext } from "@opennextjs/cloudflare";
+import { getRuntimeContext } from "@/infra/runtime-context";
 import OpenAI from "openai";
 import {
   getOpenAIClient,
@@ -30,7 +30,8 @@ import {
   CHAT_ROLE,
   APPLICATION_PERMISSIONS,
 } from "@/db/schema";
-import { ensureDocumentExtraction, queueDocumentExtraction } from "@/services/document-pipeline";
+import { ensureDocumentExtraction } from "@/services/document-pipeline";
+import { enqueueDocumentExtraction } from "@/infra/google/document-tasks";
 import { getPdfPageCount, MAX_PDF_PAGE_COUNT } from "@/services/pdf-parser";
 import { uploadToR2, buildR2Key, MAX_FILE_SIZE_BYTES } from "@/lib/r2";
 import { sanitizeForPrompt } from "@/services/atlas-prompt";
@@ -114,7 +115,7 @@ export async function POST(request: Request) {
       );
     }
 
-    const { env, ctx } = await getCloudflareContext({ async: true });
+    const { env, ctx } = await getRuntimeContext({ async: true });
 
     // Read the file bytes once — reused for both R2 upload and text extraction below
     const fileBytes = new Uint8Array(await file.arrayBuffer());
@@ -388,11 +389,7 @@ export async function POST(request: Request) {
     // 13. Trigger background indexing/reconciliation so future chat queries can
     // reuse the stored extraction via Atlas retrieval.
     if (documentId) {
-      ctx.waitUntil(
-        queueDocumentExtraction({
-          documentId,
-        }),
-      );
+      await enqueueDocumentExtraction({ documentId });
     }
 
     // Fire-and-forget: generate conversation name from first message
