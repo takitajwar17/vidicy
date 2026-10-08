@@ -3,26 +3,26 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const {
   mockAuthorizeApplicationRouteAccess,
   mockRequireRouteSession,
-  mockGetCloudflareContext,
+  mockGetRuntimeContext,
   mockGetDB,
   mockUploadToR2,
   mockBuildR2Key,
   mockTrackUsage,
   mockRecordMarketingEvent,
-  mockQueueDocumentExtraction,
+  mockEnqueueDocumentExtraction,
   mockGetPdfPageCount,
   mockLoggerError,
   mockLogAlert,
 } = vi.hoisted(() => ({
   mockAuthorizeApplicationRouteAccess: vi.fn(),
   mockRequireRouteSession: vi.fn(),
-  mockGetCloudflareContext: vi.fn(),
+  mockGetRuntimeContext: vi.fn(),
   mockGetDB: vi.fn(),
   mockUploadToR2: vi.fn(),
   mockBuildR2Key: vi.fn(),
   mockTrackUsage: vi.fn(),
   mockRecordMarketingEvent: vi.fn(),
-  mockQueueDocumentExtraction: vi.fn(),
+  mockEnqueueDocumentExtraction: vi.fn(),
   mockGetPdfPageCount: vi.fn(),
   mockLoggerError: vi.fn(),
   mockLogAlert: vi.fn(),
@@ -36,8 +36,8 @@ vi.mock("@/app/api/_utils/application-route-auth", () => ({
   authorizeApplicationRouteAccess: mockAuthorizeApplicationRouteAccess,
 }));
 
-vi.mock("@opennextjs/cloudflare", () => ({
-  getCloudflareContext: mockGetCloudflareContext,
+vi.mock("@/infra/runtime-context", () => ({
+  getRuntimeContext: mockGetRuntimeContext,
 }));
 
 vi.mock("@/db", () => ({
@@ -61,8 +61,12 @@ vi.mock("@/server/marketing/events", () => ({
   recordMarketingEvent: mockRecordMarketingEvent,
 }));
 
+vi.mock("@/infra/google/document-tasks", () => ({
+  enqueueDocumentExtraction: mockEnqueueDocumentExtraction,
+}));
+
 vi.mock("@/services/document-pipeline", () => ({
-  queueDocumentExtraction: mockQueueDocumentExtraction,
+  queueDocumentExtraction: vi.fn(),
 }));
 
 vi.mock("@/services/pdf-parser", () => ({
@@ -145,7 +149,7 @@ describe("document upload routes", () => {
         },
       },
     });
-    mockGetCloudflareContext.mockResolvedValue({
+    mockGetRuntimeContext.mockResolvedValue({
       env: {
         R2: {},
       },
@@ -156,8 +160,51 @@ describe("document upload routes", () => {
     mockUploadToR2.mockResolvedValue(undefined);
     mockBuildR2Key.mockReturnValue("file-key");
     mockRecordMarketingEvent.mockResolvedValue(undefined);
-    mockQueueDocumentExtraction.mockResolvedValue(undefined);
+    mockEnqueueDocumentExtraction.mockResolvedValue(undefined);
     mockGetPdfPageCount.mockResolvedValue(2);
+  });
+
+  it.each([
+    ["application/json", '{}'],
+    ["multipart/form-data", "missing boundary"],
+    ["multipart/form-data; boundary=expected", "--expected\r\nContent-Disposition: form-data; name=\"message\"\r\n\r\ntruncated"],
+  ])("returns 400 for malformed form input: %s", async (contentType, body) => {
+    const response = await uploadPdfPOST(new Request("https://example.com/upload", {
+      method: "POST", headers: { "Content-Type": contentType }, body,
+    }));
+    expect(response?.status).toBe(400);
+    expect(mockAuthorizeApplicationRouteAccess).not.toHaveBeenCalled();
+  });
+
+  it("bounds a chunked upload body before parsing ignored fields", async () => {
+    const cancelled = vi.fn();
+    const stream = new ReadableStream<Uint8Array>({
+      pull: (() => { let chunks = 0; return (controller: ReadableStreamDefaultController<Uint8Array>) => {
+        if (++chunks <= 13) controller.enqueue(new Uint8Array(1024 * 1024));
+        else controller.close();
+      }; })(),
+      cancel: cancelled,
+    });
+    const response = await uploadPdfPOST(new Request("https://example.com/upload", {
+      method: "POST", headers: { "Content-Type": "multipart/form-data; boundary=upload" },
+      body: stream, duplex: "half",
+    } as RequestInit & { duplex: string }));
+    expect(response?.status).toBe(413);
+    expect(cancelled).toHaveBeenCalled();
+    expect(mockAuthorizeApplicationRouteAccess).not.toHaveBeenCalled();
+  });
+
+  it.each(["applicationId", "applicantId", "checklistItemId"])("rejects a File in the %s text field", async field => {
+    const form = new FormData();
+    form.set("file", new File(["pdf"], "passport.pdf", { type: "application/pdf" }));
+    form.set("applicationId", "app_123");
+    form.set("applicantId", "applicant_123");
+    form.set("checklistItemId", "item_123");
+    form.set(field, new File(["invalid"], "field.txt"));
+    const response = await uploadPdfPOST(new Request("https://example.com/api/documents/upload/pdf", { method: "POST", body: form }));
+    expect(response.status).toBe(400);
+    expect(mockAuthorizeApplicationRouteAccess).not.toHaveBeenCalled();
+    expect(mockUploadToR2).not.toHaveBeenCalled();
   });
 
   it("rejects non-PDF files on the dedicated PDF upload route", async () => {
@@ -229,18 +276,18 @@ describe("document upload routes", () => {
     const body = (await response.json()) as { error?: string };
     expect(body.error).toContain("40");
     expect(mockUploadToR2).not.toHaveBeenCalled();
-    expect(mockQueueDocumentExtraction).not.toHaveBeenCalled();
+    expect(mockEnqueueDocumentExtraction).not.toHaveBeenCalled();
   });
 
-  it("returns success for PDF uploads before background extraction resolves", async () => {
+  it("acknowledges a PDF upload after durable extraction work is accepted", async () => {
     const { db, insertValuesCalls } = createUploadDbMock({ insertedDocumentId: "doc_pdf" });
     const waitUntil = vi.fn();
     mockGetDB.mockReturnValue(db);
-    mockGetCloudflareContext.mockResolvedValue({
+    mockGetRuntimeContext.mockResolvedValue({
       env: { R2: {} },
       ctx: { waitUntil },
     });
-    mockQueueDocumentExtraction.mockReturnValue(new Promise(() => undefined));
+    mockEnqueueDocumentExtraction.mockResolvedValue({ taskName: "task_1", deduplicated: false });
 
     const formData = new FormData();
     formData.set(
@@ -265,8 +312,8 @@ describe("document upload routes", () => {
       fileName: "uploaded-file",
       fileSize: 2048,
     });
-    expect(waitUntil).toHaveBeenCalledTimes(2);
-    expect(mockQueueDocumentExtraction).toHaveBeenCalledWith({
+    expect(waitUntil).toHaveBeenCalledTimes(1);
+    expect(mockEnqueueDocumentExtraction).toHaveBeenCalledWith({
       documentId: "doc_pdf",
     });
     expect(insertValuesCalls[0]).toMatchObject({
@@ -277,15 +324,15 @@ describe("document upload routes", () => {
     });
   });
 
-  it("returns success for image uploads before background extraction resolves", async () => {
+  it("acknowledges an image upload after durable extraction work is accepted", async () => {
     const { db, insertValuesCalls } = createUploadDbMock({ insertedDocumentId: "doc_img" });
     const waitUntil = vi.fn();
     mockGetDB.mockReturnValue(db);
-    mockGetCloudflareContext.mockResolvedValue({
+    mockGetRuntimeContext.mockResolvedValue({
       env: { R2: {} },
       ctx: { waitUntil },
     });
-    mockQueueDocumentExtraction.mockReturnValue(new Promise(() => undefined));
+    mockEnqueueDocumentExtraction.mockResolvedValue({ taskName: "task_1", deduplicated: false });
 
     const formData = new FormData();
     formData.set(
@@ -310,8 +357,8 @@ describe("document upload routes", () => {
       fileName: "uploaded-file",
       fileSize: 2048,
     });
-    expect(waitUntil).toHaveBeenCalledTimes(2);
-    expect(mockQueueDocumentExtraction).toHaveBeenCalledWith({
+    expect(waitUntil).toHaveBeenCalledTimes(1);
+    expect(mockEnqueueDocumentExtraction).toHaveBeenCalledWith({
       documentId: "doc_img",
     });
     expect(insertValuesCalls[0]).toMatchObject({
@@ -331,8 +378,8 @@ describe("upload workflow consistency", () => {
     mockAuthorizeApplicationRouteAccess.mockResolvedValue({
       session: { user: { id: "user_123" } },
     });
-    mockGetCloudflareContext.mockResolvedValue({ env: { R2: {} }, ctx: { waitUntil: vi.fn() } });
-    mockQueueDocumentExtraction.mockResolvedValue(undefined);
+    mockGetRuntimeContext.mockResolvedValue({ env: { R2: {} }, ctx: { waitUntil: vi.fn() } });
+    mockEnqueueDocumentExtraction.mockResolvedValue(undefined);
     mockRecordMarketingEvent.mockRejectedValueOnce(new Error("analytics unavailable"));
     const formData = new FormData();
     formData.set("file", new File(["image"], "bank.png", { type: "image/png" }));
@@ -356,6 +403,6 @@ describe("upload workflow consistency", () => {
         reviewCompletedAt: null,
       }),
     );
-    expect(mockQueueDocumentExtraction).toHaveBeenCalled();
+    expect(mockEnqueueDocumentExtraction).toHaveBeenCalled();
   });
 });

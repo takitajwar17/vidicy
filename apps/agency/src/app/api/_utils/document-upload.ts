@@ -1,5 +1,7 @@
 import "server-only";
 
+import { readFormBody } from "@/app/api/_utils/request-body";
+
 import { NextResponse } from "next/server";
 import { and, eq } from "drizzle-orm";
 import { getRuntimeContext } from "@/infra/runtime-context";
@@ -103,24 +105,30 @@ export async function handleDocumentUploadRoute({
       return routeAccess.response!;
     }
 
-    const formData = await request.formData();
+    const parsedBody = await readFormBody({ request, maxBytes: MAX_FILE_SIZE_BYTES + 1024 * 1024 });
+    if ("response" in parsedBody) return parsedBody.response;
+    const formData = parsedBody.data;
 
-    const file = formData.get("file") as File | null;
-    const applicationId = formData.get("applicationId") as string | null;
-    let applicantId = formData.get("applicantId") as string | null;
-    const checklistItemId = formData.get("checklistItemId") as string | null;
+    const file = formData.get("file");
+    const applicationId = formData.get("applicationId");
+    const applicantIdField = formData.get("applicantId");
+    const checklistItemId = formData.get("checklistItemId");
 
     if (!file || !(file instanceof File)) {
       return NextResponse.json({ error: "A file is required" }, { status: 400 });
     }
 
-    if (!applicationId || applicationId.trim() === "") {
+    if ((applicantIdField !== null && typeof applicantIdField !== "string")
+      || (checklistItemId !== null && typeof checklistItemId !== "string")) {
+      return NextResponse.json({ error: "Document identifiers must be text" }, { status: 400 });
+    }
+    if (typeof applicationId !== "string" || applicationId.trim() === "") {
       return NextResponse.json({ error: "applicationId is required" }, { status: 400 });
     }
 
     const applicationIdValue = applicationId.trim();
     const checklistItemIdValue = checklistItemId?.trim() || null;
-    applicantId = applicantId?.trim() || null;
+    let applicantId = applicantIdField?.trim() || null;
 
     if (!checklistItemIdValue) {
       return NextResponse.json(

@@ -1,5 +1,7 @@
 import "server-only";
 
+import { chatStreamRequestSchema } from "@/schemas/chat.schema";
+import { readJsonBody } from "@/app/api/_utils/request-body";
 import { NextResponse } from "next/server";
 import { and, asc, desc, eq } from "drizzle-orm";
 import type OpenAI from "openai";
@@ -31,11 +33,6 @@ import {
 } from "@/db/schema";
 import { trackUsage, USAGE_EVENTS } from "@/infra/usage-tracking";
 
-interface ChatStreamRequestBody {
-  applicationId?: string;
-  conversationId?: string;
-  message?: string;
-}
 
 interface ChatStreamDeltaEvent {
   type: "delta";
@@ -257,20 +254,13 @@ export async function POST(request: Request) {
       return routeAccess.response;
     }
 
-    const body = (await request.json().catch(() => null)) as ChatStreamRequestBody | null;
-    const applicationId = body?.applicationId?.trim();
-    const conversationId = body?.conversationId?.trim();
-    const message = body?.message?.trim();
-
-    if (!applicationId) {
-      return NextResponse.json({ error: "applicationId is required" }, { status: 400 });
+    const parsedBody = await readJsonBody({ request, maxBytes: 128 * 1024 });
+    if ("response" in parsedBody) return parsedBody.response;
+    const parsed = chatStreamRequestSchema.safeParse(parsedBody.data);
+    if (!parsed.success) {
+      return NextResponse.json({ error: parsed.error.issues[0].message }, { status: 400 });
     }
-    if (!conversationId) {
-      return NextResponse.json({ error: "conversationId is required" }, { status: 400 });
-    }
-    if (!message) {
-      return NextResponse.json({ error: "message is required" }, { status: 400 });
-    }
+    const { applicationId, conversationId, message } = parsed.data;
 
     const applicationAccess = await authorizeApplicationRouteAccess(
       applicationId,

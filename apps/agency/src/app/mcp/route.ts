@@ -1,5 +1,7 @@
 import "server-only";
 
+import { readJsonBody } from "@/app/api/_utils/request-body";
+import { z } from "zod";
 import { NextResponse } from "next/server";
 
 import packageJson from "../../../package.json";
@@ -14,12 +16,13 @@ import {
   PUBLIC_AGENT_TOOL_DEFINITIONS,
 } from "@/lib/public-agent-tools";
 
-interface JsonRpcRequestBody {
-  jsonrpc?: string;
-  id?: string | number | null;
-  method?: string;
-  params?: Record<string, unknown>;
-}
+const jsonRpcRequestSchema = z.object({
+  jsonrpc: z.literal("2.0"),
+  id: z.union([z.string(), z.number(), z.null()]).optional(),
+  method: z.string().min(1),
+  params: z.record(z.unknown()).optional(),
+});
+type JsonRpcRequestBody = z.infer<typeof jsonRpcRequestSchema>;
 
 function getMcpHeaders() {
   return {
@@ -96,17 +99,18 @@ function buildToolCallError(message: string) {
 }
 
 export async function POST(request: Request): Promise<Response> {
-  let body: JsonRpcRequestBody;
-
-  try {
-    body = await request.json() as JsonRpcRequestBody;
-  } catch {
-    return jsonRpcError(null, -32700, "Invalid JSON request body.");
+  const input = await readJsonBody({ request, maxBytes: 128 * 1024 });
+  if ("response" in input) {
+    return input.response.status === 413
+      ? jsonRpcError(null, -32600, "Request body is too large.", 413)
+      : jsonRpcError(null, -32700, "Invalid JSON request body.");
   }
 
-  if (body.jsonrpc !== "2.0" || typeof body.method !== "string") {
-    return jsonRpcError(body.id ?? null, -32600, "Invalid JSON-RPC request.");
+  const parsed = jsonRpcRequestSchema.safeParse(input.data);
+  if (!parsed.success) {
+    return jsonRpcError(null, -32600, "Invalid JSON-RPC request.");
   }
+  const body = parsed.data;
 
   if (body.method === "initialize") {
     return jsonRpcResult(body.id ?? null, buildInitializeResult());

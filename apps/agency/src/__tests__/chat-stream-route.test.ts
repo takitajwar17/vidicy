@@ -6,7 +6,7 @@ const {
   mockCheckActionRateLimit,
   mockTrackUsage,
   mockGetDB,
-  mockGetCloudflareContext,
+  mockGetRuntimeContext,
   mockGetOpenAIClient,
   mockBuildAtlasSystemPrompt,
   mockLoggerError,
@@ -18,7 +18,7 @@ const {
   mockCheckActionRateLimit: vi.fn(),
   mockTrackUsage: vi.fn(),
   mockGetDB: vi.fn(),
-  mockGetCloudflareContext: vi.fn(),
+  mockGetRuntimeContext: vi.fn(),
   mockGetOpenAIClient: vi.fn(),
   mockBuildAtlasSystemPrompt: vi.fn(),
   mockLoggerError: vi.fn(),
@@ -49,8 +49,8 @@ vi.mock("@/db", () => ({
   getDB: mockGetDB,
 }));
 
-vi.mock("@opennextjs/cloudflare", () => ({
-  getCloudflareContext: mockGetCloudflareContext,
+vi.mock("@/infra/runtime-context", () => ({
+  getRuntimeContext: mockGetRuntimeContext,
 }));
 
 vi.mock("@/lib/openai", () => ({
@@ -162,7 +162,7 @@ describe("/api/chat-stream", () => {
       session: { userId: "user_123" },
     });
     mockCheckActionRateLimit.mockResolvedValue(undefined);
-    mockGetCloudflareContext.mockReturnValue({ env: {} });
+    mockGetRuntimeContext.mockReturnValue({ env: {} });
     mockBuildAtlasSystemPrompt.mockReturnValue("system prompt");
     mockGetOpenAIClient.mockReturnValue({
       chat: {
@@ -177,6 +177,36 @@ describe("/api/chat-stream", () => {
         },
       },
     });
+  });
+
+  it("bounds a JSON stream without a Content-Length header", async () => {
+    const cancelled = vi.fn();
+    const response = await chatStreamPOST(new Request("https://example.com/chat", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: new ReadableStream<Uint8Array>({
+        pull: (() => { let chunks = 0; return (controller: ReadableStreamDefaultController<Uint8Array>) => {
+          if (++chunks <= 4) controller.enqueue(new Uint8Array(128 * 1024));
+          else controller.close();
+        }; })(), cancel: cancelled,
+      }), duplex: "half",
+    } as RequestInit & { duplex: string }));
+    expect(response?.status).toBe(413);
+    expect(cancelled).toHaveBeenCalled();
+    expect(mockAuthorizeApplicationRouteAccess).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    { applicationId: 123, conversationId: "conv_123", message: "Hello" },
+    { applicationId: "app_123", conversationId: {}, message: "Hello" },
+    { applicationId: "app_123", conversationId: "conv_123", message: {} },
+    { applicationId: "app_123", conversationId: "conv_123", message: "x".repeat(16_001) },
+  ])("rejects invalid chat fields before application access", async body => {
+    const response = await chatStreamPOST(new Request("https://example.com/api/chat-stream", {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
+    }));
+    expect(response?.status).toBe(400);
+    expect(mockAuthorizeApplicationRouteAccess).not.toHaveBeenCalled();
+    expect(mockGetDB).not.toHaveBeenCalled();
   });
 
   it("retries a transient D1 reset when saving the user message", async () => {

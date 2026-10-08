@@ -1,5 +1,7 @@
 import "server-only";
 
+import { chatDocumentRequestSchema } from "@/schemas/chat.schema";
+import { readFormBody } from "@/app/api/_utils/request-body";
 import { NextResponse } from "next/server";
 import { and, asc, desc, eq } from "drizzle-orm";
 import { getRuntimeContext } from "@/infra/runtime-context";
@@ -48,13 +50,20 @@ export async function POST(request: Request) {
     }
 
     // 2. Parse form data
-    const formData = await request.formData();
-    const file = formData.get("file") as File | null;
-    const applicationId = (formData.get("applicationId") as string | null)?.trim();
-    const userText = ((formData.get("message") as string | null) ?? "").trim();
-    const conversationId = (formData.get("conversationId") as string | null)?.trim();
-    // Base64 JPEG data URL generated client-side — persisted so thumbnails survive refresh
-    const thumbnailDataUrl = (formData.get("thumbnail") as string | null) || null;
+    const parsedBody = await readFormBody({ request, maxBytes: MAX_FILE_SIZE_BYTES + 1024 * 1024 });
+    if ("response" in parsedBody) return parsedBody.response;
+    const formData = parsedBody.data;
+    const file = formData.get("file");
+    const parsed = chatDocumentRequestSchema.safeParse({
+      applicationId: formData.get("applicationId"),
+      conversationId: formData.get("conversationId"),
+      message: formData.get("message"),
+      thumbnail: formData.get("thumbnail"),
+    });
+    if (!parsed.success) {
+      return NextResponse.json({ error: parsed.error.issues[0].message }, { status: 400 });
+    }
+    const { applicationId, conversationId, message: userText, thumbnail: thumbnailDataUrl } = parsed.data;
 
     // 3. Validate
     if (!file || !(file instanceof File)) {

@@ -5,14 +5,14 @@ const {
   mockAuthorizeApplicationRouteAccess,
   mockGetDB,
   mockWithRateLimit,
-  mockGetCloudflareContext,
+  mockGetRuntimeContext,
   mockGetOpenAIClient,
   mockBuildAtlasSystemPrompt,
   mockUploadToR2,
   mockBuildR2Key,
   mockCheckActionRateLimit,
   mockEnsureDocumentExtraction,
-  mockQueueDocumentExtraction,
+  mockEnqueueDocumentExtraction,
   mockGetPdfPageCount,
   mockLoggerWarn,
   mockLoggerError,
@@ -22,14 +22,14 @@ const {
   mockAuthorizeApplicationRouteAccess: vi.fn(),
   mockGetDB: vi.fn(),
   mockWithRateLimit: vi.fn(),
-  mockGetCloudflareContext: vi.fn(),
+  mockGetRuntimeContext: vi.fn(),
   mockGetOpenAIClient: vi.fn(),
   mockBuildAtlasSystemPrompt: vi.fn(),
   mockUploadToR2: vi.fn(),
   mockBuildR2Key: vi.fn(),
   mockCheckActionRateLimit: vi.fn(),
   mockEnsureDocumentExtraction: vi.fn(),
-  mockQueueDocumentExtraction: vi.fn(),
+  mockEnqueueDocumentExtraction: vi.fn(),
   mockGetPdfPageCount: vi.fn(),
   mockLoggerWarn: vi.fn(),
   mockLoggerError: vi.fn(),
@@ -52,8 +52,8 @@ vi.mock("@/infra/with-rate-limit", () => ({
   withRateLimit: mockWithRateLimit,
 }));
 
-vi.mock("@opennextjs/cloudflare", () => ({
-  getCloudflareContext: mockGetCloudflareContext,
+vi.mock("@/infra/runtime-context", () => ({
+  getRuntimeContext: mockGetRuntimeContext,
 }));
 
 vi.mock("@/lib/openai", () => ({
@@ -77,9 +77,13 @@ vi.mock("@/infra/action-rate-limit", () => ({
   checkActionRateLimit: mockCheckActionRateLimit,
 }));
 
+vi.mock("@/infra/google/document-tasks", () => ({
+  enqueueDocumentExtraction: mockEnqueueDocumentExtraction,
+}));
+
 vi.mock("@/services/document-pipeline", () => ({
   ensureDocumentExtraction: mockEnsureDocumentExtraction,
-  queueDocumentExtraction: mockQueueDocumentExtraction,
+  queueDocumentExtraction: vi.fn(),
 }));
 
 vi.mock("@/services/pdf-parser", () => ({
@@ -192,7 +196,7 @@ describe("legacy document processing routes", () => {
       },
     });
     mockWithRateLimit.mockImplementation(async (fn: () => Promise<unknown>) => fn());
-    mockGetCloudflareContext.mockResolvedValue({
+    mockGetRuntimeContext.mockResolvedValue({
       env: {
         R2: {},
       },
@@ -216,7 +220,7 @@ describe("legacy document processing routes", () => {
       extractionPayload: null,
       reusedStoredExtraction: false,
     });
-    mockQueueDocumentExtraction.mockResolvedValue({
+    mockEnqueueDocumentExtraction.mockResolvedValue({
       extraction: {
         success: true,
       },
@@ -237,11 +241,61 @@ describe("legacy document processing routes", () => {
     });
   });
 
+  it.each([
+    ["application/json", '{}'],
+    ["multipart/form-data", "missing boundary"],
+    ["multipart/form-data; boundary=expected", "--expected\r\nContent-Disposition: form-data; name=\"message\"\r\n\r\ntruncated"],
+  ])("returns 400 for malformed form input: %s", async (contentType, body) => {
+    const response = await chatWithPdfPOST(new Request("https://example.com/upload", {
+      method: "POST", headers: { "Content-Type": contentType }, body,
+    }));
+    expect(response?.status).toBe(400);
+    expect(mockAuthorizeApplicationRouteAccess).not.toHaveBeenCalled();
+  });
+
+  it("bounds a chunked upload body before parsing ignored fields", async () => {
+    const cancelled = vi.fn();
+    const stream = new ReadableStream<Uint8Array>({
+      pull: (() => { let chunks = 0; return (controller: ReadableStreamDefaultController<Uint8Array>) => {
+        if (++chunks <= 13) controller.enqueue(new Uint8Array(1024 * 1024));
+        else controller.close();
+      }; })(),
+      cancel: cancelled,
+    });
+    const response = await chatWithPdfPOST(new Request("https://example.com/upload", {
+      method: "POST", headers: { "Content-Type": "multipart/form-data; boundary=upload" },
+      body: stream, duplex: "half",
+    } as RequestInit & { duplex: string }));
+    expect(response?.status).toBe(413);
+    expect(cancelled).toHaveBeenCalled();
+    expect(mockAuthorizeApplicationRouteAccess).not.toHaveBeenCalled();
+  });
+
+  it.each(["applicationId", "conversationId", "message", "thumbnail"])("rejects a File in chat field %s", async field => {
+    const form = new FormData();
+    form.set("file", new File(["pdf"], "passport.pdf", { type: "application/pdf" }));
+    form.set("applicationId", "app_123");
+    form.set(field, new File(["invalid"], "field.txt"));
+    const response = await chatWithPdfPOST(new Request("https://example.com/api/chat-with-pdf", { method: "POST", body: form }));
+    expect(response?.status).toBe(400);
+    expect(mockAuthorizeApplicationRouteAccess).not.toHaveBeenCalled();
+  });
+
+  it.each([["message", 16_001], ["thumbnail", 512_001]] as const)("rejects oversized chat field %s", async (field, length) => {
+    const form = new FormData();
+    form.set("file", new File(["pdf"], "passport.pdf", { type: "application/pdf" }));
+    form.set("applicationId", "app_123");
+    form.set(field, "x".repeat(length));
+    const response = await chatWithPdfPOST(new Request("https://example.com/api/chat-with-pdf", { method: "POST", body: form }));
+    expect(response?.status).toBe(400);
+    expect(mockAuthorizeApplicationRouteAccess).not.toHaveBeenCalled();
+  });
+
   it("chat-with-pdf uses shared extraction and background queueing instead of the legacy PDF path", async () => {
     const { db, insertPayloads } = createChatDbMock();
     const waitUntil = vi.fn();
     mockGetDB.mockReturnValue(db);
-    mockGetCloudflareContext.mockResolvedValue({
+    mockGetRuntimeContext.mockResolvedValue({
       env: {
         R2: {},
       },
@@ -285,7 +339,7 @@ describe("legacy document processing routes", () => {
     expect(mockEnsureDocumentExtraction).toHaveBeenCalledWith({
       documentId: "doc_upload",
     });
-    expect(mockQueueDocumentExtraction).toHaveBeenCalledWith({
+    expect(mockEnqueueDocumentExtraction).toHaveBeenCalledWith({
       documentId: "doc_upload",
     });
     expect(waitUntil).toHaveBeenCalled();

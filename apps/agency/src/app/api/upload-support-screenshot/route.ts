@@ -1,5 +1,6 @@
 import "server-only";
 
+import { readFormBody } from "@/app/api/_utils/request-body";
 import { NextResponse } from "next/server";
 import { getRuntimeContext } from "@/infra/runtime-context";
 import { withRateLimit } from "@/infra/with-rate-limit";
@@ -18,8 +19,9 @@ export async function POST(request: Request) {
     }
     const { session } = access;
 
-    const formData = await request.formData();
-    const file = formData.get("file") as File | null;
+    const body = await readFormBody({ request, maxBytes: MAX_SUPPORT_FILE_SIZE + 1024 * 1024 });
+    if ("response" in body) return body.response;
+    const file = body.data.get("file");
 
     if (!file || !(file instanceof File)) {
       return NextResponse.json({ error: "A file is required" }, { status: 400 });
