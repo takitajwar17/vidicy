@@ -1,5 +1,5 @@
 import type { Metadata } from "next"
-import { redirect } from "next/navigation"
+import { notFound } from "next/navigation"
 
 import { SidebarProvider, SidebarInset } from "@/components/ui/sidebar"
 import { SiteSidebar } from "@/components/site-sidebar"
@@ -32,7 +32,7 @@ export default async function WorkspaceLayout({
   const staff = await ensureAgencyTeamMembership(session)
 
   if (!staff) {
-    redirect("/pilot-access")
+    notFound()
   }
 
   return (

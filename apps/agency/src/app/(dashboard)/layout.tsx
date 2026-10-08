@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { redirect } from "next/navigation";
+import { notFound } from "next/navigation";
 
 import { SiteSidebar } from "@/components/site-sidebar";
 import { requireVerifiedPageSession } from "@/utils/auth-page";
@@ -21,7 +21,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
   const staff = await ensureAgencyTeamMembership(session);
 
   if (!staff) {
-    redirect("/pilot-access");
+    notFound();
   }
 
   return (
