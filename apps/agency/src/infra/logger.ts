@@ -7,18 +7,18 @@ export interface LogContext {
   teamId?: string;
   ip?: string;
   userAgent?: string;
-  [key: string]: any;
+  [key: string]: unknown;
 }
 
 // Lightweight Production Logger
-class ProductionLogger {
+export class Logger {
   private context: LogContext;
 
   constructor(context: LogContext = {}) {
     this.context = context;
   }
 
-  private format(level: string, message: string, meta: any = {}) {
+  private format(level: string, message: string, meta: Record<string, unknown> = {}) {
     return JSON.stringify({
       timestamp: new Date().toISOString(),
       level,
@@ -28,7 +28,7 @@ class ProductionLogger {
     });
   }
 
-  error(message: string, meta?: any) {
+  error(message: string, meta?: Record<string, unknown>) {
     console.error(this.format("error", message, meta));
     // Send errors to Sentry in production
     import("@/infra/sentry").then(({ captureException, captureMessage: sentryMessage, isInitialized }) => {
@@ -41,10 +41,10 @@ class ProductionLogger {
       }
     }).catch(() => {/* Sentry not available */});
   }
-  warn(message: string, meta?: any) { console.warn(this.format("warn", message, meta)); }
-  info(message: string, meta?: any) { console.info(this.format("info", message, meta)); }
-  http(message: string, meta?: any) { console.info(this.format("http", message, meta)); }
-  debug(message: string, meta?: any) {
+  warn(message: string, meta?: Record<string, unknown>) { console.warn(this.format("warn", message, meta)); }
+  info(message: string, meta?: Record<string, unknown>) { console.info(this.format("info", message, meta)); }
+  http(message: string, meta?: Record<string, unknown>) { console.info(this.format("http", message, meta)); }
+  debug(message: string, meta?: Record<string, unknown>) {
     // In Workers, process.env may not exist — guard safely
     const debugEnabled = typeof process !== "undefined" && process.env?.LOG_LEVEL === "debug";
     if (debugEnabled) {
@@ -53,37 +53,17 @@ class ProductionLogger {
   }
 
   withContext(additionalContext: LogContext) {
-    return new ProductionLogger({ ...this.context, ...additionalContext });
+    return new Logger({ ...this.context, ...additionalContext });
   }
 }
 
 // Keep the shared logger implementation Edge-safe. The heavier development
 // logger uses Node-only modules and must not be reachable from Edge routes.
-const loggerInstance: any = new ProductionLogger();
+const loggerInstance = new Logger();
 
 export const logger = loggerInstance;
 
-export class Logger {
-  private context: LogContext;
-  private impl: any;
-
-  constructor(context: LogContext = {}) {
-    this.context = context;
-    this.impl = isProd ? new ProductionLogger(context) : (loggerInstance.child ? loggerInstance.child(context) : loggerInstance);
-  }
-
-  error(message: string, meta?: any) { this.impl.error(message, meta); }
-  warn(message: string, meta?: any) { this.impl.warn(message, meta); }
-  info(message: string, meta?: any) { this.impl.info(message, meta); }
-  http(message: string, meta?: any) { this.impl.http(message, meta); }
-  debug(message: string, meta?: any) { this.impl.debug(message, meta); }
-
-  withContext(additionalContext: LogContext) {
-    return new Logger({ ...this.context, ...additionalContext });
-  }
-}
-
-export const log = new Logger();
+export const log = loggerInstance;
 
 export const logError = (error: Error, context?: LogContext) => {
   log.withContext(context || {}).error(error.message, { stack: error.stack, name: error.name });

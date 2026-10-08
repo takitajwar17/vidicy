@@ -7,9 +7,9 @@ import type { getAdminUsersPage } from "@/server/admin-users"
 
 // Dynamic import to code-split the heavy data-table bundle (tanstack-table + dnd-kit)
 const DataTable = dynamic(
-  () => import("@/components/data-table").then(mod => mod.DataTable),
+  () => import("@/components/data-table").then(mod => mod.DataTable<User, unknown>),
   { ssr: false }
-) as any
+)
 import { getUsersAction } from "@/app/(admin)/admin/_actions/get-users.action"
 import { 
   bulkDeleteUsersAction, 

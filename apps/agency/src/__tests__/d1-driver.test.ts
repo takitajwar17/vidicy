@@ -6,7 +6,7 @@ import {
   chatMessageTable,
   checklistItemTable,
   userTable,
-} from "@/db/schema";
+} from "@/db/legacy-d1-schema";
 
 type FailureMode = "commit_then_timeout_once" | "timeout_before_commit_once";
 

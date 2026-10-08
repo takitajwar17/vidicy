@@ -1,4 +1,4 @@
-export function exportToCSV(data: any[], filename: string) {
+export function exportToCSV<T extends object>(data: readonly T[], filename: string) {
   if (data.length === 0) return
 
   const headers = Object.keys(data[0]).join(",")

@@ -5,7 +5,6 @@ import * as DropdownMenuPrimitive from "@radix-ui/react-dropdown-menu"
 import { Check, ChevronRight, Circle } from "lucide-react"
 
 import { cn } from "@/lib/utils"
-import { Slot } from "@radix-ui/react-slot"
 
 const DropdownMenu = DropdownMenuPrimitive.Root
 
@@ -82,9 +81,9 @@ const DropdownMenuItem = React.forwardRef<
     asChild?: boolean
   }
 >(({ className, inset, asChild = false, ...props }, ref) => {
-  const Comp = (asChild ? Slot : DropdownMenuPrimitive.Item) as any
   return (
-    <Comp
+    <DropdownMenuPrimitive.Item
+      asChild={asChild}
       ref={ref}
       className={cn(
         "relative flex cursor-default select-none items-center gap-2 rounded-md px-2.5 py-2 text-sm outline-none transition-[background-color,color] focus:bg-accent/85 focus:text-accent-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0",

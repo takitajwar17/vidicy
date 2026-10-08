@@ -835,7 +835,7 @@ class RecoveringD1PreparedQuery<T extends PreparedQueryConfig = PreparedQueryCon
     return mapResultRow(this.fields!, rows[0], getJoinsNotNullableMap(this));
   }
 
-  override async values<TValues extends any[] = unknown[]>(
+  override async values<TValues extends unknown[] = unknown[]>(
     placeholderValues?: Record<string, unknown>,
   ): Promise<TValues[]> {
     const params = fillPlaceholders(this.query.params, placeholderValues ?? {});

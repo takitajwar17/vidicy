@@ -33,7 +33,7 @@ const eslintConfig = [
     rules: {
       // Turn off the base @typescript-eslint/no-unused-vars rule
       "@typescript-eslint/no-unused-vars": "off",
-      "@typescript-eslint/no-explicit-any": "off",
+      "@typescript-eslint/no-explicit-any": "error",
       "react/no-unescaped-entities": "off",
       "prefer-const": "off",
       // Use the unused-imports plugin to handle unused vars
@@ -50,6 +50,10 @@ const eslintConfig = [
       // eslint-plugin-import rules
       "import/no-unused-modules": "off",
     },
+  },
+  {
+    files: ["src/__tests__/**"],
+    rules: { "@typescript-eslint/no-explicit-any": "off" },
   },
   // Disable unused-modules rule for Next.js app directory files
   {
