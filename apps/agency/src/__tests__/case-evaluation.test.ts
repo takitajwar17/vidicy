@@ -232,6 +232,72 @@ describe("production case evaluation core", () => {
     }
   });
 
+  it("keeps identity, expiry and language checks after saved feedback is reused", async () => {
+    const input = fixture(2);
+    const fields = [
+      {
+        ...documentResult.extractedFields,
+        holderName: "PRIYA SHARMA",
+        expiryDate: "2026-10-01",
+        language: "fr",
+      },
+      { ...documentResult.extractedFields, holderName: "ANANYA SHARMA" },
+    ];
+    const evaluate = vi.fn();
+    for (const extractedFields of fields) {
+      evaluate.mockResolvedValueOnce(JSON.stringify({ ...documentResult, extractedFields }));
+    }
+    evaluate.mockResolvedValueOnce(overall(40));
+    const first = await runCaseEvaluation({ ...input, asOfDate: "2026-09-19", evaluate });
+    const previousEvaluation = JSON.parse(
+      JSON.stringify({
+        docSnapshots: first.docSnapshots,
+        itemFeedback: first.evaluationData.itemFeedback,
+      }),
+    );
+    const reviewAgain = vi.fn().mockResolvedValue(overall(40));
+    const second = await runCaseEvaluation({
+      ...input,
+      asOfDate: "2026-10-18",
+      previousEvaluation,
+      evaluate: reviewAgain,
+    });
+    expect(reviewAgain).toHaveBeenCalledTimes(1);
+    expect(second.perDocumentEvaluations.every((document) => document.reused)).toBe(true);
+    expect(second.perDocumentEvaluations.map((document) => document.extractedFields)).toEqual(
+      fields,
+    );
+    const prompt = reviewAgain.mock.calls[0][0].userContent;
+    expect(prompt).toContain("Name mismatch:");
+    expect(prompt).toContain("Expired document:");
+    expect(prompt).toContain("FOREIGN LANGUAGE DOCUMENTS DETECTED");
+  });
+
+  it("reviews legacy feedback again when extracted fields were not saved", async () => {
+    const input = fixture();
+    const firstProvider = vi
+      .fn()
+      .mockResolvedValueOnce(JSON.stringify(documentResult))
+      .mockResolvedValueOnce(overall(40));
+    const first = await runCaseEvaluation({ ...input, evaluate: firstProvider });
+    const itemFeedback = structuredClone(first.evaluationData.itemFeedback);
+    delete (itemFeedback["item-0"] as { extractedFields?: unknown }).extractedFields;
+    const evaluate = vi
+      .fn()
+      .mockResolvedValueOnce(JSON.stringify(documentResult))
+      .mockResolvedValueOnce(overall(40));
+    const second = await runCaseEvaluation({
+      ...input,
+      previousEvaluation: { docSnapshots: first.docSnapshots, itemFeedback },
+      evaluate,
+    });
+    expect(evaluate.mock.calls.map(([request]) => request.schemaName)).toEqual([
+      "per_document_evaluation",
+      "orchestrator_evaluation",
+    ]);
+    expect(second.perDocumentEvaluations[0].reused).not.toBe(true);
+  });
+
   it("rejects invalid concurrency before provider work", async () => {
     const evaluate = vi.fn();
     await expect(runCaseEvaluation({ ...fixture(), evaluate, maxConcurrency: 0 })).rejects.toThrow(

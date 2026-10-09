@@ -179,6 +179,7 @@ const orchestratorItemSchema = z.object({
   hasContent: z.boolean().optional().catch(undefined),
   confidence: z.number().optional().catch(undefined),
   confidenceReason: z.string().optional().catch(undefined),
+  extractedFields: extractedFieldsSchema.optional(),
 });
 
 const orchestratorResponseSchema = z.object({
@@ -561,7 +562,9 @@ async function evaluateChecklistDocuments({
           ? previousEvaluation.itemFeedback?.[item.id]
           : undefined;
 
-      if (prevFeedback) {
+      // Legacy feedback lacks the fields needed for consistency checks. Refresh
+      // uploaded documents once instead of reusing an incomplete evidence record.
+      if (prevFeedback && (!hasDocument || prevFeedback.extractedFields)) {
         return {
           checklistItemId: item.id,
           documentName: item.documentName,
@@ -577,15 +580,7 @@ async function evaluateChecklistDocuments({
           confidenceReason:
             (prevFeedback as { confidenceReason?: string }).confidenceReason ??
             "Reused from previous evaluation.",
-          extractedFields: (prevFeedback as { extractedFields?: ExtractedFields })
-            .extractedFields ?? {
-            holderName: null,
-            expiryDate: null,
-            documentNumber: null,
-            issuingAuthority: null,
-            language: "unknown",
-            dateRange: null,
-          },
+          extractedFields: extractedFieldsSchema.parse(prevFeedback.extractedFields),
           contentExcerpt: rawText.slice(0, 3000),
           reused: true,
         };
@@ -1094,6 +1089,7 @@ async function evaluateApplicationReadiness({
         hasContent: perDoc.hasContent,
         confidence: perDoc.confidence,
         confidenceReason: perDoc.confidenceReason,
+        extractedFields: perDoc.extractedFields,
       };
     } else {
       // Enrich orchestrator feedback with per-document fields if missing
@@ -1108,6 +1104,7 @@ async function evaluateApplicationReadiness({
         // Always use Phase 1 confidence — the orchestrator doesn't re-read the raw doc
         confidence: perDoc.confidence,
         confidenceReason: perDoc.confidenceReason,
+        extractedFields: perDoc.extractedFields,
       };
     }
   }
