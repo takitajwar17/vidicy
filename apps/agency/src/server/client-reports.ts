@@ -3,6 +3,7 @@ import "server-only";
 import { randomUUID } from "node:crypto";
 import { and, desc, eq, isNotNull, isNull, sql } from "drizzle-orm";
 import { ZSAError } from "zsa";
+import { z } from "zod";
 import { getDB } from "@/db";
 import { clientReportTable, visaApplicationTable } from "@/db/schema";
 import { requireAgencyStaff } from "@/server/agency-team";
@@ -39,6 +40,71 @@ export async function getClientReport({ reportId }: { reportId: string }) {
     report.status === "draft" ||
     !["ready", "sent"].includes(application.clientReportStatus);
   return { report, application, isStale, session };
+}
+
+export async function updateClientReportRecipient({
+  reportId,
+  email,
+}: {
+  reportId: string;
+  email: string;
+}) {
+  const { report, application, isStale } = await getClientReport({ reportId });
+  if (isStale)
+    throw new ZSAError("PRECONDITION_FAILED", "This report is out of date. Prepare a new report.");
+  if (
+    report.status !== "ready" ||
+    report.deliveryKey ||
+    report.deliveryStartedAt ||
+    report.deliveryRequest ||
+    report.deliveryPayload
+  )
+    throw new ZSAError(
+      "PRECONDITION_FAILED",
+      "The delivery has started. Its recipient cannot be changed.",
+    );
+  const recipient = z.string().trim().email().parse(email).toLowerCase();
+  const db = getDB();
+  await db.withTransaction(async () => {
+    // Use the same case-then-report lock order as delivery. The second guard
+    // also covers a delivery claim made between the report and case reads.
+    const changed = await db
+      .update(visaApplicationTable)
+      .set({ clientEmail: recipient })
+      .where(
+        and(
+          eq(visaApplicationTable.id, application.id),
+          sql`${visaApplicationTable.updateCounter} IS NOT DISTINCT FROM ${application.updateCounter}`,
+        ),
+      )
+      .returning({ id: visaApplicationTable.id });
+    if (!changed.length)
+      throw new ZSAError(
+        "PRECONDITION_FAILED",
+        "The case changed. Refresh the report before saving its recipient.",
+      );
+    const saved = await db
+      .update(clientReportTable)
+      .set({ updatedAt: new Date() })
+      .where(
+        and(
+          eq(clientReportTable.id, report.id),
+          eq(clientReportTable.status, "ready"),
+          isNull(clientReportTable.deliveryKey),
+          isNull(clientReportTable.deliveryStartedAt),
+          isNull(clientReportTable.deliveryRequest),
+          isNull(clientReportTable.deliveryPayload),
+          sql`${clientReportTable.updateCounter} IS NOT DISTINCT FROM ${report.updateCounter}`,
+        ),
+      )
+      .returning({ id: clientReportTable.id });
+    if (!saved.length)
+      throw new ZSAError(
+        "PRECONDITION_FAILED",
+        "The report changed or delivery has started. Refresh the report.",
+      );
+  });
+  return { email: recipient };
 }
 
 export async function deliverClientReport({ reportId }: { reportId: string }) {

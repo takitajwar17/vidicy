@@ -128,6 +128,7 @@ import {
   syncAgencyReviewIssues,
 } from "@/server/agency-review";
 import { getAgencyCaseDetail, getAgencyCaseRows, getAgencyReports } from "@/server/agency-data";
+import { updateClientReportRecipient } from "@/server/client-reports";
 
 import { deleteTicket } from "@/server/support";
 import { ensureDocumentExtraction } from "@/services/document-pipeline";
@@ -937,6 +938,31 @@ describe("agency review workflow with the real database driver", () => {
     expect((await fixture.db.query.visaApplicationTable.findFirst())?.clientReportStatus).toBe(
       "draft",
     );
+  });
+
+  it("rolls back a recipient edit when delivery starts between the report and case reads", async () => {
+    await generateClientReportAction({ applicationId });
+    const report = (await fixture.db.query.clientReportTable.findFirst())!;
+    const before = await fixture.db.query.visaApplicationTable.findFirst();
+    fixture.setBeforeQuery(async (query) => {
+      if (!query.startsWith("select") || !query.includes('from "visa_application"')) return;
+      fixture.setBeforeQuery();
+      await fixture.pool.query(
+        `UPDATE client_report SET status = 'sending', "deliveryKey" = 'concurrent/claim', "updateCounter" = COALESCE("updateCounter", 0) + 1 WHERE id = $1`,
+        [report.id],
+      );
+      await fixture.pool.query(
+        'UPDATE visa_application SET "updateCounter" = COALESCE("updateCounter", 0) + 1 WHERE id = $1',
+        [applicationId],
+      );
+    });
+    await expect(
+      updateClientReportRecipient({ reportId: report.id, email: "other@example.com" }),
+    ).rejects.toThrow("delivery has started");
+    expect((await fixture.db.query.visaApplicationTable.findFirst())?.clientEmail).toBe(
+      before?.clientEmail,
+    );
+    expect((await fixture.db.query.clientReportTable.findFirst())?.status).toBe("sending");
   });
 
   it("does not save a new issue if clearing readiness fails", async () => {

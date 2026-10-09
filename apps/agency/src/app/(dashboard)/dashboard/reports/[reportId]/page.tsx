@@ -94,6 +94,14 @@ export default async function ClientReportPage({
         <ClientReportControls
           reportId={report.id}
           recipient={recipient}
+          canEditRecipient={
+            !isStale &&
+            report.status === "ready" &&
+            !report.deliveryKey &&
+            !report.deliveryStartedAt &&
+            !report.deliveryRequest &&
+            !report.deliveryPayload
+          }
           canSend={
             !isStale &&
             report.status !== "sent" &&

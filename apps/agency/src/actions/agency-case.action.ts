@@ -34,7 +34,7 @@ import { sendEmailBestEffort } from "@/lib/best-effort-email";
 import { isOpenReviewIssueStatus, normalizeReviewIssueStatus } from "@/lib/agency-workflow";
 import { logger } from "@/infra/logger";
 import { sendAgencyTeamAccessEmail } from "@/utils/email";
-import { deliverClientReport } from "@/server/client-reports";
+import { deliverClientReport, updateClientReportRecipient } from "@/server/client-reports";
 import { validateCsrfToken } from "@/infra/csrf";
 import {
   invalidateAgencyReports,
@@ -570,6 +570,26 @@ export const generateClientReportAction = createServerAction()
     revalidatePath("/dashboard");
     revalidatePath("/dashboard/reports");
     return report;
+  });
+
+export const updateClientReportRecipientAction = createServerAction()
+  .input(
+    z.object({
+      reportId: z.string().min(1),
+      email: z.string().trim().email(),
+      csrfToken: z.string().min(1),
+    }),
+  )
+  .handler(async ({ input }) => {
+    if (!(await validateCsrfToken(input.csrfToken)))
+      throw new ZSAError("FORBIDDEN", "Invalid security token. Refresh the page.");
+    const result = await updateClientReportRecipient({
+      reportId: input.reportId,
+      email: input.email,
+    });
+    revalidatePath("/dashboard/reports");
+    revalidatePath(`/dashboard/reports/${input.reportId}`);
+    return result;
   });
 
 export const sendClientReportAction = createServerAction()

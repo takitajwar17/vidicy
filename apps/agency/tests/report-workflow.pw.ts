@@ -81,7 +81,7 @@ test.beforeAll(async () => {
       userId: staff.id,
       clientId: client.id,
       clientName: client.name,
-      clientEmail: client.email,
+      clientEmail: null,
       homeCountry: "Bangladesh",
       currentCountry: "Bangladesh",
       destinationCountry: "Japan",
@@ -325,6 +325,16 @@ test("generate, view, export, and deliver with real auth and a private provider 
   expect(downloadedHtml).toContain("Please replace passport");
   expect(downloadedHtml).toContain("&lt;script&gt;");
   expect(downloadedHtml).not.toContain("<script>");
+  await expect(page.getByRole("textbox", { name: "Report recipient", exact: true })).toHaveValue(
+    "",
+  );
+  await page
+    .getByRole("textbox", { name: "Report recipient", exact: true })
+    .fill("client@example.test");
+  await page.getByRole("button", { name: "Save recipient", exact: true }).click();
+  await expect(
+    page.getByRole("button", { name: "Send report to client@example.test", exact: true }),
+  ).toBeEnabled();
   writeFileSync(control, "reject");
   await page
     .getByRole("button", { name: "Send report to client@example.test", exact: true })
@@ -337,6 +347,7 @@ test("generate, view, export, and deliver with real auth and a private provider 
   ]);
   expect(rejected.rows[0].sentAt).toBeNull();
   expect(rejected.rows[0].status).toBe("sending");
+  await expect(page.getByRole("button", { name: "Save recipient", exact: true })).toHaveCount(0);
   await pool.query(
     "UPDATE client_report SET \"deliveryStartedAt\" = NOW() - INTERVAL '3 minutes', \"updatedAt\" = NOW() - INTERVAL '3 minutes' WHERE id = $1",
     [reportId],

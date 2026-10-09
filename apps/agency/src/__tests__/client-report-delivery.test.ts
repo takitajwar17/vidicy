@@ -14,7 +14,11 @@ vi.mock("@/utils/email", async (original) => ({
 vi.mock("@/server/agency-review", () => ({ requireCurrentAgencyReview: mocks.current }));
 import { getDBFromDatabase } from "@/db";
 import { agencyClientTable, clientReportTable, userTable, visaApplicationTable } from "@/db/schema";
-import { deliverClientReport, getClientReport } from "@/server/client-reports";
+import {
+  deliverClientReport,
+  getClientReport,
+  updateClientReportRecipient,
+} from "@/server/client-reports";
 let postgres: ReturnType<typeof startTestPostgres>;
 let pool: ReturnType<typeof postgres.createPool>;
 function createDatabase(pool: ReturnType<ReturnType<typeof startTestPostgres>["createPool"]>) {
@@ -225,6 +229,50 @@ describe("client report delivery", () => {
     );
     await expect(deliverClientReport({ reportId })).rejects.toThrow("original sender");
     expect(mocks.send).not.toHaveBeenCalled();
+  });
+
+  it("adds a missing case recipient before the first send", async () => {
+    await pool.query('UPDATE visa_application SET "clientEmail" = NULL WHERE id = $1', [
+      applicationId,
+    ]);
+    await updateClientReportRecipient({ reportId, email: " New.Client@Example.COM " });
+    expect((await db.query.visaApplicationTable.findFirst())?.clientEmail).toBe(
+      "new.client@example.com",
+    );
+    await deliverClientReport({ reportId });
+    expect(mocks.send.mock.calls[0][0].request.to).toEqual(["new.client@example.com"]);
+  });
+
+  it("rejects recipient changes after an attempt starts", async () => {
+    mocks.send.mockRejectedValueOnce(new Error("timeout"));
+    await expect(deliverClientReport({ reportId })).rejects.toThrow();
+    await expect(
+      updateClientReportRecipient({ reportId, email: "other@example.com" }),
+    ).rejects.toThrow("delivery has started");
+    expect((await db.query.visaApplicationTable.findFirst())?.clientEmail).toBe(
+      "client@example.com",
+    );
+  });
+
+  it("blocks recipient changes for stale reports and users without staff access", async () => {
+    mocks.staff.mockRejectedValueOnce(new Error("forbidden"));
+    await expect(
+      updateClientReportRecipient({ reportId, email: "other@example.com" }),
+    ).rejects.toThrow("forbidden");
+    await pool.query('UPDATE visa_application SET "clientReportStatus" = $1 WHERE id = $2', [
+      "draft",
+      applicationId,
+    ]);
+    await expect(
+      updateClientReportRecipient({ reportId, email: "other@example.com" }),
+    ).rejects.toThrow("out of date");
+  });
+
+  it("rejects malformed recipient addresses before changing the case", async () => {
+    await expect(updateClientReportRecipient({ reportId, email: "invalid" })).rejects.toThrow();
+    expect((await db.query.visaApplicationTable.findFirst())?.clientEmail).toBe(
+      "client@example.com",
+    );
   });
 
   it("blocks stale reports and users without staff access", async () => {
