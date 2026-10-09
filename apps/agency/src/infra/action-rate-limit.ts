@@ -1,67 +1,30 @@
 import "server-only";
-import { getRuntimeContext } from "@/infra/runtime-context";
+import { appKV } from "@/infra/google/kv";
 import { logger } from "@/infra/logger";
 import { RATE_LIMIT_WINDOW_SECONDS } from "@/constants";
 import { ZSAError } from "zsa";
 
-/**
- * Per-user rate limiter for server actions, backed by Cloudflare KV.
- * Uses a sliding 1-hour window counter. Non-fatal in local dev (KV unavailable).
- *
- * NOTE (R04): The read-check-write below is not atomic — under concurrent burst traffic,
- * multiple requests can read the same count and all pass the check. At <10k concurrent
- * users this is acceptable. For true atomicity, migrate to Cloudflare Durable Objects.
- *
- * @param action  Short identifier for the action (used in KV key)
- * @param userId  User to track
- * @param limit   Max calls allowed within the 1-hour window
- */
+/** Per-user action limits for one hour after the first request. */
 export async function checkActionRateLimit(
   action: string,
   userId: string,
   limit: number,
 ): Promise<void> {
-  let kv: KVNamespace | undefined;
   try {
-    const { env } = getRuntimeContext();
-    kv = env.APP_KV as KVNamespace | undefined;
-  } catch {
-    /* not in Workers context — skip rate limiting in local dev */
-  }
-
-  if (!kv) return; // local dev — no KV, allow everything
-
-  const key = `rl:${action}:${userId}`;
-  const WINDOW_SECONDS = RATE_LIMIT_WINDOW_SECONDS;
-
-  try {
-    const existing = (await kv.get(key, "json")) as { count: number; windowStart: number } | null;
-    const now = Date.now();
-
-    if (!existing || now - existing.windowStart > WINDOW_SECONDS * 1000) {
-      await kv.put(key, JSON.stringify({ count: 1, windowStart: now }), {
-        expirationTtl: WINDOW_SECONDS,
-      });
-      return;
-    }
-
-    if (existing.count >= limit) {
-      const windowEndsIn = Math.ceil(
-        (WINDOW_SECONDS * 1000 - (now - existing.windowStart)) / 60000,
-      );
+    // Version the key because the earlier implementation stored a JSON object.
+    const { count, remainingSeconds } = await appKV.incrementWindow({
+      key: `rl:v2:${action}:${userId}`,
+      expirationTtl: RATE_LIMIT_WINDOW_SECONDS,
+    });
+    if (count > limit) {
+      const minutes = Math.max(1, Math.ceil(remainingSeconds / 60));
       throw new ZSAError(
         "TOO_MANY_REQUESTS",
-        `You've reached the limit for this action. Please try again in ${windowEndsIn} minute${windowEndsIn !== 1 ? "s" : ""}.`,
+        `You've reached the limit for this action. Please try again in ${minutes} minute${minutes !== 1 ? "s" : ""}.`,
       );
     }
-
-    await kv.put(
-      key,
-      JSON.stringify({ count: existing.count + 1, windowStart: existing.windowStart }),
-      { expirationTtl: WINDOW_SECONDS },
-    );
-  } catch (err) {
-    if (err instanceof ZSAError) throw err;
-    logger.warn("Rate limit KV error (non-fatal)", { error: err });
+  } catch (error) {
+    if (error instanceof ZSAError) throw error;
+    logger.warn("Rate limit Redis error (non-fatal)", { error });
   }
 }

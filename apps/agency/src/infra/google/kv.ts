@@ -22,6 +22,11 @@ export interface GoogleKVListResult {
 
 /** String and JSON operations used by sessions, tokens, rate limits and caches. */
 export interface GoogleKVNamespace {
+  take(key: string): Promise<string | null>;
+  incrementWindow(options: {
+    key: string;
+    expirationTtl: number;
+  }): Promise<{ count: number; remainingSeconds: number }>;
   increment(options: { key: string; expirationTtl: number }): Promise<number>;
   get(key: string): Promise<string | null>;
   get<T = unknown>(
@@ -147,6 +152,26 @@ export function createGoogleKV({ namespace }: { namespace: string }): GoogleKVNa
 
   return {
     get: getValue,
+    async take(key) {
+      // GETDEL consumes a one-time token in one Redis operation.
+      return (await getRedis()).getDel(`${namespace}${key}`);
+    },
+    async incrementWindow({ key, expirationTtl }) {
+      if (!Number.isInteger(expirationTtl) || expirationTtl < 1)
+        throw new Error("Invalid counter expiration");
+      const result = await (
+        await getRedis()
+      ).sendCommand([
+        "EVAL",
+        "local count = redis.call('INCR', KEYS[1]); local ttl = redis.call('TTL', KEYS[1]); if ttl < 0 then redis.call('EXPIRE', KEYS[1], ARGV[1]); ttl = tonumber(ARGV[1]); end; return {count, ttl}",
+        "1",
+        `${namespace}${key}`,
+        String(expirationTtl),
+      ]);
+      if (!Array.isArray(result) || typeof result[0] !== "number" || typeof result[1] !== "number")
+        throw new Error("Invalid counter result");
+      return { count: result[0], remainingSeconds: result[1] };
+    },
     async increment({ key, expirationTtl }) {
       if (!Number.isInteger(expirationTtl) || expirationTtl < 1)
         throw new Error("Invalid counter expiration");
@@ -252,3 +277,5 @@ export function createGoogleKV({ namespace }: { namespace: string }): GoogleKVNa
 }
 
 export const appKV = createGoogleKV({ namespace: "vidicy:app:" });
+
+export const cacheKV = createGoogleKV({ namespace: "vidicy:cache:" });

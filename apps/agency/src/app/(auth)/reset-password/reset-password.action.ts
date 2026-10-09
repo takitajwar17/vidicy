@@ -6,7 +6,7 @@ import { userTable } from "@/db/schema";
 import { resetPasswordSchema } from "@/schemas/reset-password.schema";
 import { hashPassword } from "@/infra/password-hasher";
 import { eq } from "drizzle-orm";
-import { getRuntimeContext } from "@/infra/runtime-context";
+import { cacheKV } from "@/infra/google/kv";
 import { getResetTokenKey } from "@/utils/auth-utils";
 import { withRateLimit, RATE_LIMITS } from "@/infra/with-rate-limit";
 import { logger } from "@/infra/logger";
@@ -23,15 +23,10 @@ export const resetPasswordAction = createServerAction()
       }
 
       const db = getDB();
-      const { env } = getRuntimeContext();
-
-      if (!env?.NEXT_INC_CACHE_KV) {
-        throw new Error("Can't connect to KV store");
-      }
 
       try {
-        // Find valid reset token
-        const resetTokenStr = await env.NEXT_INC_CACHE_KV.get(getResetTokenKey(input.token));
+        // Consume the token before any password write; concurrent requests cannot reuse it.
+        const resetTokenStr = await cacheKV.take(getResetTokenKey(input.token));
         if (!resetTokenStr) {
           throw new ZSAError("NOT_FOUND", "Invalid or expired reset token");
         }
@@ -49,17 +44,8 @@ export const resetPasswordAction = createServerAction()
 
         // Check if token is expired (although KV should have auto-deleted it)
         if (new Date() > new Date(resetToken.expiresAt)) {
-          await env.NEXT_INC_CACHE_KV.delete(getResetTokenKey(input.token));
-
           throw new ZSAError("PRECONDITION_FAILED", "Reset token has expired");
         }
-
-        // Mark token as used BEFORE changing password to prevent race conditions
-        await env.NEXT_INC_CACHE_KV.put(
-          getResetTokenKey(input.token),
-          JSON.stringify({ ...resetToken, used: true }),
-          { expirationTtl: 3600 }, // Keep for 1 hour for audit purposes
-        );
 
         // Find user
         const user = await db.query.userTable.findFirst({

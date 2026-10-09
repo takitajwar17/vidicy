@@ -1,5 +1,5 @@
 import "server-only";
-import { getRuntimeContext } from "@/infra/runtime-context";
+import { cacheKV } from "@/infra/google/kv";
 import * as ipaddr from "ipaddr.js";
 
 interface RateLimitOptions {
@@ -50,12 +50,7 @@ export async function checkRateLimit({
   key: string;
   options: RateLimitOptions;
 }): Promise<RateLimitResult> {
-  const { env } = getRuntimeContext();
   const now = Math.floor(Date.now() / 1000);
-
-  if (!env?.NEXT_INC_CACHE_KV) {
-    throw new Error("Can't connect to KV store");
-  }
 
   // Normalize the key if it looks like an IP address
   const normalizedKey = ipaddr.isValid(key) ? normalizeIP(key) : key;
@@ -64,30 +59,12 @@ export async function checkRateLimit({
     now / options.windowInSeconds,
   )}`;
 
-  // Get the current count from KV
-  // NOTE (R04): This read-check-write is not atomic — under concurrent burst traffic,
-  // multiple requests can read the same count and all pass the check. At <10k concurrent
-  // users this is acceptable. For true atomicity, migrate to Cloudflare Durable Objects.
-  const currentCount = parseInt((await env.NEXT_INC_CACHE_KV.get(windowKey)) || "0");
   const reset = (Math.floor(now / options.windowInSeconds) + 1) * options.windowInSeconds;
-
-  if (currentCount >= options.limit) {
-    return {
-      success: false,
-      remaining: 0,
-      reset,
-      limit: options.limit,
-    };
-  }
-
-  // Increment the counter
-  await env.NEXT_INC_CACHE_KV.put(windowKey, (currentCount + 1).toString(), {
-    expirationTtl: options.windowInSeconds,
-  });
+  const count = await cacheKV.increment({ key: windowKey, expirationTtl: reset - now });
 
   return {
-    success: true,
-    remaining: options.limit - (currentCount + 1),
+    success: count <= options.limit,
+    remaining: Math.max(0, options.limit - count),
     reset,
     limit: options.limit,
   };

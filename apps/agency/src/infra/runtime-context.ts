@@ -2,7 +2,7 @@ import "server-only";
 
 import { after } from "next/server";
 import { createGoogleStorageBucket } from "@/infra/google/storage";
-import { appKV, createGoogleKV } from "@/infra/google/kv";
+import { appKV, cacheKV } from "@/infra/google/kv";
 import { createGoogleVectorIndex } from "@/infra/google/vector-search";
 import { logger } from "@/infra/logger";
 
@@ -11,7 +11,7 @@ import { logger } from "@/infra/logger";
 const bindings = {
   R2: createGoogleStorageBucket(),
   APP_KV: appKV,
-  NEXT_INC_CACHE_KV: createGoogleKV({ namespace: "vidicy:cache:" }),
+  NEXT_INC_CACHE_KV: cacheKV,
   VECTORIZE: createGoogleVectorIndex(),
 };
 
