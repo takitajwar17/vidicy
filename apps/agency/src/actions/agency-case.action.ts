@@ -475,13 +475,14 @@ export const generateClientReportAction = createServerAction()
     const { session } = await requireAgencyStaff();
     const db = getDB();
 
-    await requireAgencyCase({ db, applicationId: input.applicationId });
+    const original = await requireAgencyCase({ db, applicationId: input.applicationId });
     await requireCurrentAgencyReview({
       db,
       applicationId: input.applicationId,
       userId: session.userId,
     });
-    const original = await requireAgencyCase({ db, applicationId: input.applicationId });
+    // Keep the version captured before validation. A later upload must not
+    // become the baseline for publishing findings from the previous review.
 
     const [application, issues] = await Promise.all([
       db.query.visaApplicationTable.findFirst({

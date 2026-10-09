@@ -914,6 +914,31 @@ describe("agency review workflow with the real database driver", () => {
     );
   });
 
+  it("rejects report generation when a replacement arrives after review validation", async () => {
+    let caseReads = 0;
+    fixture.setBeforeQuery(async (query) => {
+      if (!query.startsWith("select") || !query.includes('from "visa_application"')) return;
+      caseReads++;
+      if (caseReads !== 2) return;
+      fixture.setBeforeQuery();
+      await fixture.db.insert(uploadedDocumentTable).values({
+        applicationId,
+        applicantId,
+        checklistItemId: itemId,
+        fileName: "replacement.pdf",
+        fileKey: "replacement",
+        fileSize: 100,
+        mimeType: "application/pdf",
+      });
+      await invalidateAgencyReview({ db: fixture.db, applicationId });
+    });
+    await expect(generateClientReportAction({ applicationId })).rejects.toThrow("case changed");
+    expect(await fixture.db.query.clientReportTable.findMany()).toHaveLength(0);
+    expect((await fixture.db.query.visaApplicationTable.findFirst())?.clientReportStatus).toBe(
+      "draft",
+    );
+  });
+
   it("does not save a new issue if clearing readiness fails", async () => {
     await markAgencyCaseReady(context());
     fixture.setBeforeQuery((query) => {
