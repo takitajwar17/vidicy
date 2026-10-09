@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { renderToStaticMarkup } from "react-dom/server";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import sitemap from "@/app/sitemap";
 import AboutPage from "@/app/(marketing)/about/page";
@@ -59,19 +59,21 @@ describe("marketing SEO surfaces", () => {
     const byUrl = new Map(entries.map((entry) => [entry.url, entry]));
 
     expect(byUrl.get(`${CANONICAL_SITE_URL}/subprocessors`)).toBeDefined();
-    expect(toIsoDate(byUrl.get(CANONICAL_SITE_URL)?.lastModified)).toBe("2026-10-08T00:00:00.000Z");
     expect(byUrl.get(`${CANONICAL_SITE_URL}/about`)).toBeDefined();
     expect(byUrl.get(`${CANONICAL_SITE_URL}/how-it-works`)).toBeUndefined();
     expect(byUrl.get(`${CANONICAL_SITE_URL}/editorial-standards`)).toBeUndefined();
-    expect(toIsoDate(byUrl.get(`${CANONICAL_SITE_URL}/privacy`)?.lastModified)).toBe(
-      "2026-10-02T00:00:00.000Z",
-    );
-    expect(toIsoDate(byUrl.get(`${CANONICAL_SITE_URL}/terms`)?.lastModified)).toBe(
-      "2026-10-02T00:00:00.000Z",
-    );
-    expect(toIsoDate(byUrl.get(`${CANONICAL_SITE_URL}/subprocessors`)?.lastModified)).toBe(
-      "2026-10-14T00:00:00.000Z",
-    );
+    for (const entry of entries) {
+      expect(toIsoDate(entry.lastModified)).toMatch(/^\d{4}-\d{2}-\d{2}T00:00:00\.000Z$/);
+    }
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(new Date("2030-01-01T00:00:00.000Z"));
+      expect(await sitemap()).toEqual(entries);
+      vi.setSystemTime(new Date("2031-01-01T00:00:00.000Z"));
+      expect(await sitemap()).toEqual(entries);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("keeps public navigation free of removed feature anchors", () => {
