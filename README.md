@@ -137,7 +137,7 @@ These are the model IDs requested by the checked-in code. The project must have 
 | Task                            | Provider and configured model                           |
 | ------------------------------- | ------------------------------------------------------- |
 | Document extraction             | Vertex AI: `gemini-3.8-flash`                           |
-| Document evaluation             | Vertex AI: `gemini-4-argon`                             |
+| Document evaluation             | Vertex AI: `gemini-3.8-flash`                           |
 | Checklist research              | Perplexity: `sonar-pro`                                 |
 | Structured checklist generation | OpenAI: `gpt-4o`                                        |
 | Document embeddings             | OpenAI: `text-embedding-3-small`, with 1,536 dimensions |

@@ -364,7 +364,7 @@ The same route processes bounded vector metadata cleanup. It returns 503 if enqu
 | Path       | Model constant     | Input and output contract                                                          |
 | ---------- | ------------------ | ---------------------------------------------------------------------------------- |
 | Extraction | `gemini-3.8-flash` | Inline PDF or image bytes and an extraction prompt; low thinking level; plain text |
-| Evaluation | `gemini-4-argon`   | Text and validated inline images; medium thinking level; JSON Schema output        |
+| Evaluation | `gemini-3.8-flash` | Text and validated inline images; medium thinking level; JSON Schema output        |
 
 The [model catalog](https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/google-models) and [release notes](https://ai.google.dev/gemini-api/docs/changelog) describe the model families. Project access, quota, supported location, and model lifecycle still need to be checked when changing a model ID. A public catalog entry does not verify a request from this deployment.
 

@@ -4,7 +4,7 @@ import { getRuntimeContext } from "@/infra/runtime-context";
 
 const DEFAULT_VERTEX_LOCATION = "global";
 export const GEMINI_DOCUMENT_EXTRACTION_MODEL = "gemini-3.8-flash";
-export const GEMINI_DOCUMENT_EVALUATION_MODEL = "gemini-4-argon";
+export const GEMINI_DOCUMENT_EVALUATION_MODEL = "gemini-3.8-flash";
 
 function getConfigValue(name: string): string | undefined {
   try {
