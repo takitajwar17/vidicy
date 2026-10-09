@@ -1,9 +1,9 @@
-"use client"
+"use client";
 
-import { useState, useEffect } from "react"
-import { FileIcon, DownloadIcon, Loader2Icon, AlertCircleIcon, EyeIcon } from "lucide-react"
-import { Badge } from "@/components/ui/badge"
-import { Button } from "@/components/ui/button"
+import { useState, useEffect } from "react";
+import { FileIcon, DownloadIcon, Loader2Icon, AlertCircleIcon, EyeIcon } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import {
   Sheet,
   SheetContent,
@@ -11,28 +11,28 @@ import {
   SheetTitle,
   SheetDescription,
   SheetFooter,
-} from "@/components/ui/sheet"
-import { PdfCanvasPreview } from "@/components/visa/pdf-canvas-preview"
+} from "@/components/ui/sheet";
+import { PdfCanvasPreview } from "@/components/visa/pdf-canvas-preview";
 
 function formatBytes(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
-  return `${(bytes / 1024 / 1024).toFixed(1)} MB`
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
 }
 
 interface DocumentPreviewDrawerProps {
-  documentId: string
-  fileName: string
-  fileSize: number
-  mimeType: string
-  uploadedAt: Date
-  isActive: boolean
-  hasMultipleVersions: boolean
-  sectionLabel: string
-  children?: React.ReactNode
-  side?: "left" | "right"
-  triggerLabel?: string
-  triggerVariant?: "button" | "document-row"
+  documentId: string;
+  fileName: string;
+  fileSize: number;
+  mimeType: string;
+  uploadedAt: Date;
+  isActive: boolean;
+  hasMultipleVersions: boolean;
+  sectionLabel: string;
+  children?: React.ReactNode;
+  side?: "left" | "right";
+  triggerLabel?: string;
+  triggerVariant?: "button" | "document-row";
 }
 
 export function DocumentPreviewDrawer({
@@ -49,52 +49,51 @@ export function DocumentPreviewDrawer({
   triggerLabel = "View",
   triggerVariant = "document-row",
 }: DocumentPreviewDrawerProps) {
-  const [open, setOpen] = useState<boolean>(false)
-  const [pdfBlobUrl, setPdfBlobUrl] = useState<string | null>(null)
-  const [pdfLoading, setPdfLoading] = useState(false)
-  const [pdfError, setPdfError] = useState<string | null>(null)
+  const [open, setOpen] = useState<boolean>(false);
+  const [pdfBlobUrl, setPdfBlobUrl] = useState<string | null>(null);
+  const [pdfLoading, setPdfLoading] = useState(false);
+  const [pdfError, setPdfError] = useState<string | null>(null);
 
-  const downloadUrl = `/api/document-preview/${documentId}?download=1`
-  const isPDF = mimeType === "application/pdf"
-  const isImage = mimeType.startsWith("image/")
+  const downloadUrl = `/api/document-preview/${documentId}?download=1`;
+  const isPDF = mimeType === "application/pdf";
+  const isImage = mimeType.startsWith("image/");
   const isWord =
     mimeType === "application/msword" ||
-    mimeType === "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+    mimeType === "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
 
   // Fetch PDF as a blob when the drawer opens.
   // The blob URL is then handed to PdfViewer which renders it page-by-page via PDF.js.
   useEffect(() => {
-    if (!open || !isPDF) return
+    if (!open || !isPDF) return;
 
-    setPdfLoading(true)
-    setPdfError(null)
-    let cancelled = false
+    setPdfLoading(true);
+    setPdfError(null);
+    let cancelled = false;
 
     fetch(`/api/document-preview/${documentId}`)
       .then(async (res) => {
-        if (!res.ok) throw new Error(`Failed to load PDF (${res.status})`)
-        return res.blob()
+        if (!res.ok) throw new Error(`Failed to load PDF (${res.status})`);
+        return res.blob();
       })
       .then((blob) => {
-        if (cancelled) return
-        setPdfBlobUrl(URL.createObjectURL(blob))
+        if (cancelled) return;
+        setPdfBlobUrl(URL.createObjectURL(blob));
       })
       .catch((err: unknown) => {
-        if (!cancelled)
-          setPdfError(err instanceof Error ? err.message : "Failed to load PDF")
+        if (!cancelled) setPdfError(err instanceof Error ? err.message : "Failed to load PDF");
       })
       .finally(() => {
-        if (!cancelled) setPdfLoading(false)
-      })
+        if (!cancelled) setPdfLoading(false);
+      });
 
     return () => {
-      cancelled = true
+      cancelled = true;
       setPdfBlobUrl((prev) => {
-        if (prev) URL.revokeObjectURL(prev)
-        return null
-      })
-    }
-  }, [open, isPDF, documentId])
+        if (prev) URL.revokeObjectURL(prev);
+        return null;
+      });
+    };
+  }, [open, isPDF, documentId]);
 
   return (
     <>
@@ -120,7 +119,12 @@ export function DocumentPreviewDrawer({
             isActive ? "border-primary/20 bg-primary/5" : "bg-muted/20 hover:bg-muted/35"
           }`}
           onClick={() => setOpen(true)}
-          onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setOpen(true); } }}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" || e.key === " ") {
+              e.preventDefault();
+              setOpen(true);
+            }
+          }}
           aria-label={`Preview document: ${fileName}`}
         >
           <div className="flex items-center gap-3">
@@ -134,7 +138,10 @@ export function DocumentPreviewDrawer({
                   </Badge>
                 )}
                 {!isActive && (
-                  <Badge variant="outline" className="text-2xs h-4 px-1.5 font-normal text-muted-foreground shrink-0">
+                  <Badge
+                    variant="outline"
+                    className="text-2xs h-4 px-1.5 font-normal text-muted-foreground shrink-0"
+                  >
                     Older
                   </Badge>
                 )}
@@ -151,9 +158,14 @@ export function DocumentPreviewDrawer({
       )}
 
       <Sheet open={open} onOpenChange={setOpen}>
-        <SheetContent side={side} className="flex w-[min(92vw,44rem)] flex-col gap-0 p-0 sm:max-w-2xl">
+        <SheetContent
+          side={side}
+          className="flex w-[min(92vw,44rem)] flex-col gap-0 p-0 sm:max-w-2xl"
+        >
           <SheetHeader className="px-6 pt-6 pb-4 border-b shrink-0">
-            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{sectionLabel}</p>
+            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+              {sectionLabel}
+            </p>
             <SheetTitle className="truncate text-base">{fileName}</SheetTitle>
             <div className="flex items-center gap-2">
               <SheetDescription>
@@ -207,7 +219,9 @@ export function DocumentPreviewDrawer({
                 <FileIcon className="h-12 w-12 text-muted-foreground" />
                 <div className="space-y-1">
                   <p className="font-medium">Word documents can&apos;t be previewed</p>
-                  <p className="text-sm text-muted-foreground">Download the file to view its contents.</p>
+                  <p className="text-sm text-muted-foreground">
+                    Download the file to view its contents.
+                  </p>
                 </div>
               </div>
             )}
@@ -224,5 +238,5 @@ export function DocumentPreviewDrawer({
         </SheetContent>
       </Sheet>
     </>
-  )
+  );
 }

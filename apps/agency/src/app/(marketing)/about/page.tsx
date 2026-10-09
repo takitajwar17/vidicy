@@ -1,11 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 
-import {
-  PublicPage,
-  PublicPageContent,
-  PublicPageHero,
-} from "@/components/public-page-shell";
+import { PublicPage, PublicPageContent, PublicPageHero } from "@/components/public-page-shell";
 import { buttonVariants } from "@/components/ui/button";
 import { CANONICAL_SITE_URL } from "@/constants";
 import { constructMetadata } from "@/lib/utils";

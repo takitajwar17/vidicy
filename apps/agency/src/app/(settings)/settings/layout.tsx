@@ -4,11 +4,7 @@ import { requireVerifiedPageSession } from "@/utils/auth-page";
 import { SiteSidebar } from "@/components/site-sidebar";
 import { Separator } from "@/components/ui/separator";
 import { SettingsNav } from "./settings-nav";
-import {
-  SidebarInset,
-  SidebarProvider,
-  SidebarTrigger,
-} from "@/components/ui/sidebar";
+import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { SettingsBreadcrumbs } from "./settings-breadcrumbs";
 import { getCsrfToken } from "@/infra/csrf";
 import { CsrfProvider } from "@/components/csrf-provider";
@@ -21,15 +17,8 @@ export const metadata: Metadata = {
   },
 };
 
-export default async function SettingsLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
-  const [session, csrfToken] = await Promise.all([
-    requireVerifiedPageSession(),
-    getCsrfToken(),
-  ]);
+export default async function SettingsLayout({ children }: { children: React.ReactNode }) {
+  const [session, csrfToken] = await Promise.all([requireVerifiedPageSession(), getCsrfToken()]);
 
   return (
     <CsrfProvider token={csrfToken}>

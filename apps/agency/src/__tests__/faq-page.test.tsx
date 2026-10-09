@@ -2,11 +2,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
 import MarketingFaqPage from "@/app/(marketing)/faq/page";
-import {
-  faqItems,
-  faqSchema,
-  faqSections,
-} from "@/app/(marketing)/faq/content";
+import { faqItems, faqSchema, faqSections } from "@/app/(marketing)/faq/content";
 import MarketingLayout from "@/app/(marketing)/layout";
 
 describe("dedicated FAQ page", () => {

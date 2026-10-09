@@ -45,15 +45,11 @@ const STATUS_CONFIG = {
 } as const;
 
 function StatusBadge({ status }: { status: string }) {
-  const cfg =
-    STATUS_CONFIG[status as keyof typeof STATUS_CONFIG] ?? STATUS_CONFIG.new;
+  const cfg = STATUS_CONFIG[status as keyof typeof STATUS_CONFIG] ?? STATUS_CONFIG.new;
   return (
     <Badge
       variant="outline"
-      className={cn(
-        "text-xs px-2 h-5 rounded-full font-normal",
-        cfg.className,
-      )}
+      className={cn("text-xs px-2 h-5 rounded-full font-normal", cfg.className)}
     >
       {cfg.label}
     </Badge>
@@ -72,16 +68,13 @@ function InquiryDetail({
   );
   const [adminNote, setAdminNote] = useState(inquiry.adminNote ?? "");
 
-  const { execute, isPending } = useServerAction(
-    updateEnterpriseInquiryStatusAction,
-    {
-      onSuccess: (result) => {
-        toast.success("Saved.");
-        onUpdate(result as unknown as EnterpriseInquiry);
-      },
-      onError: ({ err }) => toast.error(err.message ?? "Failed to save."),
+  const { execute, isPending } = useServerAction(updateEnterpriseInquiryStatusAction, {
+    onSuccess: (result) => {
+      toast.success("Saved.");
+      onUpdate(result as unknown as EnterpriseInquiry);
     },
-  );
+    onError: ({ err }) => toast.error(err.message ?? "Failed to save."),
+  });
 
   return (
     <div className="flex flex-col h-full">
@@ -93,11 +86,7 @@ function InquiryDetail({
             <div className="flex items-center gap-1.5 text-sm text-muted-foreground mt-0.5">
               <BuildingIcon className="h-3.5 w-3.5" />
               {inquiry.company}
-              {inquiry.role && (
-                <span className="text-muted-foreground/60">
-                  · {inquiry.role}
-                </span>
-              )}
+              {inquiry.role && <span className="text-muted-foreground/60">· {inquiry.role}</span>}
             </div>
           </div>
           <StatusBadge status={inquiry.status} />
@@ -111,9 +100,7 @@ function InquiryDetail({
             <div className="flex items-center gap-2.5 rounded-lg border bg-muted/30 px-3 py-2.5">
               <MailIcon className="h-4 w-4 text-muted-foreground shrink-0" />
               <div className="min-w-0">
-                <p className="text-2xs text-muted-foreground uppercase tracking-wider">
-                  Email
-                </p>
+                <p className="text-2xs text-muted-foreground uppercase tracking-wider">Email</p>
                 <p className="text-sm font-medium truncate">{inquiry.email}</p>
               </div>
             </div>
@@ -132,9 +119,7 @@ function InquiryDetail({
               <div className="flex items-center gap-2.5 rounded-lg border bg-muted/30 px-3 py-2.5">
                 <GlobeIcon className="h-4 w-4 text-muted-foreground shrink-0" />
                 <div className="min-w-0">
-                  <p className="text-2xs text-muted-foreground uppercase tracking-wider">
-                    Website
-                  </p>
+                  <p className="text-2xs text-muted-foreground uppercase tracking-wider">Website</p>
                   <a
                     href={inquiry.website}
                     target="_blank"
@@ -160,9 +145,7 @@ function InquiryDetail({
             <div className="flex items-center gap-2.5 rounded-lg border bg-muted/30 px-3 py-2.5">
               <CalendarIcon className="h-4 w-4 text-muted-foreground shrink-0" />
               <div>
-                <p className="text-2xs text-muted-foreground uppercase tracking-wider">
-                  Received
-                </p>
+                <p className="text-2xs text-muted-foreground uppercase tracking-wider">Received</p>
                 <p className="text-sm font-medium">
                   {new Date(inquiry.createdAt).toLocaleDateString()}
                 </p>
@@ -189,10 +172,7 @@ function InquiryDetail({
             </p>
             <div className="flex items-center gap-3">
               <p className="text-sm text-muted-foreground shrink-0">Status</p>
-              <Select
-                value={status}
-                onValueChange={(v) => setStatus(v as typeof status)}
-              >
+              <Select value={status} onValueChange={(v) => setStatus(v as typeof status)}>
                 <SelectTrigger className="w-40 h-8 text-sm">
                   <SelectValue />
                 </SelectTrigger>
@@ -236,16 +216,12 @@ export function EnterpriseInquiriesClient({
   inquiries: EnterpriseInquiry[];
 }) {
   const [inquiries, setInquiries] = useState(initial);
-  const [selectedId, setSelectedId] = useState<string | null>(
-    initial[0]?.id ?? null,
-  );
+  const [selectedId, setSelectedId] = useState<string | null>(initial[0]?.id ?? null);
 
   const selected = inquiries.find((i) => i.id === selectedId) ?? null;
 
   function handleUpdate(updated: EnterpriseInquiry) {
-    setInquiries((prev) =>
-      prev.map((i) => (i.id === updated.id ? updated : i)),
-    );
+    setInquiries((prev) => prev.map((i) => (i.id === updated.id ? updated : i)));
   }
 
   if (inquiries.length === 0) {
@@ -258,8 +234,8 @@ export function EnterpriseInquiriesClient({
         <div className="space-y-2 max-w-sm">
           <p className="text-lg font-semibold">No enterprise inquiries yet</p>
           <p className="text-sm text-muted-foreground leading-relaxed">
-            When organizations submit enterprise inquiries, they will appear
-            here for review and follow-up.
+            When organizations submit enterprise inquiries, they will appear here for review and
+            follow-up.
           </p>
         </div>
       </div>
@@ -308,11 +284,7 @@ export function EnterpriseInquiriesClient({
       {/* Right panel — detail */}
       <div className="flex-1 min-w-0">
         {selected ? (
-          <InquiryDetail
-            key={selected.id}
-            inquiry={selected}
-            onUpdate={handleUpdate}
-          />
+          <InquiryDetail key={selected.id} inquiry={selected} onUpdate={handleUpdate} />
         ) : (
           <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
             Select an inquiry to view details

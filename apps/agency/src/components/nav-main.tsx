@@ -1,8 +1,8 @@
-"use client"
+"use client";
 
-import { PlusCircleIcon } from "lucide-react"
-import Link from "next/link"
-import type { Route } from "next"
+import { PlusCircleIcon } from "lucide-react";
+import Link from "next/link";
+import type { Route } from "next";
 import {
   SidebarGroup,
   SidebarGroupContent,
@@ -11,21 +11,21 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
   useSidebar,
-} from "@/components/ui/sidebar"
+} from "@/components/ui/sidebar";
 
 export function NavMain({
   items,
   label,
 }: {
   items: {
-    title: string
-    url: string
-    icon?: React.ElementType
-    badge?: number | null
-  }[]
-  label?: string
+    title: string;
+    url: string;
+    icon?: React.ElementType;
+    badge?: number | null;
+  }[];
+  label?: string;
 }) {
-  const { setOpenMobile } = useSidebar()
+  const { setOpenMobile } = useSidebar();
 
   return (
     <SidebarGroup>
@@ -37,7 +37,10 @@ export function NavMain({
               tooltip="New client file"
               className="min-w-8 rounded-full border border-[var(--sidebar-action-border)] bg-[var(--sidebar-action)] text-[var(--sidebar-action-foreground)] duration-200 ease-linear hover:bg-[var(--sidebar-action-hover)] hover:text-[var(--sidebar-action-foreground)] active:bg-[var(--sidebar-action-active)]"
             >
-              <Link href={"/dashboard/applications/new" as Route} onClick={() => setOpenMobile(false)}>
+              <Link
+                href={"/dashboard/applications/new" as Route}
+                onClick={() => setOpenMobile(false)}
+              >
                 <PlusCircleIcon />
                 <span>New client file</span>
               </Link>
@@ -64,5 +67,5 @@ export function NavMain({
         </SidebarMenu>
       </SidebarGroupContent>
     </SidebarGroup>
-  )
+  );
 }

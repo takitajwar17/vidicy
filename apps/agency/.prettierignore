@@ -1,0 +1,3 @@
+# Generated migration metadata is consumed and hashed by migration tools.
+src/db/migrations/meta/
+src/db/postgres-migrations/meta/

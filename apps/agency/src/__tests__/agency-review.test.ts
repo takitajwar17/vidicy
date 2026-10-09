@@ -3,7 +3,15 @@ import { startTestPostgres } from "./helpers/postgres";
 import { readFileSync, readdirSync } from "node:fs";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
-const { mockGetDB, mockPermission, mockOpenAI, mockPerplexity, mockGemini, mockStorageHead, mockStorageDelete } = vi.hoisted(() => ({
+const {
+  mockGetDB,
+  mockPermission,
+  mockOpenAI,
+  mockPerplexity,
+  mockGemini,
+  mockStorageHead,
+  mockStorageDelete,
+} = vi.hoisted(() => ({
   mockGetDB: vi.fn(),
   mockPermission: vi.fn(),
   mockOpenAI: vi.fn(),
@@ -42,7 +50,10 @@ vi.mock("@/utils/email", () => ({
   sendSupportTicketUserReplyNotification: vi.fn(),
 }));
 vi.mock("@/utils/auth", () => ({ getSessionFromCookie: vi.fn(), requireAdmin: vi.fn() }));
-vi.mock("@/server/unread-counts", () => ({ invalidateUnreadCount: vi.fn(), invalidateAdminUnreadCount: vi.fn() }));
+vi.mock("@/server/unread-counts", () => ({
+  invalidateUnreadCount: vi.fn(),
+  invalidateAdminUnreadCount: vi.fn(),
+}));
 vi.mock("@/lib/r2", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/r2")>()),
   getR2Bucket: async () => ({ head: mockStorageHead, delete: mockStorageDelete }),
@@ -121,16 +132,20 @@ async function createDatabase({ lastMigration }: { lastMigration?: string } = {}
   await adminPool.query(`CREATE DATABASE "${name}"`);
   const pool = postgres.createPool(name);
   let beforeQuery: ((query: string) => void | Promise<void>) | undefined;
-  pool.on("connect", client => {
+  pool.on("connect", (client) => {
     client.query = new Proxy(client.query, {
       apply(target, receiver, args) {
         const query = typeof args[0] === "string" ? args[0] : args[0].text;
-        return Promise.resolve(beforeQuery?.(query)).then(() => Reflect.apply(target, receiver, args));
+        return Promise.resolve(beforeQuery?.(query)).then(() =>
+          Reflect.apply(target, receiver, args),
+        );
       },
     });
   });
   const migrationDirectory = new URL("../db/postgres-migrations/", import.meta.url);
-  for (const file of readdirSync(migrationDirectory).filter(file => file.endsWith(".sql")).sort()) {
+  for (const file of readdirSync(migrationDirectory)
+    .filter((file) => file.endsWith(".sql"))
+    .sort()) {
     if (!lastMigration || file.slice(0, 4) <= lastMigration) {
       await pool.query(readFileSync(new URL(file, migrationDirectory), "utf8"));
     }
@@ -138,7 +153,9 @@ async function createDatabase({ lastMigration }: { lastMigration?: string } = {}
   return {
     db: getDBFromDatabase(pool),
     pool,
-    setBeforeQuery(callback?: (query: string) => void | Promise<void>) { beforeQuery = callback; },
+    setBeforeQuery(callback?: (query: string) => void | Promise<void>) {
+      beforeQuery = callback;
+    },
     async close() {
       beforeQuery = undefined;
       await pool.end();
@@ -295,12 +312,30 @@ describe("agency review workflow with the real database driver", () => {
     }));
     mockStorageDelete.mockReset();
     mockStorageDelete.mockResolvedValue(undefined);
-    const [removed, retained] = await fixture.db.insert(supportTicketTable).values([
-      { userId, subject: "Remove", description: "Test", category: "bug", screenshotUrls: [ticketKey, messageKey, unusedKey, foreignKey, adminKey] },
-      { userId, subject: "Retain", description: "Test", category: "bug", screenshotUrls: [ticketKey] },
-    ]).returning();
+    const [removed, retained] = await fixture.db
+      .insert(supportTicketTable)
+      .values([
+        {
+          userId,
+          subject: "Remove",
+          description: "Test",
+          category: "bug",
+          screenshotUrls: [ticketKey, messageKey, unusedKey, foreignKey, adminKey],
+        },
+        {
+          userId,
+          subject: "Retain",
+          description: "Test",
+          category: "bug",
+          screenshotUrls: [ticketKey],
+        },
+      ])
+      .returning();
     await fixture.db.insert(supportMessageTable).values({
-      ticketId: retained.id, userId, content: "Shared image", screenshotUrls: [messageKey],
+      ticketId: retained.id,
+      userId,
+      content: "Shared image",
+      screenshotUrls: [messageKey],
     });
     await deleteTicket({ ticketId: removed.id });
     expect(mockStorageDelete.mock.calls).toEqual([[unusedKey]]);
@@ -309,30 +344,67 @@ describe("agency review workflow with the real database driver", () => {
   });
 
   it("evaluates stored evidence and publishes the combined review", async () => {
-    await fixture.db.update(uploadedDocumentTable).set({ textContent: "Passport document text", extractionStatus: "completed" });
+    await fixture.db
+      .update(uploadedDocumentTable)
+      .set({ textContent: "Passport document text", extractionStatus: "completed" });
     mockGemini.mockReset();
-    mockGemini.mockResolvedValueOnce(JSON.stringify({ status: "ok", score: 98, feedback: "Valid passport", confidence: 95,
-      issues: [], strengths: ["Valid identity"], extractedFields: { holderName: "Test User", language: "en" } }));
-    mockGemini.mockResolvedValueOnce(JSON.stringify({ overallScore: 98, riskLevel: "low", summary: "Documents are ready",
-      redFlags: [], strengths: ["Valid passport"], recommendations: [], itemFeedback: {} }));
+    mockGemini.mockResolvedValueOnce(
+      JSON.stringify({
+        status: "ok",
+        score: 98,
+        feedback: "Valid passport",
+        confidence: 95,
+        issues: [],
+        strengths: ["Valid identity"],
+        extractedFields: { holderName: "Test User", language: "en" },
+      }),
+    );
+    mockGemini.mockResolvedValueOnce(
+      JSON.stringify({
+        overallScore: 98,
+        riskLevel: "low",
+        summary: "Documents are ready",
+        redFlags: [],
+        strengths: ["Valid passport"],
+        recommendations: [],
+        itemFeedback: {},
+      }),
+    );
     await evaluateDocumentsAction({ applicationId, applicantId });
     const saved = await fixture.db.query.documentEvaluationTable.findMany();
     expect(saved).toHaveLength(2);
-    const result = saved.find(row => row.id !== evaluation.id)!;
+    const result = saved.find((row) => row.id !== evaluation.id)!;
     expect(result.overallScore).toBe(98);
-    expect(result.itemFeedback?.[itemId]).toMatchObject({ status: "ok", hasContent: true, confidence: 95 });
+    expect(result.itemFeedback?.[itemId]).toMatchObject({
+      status: "ok",
+      hasContent: true,
+      confidence: 95,
+    });
     expect(result.docSnapshots?.[itemId]).toContain(documentId);
     expect(mockGemini).toHaveBeenCalledTimes(2);
     expect(mockGemini.mock.calls[0][0].userContent).toContain("Passport document text");
   });
 
   it("saves document results when the orchestrator fails", async () => {
-    await fixture.db.update(uploadedDocumentTable).set({ textContent: "Passport evidence", extractionStatus: "completed" });
+    await fixture.db
+      .update(uploadedDocumentTable)
+      .set({ textContent: "Passport evidence", extractionStatus: "completed" });
     mockGemini.mockReset();
-    mockGemini.mockResolvedValueOnce(JSON.stringify({ status: "ok", score: 98, feedback: "Valid passport", confidence: 95, issues: [], strengths: [] }));
+    mockGemini.mockResolvedValueOnce(
+      JSON.stringify({
+        status: "ok",
+        score: 98,
+        feedback: "Valid passport",
+        confidence: 95,
+        issues: [],
+        strengths: [],
+      }),
+    );
     mockGemini.mockRejectedValueOnce(new Error("Orchestrator unavailable"));
     await evaluateDocumentsAction({ applicationId, applicantId });
-    const saved = (await fixture.db.query.documentEvaluationTable.findMany()).find(row => row.id !== evaluation.id)!;
+    const saved = (await fixture.db.query.documentEvaluationTable.findMany()).find(
+      (row) => row.id !== evaluation.id,
+    )!;
     expect(saved.overallScore).toBe(98);
     expect(saved.itemFeedback?.[itemId]).toMatchObject({ status: "ok", confidence: 95 });
     expect(saved.docSnapshots?.[itemId]).toContain(documentId);
@@ -340,58 +412,131 @@ describe("agency review workflow with the real database driver", () => {
   });
 
   it("preserves the primary score when the adversarial pass fails", async () => {
-    await fixture.db.update(uploadedDocumentTable).set({ textContent: "Passport evidence", extractionStatus: "completed" });
+    await fixture.db
+      .update(uploadedDocumentTable)
+      .set({ textContent: "Passport evidence", extractionStatus: "completed" });
     mockGemini.mockReset();
-    mockGemini.mockResolvedValueOnce(JSON.stringify({ status: "ok", score: 98, feedback: "Valid passport", confidence: 95, issues: [], strengths: [] }));
-    mockGemini.mockResolvedValueOnce(JSON.stringify({ overallScore: 80, riskLevel: "medium", summary: "Needs review", redFlags: [], strengths: [], recommendations: [], itemFeedback: {} }));
+    mockGemini.mockResolvedValueOnce(
+      JSON.stringify({
+        status: "ok",
+        score: 98,
+        feedback: "Valid passport",
+        confidence: 95,
+        issues: [],
+        strengths: [],
+      }),
+    );
+    mockGemini.mockResolvedValueOnce(
+      JSON.stringify({
+        overallScore: 80,
+        riskLevel: "medium",
+        summary: "Needs review",
+        redFlags: [],
+        strengths: [],
+        recommendations: [],
+        itemFeedback: {},
+      }),
+    );
     mockGemini.mockRejectedValueOnce(new Error("Adversarial pass unavailable"));
     await evaluateDocumentsAction({ applicationId, applicantId });
-    const saved = (await fixture.db.query.documentEvaluationTable.findMany()).find(row => row.id !== evaluation.id)!;
-    expect(saved).toMatchObject({ overallScore: 80, scoreConfidence: null, ensembleDivergence: null });
+    const saved = (await fixture.db.query.documentEvaluationTable.findMany()).find(
+      (row) => row.id !== evaluation.id,
+    )!;
+    expect(saved).toMatchObject({
+      overallScore: 80,
+      scoreConfidence: null,
+      ensembleDivergence: null,
+    });
     expect(mockGemini).toHaveBeenCalledTimes(3);
     expect(mockGemini.mock.calls[2][0].userContent).toBe(mockGemini.mock.calls[1][0].userContent);
     expect(mockGemini.mock.calls[2][0].systemPrompt).toContain("skeptical");
   });
 
   it("rejects incomplete reviews and retries the documents after a provider failure", async () => {
-    await fixture.db.update(uploadedDocumentTable).set({ textContent: "Passport evidence", extractionStatus: "completed" });
-    const [bankItem] = await fixture.db.insert(checklistItemTable).values({
-      applicationId, applicantId, documentName: "Bank statement", description: "Recent funds", isRequired: true,
-    }).returning();
-    const [bankDocument] = await fixture.db.insert(uploadedDocumentTable).values({
-      applicationId, applicantId, checklistItemId: bankItem.id, fileName: "bank.pdf", fileKey: "bank",
-      fileSize: 100, mimeType: "application/pdf", textContent: "Bank evidence", extractionStatus: "completed",
-    }).returning();
+    await fixture.db
+      .update(uploadedDocumentTable)
+      .set({ textContent: "Passport evidence", extractionStatus: "completed" });
+    const [bankItem] = await fixture.db
+      .insert(checklistItemTable)
+      .values({
+        applicationId,
+        applicantId,
+        documentName: "Bank statement",
+        description: "Recent funds",
+        isRequired: true,
+      })
+      .returning();
+    const [bankDocument] = await fixture.db
+      .insert(uploadedDocumentTable)
+      .values({
+        applicationId,
+        applicantId,
+        checklistItemId: bankItem.id,
+        fileName: "bank.pdf",
+        fileKey: "bank",
+        fileSize: 100,
+        mimeType: "application/pdf",
+        textContent: "Bank evidence",
+        extractionStatus: "completed",
+      })
+      .returning();
     let hasFailed = false;
     mockGemini.mockReset();
     mockGemini.mockImplementation(async (input: { schemaName: string; userContent: string }) => {
       if (input.schemaName === "orchestrator_evaluation") {
-        return JSON.stringify({ overallScore: 98, riskLevel: "low", summary: "Review", redFlags: [], strengths: [], recommendations: [], itemFeedback: {} });
+        return JSON.stringify({
+          overallScore: 98,
+          riskLevel: "low",
+          summary: "Review",
+          redFlags: [],
+          strengths: [],
+          recommendations: [],
+          itemFeedback: {},
+        });
       }
       if (input.userContent.includes("Bank evidence") && !hasFailed) {
         hasFailed = true;
         throw new Error("Temporary bank document failure");
       }
-      return JSON.stringify({ status: "ok", score: 98, feedback: "Valid evidence", confidence: 95, issues: [], strengths: [] });
+      return JSON.stringify({
+        status: "ok",
+        score: 98,
+        feedback: "Valid evidence",
+        confidence: 95,
+        issues: [],
+        strengths: [],
+      });
     });
-    await expect(evaluateDocumentsAction({ applicationId, applicantId })).rejects.toThrow("Some documents could not be evaluated");
+    await expect(evaluateDocumentsAction({ applicationId, applicantId })).rejects.toThrow(
+      "Some documents could not be evaluated",
+    );
     expect(await fixture.db.query.documentEvaluationTable.findMany()).toHaveLength(1);
-    expect(mockGemini.mock.calls.every(([input]) => input.schemaName === "per_document_evaluation")).toBe(true);
+    expect(
+      mockGemini.mock.calls.every(([input]) => input.schemaName === "per_document_evaluation"),
+    ).toBe(true);
     mockGemini.mockClear();
     await evaluateDocumentsAction({ applicationId, applicantId });
-    const documentCalls = mockGemini.mock.calls.filter(([input]) => input.schemaName === "per_document_evaluation");
+    const documentCalls = mockGemini.mock.calls.filter(
+      ([input]) => input.schemaName === "per_document_evaluation",
+    );
     expect(documentCalls).toHaveLength(2);
     expect(documentCalls.some(([input]) => input.userContent.includes("Bank evidence"))).toBe(true);
-    const complete = (await fixture.db.query.documentEvaluationTable.findMany()).find(row => row.id !== evaluation.id);
+    const complete = (await fixture.db.query.documentEvaluationTable.findMany()).find(
+      (row) => row.id !== evaluation.id,
+    );
     expect(complete?.docSnapshots?.[bankItem.id]).toContain(bankDocument.id);
     expect(complete?.docSnapshots?.[itemId]).toContain(documentId);
   });
 
   it("does not save a new review when every document provider call fails", async () => {
-    await fixture.db.update(uploadedDocumentTable).set({ textContent: "Passport document text", extractionStatus: "completed" });
+    await fixture.db
+      .update(uploadedDocumentTable)
+      .set({ textContent: "Passport document text", extractionStatus: "completed" });
     mockGemini.mockReset();
     mockGemini.mockRejectedValue(new Error("Provider unavailable"));
-    await expect(evaluateDocumentsAction({ applicationId, applicantId })).rejects.toThrow("could not evaluate");
+    await expect(evaluateDocumentsAction({ applicationId, applicantId })).rejects.toThrow(
+      "could not evaluate",
+    );
     expect(await fixture.db.query.documentEvaluationTable.findMany()).toHaveLength(1);
   });
 
@@ -423,15 +568,27 @@ describe("agency review workflow with the real database driver", () => {
       { documentName: "Bank statement", description: "Recent statement" },
       { documentName: "Travel plan", description: "Trip details" },
     ]);
-    const response = { choices: [{ message: { content: JSON.stringify({ items: [
-      { documentName: "Passport", description: "Valid passport" },
-      { documentName: "Bank statement", description: "Recent statement" },
-      { documentName: "Travel plan", description: "Trip details" },
-    ] }) } }] };
+    const response = {
+      choices: [
+        {
+          message: {
+            content: JSON.stringify({
+              items: [
+                { documentName: "Passport", description: "Valid passport" },
+                { documentName: "Bank statement", description: "Recent statement" },
+                { documentName: "Travel plan", description: "Trip details" },
+              ],
+            }),
+          },
+        },
+      ],
+    };
     mockOpenAI.mockReset();
     let calls = 0;
     let release!: () => void;
-    const gate = new Promise<void>(resolve => { release = resolve; });
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
     mockOpenAI.mockImplementation(async () => {
       if (++calls === 2) release();
       await gate;
@@ -454,17 +611,34 @@ describe("agency review workflow with the real database driver", () => {
     ];
     await prepareChecklistGeneration(items);
     mockPerplexity
-      .mockResolvedValueOnce({ choices: [{ message: { content: "Research A" } }], citations: ["https://example.gov/a"] })
-      .mockResolvedValueOnce({ choices: [{ message: { content: "Research B" } }], citations: ["https://example.gov/b"] });
+      .mockResolvedValueOnce({
+        choices: [{ message: { content: "Research A" } }],
+        citations: ["https://example.gov/a"],
+      })
+      .mockResolvedValueOnce({
+        choices: [{ message: { content: "Research B" } }],
+        citations: ["https://example.gov/b"],
+      });
     const response = { choices: [{ message: { content: JSON.stringify({ items }) } }] };
     let enteredSecond!: () => void;
     let finishSecond!: () => void;
-    const secondEntered = new Promise<void>(resolve => { enteredSecond = resolve; });
-    const secondCanFinish = new Promise<void>(resolve => { finishSecond = resolve; });
+    const secondEntered = new Promise<void>((resolve) => {
+      enteredSecond = resolve;
+    });
+    const secondCanFinish = new Promise<void>((resolve) => {
+      finishSecond = resolve;
+    });
     mockOpenAI.mockReset();
     mockOpenAI
-      .mockImplementationOnce(async () => { await secondEntered; return response; })
-      .mockImplementationOnce(async () => { enteredSecond(); await secondCanFinish; return response; });
+      .mockImplementationOnce(async () => {
+        await secondEntered;
+        return response;
+      })
+      .mockImplementationOnce(async () => {
+        enteredSecond();
+        await secondCanFinish;
+        return response;
+      });
     const first = generateChecklistAction({ applicationId, applicantId });
     const second = generateChecklistAction({ applicationId, applicantId });
     await first;
@@ -515,8 +689,7 @@ describe("agency review workflow with the real database driver", () => {
       })),
     );
     fixture.setBeforeQuery((query) => {
-      if (query.startsWith('insert into "checklist_item"'))
-        throw new Error("write failed");
+      if (query.startsWith('insert into "checklist_item"')) throw new Error("write failed");
     });
     await expect(generateChecklistAction({ applicationId, applicantId })).rejects.toThrow();
     fixture.setBeforeQuery();
@@ -865,7 +1038,9 @@ describe("agency review workflow with the real database driver", () => {
     fixture.setBeforeQuery(async (query) => {
       if (!changed && query.startsWith("select") && query.includes("review_issue")) {
         changed = true;
-        await fixture.pool.query('UPDATE "visa_application" SET "updateCounter" = "updateCounter" + 1');
+        await fixture.pool.query(
+          'UPDATE "visa_application" SET "updateCounter" = "updateCounter" + 1',
+        );
       }
     });
     await expect(markAgencyCaseReady(context())).rejects.toThrow("case changed");
@@ -875,39 +1050,82 @@ describe("agency review workflow with the real database driver", () => {
   });
 });
 
-
 describe("document upload sequence migration", () => {
   it("preserves existing rows and assigns later uploads a larger sequence", async () => {
     vi.stubEnv("DB_SQL_LOG", "false");
     const fixture = await createDatabase({ lastMigration: "0001" });
     try {
-      const [user] = await fixture.db.insert(userTable).values({ email: "migration@example.com" }).returning();
-      const [application] = await fixture.db.insert(visaApplicationTable).values({
-        userId: user.id, clientId: "client", clientName: "Client", homeCountry: "Bangladesh",
-        currentCountry: "Bangladesh", destinationCountry: "Japan", visaType: "Tourist", embassy: "Dhaka",
-      }).returning();
-      const [applicant] = await fixture.db.insert(applicantTable).values({ applicationId: application.id, name: "Applicant", relationship: "primary" }).returning();
-      const [item] = await fixture.db.insert(checklistItemTable).values({ applicationId: application.id, applicantId: applicant.id, documentName: "Passport", description: "Valid passport" }).returning();
+      const [user] = await fixture.db
+        .insert(userTable)
+        .values({ email: "migration@example.com" })
+        .returning();
+      const [application] = await fixture.db
+        .insert(visaApplicationTable)
+        .values({
+          userId: user.id,
+          clientId: "client",
+          clientName: "Client",
+          homeCountry: "Bangladesh",
+          currentCountry: "Bangladesh",
+          destinationCountry: "Japan",
+          visaType: "Tourist",
+          embassy: "Dhaka",
+        })
+        .returning();
+      const [applicant] = await fixture.db
+        .insert(applicantTable)
+        .values({ applicationId: application.id, name: "Applicant", relationship: "primary" })
+        .returning();
+      const [item] = await fixture.db
+        .insert(checklistItemTable)
+        .values({
+          applicationId: application.id,
+          applicantId: applicant.id,
+          documentName: "Passport",
+          description: "Valid passport",
+        })
+        .returning();
       // Seed the old schema directly because uploadSequence does not exist yet.
       for (const id of ["old_a", "old_b"]) {
-        await fixture.pool.query(`INSERT INTO uploaded_document
+        await fixture.pool.query(
+          `INSERT INTO uploaded_document
           (id, "applicationId", "applicantId", "checklistItemId", "fileName", "fileKey", "fileSize", "mimeType", "uploadedAt", "textContent")
           VALUES ($1, $2, $3, $4, 'passport.pdf', $1, 100, 'application/pdf', '2026-09-19T00:00:00Z', 'Original evidence')`,
-          [id, application.id, applicant.id, item.id]);
+          [id, application.id, applicant.id, item.id],
+        );
       }
-      const before = (await fixture.pool.query('SELECT * FROM uploaded_document ORDER BY id')).rows;
-      await fixture.pool.query(readFileSync(new URL("../db/postgres-migrations/0002_document_upload_order.sql", import.meta.url), "utf8"));
-      const after = await fixture.db.query.uploadedDocumentTable.findMany({ orderBy: uploadedDocumentTable.id });
+      const before = (await fixture.pool.query("SELECT * FROM uploaded_document ORDER BY id")).rows;
+      await fixture.pool.query(
+        readFileSync(
+          new URL("../db/postgres-migrations/0002_document_upload_order.sql", import.meta.url),
+          "utf8",
+        ),
+      );
+      const after = await fixture.db.query.uploadedDocumentTable.findMany({
+        orderBy: uploadedDocumentTable.id,
+      });
       expect(after.map(({ uploadSequence: _uploadSequence, ...row }) => row)).toEqual(before);
-      expect(new Set(after.map(row => row.uploadSequence)).size).toBe(2);
-      expect(after.every(row => row.uploadSequence > 0)).toBe(true);
-      const [newDocument] = await fixture.db.insert(uploadedDocumentTable).values({
-        applicationId: application.id, applicantId: applicant.id, checklistItemId: item.id,
-        fileName: "corrected.pdf", fileKey: "new", fileSize: 100, mimeType: "application/pdf",
-        uploadedAt: new Date("2026-09-19T00:00:00Z"),
-      }).returning();
-      expect(newDocument.uploadSequence).toBeGreaterThan(Math.max(...after.map(row => row.uploadSequence)));
-      const ordered = await fixture.db.query.uploadedDocumentTable.findMany({ orderBy: newestDocumentOrder });
+      expect(new Set(after.map((row) => row.uploadSequence)).size).toBe(2);
+      expect(after.every((row) => row.uploadSequence > 0)).toBe(true);
+      const [newDocument] = await fixture.db
+        .insert(uploadedDocumentTable)
+        .values({
+          applicationId: application.id,
+          applicantId: applicant.id,
+          checklistItemId: item.id,
+          fileName: "corrected.pdf",
+          fileKey: "new",
+          fileSize: 100,
+          mimeType: "application/pdf",
+          uploadedAt: new Date("2026-09-19T00:00:00Z"),
+        })
+        .returning();
+      expect(newDocument.uploadSequence).toBeGreaterThan(
+        Math.max(...after.map((row) => row.uploadSequence)),
+      );
+      const ordered = await fixture.db.query.uploadedDocumentTable.findMany({
+        orderBy: newestDocumentOrder,
+      });
       expect(ordered[0].id).toBe(newDocument.id);
       expect(ordered[0].applicantId).toBe(applicant.id);
       expect(ordered[0].checklistItemId).toBe(item.id);

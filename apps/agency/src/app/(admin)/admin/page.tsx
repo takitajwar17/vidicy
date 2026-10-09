@@ -1,22 +1,22 @@
-import { PageHeader } from "@/components/page-header"
-import type { Metadata } from "next"
-import { getDB } from "@/db"
-import { enterpriseInquiryTable, ENTERPRISE_INQUIRY_STATUS, userTable } from "@/db/schema"
-import { desc, eq } from "drizzle-orm"
-import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card"
-import { ArrowRightIcon, ActivityIcon } from "lucide-react"
-import Link from "next/link"
-import type { Route } from "next"
-import { Badge } from "@/components/ui/badge"
-import { formatDistanceToNow } from "date-fns"
+import { PageHeader } from "@/components/page-header";
+import type { Metadata } from "next";
+import { getDB } from "@/db";
+import { enterpriseInquiryTable, ENTERPRISE_INQUIRY_STATUS, userTable } from "@/db/schema";
+import { desc, eq } from "drizzle-orm";
+import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
+import { ArrowRightIcon, ActivityIcon } from "lucide-react";
+import Link from "next/link";
+import type { Route } from "next";
+import { Badge } from "@/components/ui/badge";
+import { formatDistanceToNow } from "date-fns";
 
 export const metadata: Metadata = {
   title: "Admin dashboard",
   description: "Overview of admin tools and latest activity",
-}
+};
 
 export default async function AdminPage() {
-  const db = getDB()
+  const db = getDB();
   const [newInquiryCount, latestUsers, latestInquiries] = await Promise.all([
     db
       .select({ id: enterpriseInquiryTable.id })
@@ -48,7 +48,7 @@ export default async function AdminPage() {
       orderBy: [desc(enterpriseInquiryTable.createdAt)],
       limit: 3,
     }),
-  ])
+  ]);
 
   return (
     <>
@@ -57,7 +57,6 @@ export default async function AdminPage() {
         <div className="@container/main flex flex-1 flex-col gap-2">
           <div className="flex flex-col gap-4 py-4 md:gap-6 md:py-6">
             <div className="px-4 lg:px-6 flex flex-col gap-6">
-
               {/* Quick links */}
               <div className="flex flex-wrap gap-3">
                 <Link href={"/admin/status" as Route}>
@@ -96,7 +95,10 @@ export default async function AdminPage() {
                     </div>
                   ) : (
                     latestUsers.map((user) => {
-                      const displayName = [user.firstName, user.lastName].filter(Boolean).join(" ").trim()
+                      const displayName = [user.firstName, user.lastName]
+                        .filter(Boolean)
+                        .join(" ")
+                        .trim();
                       return (
                         <Link
                           key={user.id}
@@ -107,7 +109,9 @@ export default async function AdminPage() {
                             <p className="truncate text-sm font-medium text-foreground">
                               {displayName || user.email || "Unnamed user"}
                             </p>
-                            <p className="truncate text-xs text-muted-foreground">{user.email || "No email"}</p>
+                            <p className="truncate text-xs text-muted-foreground">
+                              {user.email || "No email"}
+                            </p>
                           </div>
                           <div className="flex items-center gap-2 pl-3">
                             <Badge variant={user.role === "admin" ? "default" : "secondary"}>
@@ -121,7 +125,7 @@ export default async function AdminPage() {
                             </span>
                           </div>
                         </Link>
-                      )
+                      );
                     })
                   )}
                 </CardContent>
@@ -155,8 +159,9 @@ export default async function AdminPage() {
                           ? "default"
                           : inquiry.status === ENTERPRISE_INQUIRY_STATUS.CONTACTED
                             ? "secondary"
-                            : "outline"
-                      const statusLabel = inquiry.status.charAt(0).toUpperCase() + inquiry.status.slice(1)
+                            : "outline";
+                      const statusLabel =
+                        inquiry.status.charAt(0).toUpperCase() + inquiry.status.slice(1);
 
                       return (
                         <Link
@@ -168,16 +173,20 @@ export default async function AdminPage() {
                             <p className="truncate text-sm font-medium text-foreground">
                               {inquiry.name} · {inquiry.company}
                             </p>
-                            <p className="truncate text-xs text-muted-foreground">{inquiry.email}</p>
+                            <p className="truncate text-xs text-muted-foreground">
+                              {inquiry.email}
+                            </p>
                           </div>
                           <div className="flex items-center gap-2 pl-3">
                             <Badge variant={statusVariant}>{statusLabel}</Badge>
                             <span className="hidden text-xs text-muted-foreground sm:inline">
-                              {formatDistanceToNow(new Date(inquiry.createdAt), { addSuffix: true })}
+                              {formatDistanceToNow(new Date(inquiry.createdAt), {
+                                addSuffix: true,
+                              })}
                             </span>
                           </div>
                         </Link>
-                      )
+                      );
                     })
                   )}
                 </CardContent>
@@ -187,5 +196,5 @@ export default async function AdminPage() {
         </div>
       </div>
     </>
-  )
+  );
 }

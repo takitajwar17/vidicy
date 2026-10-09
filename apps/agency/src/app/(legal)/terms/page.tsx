@@ -3,11 +3,7 @@ import Link from "next/link";
 import { CANONICAL_SITE_URL } from "@/constants";
 import { siteConfig } from "@/lib/config";
 import { constructMetadata } from "@/lib/utils";
-import {
-  PublicPage,
-  PublicPageContent,
-  PublicPageHero,
-} from "@/components/public-page-shell";
+import { PublicPage, PublicPageContent, PublicPageHero } from "@/components/public-page-shell";
 import {
   FileTextIcon,
   UserIcon,
@@ -106,10 +102,10 @@ export default function TermsPage() {
         <section>
           <SectionHeading icon={FileTextIcon} title="1. Acceptance of Terms" />
           <p className="text-sm text-muted-foreground leading-relaxed mb-4">
-            By accessing {siteConfig.name}, creating an account, joining a pilot, or purchasing a subscription, you
-            accept and agree to be bound by the terms and provisions of this agreement. Our platform
-            uses automated document processing to help agencies review visa application files for missing
-            documents, weak evidence, and cross-file inconsistencies.
+            By accessing {siteConfig.name}, creating an account, joining a pilot, or purchasing a
+            subscription, you accept and agree to be bound by the terms and provisions of this
+            agreement. Our platform uses automated document processing to help agencies review visa
+            application files for missing documents, weak evidence, and cross-file inconsistencies.
           </p>
           <div className="rounded-xl border border-status-warning/40 bg-status-warning/10 p-4 flex items-start gap-3">
             <AlertTriangleIcon className="h-5 w-5 text-status-warning shrink-0 mt-0.5" />
@@ -130,8 +126,8 @@ export default function TermsPage() {
             authorized party. You must not upload fraudulent documents.
           </p>
           <p className="text-sm text-muted-foreground leading-relaxed">
-            You agree not to reverse-engineer our service, abuse automated review endpoints, or attempt to
-            compromise our security.
+            You agree not to reverse-engineer our service, abuse automated review endpoints, or
+            attempt to compromise our security.
           </p>
         </section>
 
@@ -144,8 +140,8 @@ export default function TermsPage() {
           </p>
           <p className="text-sm text-muted-foreground leading-relaxed">
             Because document review can incur compute, storage, and support costs immediately,
-            credits, cancellations, and pilot terms are handled according to the applicable
-            written agreement or order form.
+            credits, cancellations, and pilot terms are handled according to the applicable written
+            agreement or order form.
           </p>
         </section>
 
@@ -202,11 +198,10 @@ export default function TermsPage() {
           <SectionHeading icon={ShieldAlertIcon} title="6. Limitations of Liability" />
           <p className="text-sm text-muted-foreground leading-relaxed mb-4">
             Immigration decisions are entirely at the discretion of the relevant government
-            authority. Under no circumstances shall {siteConfig.name} or our suppliers be
-            liable for any direct, indirect, incidental, or consequential damages (including, but
-            not limited to, financial loss, travel delays, emotional distress, or loss of
-            employment) resulting from an application rejection or the use/inability to use our
-            service.
+            authority. Under no circumstances shall {siteConfig.name} or our suppliers be liable for
+            any direct, indirect, incidental, or consequential damages (including, but not limited
+            to, financial loss, travel delays, emotional distress, or loss of employment) resulting
+            from an application rejection or the use/inability to use our service.
           </p>
           <p className="text-sm text-muted-foreground leading-relaxed">
             The agency, client, or authorized representative is responsible for final submission.
@@ -219,14 +214,13 @@ export default function TermsPage() {
           <SectionHeading icon={DatabaseIcon} title="7. Data Processing" id="data-processing" />
           <p className="text-sm text-muted-foreground leading-relaxed">
             By using our service, you acknowledge that uploaded documents and personal data may be
-            processed by third-party review and requirement-processing providers as
-            described in our{" "}
+            processed by third-party review and requirement-processing providers as described in our{" "}
             <Link href="/privacy" className="text-primary hover:underline">
               Privacy Policy
             </Link>
             . Document text content is sent to these providers solely for the purpose of delivering
-            our evaluation and review-support services. These providers operate under Data Processing
-            Agreements and do not use your data to train their models.
+            our evaluation and review-support services. These providers operate under Data
+            Processing Agreements and do not use your data to train their models.
           </p>
         </section>
 
@@ -238,7 +232,6 @@ export default function TermsPage() {
             platform after changes are posted constitutes acceptance of those changes.
           </p>
         </section>
-
       </PublicPageContent>
     </PublicPage>
   );

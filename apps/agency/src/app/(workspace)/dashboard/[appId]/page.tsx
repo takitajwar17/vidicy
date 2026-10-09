@@ -8,8 +8,8 @@ export const metadata: Metadata = {
 export default async function ApplicationDetailPage({
   params,
 }: {
-  params: Promise<{ appId: string }>
+  params: Promise<{ appId: string }>;
 }) {
-  const { appId } = await params
-  return await AgencyCaseContent({ appId })
+  const { appId } = await params;
+  return await AgencyCaseContent({ appId });
 }

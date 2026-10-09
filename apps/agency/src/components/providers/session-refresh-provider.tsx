@@ -1,99 +1,99 @@
-"use client"
+"use client";
 
-import { useCallback, useEffect, useRef } from "react"
-import { useDebounceCallback } from "usehooks-ts"
-import type { getConfig } from "@/flags"
-import { useConfigStore } from "@/state/config"
-import { useSessionStore } from "@/state/session"
-import type { SessionValidationResult } from "@/types"
+import { useCallback, useEffect, useRef } from "react";
+import { useDebounceCallback } from "usehooks-ts";
+import type { getConfig } from "@/flags";
+import { useConfigStore } from "@/state/config";
+import { useSessionStore } from "@/state/session";
+import type { SessionValidationResult } from "@/types";
 
 interface SessionRefreshProviderProps {
-  initialConfig?: Awaited<ReturnType<typeof getConfig>> | null
-  initialSession?: SessionValidationResult
+  initialConfig?: Awaited<ReturnType<typeof getConfig>> | null;
+  initialSession?: SessionValidationResult;
 }
 
 export function SessionRefreshProvider({
   initialConfig = null,
   initialSession = null,
 }: SessionRefreshProviderProps) {
-  const setSession = useSessionStore((store) => store.setSession)
-  const setConfig = useConfigStore((store) => store.setConfig)
-  const refetchSession = useSessionStore((store) => store.refetchSession)
-  const clearSession = useSessionStore((store) => store.clearSession)
+  const setSession = useSessionStore((store) => store.setSession);
+  const setConfig = useConfigStore((store) => store.setConfig);
+  const refetchSession = useSessionStore((store) => store.refetchSession);
+  const clearSession = useSessionStore((store) => store.clearSession);
 
   const doFetchSession = useCallback(async () => {
     try {
-      refetchSession()
+      refetchSession();
 
-      const response = await fetch("/api/get-session")
+      const response = await fetch("/api/get-session");
       const sessionWithConfig = (await response.json()) as {
-        session: SessionValidationResult
-        config: Awaited<ReturnType<typeof getConfig>>
-      }
+        session: SessionValidationResult;
+        config: Awaited<ReturnType<typeof getConfig>>;
+      };
 
-      setConfig(sessionWithConfig?.config)
+      setConfig(sessionWithConfig?.config);
 
       if (sessionWithConfig?.session) {
-        setSession(sessionWithConfig.session)
+        setSession(sessionWithConfig.session);
       } else {
-        clearSession()
+        clearSession();
       }
     } catch (error) {
-      console.error("Failed to fetch session:", error)
-      clearSession()
+      console.error("Failed to fetch session:", error);
+      clearSession();
     }
-  }, [clearSession, refetchSession, setConfig, setSession])
+  }, [clearSession, refetchSession, setConfig, setSession]);
 
-  const doFetchSessionRef = useRef(doFetchSession)
+  const doFetchSessionRef = useRef(doFetchSession);
 
   useEffect(() => {
-    doFetchSessionRef.current = doFetchSession
-  })
+    doFetchSessionRef.current = doFetchSession;
+  });
 
   const fetchSession = useDebounceCallback(
     useCallback(() => doFetchSessionRef.current(), []),
     30,
-  )
+  );
 
   useEffect(() => {
     if (initialConfig) {
-      setConfig(initialConfig)
+      setConfig(initialConfig);
     }
 
     if (initialSession) {
-      setSession(initialSession)
+      setSession(initialSession);
     } else {
-      clearSession()
+      clearSession();
     }
-  }, [clearSession, initialConfig, initialSession, setConfig, setSession])
+  }, [clearSession, initialConfig, initialSession, setConfig, setSession]);
 
   useEffect(() => {
     function handleVisibilityChange() {
       if (document.visibilityState === "visible") {
-        fetchSession()
+        fetchSession();
       }
     }
 
     function handleFocus() {
-      fetchSession()
+      fetchSession();
     }
 
-    document.addEventListener("visibilitychange", handleVisibilityChange)
-    window.addEventListener("focus", handleFocus)
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    window.addEventListener("focus", handleFocus);
 
     return () => {
-      document.removeEventListener("visibilitychange", handleVisibilityChange)
-      window.removeEventListener("focus", handleFocus)
-    }
-  }, [fetchSession])
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+      window.removeEventListener("focus", handleFocus);
+    };
+  }, [fetchSession]);
 
   useEffect(() => {
     useSessionStore.setState({
       fetchSession: async () => {
-        fetchSession()
+        fetchSession();
       },
-    })
-  }, [fetchSession])
+    });
+  }, [fetchSession]);
 
-  return null
+  return null;
 }

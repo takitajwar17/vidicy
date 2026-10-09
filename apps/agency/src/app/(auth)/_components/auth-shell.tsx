@@ -49,9 +49,7 @@ export function AuthShell({
             <p className="text-lg font-medium leading-relaxed text-sidebar-foreground">
               &ldquo;{testimonial.quote}&rdquo;
             </p>
-            <footer className="text-sm text-sidebar-foreground/60">
-              ~ {testimonial.author}
-            </footer>
+            <footer className="text-sm text-sidebar-foreground/60">~ {testimonial.author}</footer>
           </blockquote>
         </div>
 

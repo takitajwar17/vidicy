@@ -1,42 +1,48 @@
-import "server-only"
+import "server-only";
 
-import { getRuntimeContext } from "@/infra/runtime-context"
+import { getRuntimeContext } from "@/infra/runtime-context";
 
-import { MAX_DOCUMENT_FILE_SIZE } from "@/constants"
-import { logger } from "@/infra/logger"
+import { MAX_DOCUMENT_FILE_SIZE } from "@/constants";
+import { logger } from "@/infra/logger";
 
 /** Maximum permitted upload size across all document upload endpoints. */
-export const MAX_FILE_SIZE_BYTES = MAX_DOCUMENT_FILE_SIZE
+export const MAX_FILE_SIZE_BYTES = MAX_DOCUMENT_FILE_SIZE;
 
 /**
  * Returns the Cloud Storage adapter through the shared runtime context.
  * Throws if R2 is not available.
  */
 export async function getR2Bucket(): Promise<R2Bucket> {
-  const { env } = await getRuntimeContext({ async: true })
+  const { env } = await getRuntimeContext({ async: true });
   if (!env.R2) {
-    throw new Error("R2 binding unavailable")
+    throw new Error("R2 binding unavailable");
   }
-  return env.R2
+  return env.R2;
 }
 
 interface UploadToR2Params {
-  r2: R2Bucket
-  fileKey: string
-  bytes: Uint8Array
-  contentType: string
-  metadata: Record<string, string>
+  r2: R2Bucket;
+  fileKey: string;
+  bytes: Uint8Array;
+  contentType: string;
+  metadata: Record<string, string>;
 }
 
 /**
  * Uploads a file to R2 with standard httpMetadata and customMetadata.
  * Returns the fileKey on success, throws on failure.
  */
-export async function uploadToR2({ r2, fileKey, bytes, contentType, metadata }: UploadToR2Params): Promise<void> {
+export async function uploadToR2({
+  r2,
+  fileKey,
+  bytes,
+  contentType,
+  metadata,
+}: UploadToR2Params): Promise<void> {
   await r2.put(fileKey, bytes, {
     httpMetadata: { contentType },
     customMetadata: metadata,
-  })
+  });
 }
 
 /**
@@ -44,19 +50,24 @@ export async function uploadToR2({ r2, fileKey, bytes, contentType, metadata }: 
  */
 export function sanitizeFileName(name: string): string {
   // Strip path traversal sequences before character filtering
-  const stripped = name.replace(/\.\./g, "_")
-  return stripped.replace(/[^a-zA-Z0-9._-]/g, "_")
+  const stripped = name.replace(/\.\./g, "_");
+  return stripped.replace(/[^a-zA-Z0-9._-]/g, "_");
 }
 
 /**
  * Builds a timestamped R2 key under the standard visa-documents path.
  */
-export function buildR2Key(userId: string, applicationId: string, fileName: string, subPath?: string): string {
-  const sanitized = sanitizeFileName(fileName)
-  const base = `visa-documents/${userId}/${applicationId}`
+export function buildR2Key(
+  userId: string,
+  applicationId: string,
+  fileName: string,
+  subPath?: string,
+): string {
+  const sanitized = sanitizeFileName(fileName);
+  const base = `visa-documents/${userId}/${applicationId}`;
   return subPath
     ? `${base}/${subPath}/${Date.now()}-${sanitized}`
-    : `${base}/${Date.now()}-${sanitized}`
+    : `${base}/${Date.now()}-${sanitized}`;
 }
 
 /**
@@ -64,7 +75,7 @@ export function buildR2Key(userId: string, applicationId: string, fileName: stri
  * Returns the R2ObjectBody, or null if not found.
  */
 export async function getFromR2(r2: R2Bucket, fileKey: string): Promise<R2ObjectBody | null> {
-  return r2.get(fileKey)
+  return r2.get(fileKey);
 }
 
 /**
@@ -72,10 +83,12 @@ export async function getFromR2(r2: R2Bucket, fileKey: string): Promise<R2Object
  * Individual failures are logged but do not reject the overall operation.
  */
 export async function deleteFromR2(r2: R2Bucket, keys: string[]): Promise<void> {
-  if (keys.length === 0) return
-  await Promise.all(keys.map(key =>
-    r2.delete(key).catch((err) => {
-      logger.warn("R2 delete failed for key", { key, error: err })
-    })
-  ))
+  if (keys.length === 0) return;
+  await Promise.all(
+    keys.map((key) =>
+      r2.delete(key).catch((err) => {
+        logger.warn("R2 delete failed for key", { key, error: err });
+      }),
+    ),
+  );
 }

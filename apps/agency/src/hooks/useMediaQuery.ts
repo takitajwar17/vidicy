@@ -1,4 +1,4 @@
-import { useMediaQuery as useMediaQueryHook } from "usehooks-ts"
+import { useMediaQuery as useMediaQueryHook } from "usehooks-ts";
 
 const tailwindBreakpoints = {
   sm: 640,
@@ -47,12 +47,12 @@ const MEDIA_QUERIES = {
 type MediaQuery = keyof typeof MEDIA_QUERIES;
 
 export const useMediaQuery = (query: MediaQuery) => {
-  return useMediaQueryHook(MEDIA_QUERIES[query])
-}
+  return useMediaQueryHook(MEDIA_QUERIES[query]);
+};
 
 /**
  * Returns true when the viewport is narrower than the `md` breakpoint (768 px).
  * Alias for useMediaQuery("MD_AND_SMALLER") — prefer this in components that only
  * need a simple mobile/desktop split.
  */
-export const useIsMobile = () => useMediaQuery("MD_AND_SMALLER")
+export const useIsMobile = () => useMediaQuery("MD_AND_SMALLER");

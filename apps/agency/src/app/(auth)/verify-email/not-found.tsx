@@ -1,11 +1,5 @@
 import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import Link from "next/link";
 
 export default function NotFound() {
@@ -26,23 +20,11 @@ export default function NotFound() {
           </ul>
 
           <div className="space-y-2">
-            <Button
-              variant="outline"
-              className="w-full"
-              asChild
-            >
-              <Link href="/sign-in">
-                Sign In
-              </Link>
+            <Button variant="outline" className="w-full" asChild>
+              <Link href="/sign-in">Sign In</Link>
             </Button>
-            <Button
-              variant="outline"
-              className="w-full"
-              asChild
-            >
-              <Link href="/">
-                Go to Home
-              </Link>
+            <Button variant="outline" className="w-full" asChild>
+              <Link href="/">Go to Home</Link>
             </Button>
           </div>
         </CardContent>

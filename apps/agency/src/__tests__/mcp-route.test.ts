@@ -24,24 +24,38 @@ describe("public MCP route", () => {
       pull(controller) {
         if (chunks++ < 4) controller.enqueue(new Uint8Array(128 * 1024));
         else controller.close();
-      }, cancel,
+      },
+      cancel,
     });
-    const response = await POST(new Request("https://example.com/mcp", {
-      method: "POST", body: stream, duplex: "half",
-    } as RequestInit));
+    const response = await POST(
+      new Request("https://example.com/mcp", {
+        method: "POST",
+        body: stream,
+        duplex: "half",
+      } as RequestInit),
+    );
     expect(response.status).toBe(413);
     expect(response.headers.get("Access-Control-Allow-Origin")).toBe("*");
-    await expect(response.json()).resolves.toMatchObject({ jsonrpc: "2.0", error: { code: -32600 } });
+    await expect(response.json()).resolves.toMatchObject({
+      jsonrpc: "2.0",
+      error: { code: -32600 },
+    });
     expect(cancel).toHaveBeenCalledOnce();
   });
 
-  it.each([null, [], 1, "x", { jsonrpc: "2.0", method: "tools/call", params: [] }])("rejects invalid JSON-RPC shapes: %j", async body => {
-    const response = await POST(new Request("https://example.com/mcp", {
-      method: "POST", body: JSON.stringify(body),
-    }));
-    expect(response.status).toBe(400);
-    await expect(response.json()).resolves.toMatchObject({ error: { code: -32600 } });
-  });
+  it.each([null, [], 1, "x", { jsonrpc: "2.0", method: "tools/call", params: [] }])(
+    "rejects invalid JSON-RPC shapes: %j",
+    async (body) => {
+      const response = await POST(
+        new Request("https://example.com/mcp", {
+          method: "POST",
+          body: JSON.stringify(body),
+        }),
+      );
+      expect(response.status).toBe(400);
+      await expect(response.json()).resolves.toMatchObject({ error: { code: -32600 } });
+    },
+  );
 
   it("responds to initialize with server capabilities", async () => {
     const response = await POST(

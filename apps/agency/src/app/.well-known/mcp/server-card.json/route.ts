@@ -3,11 +3,7 @@ import "server-only";
 import { NextResponse } from "next/server";
 
 import packageJson from "../../../../../package.json";
-import {
-  CANONICAL_SITE_URL,
-  MCP_ENDPOINT_PATH,
-  MCP_PROTOCOL_VERSION,
-} from "@/constants";
+import { CANONICAL_SITE_URL, MCP_ENDPOINT_PATH, MCP_PROTOCOL_VERSION } from "@/constants";
 import { PUBLIC_AGENT_TOOL_DEFINITIONS } from "@/lib/public-agent-tools";
 
 function getHeaders() {
@@ -30,8 +26,7 @@ function getServerCard() {
       title: "Vidicy Public Pages",
       version: packageJson.version,
     },
-    description:
-      "Public structured interface for Vidicy's markdown pages.",
+    description: "Public structured interface for Vidicy's markdown pages.",
     documentationUrl: CANONICAL_SITE_URL,
     transport: {
       type: "streamable-http",

@@ -23,10 +23,7 @@ export interface VectorizeQueryClient {
 const DIRECT_DOCUMENT_TOP_K = 6;
 const APPLICATION_FALLBACK_TOP_K = 24;
 
-function extractChunks(
-  matches: VectorizeQueryMatch[],
-  documentId?: string,
-): string[] {
+function extractChunks(matches: VectorizeQueryMatch[], documentId?: string): string[] {
   return matches
     .filter((match) => {
       if (!documentId) return true;

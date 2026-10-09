@@ -1,12 +1,6 @@
 import { SITE_DOMAIN, SITE_URL } from "@/constants";
 
-export function agencyTeamAccessText({
-  addedByName,
-  role,
-}: {
-  addedByName: string;
-  role: string;
-}) {
+export function agencyTeamAccessText({ addedByName, role }: { addedByName: string; role: string }) {
   return `Hi,
 
 ${addedByName} added you to the Vidicy agency workspace as ${role === "admin" ? "an admin" : "a reviewer"}.

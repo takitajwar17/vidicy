@@ -75,9 +75,7 @@ export default async function SettingsPage() {
   return (
     <div className="flex flex-col gap-4 md:gap-6">
       <div className="space-y-1">
-        <h1 className="text-2xl font-bold tracking-tight text-foreground md:text-3xl">
-          Profile
-        </h1>
+        <h1 className="text-2xl font-bold tracking-tight text-foreground md:text-3xl">Profile</h1>
         <p className="max-w-3xl text-sm text-muted-foreground">
           Your profile, sign-in details, device preferences, and account controls.
         </p>
@@ -95,9 +93,7 @@ export default async function SettingsPage() {
       <Card className={SETTINGS_CARD_CLASS}>
         <CardHeader>
           <CardTitle>Appearance</CardTitle>
-          <CardDescription>
-            Choose how the review desk looks on this device.
-          </CardDescription>
+          <CardDescription>Choose how the review desk looks on this device.</CardDescription>
         </CardHeader>
         <CardContent>
           <div className="flex items-center justify-between">

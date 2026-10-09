@@ -171,9 +171,7 @@ describe("private shell auth boundaries", () => {
   it("redirects the dashboard shell when the verified user is not agency staff", async () => {
     mockEnsureAgencyTeamMembership.mockResolvedValueOnce(null);
 
-    await expect(DashboardLayout({ children: <div /> })).rejects.toThrow(
-      "NOT_FOUND",
-    );
+    await expect(DashboardLayout({ children: <div /> })).rejects.toThrow("NOT_FOUND");
     expect(mockNotFound).toHaveBeenCalled();
   });
 

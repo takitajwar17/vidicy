@@ -106,130 +106,144 @@ async function produceEvaluation(
 
 describe("Document Evaluation Scoring", () => {
   it("passes all quality metrics across document scenarios", { timeout: 300_000 }, async () => {
-      const baseline = loadBaseline("document-evaluation");
+    const baseline = loadBaseline("document-evaluation");
 
-      const { result, regressions } = await runEvalSuite<OrchestratorEvalOutput, EvaluationExpected>({
-        suiteName: "document-evaluation",
-        cases: evaluationCases,
-        producer: produceEvaluation,
-        baseline,
-        metrics: [
-          // Schema completeness
-          {
-            name: "schemaCompleteness",
-            threshold: 1.0,
-            score({ output }) {
-              return schemaCompleteness([
-                "overallScore",
-                "riskLevel",
-                "summary",
-                "redFlags",
-                "strengths",
-                "recommendations",
-                "itemFeedback",
-              ]).score({ output: output as unknown as Record<string, unknown> });
-            },
+    const { result, regressions } = await runEvalSuite<OrchestratorEvalOutput, EvaluationExpected>({
+      suiteName: "document-evaluation",
+      cases: evaluationCases,
+      producer: produceEvaluation,
+      baseline,
+      metrics: [
+        // Schema completeness
+        {
+          name: "schemaCompleteness",
+          threshold: 1.0,
+          score({ output }) {
+            return schemaCompleteness([
+              "overallScore",
+              "riskLevel",
+              "summary",
+              "redFlags",
+              "strengths",
+              "recommendations",
+              "itemFeedback",
+            ]).score({ output: output as unknown as Record<string, unknown> });
           },
-          // Overall score in valid range
-          {
-            name: "scoreRange",
-            threshold: 1.0,
-            score({ output }) {
-              return scoreRange(0, 100).score({ output: output.overallScore });
-            },
+        },
+        // Overall score in valid range
+        {
+          name: "scoreRange",
+          threshold: 1.0,
+          score({ output }) {
+            return scoreRange(0, 100).score({ output: output.overallScore });
           },
-          // Score falls in the expected range for this test case
-          {
-            name: "expectedScoreRange",
-            threshold: 1.0,
-            score({ output, expected }) {
-              const min = expected?.scoreRange?.min ?? 0;
-              const max = expected?.scoreRange?.max ?? 100;
-              const inRange = output.overallScore >= min && output.overallScore <= max;
-              return {
-                name: "expectedScoreRange",
-                score: inRange ? 1 : 0,
-                passed: inRange,
-                detail: inRange
-                  ? `Score ${output.overallScore} in [${min}, ${max}]`
-                  : `Score ${output.overallScore} NOT in expected [${min}, ${max}]`,
-              };
-            },
+        },
+        // Score falls in the expected range for this test case
+        {
+          name: "expectedScoreRange",
+          threshold: 1.0,
+          score({ output, expected }) {
+            const min = expected?.scoreRange?.min ?? 0;
+            const max = expected?.scoreRange?.max ?? 100;
+            const inRange = output.overallScore >= min && output.overallScore <= max;
+            return {
+              name: "expectedScoreRange",
+              score: inRange ? 1 : 0,
+              passed: inRange,
+              detail: inRange
+                ? `Score ${output.overallScore} in [${min}, ${max}]`
+                : `Score ${output.overallScore} NOT in expected [${min}, ${max}]`,
+            };
           },
-          // Risk level consistency
-          riskLevelConsistency(),
-          // Has recommendations
-          hasRecommendations(1),
-          // Expected risk level matches
-          {
-            name: "expectedRiskLevel",
-            threshold: 1.0,
-            score({ output, expected }) {
-              if (!expected?.expectedRiskLevel) {
-                return { name: "expectedRiskLevel", score: 1, passed: true, detail: "No expected risk level" };
-              }
-              const matches = output.riskLevel === expected.expectedRiskLevel;
+        },
+        // Risk level consistency
+        riskLevelConsistency(),
+        // Has recommendations
+        hasRecommendations(1),
+        // Expected risk level matches
+        {
+          name: "expectedRiskLevel",
+          threshold: 1.0,
+          score({ output, expected }) {
+            if (!expected?.expectedRiskLevel) {
               return {
                 name: "expectedRiskLevel",
-                score: matches ? 1 : 0,
-                passed: matches,
-                detail: matches
-                  ? undefined
-                  : `Expected "${expected.expectedRiskLevel}" but got "${output.riskLevel}"`,
+                score: 1,
+                passed: true,
+                detail: "No expected risk level",
               };
-            },
+            }
+            const matches = output.riskLevel === expected.expectedRiskLevel;
+            return {
+              name: "expectedRiskLevel",
+              score: matches ? 1 : 0,
+              passed: matches,
+              detail: matches
+                ? undefined
+                : `Expected "${expected.expectedRiskLevel}" but got "${output.riskLevel}"`,
+            };
           },
-          // Red flags contain expected keywords (at least 1 match suffices)
-          {
-            name: "redFlagDetection",
-            threshold: 0.5,
-            score({ output, expected }) {
-              const expectedFlags = expected?.expectedRedFlags ?? [];
-              if (expectedFlags.length === 0) {
-                return { name: "redFlagDetection", score: 1, passed: true, detail: "No expected red flags" };
-              }
-              const allFlags = (output.redFlags || []).join(" ").toLowerCase()
-                + " " + (output.summary || "").toLowerCase()
-                + " " + (output.recommendations || []).join(" ").toLowerCase();
-              const found = expectedFlags.filter((kw) => allFlags.includes(kw.toLowerCase()));
-              const ratio = found.length / expectedFlags.length;
+        },
+        // Red flags contain expected keywords (at least 1 match suffices)
+        {
+          name: "redFlagDetection",
+          threshold: 0.5,
+          score({ output, expected }) {
+            const expectedFlags = expected?.expectedRedFlags ?? [];
+            if (expectedFlags.length === 0) {
               return {
                 name: "redFlagDetection",
-                score: ratio,
-                passed: ratio >= 0.5,
-                detail: ratio < 1
+                score: 1,
+                passed: true,
+                detail: "No expected red flags",
+              };
+            }
+            const allFlags =
+              (output.redFlags || []).join(" ").toLowerCase() +
+              " " +
+              (output.summary || "").toLowerCase() +
+              " " +
+              (output.recommendations || []).join(" ").toLowerCase();
+            const found = expectedFlags.filter((kw) => allFlags.includes(kw.toLowerCase()));
+            const ratio = found.length / expectedFlags.length;
+            return {
+              name: "redFlagDetection",
+              score: ratio,
+              passed: ratio >= 0.5,
+              detail:
+                ratio < 1
                   ? `Missing red flag keywords: ${expectedFlags.filter((kw) => !allFlags.includes(kw.toLowerCase())).join(", ")}`
                   : undefined,
-              };
-            },
+            };
           },
-          // LLM-as-judge (optional)
-          {
-            name: "llmJudge(accuracy,helpfulness,actionability)",
-            threshold: 0.7,
-            async score({ output, input }) {
-              const metric = llmJudgeMetric(["accuracy", "helpfulness", "actionability"]);
-              return metric.score({
-                output: JSON.stringify(output, null, 2),
-                input: JSON.stringify(input),
-              });
-            },
+        },
+        // LLM-as-judge (optional)
+        {
+          name: "llmJudge(accuracy,helpfulness,actionability)",
+          threshold: 0.7,
+          async score({ output, input }) {
+            const metric = llmJudgeMetric(["accuracy", "helpfulness", "actionability"]);
+            return metric.score({
+              output: JSON.stringify(output, null, 2),
+              input: JSON.stringify(input),
+            });
           },
-        ],
-      });
-
-      printResults(result, regressions);
-      saveResults(result);
-
-      // Assert aggregate pass rates meet minimum thresholds
-      for (const agg of result.aggregates) {
-        if (agg.name.startsWith("llmJudge")) continue;
-        expect(
-          agg.passRate,
-          `Aggregate ${agg.name}: pass rate ${(agg.passRate * 100).toFixed(0)}% below 70%`,
-        ).toBeGreaterThanOrEqual(0.7);
-      }
-
-      expect(regressions).toHaveLength(0);
+        },
+      ],
     });
+
+    printResults(result, regressions);
+    saveResults(result);
+
+    // Assert aggregate pass rates meet minimum thresholds
+    for (const agg of result.aggregates) {
+      if (agg.name.startsWith("llmJudge")) continue;
+      expect(
+        agg.passRate,
+        `Aggregate ${agg.name}: pass rate ${(agg.passRate * 100).toFixed(0)}% below 70%`,
+      ).toBeGreaterThanOrEqual(0.7);
+    }
+
+    expect(regressions).toHaveLength(0);
+  });
 });

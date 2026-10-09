@@ -12,7 +12,7 @@ async function hashPassword({ password, providedSalt }: HashPasswordParams) {
     encoder.encode(password),
     { name: "PBKDF2" },
     false,
-    ["deriveBits", "deriveKey"]
+    ["deriveBits", "deriveKey"],
   );
 
   const key = await crypto.subtle.deriveKey(
@@ -25,7 +25,7 @@ async function hashPassword({ password, providedSalt }: HashPasswordParams) {
     keyMaterial,
     { name: "AES-GCM", length: 256 },
     true,
-    ["encrypt", "decrypt"]
+    ["encrypt", "decrypt"],
   );
 
   const exportedKey = await crypto.subtle.exportKey("raw", key);
@@ -62,7 +62,7 @@ async function verifyPassword({ storedHash, passwordAttempt }: VerifyPasswordPar
 
   const attemptHashWithSalt = await hashPassword({
     password: passwordAttempt,
-    providedSalt: salt
+    providedSalt: salt,
   });
   const [, attemptHash] = attemptHashWithSalt.split(":");
 

@@ -21,17 +21,13 @@ function createRetryableInsertError() {
   const error = new Error(
     'Failed query: insert into "table" ("id") values (?) returning "id"',
   ) as Error & { cause?: unknown };
-  error.cause = new Error("D1 DB storage operation exceeded timeout which caused object to be reset.");
+  error.cause = new Error(
+    "D1 DB storage operation exceeded timeout which caused object to be reset.",
+  );
   return error;
 }
 
-function findMatchingParenthesis({
-  sqlText,
-  startIndex,
-}: {
-  sqlText: string;
-  startIndex: number;
-}) {
+function findMatchingParenthesis({ sqlText, startIndex }: { sqlText: string; startIndex: number }) {
   let depth = 0;
   let inSingleQuote = false;
   let inDoubleQuote = false;
@@ -143,13 +139,7 @@ function extractValuesTuples(valuesSql: string) {
   return tuples;
 }
 
-function parseInsertStatement({
-  params,
-  sqlText,
-}: {
-  params: unknown[];
-  sqlText: string;
-}) {
+function parseInsertStatement({ params, sqlText }: { params: unknown[]; sqlText: string }) {
   const tableMatch = sqlText.match(/insert into "([^"]+)"/i);
   if (!tableMatch) {
     throw new Error(`Unable to parse insert table from SQL: ${sqlText}`);
@@ -292,13 +282,7 @@ class MockD1Database {
     return Promise.all(statements.map((statement) => statement.run()));
   }
 
-  async executeRaw<T>({
-    params,
-    sqlText,
-  }: {
-    params: unknown[];
-    sqlText: string;
-  }) {
+  async executeRaw<T>({ params, sqlText }: { params: unknown[]; sqlText: string }) {
     if (sqlText.toLowerCase().startsWith("insert into")) {
       return this.handleInsertRaw<T>({ params, sqlText });
     }
@@ -310,13 +294,7 @@ class MockD1Database {
     throw new Error(`Unexpected raw SQL in test double: ${sqlText}`);
   }
 
-  async executeAll<T>({
-    params,
-    sqlText,
-  }: {
-    params: unknown[];
-    sqlText: string;
-  }) {
+  async executeAll<T>({ params, sqlText }: { params: unknown[]; sqlText: string }) {
     if (!sqlText.toLowerCase().startsWith("select ")) {
       throw new Error(`Unexpected all() SQL in test double: ${sqlText}`);
     }
@@ -343,13 +321,7 @@ class MockD1Database {
     };
   }
 
-  async executeRun({
-    params,
-    sqlText,
-  }: {
-    params: unknown[];
-    sqlText: string;
-  }) {
+  async executeRun({ params, sqlText }: { params: unknown[]; sqlText: string }) {
     if (!sqlText.toLowerCase().startsWith("insert into")) {
       throw new Error(`Unexpected run() SQL in test double: ${sqlText}`);
     }
@@ -377,13 +349,7 @@ class MockD1Database {
     };
   }
 
-  private async handleInsertRaw<T>({
-    params,
-    sqlText,
-  }: {
-    params: unknown[];
-    sqlText: string;
-  }) {
+  private async handleInsertRaw<T>({ params, sqlText }: { params: unknown[]; sqlText: string }) {
     const parsedInsert = parseInsertStatement({ params, sqlText });
     const shouldThrow = this.shouldThrowForInsert(parsedInsert.tableName);
 
@@ -408,13 +374,7 @@ class MockD1Database {
     }) as T[];
   }
 
-  private async handleSelectRaw<T>({
-    params,
-    sqlText,
-  }: {
-    params: unknown[];
-    sqlText: string;
-  }) {
+  private async handleSelectRaw<T>({ params, sqlText }: { params: unknown[]; sqlText: string }) {
     const projectionMatch = sqlText.match(/^select\s+(.+?)\s+from\s+"([^"]+)"/i);
     if (!projectionMatch) {
       throw new Error(`Unable to parse recovery select in SQL: ${sqlText}`);
@@ -435,7 +395,8 @@ class MockD1Database {
   }
 
   private persistRows(tableName: string, rows: Array<Record<string, unknown>>) {
-    const tableRows = this.rowsByTable.get(tableName) ?? new Map<unknown, Record<string, unknown>>();
+    const tableRows =
+      this.rowsByTable.get(tableName) ?? new Map<unknown, Record<string, unknown>>();
     for (const row of rows) {
       tableRows.set(row.id, row);
     }
@@ -460,7 +421,8 @@ describe("drizzleWithInsertRecovery", () => {
     }) as unknown as D1Database;
     const db = getDBFromDatabase(database);
 
-    const [user] = await db.insert(userTable)
+    const [user] = await db
+      .insert(userTable)
       .values({
         email: "gleecon2020@gmail.com",
         firstName: "Glee",
@@ -480,7 +442,8 @@ describe("drizzleWithInsertRecovery", () => {
     }) as unknown as D1Database;
     const db = getDBFromDatabase(database);
 
-    const [user] = await db.insert(userTable)
+    const [user] = await db
+      .insert(userTable)
       .values({
         email: "retry@example.com",
         firstName: "Retry",
@@ -498,7 +461,8 @@ describe("drizzleWithInsertRecovery", () => {
     }) as unknown as D1Database;
     const db = getDBFromDatabase(database);
 
-    const items = await db.insert(checklistItemTable)
+    const items = await db
+      .insert(checklistItemTable)
       .values([
         {
           applicationId: "vapp_1",
@@ -526,10 +490,7 @@ describe("drizzleWithInsertRecovery", () => {
     expect(items).toHaveLength(2);
     expect(items[0].id).toMatch(/^citem_/);
     expect(items[1].id).toMatch(/^citem_/);
-    expect(items.map((item) => item.documentName)).toEqual([
-      "Passport",
-      "Bank Statement",
-    ]);
+    expect(items.map((item) => item.documentName)).toEqual(["Passport", "Bank Statement"]);
   });
 
   it("recovers a committed chat message insert with returning()", async () => {
@@ -538,7 +499,8 @@ describe("drizzleWithInsertRecovery", () => {
     }) as unknown as D1Database;
     const db = getDBFromDatabase(database);
 
-    const [message] = await db.insert(chatMessageTable)
+    const [message] = await db
+      .insert(chatMessageTable)
       .values({
         applicationId: "vapp_1",
         conversationId: "cconv_1",

@@ -5,7 +5,14 @@ import { type SignInSchema, signInSchema } from "@/schemas/signin.schema";
 import { useState } from "react";
 import type { Route } from "next";
 
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import {
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
@@ -33,26 +40,26 @@ const SignInPage = ({ email, redirectPath, isGoogleSSOEnabled }: SignInClientPro
   const [showPassword, setShowPassword] = useState(false);
   const { execute: signIn, isPending: isSigningIn } = useServerAction(signInAction, {
     onError: (error) => {
-      toast.dismiss()
-      toast.error(error.err?.message)
+      toast.dismiss();
+      toast.error(error.err?.message);
     },
     onStart: () => {
-      toast.loading("Signing you in...")
+      toast.loading("Signing you in...");
     },
     onSuccess: (response) => {
-      toast.dismiss()
-      toast.success("Signed in successfully")
+      toast.dismiss();
+      toast.success("Signed in successfully");
       window.location.href = response?.data?.redirectTo ?? redirectPath;
-    }
-  })
+    },
+  });
   const form = useForm<SignInSchema>({
     resolver: zodResolver(signInSchema),
     defaultValues: { email },
   });
 
   const onSubmit = async (data: SignInSchema) => {
-    signIn({ ...data, csrfToken, verifiedRedirectPath: redirectPath })
-  }
+    signIn({ ...data, csrfToken, verifiedRedirectPath: redirectPath });
+  };
 
   return (
     <AuthShell
@@ -89,7 +96,9 @@ const SignInPage = ({ email, redirectPath, isGoogleSSOEnabled }: SignInClientPro
             name="email"
             render={({ field }) => (
               <FormItem>
-                <FormLabel className="text-[13px] font-medium tracking-[0.01em] text-foreground/90">Email address</FormLabel>
+                <FormLabel className="text-[13px] font-medium tracking-[0.01em] text-foreground/90">
+                  Email address
+                </FormLabel>
                 <FormControl>
                   <Input
                     placeholder="you@example.com"
@@ -110,7 +119,9 @@ const SignInPage = ({ email, redirectPath, isGoogleSSOEnabled }: SignInClientPro
             name="password"
             render={({ field }) => (
               <FormItem>
-                <FormLabel className="text-[13px] font-medium tracking-[0.01em] text-foreground/90">Password</FormLabel>
+                <FormLabel className="text-[13px] font-medium tracking-[0.01em] text-foreground/90">
+                  Password
+                </FormLabel>
                 <FormControl>
                   <div className="relative">
                     <Input
@@ -126,13 +137,20 @@ const SignInPage = ({ email, redirectPath, isGoogleSSOEnabled }: SignInClientPro
                       className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
                       aria-label={showPassword ? "Hide password" : "Show password"}
                     >
-                      {showPassword ? <EyeOffIcon className="h-4 w-4" /> : <EyeIcon className="h-4 w-4" />}
+                      {showPassword ? (
+                        <EyeOffIcon className="h-4 w-4" />
+                      ) : (
+                        <EyeIcon className="h-4 w-4" />
+                      )}
                     </button>
                   </div>
                 </FormControl>
                 <FormMessage />
                 <div className="flex justify-end">
-                  <Link href="/forgot-password" className="text-xs font-semibold tracking-[0.01em] text-primary hover:text-primary/90">
+                  <Link
+                    href="/forgot-password"
+                    className="text-xs font-semibold tracking-[0.01em] text-primary hover:text-primary/90"
+                  >
                     Forgot password?
                   </Link>
                 </div>
@@ -140,12 +158,7 @@ const SignInPage = ({ email, redirectPath, isGoogleSSOEnabled }: SignInClientPro
             )}
           />
 
-          <Button
-            type="submit"
-            className="h-11 w-full text-sm"
-            size="lg"
-            disabled={isSigningIn}
-          >
+          <Button type="submit" className="h-11 w-full text-sm" size="lg" disabled={isSigningIn}>
             {isSigningIn ? (
               <>
                 <Spinner className="mr-2 h-5 w-5" />

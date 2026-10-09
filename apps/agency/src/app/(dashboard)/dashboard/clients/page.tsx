@@ -95,44 +95,44 @@ export default async function ClientsPage({
           actionLabel="New client file"
         />
       ) : (
-          <AgencyTableCard
-            title="Client directory"
-            description="Open files, total files, and the last day each client sent work."
-          >
-            <AgencyTable>
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="pl-5">Client</TableHead>
-                  <TableHead>Email</TableHead>
-                  <TableHead>Phone</TableHead>
-                  <TableHead>Country</TableHead>
-                  <TableHead>Open cases</TableHead>
-                  <TableHead>Total cases</TableHead>
-                  <TableHead className="pr-5">Last activity</TableHead>
+        <AgencyTableCard
+          title="Client directory"
+          description="Open files, total files, and the last day each client sent work."
+        >
+          <AgencyTable>
+            <TableHeader>
+              <TableRow>
+                <TableHead className="pl-5">Client</TableHead>
+                <TableHead>Email</TableHead>
+                <TableHead>Phone</TableHead>
+                <TableHead>Country</TableHead>
+                <TableHead>Open cases</TableHead>
+                <TableHead>Total cases</TableHead>
+                <TableHead className="pr-5">Last activity</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {rows.map(({ client, caseCount, openCaseCount, lastCaseAt }) => (
+                <TableRow key={client.id}>
+                  <TableCell className="pl-5 font-bold">{client.name}</TableCell>
+                  <TableCell>{client.email ?? "—"}</TableCell>
+                  <TableCell>{client.phone ?? "—"}</TableCell>
+                  <TableCell>{client.country ?? "—"}</TableCell>
+                  <TableCell className="font-bold">{openCaseCount}</TableCell>
+                  <TableCell>{caseCount}</TableCell>
+                  <TableCell className="pr-5">{formatShortDate(lastCaseAt)}</TableCell>
                 </TableRow>
-              </TableHeader>
-              <TableBody>
-                {rows.map(({ client, caseCount, openCaseCount, lastCaseAt }) => (
-                  <TableRow key={client.id}>
-                    <TableCell className="pl-5 font-bold">{client.name}</TableCell>
-                    <TableCell>{client.email ?? "—"}</TableCell>
-                    <TableCell>{client.phone ?? "—"}</TableCell>
-                    <TableCell>{client.country ?? "—"}</TableCell>
-                    <TableCell className="font-bold">{openCaseCount}</TableCell>
-                    <TableCell>{caseCount}</TableCell>
-                    <TableCell className="pr-5">{formatShortDate(lastCaseAt)}</TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </AgencyTable>
-            <AgencyPagination
-              page={page}
-              hasNextPage={hasNextPage}
-              previousHref={getClientsHref({ page: page - 1, query })}
-              nextHref={getClientsHref({ page: page + 1, query })}
-              endLabel="End of directory"
-            />
-          </AgencyTableCard>
+              ))}
+            </TableBody>
+          </AgencyTable>
+          <AgencyPagination
+            page={page}
+            hasNextPage={hasNextPage}
+            previousHref={getClientsHref({ page: page - 1, query })}
+            nextHref={getClientsHref({ page: page + 1, query })}
+            endLabel="End of directory"
+          />
+        </AgencyTableCard>
       )}
     </AgencyPageShell>
   );

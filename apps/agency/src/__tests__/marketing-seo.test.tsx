@@ -59,9 +59,7 @@ describe("marketing SEO surfaces", () => {
     const byUrl = new Map(entries.map((entry) => [entry.url, entry]));
 
     expect(byUrl.get(`${CANONICAL_SITE_URL}/subprocessors`)).toBeDefined();
-    expect(toIsoDate(byUrl.get(CANONICAL_SITE_URL)?.lastModified)).toBe(
-      "2026-10-08T00:00:00.000Z",
-    );
+    expect(toIsoDate(byUrl.get(CANONICAL_SITE_URL)?.lastModified)).toBe("2026-10-08T00:00:00.000Z");
     expect(byUrl.get(`${CANONICAL_SITE_URL}/about`)).toBeDefined();
     expect(byUrl.get(`${CANONICAL_SITE_URL}/how-it-works`)).toBeUndefined();
     expect(byUrl.get(`${CANONICAL_SITE_URL}/editorial-standards`)).toBeUndefined();
@@ -108,10 +106,26 @@ describe("marketing SEO surfaces", () => {
 
   it("renders WebPage schema on static informational and legal pages", () => {
     const pages = [
-      { name: "About Vidicy", markup: renderToStaticMarkup(<AboutPage />), schemaType: "AboutPage" },
-      { name: "Privacy Policy", markup: renderToStaticMarkup(<PrivacyPage />), schemaType: "WebPage" },
-      { name: "Terms of Service", markup: renderToStaticMarkup(<TermsPage />), schemaType: "WebPage" },
-      { name: "Subprocessors", markup: renderToStaticMarkup(<SubprocessorsPage />), schemaType: "WebPage" },
+      {
+        name: "About Vidicy",
+        markup: renderToStaticMarkup(<AboutPage />),
+        schemaType: "AboutPage",
+      },
+      {
+        name: "Privacy Policy",
+        markup: renderToStaticMarkup(<PrivacyPage />),
+        schemaType: "WebPage",
+      },
+      {
+        name: "Terms of Service",
+        markup: renderToStaticMarkup(<TermsPage />),
+        schemaType: "WebPage",
+      },
+      {
+        name: "Subprocessors",
+        markup: renderToStaticMarkup(<SubprocessorsPage />),
+        schemaType: "WebPage",
+      },
     ];
 
     for (const page of pages) {

@@ -11,8 +11,7 @@ export const PUBLIC_AGENT_TOOL_DEFINITIONS: PublicAgentToolDefinition[] = [
   {
     name: "get_public_markdown",
     title: "Get public markdown",
-    description:
-      "Return the markdown-optimized version of a public Vidicy page for agent reading.",
+    description: "Return the markdown-optimized version of a public Vidicy page for agent reading.",
     inputSchema: {
       type: "object",
       properties: {

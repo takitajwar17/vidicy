@@ -138,12 +138,12 @@ async function getReplacementAgencyOwner({ userId }: { userId: string }) {
       createdAt: agencyTeamMemberTable.createdAt,
     })
     .from(agencyTeamMemberTable)
-	    .where(
-	      and(
-	        isNotNull(agencyTeamMemberTable.userId),
-	        ne(agencyTeamMemberTable.userId, userId),
-	        eq(agencyTeamMemberTable.status, AGENCY_STAFF_STATUS.ACTIVE),
-	      ),
+    .where(
+      and(
+        isNotNull(agencyTeamMemberTable.userId),
+        ne(agencyTeamMemberTable.userId, userId),
+        eq(agencyTeamMemberTable.status, AGENCY_STAFF_STATUS.ACTIVE),
+      ),
     );
 
   activeStaff.sort((a, b) => {
@@ -176,12 +176,12 @@ export async function transferOrDeleteOwnedApplicationsForUser({ userId }: { use
   if (replacement) {
     await db
       .update(visaApplicationTable)
-	      .set({ userId: replacement.userId!, updatedAt: new Date() })
+      .set({ userId: replacement.userId!, updatedAt: new Date() })
       .where(eq(visaApplicationTable.userId, userId));
 
     logger.info("Agency case ownership transferred before user deletion", {
       fromUserId: userId,
-	      toUserId: replacement.userId,
+      toUserId: replacement.userId,
       applicationCount: ownedApps.length,
     });
 
@@ -214,7 +214,9 @@ export async function transferOrDeleteOwnedApplicationsForUser({ userId }: { use
 export async function adminDeleteUser({ userId }: { userId: string }) {
   const db = getDB();
 
-  const { appsTransferred, appsDeleted } = await transferOrDeleteOwnedApplicationsForUser({ userId });
+  const { appsTransferred, appsDeleted } = await transferOrDeleteOwnedApplicationsForUser({
+    userId,
+  });
 
   // 2. Remove memberships in other users' applications
   await db.delete(applicationMembershipTable).where(eq(applicationMembershipTable.userId, userId));

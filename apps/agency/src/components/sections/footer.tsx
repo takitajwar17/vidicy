@@ -49,9 +49,7 @@ const footerSections = [
   },
   {
     title: "Support",
-    links: [
-      { href: `mailto:${siteConfig.links.email}`, text: "Contact Us" },
-    ],
+    links: [{ href: `mailto:${siteConfig.links.email}`, text: "Contact Us" }],
   },
   {
     title: "Legal",
@@ -63,21 +61,20 @@ const footerSections = [
   },
 ] as const;
 
-const socialLinks = [
-  { href: siteConfig.links.twitter, label: "X", icon: XIcon },
-] as const;
+const socialLinks = [{ href: siteConfig.links.twitter, label: "X", icon: XIcon }] as const;
 
 export default function Footer({ className }: { className?: string }) {
   return (
-    <footer className={cn("dark relative mt-10 overflow-hidden border-t border-border bg-background text-foreground", className)}>
+    <footer
+      className={cn(
+        "dark relative mt-10 overflow-hidden border-t border-border bg-background text-foreground",
+        className,
+      )}
+    >
       <div className="relative mx-auto max-w-7xl px-5 pb-4 pt-10 sm:px-8 sm:pt-12 lg:px-12 lg:pt-14">
         <div className="grid gap-9 lg:grid-cols-[minmax(0,1.12fr)_minmax(0,0.88fr)] lg:gap-12">
           <div className="flex flex-col gap-7 lg:pr-8">
-            <Link
-              href="/"
-              title={siteConfig.name}
-              className="relative flex w-fit items-center"
-            >
+            <Link href="/" title={siteConfig.name} className="relative flex w-fit items-center">
               <Logo variant="horizontal" className="h-10 w-auto sm:h-12" />
             </Link>
 
@@ -86,7 +83,10 @@ export default function Footer({ className }: { className?: string }) {
                 className="public-footer-status inline-flex w-fit items-center gap-2.5 rounded-[1rem] bg-background/66 px-4 py-2.5 text-base font-medium tracking-tight text-foreground/78 backdrop-blur-sm"
                 role="status"
               >
-                <span className="public-footer-status-dot h-2.5 w-2.5 shrink-0 rounded-full" aria-hidden="true" />
+                <span
+                  className="public-footer-status-dot h-2.5 w-2.5 shrink-0 rounded-full"
+                  aria-hidden="true"
+                />
                 <span>All systems operational</span>
               </div>
 
@@ -129,11 +129,7 @@ export default function Footer({ className }: { className?: string }) {
                       className="public-footer-badge flex h-14 w-auto items-center justify-center px-1"
                     >
                       {item.href ? (
-                        <a
-                          href={item.href}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                        >
+                        <a href={item.href} target="_blank" rel="noopener noreferrer">
                           {badgeImage}
                         </a>
                       ) : (

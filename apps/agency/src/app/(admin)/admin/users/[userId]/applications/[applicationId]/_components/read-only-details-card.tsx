@@ -1,15 +1,15 @@
-import type { ReactNode } from "react"
+import type { ReactNode } from "react";
 
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 
 export function ReadOnlyDetailsCard({
   title,
   description,
   items,
 }: {
-  title: string
-  description: string
-  items: Array<{ label: string; value: ReactNode }>
+  title: string;
+  description: string;
+  items: Array<{ label: string; value: ReactNode }>;
 }) {
   return (
     <Card>
@@ -28,5 +28,5 @@ export function ReadOnlyDetailsCard({
         </dl>
       </CardContent>
     </Card>
-  )
+  );
 }

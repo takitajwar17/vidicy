@@ -20,7 +20,11 @@ export default function GoogleCallbackClientComponent({
   const router = useRouter();
   const hasCalledCallback = useRef(false);
 
-  const { execute: handleCallback, isPending, error } = useServerAction(googleSSOCallbackAction, {
+  const {
+    execute: handleCallback,
+    isPending,
+    error,
+  } = useServerAction(googleSSOCallbackAction, {
     onError: (error) => {
       toast.dismiss();
       toast.error(error.err?.message || "Failed to sign in with Google");
@@ -57,9 +61,7 @@ export default function GoogleCallbackClientComponent({
             <div className="flex flex-col items-center space-y-4">
               <Spinner size="large" />
               <CardTitle>Signing in with Google</CardTitle>
-              <CardDescription>
-                Please wait while we complete your sign in...
-              </CardDescription>
+              <CardDescription>Please wait while we complete your sign in...</CardDescription>
             </div>
           </CardHeader>
         </Card>
@@ -73,16 +75,10 @@ export default function GoogleCallbackClientComponent({
         <Card className="w-full max-w-md">
           <CardHeader>
             <CardTitle>Sign in failed</CardTitle>
-            <CardDescription>
-              {error?.message || "Failed to sign in with Google"}
-            </CardDescription>
+            <CardDescription>{error?.message || "Failed to sign in with Google"}</CardDescription>
           </CardHeader>
           <CardContent>
-            <Button
-              variant="outline"
-              className="w-full"
-              onClick={() => router.push("/sign-in")}
-            >
+            <Button variant="outline" className="w-full" onClick={() => router.push("/sign-in")}>
               Back to sign in
             </Button>
           </CardContent>
@@ -101,11 +97,7 @@ export default function GoogleCallbackClientComponent({
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <Button
-            variant="outline"
-            className="w-full"
-            onClick={() => router.push("/sign-in")}
-          >
+          <Button variant="outline" className="w-full" onClick={() => router.push("/sign-in")}>
             Back to sign in
           </Button>
         </CardContent>

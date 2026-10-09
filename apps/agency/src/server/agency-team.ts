@@ -28,10 +28,10 @@ export async function ensureAgencyTeamMembership(
   const db = getDB();
   const user = getSessionUser(session);
 
-	  const existing = await db.query.agencyTeamMemberTable.findFirst({
-	    where: eq(agencyTeamMemberTable.userId, user.id),
-	    columns: { id: true, role: true, status: true },
-	  });
+  const existing = await db.query.agencyTeamMemberTable.findFirst({
+    where: eq(agencyTeamMemberTable.userId, user.id),
+    columns: { id: true, role: true, status: true },
+  });
 
   if (existing?.status === AGENCY_STAFF_STATUS.ACTIVE) {
     const role = existing.role as AgencyStaffContext["role"];
@@ -41,46 +41,46 @@ export async function ensureAgencyTeamMembership(
     };
   }
 
-	  if (existing) {
-	    return null;
-	  }
+  if (existing) {
+    return null;
+  }
 
-	  const email = user.email?.trim().toLowerCase();
-	  const accessGrant = email
-	    ? await db.query.agencyTeamMemberTable.findFirst({
-	        where: eq(agencyTeamMemberTable.email, email),
-	        columns: { id: true, role: true, status: true, userId: true },
-	      })
-	    : null;
+  const email = user.email?.trim().toLowerCase();
+  const accessGrant = email
+    ? await db.query.agencyTeamMemberTable.findFirst({
+        where: eq(agencyTeamMemberTable.email, email),
+        columns: { id: true, role: true, status: true, userId: true },
+      })
+    : null;
 
-	  if (accessGrant?.status === AGENCY_STAFF_STATUS.ACTIVE) {
-	    const role = accessGrant.role as AgencyStaffContext["role"];
-	    await db
-	      .update(agencyTeamMemberTable)
-	      .set({
-	        userId: user.id,
-	        ...(accessGrant.userId ? {} : { joinedAt: new Date() }),
-	        updatedAt: new Date(),
-	      })
-	      .where(eq(agencyTeamMemberTable.id, accessGrant.id));
+  if (accessGrant?.status === AGENCY_STAFF_STATUS.ACTIVE) {
+    const role = accessGrant.role as AgencyStaffContext["role"];
+    await db
+      .update(agencyTeamMemberTable)
+      .set({
+        userId: user.id,
+        ...(accessGrant.userId ? {} : { joinedAt: new Date() }),
+        updatedAt: new Date(),
+      })
+      .where(eq(agencyTeamMemberTable.id, accessGrant.id));
 
-	    return {
-	      role,
-	      isAdmin: role === AGENCY_STAFF_ROLE.ADMIN || user.role === ROLES_ENUM.ADMIN,
-	    };
-	  }
+    return {
+      role,
+      isAdmin: role === AGENCY_STAFF_ROLE.ADMIN || user.role === ROLES_ENUM.ADMIN,
+    };
+  }
 
-	  if (accessGrant) {
-	    return null;
-	  }
+  if (accessGrant) {
+    return null;
+  }
 
-	  if (user.role === ROLES_ENUM.ADMIN) {
-	    await db.insert(agencyTeamMemberTable).values({
-	      userId: user.id,
-	      email: email ?? user.id,
-	      role: AGENCY_STAFF_ROLE.ADMIN,
-	      status: AGENCY_STAFF_STATUS.ACTIVE,
-	      joinedAt: new Date(),
+  if (user.role === ROLES_ENUM.ADMIN) {
+    await db.insert(agencyTeamMemberTable).values({
+      userId: user.id,
+      email: email ?? user.id,
+      role: AGENCY_STAFF_ROLE.ADMIN,
+      status: AGENCY_STAFF_STATUS.ACTIVE,
+      joinedAt: new Date(),
     });
 
     return { role: AGENCY_STAFF_ROLE.ADMIN, isAdmin: true };

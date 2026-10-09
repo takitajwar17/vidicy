@@ -1,4 +1,4 @@
-import { z } from "zod"
+import { z } from "zod";
 import { captchaSchema } from "./captcha.schema";
 
 export const signUpSchema = z.object({
@@ -11,6 +11,6 @@ export const signUpSchema = z.object({
   }),
   captchaToken: captchaSchema,
   csrfToken: z.string().optional(),
-})
+});
 
-export type SignUpSchema = z.infer<typeof signUpSchema>
+export type SignUpSchema = z.infer<typeof signUpSchema>;

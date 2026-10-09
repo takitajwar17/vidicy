@@ -93,77 +93,74 @@ export default async function DocumentsPage({
           actionLabel="View cases"
         />
       ) : (
-          <AgencyTableCard
-            title="File inventory"
-            description="Client files linked to agency cases."
-          >
-            <AgencyTable>
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="pl-5">Document</TableHead>
-                  <TableHead>Case</TableHead>
-                  <TableHead>Client</TableHead>
-                  <TableHead>Applicant</TableHead>
-                  <TableHead>Size</TableHead>
-                  <TableHead>Uploaded</TableHead>
-                  <TableHead className="pr-5 text-right">View</TableHead>
+        <AgencyTableCard title="File inventory" description="Client files linked to agency cases.">
+          <AgencyTable>
+            <TableHeader>
+              <TableRow>
+                <TableHead className="pl-5">Document</TableHead>
+                <TableHead>Case</TableHead>
+                <TableHead>Client</TableHead>
+                <TableHead>Applicant</TableHead>
+                <TableHead>Size</TableHead>
+                <TableHead>Uploaded</TableHead>
+                <TableHead className="pr-5 text-right">View</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {rows.map(({ document, application, applicant }) => (
+                <TableRow key={document.id}>
+                  <TableCell className="max-w-[320px] pl-5">
+                    <p className="truncate font-bold" title={document.fileName}>
+                      {document.fileName}
+                    </p>
+                  </TableCell>
+                  <TableCell>
+                    {application ? (
+                      <Link
+                        href={`/dashboard/${application.id}` as Route}
+                        className="font-bold text-primary"
+                      >
+                        {getDisplayCaseNumber(application.caseNumber, application.id)}
+                      </Link>
+                    ) : (
+                      "Missing case"
+                    )}
+                  </TableCell>
+                  <TableCell>{application?.clientName ?? "—"}</TableCell>
+                  <TableCell>{applicant?.name ?? "—"}</TableCell>
+                  <TableCell>{formatBytes(document.fileSize)}</TableCell>
+                  <TableCell>{formatShortDate(document.uploadedAt)}</TableCell>
+                  <TableCell className="pr-5 text-right">
+                    <DocumentPreviewDrawer
+                      documentId={document.id}
+                      fileName={document.fileName}
+                      fileSize={document.fileSize}
+                      mimeType={document.mimeType}
+                      uploadedAt={document.uploadedAt}
+                      isActive
+                      hasMultipleVersions={false}
+                      sectionLabel={
+                        application
+                          ? getDisplayCaseNumber(application.caseNumber, application.id)
+                          : "Document"
+                      }
+                      side="right"
+                      triggerVariant="button"
+                      triggerLabel="View"
+                    />
+                  </TableCell>
                 </TableRow>
-              </TableHeader>
-              <TableBody>
-                {rows.map(({ document, application, applicant }) => (
-                  <TableRow key={document.id}>
-                    <TableCell className="max-w-[320px] pl-5">
-                      <p className="truncate font-bold" title={document.fileName}>
-                        {document.fileName}
-                      </p>
-                    </TableCell>
-                    <TableCell>
-                      {application ? (
-                        <Link
-                          href={`/dashboard/${application.id}` as Route}
-                          className="font-bold text-primary"
-                        >
-                          {getDisplayCaseNumber(application.caseNumber, application.id)}
-                        </Link>
-                      ) : (
-                        "Missing case"
-                      )}
-                    </TableCell>
-                    <TableCell>{application?.clientName ?? "—"}</TableCell>
-                    <TableCell>{applicant?.name ?? "—"}</TableCell>
-                    <TableCell>{formatBytes(document.fileSize)}</TableCell>
-                    <TableCell>{formatShortDate(document.uploadedAt)}</TableCell>
-                    <TableCell className="pr-5 text-right">
-                      <DocumentPreviewDrawer
-                        documentId={document.id}
-                        fileName={document.fileName}
-                        fileSize={document.fileSize}
-                        mimeType={document.mimeType}
-                        uploadedAt={document.uploadedAt}
-                        isActive
-                        hasMultipleVersions={false}
-                        sectionLabel={
-                          application
-                            ? getDisplayCaseNumber(application.caseNumber, application.id)
-                            : "Document"
-                        }
-                        side="right"
-                        triggerVariant="button"
-                        triggerLabel="View"
-                      />
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </AgencyTable>
-            <AgencyPagination
-              page={page}
-              hasNextPage={hasNextPage}
-              previousHref={getDocumentsHref({ page: page - 1, query })}
-              nextHref={getDocumentsHref({ page: page + 1, query })}
-              endLabel="End of inventory"
-            />
-          </AgencyTableCard>
+              ))}
+            </TableBody>
+          </AgencyTable>
+          <AgencyPagination
+            page={page}
+            hasNextPage={hasNextPage}
+            previousHref={getDocumentsHref({ page: page - 1, query })}
+            nextHref={getDocumentsHref({ page: page + 1, query })}
+            endLabel="End of inventory"
+          />
+        </AgencyTableCard>
       )}
     </AgencyPageShell>
   );

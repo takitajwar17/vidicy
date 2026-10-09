@@ -19,25 +19,26 @@ const SignUpPage = async ({
   searchParams: Promise<{ email?: string; redirect?: string }>;
 }) => {
   const { email, redirect: redirectParam } = await searchParams;
-  const [session, config] = await Promise.all([
-    getSessionFromCookie(),
-    getConfig(),
-  ]);
+  const [session, config] = await Promise.all([getSessionFromCookie(), getConfig()]);
   const redirectPath = normalizeRedirectPath(redirectParam);
 
   if (session) {
-    return redirect(getSessionRedirectPath({
-      session,
-      verifiedRedirectPath: redirectPath,
-    }) as Route);
+    return redirect(
+      getSessionRedirectPath({
+        session,
+        verifiedRedirectPath: redirectPath,
+      }) as Route,
+    );
   }
 
   return (
-    <Suspense fallback={
-      <div className="min-h-[90vh] flex items-center justify-center">
-        <Spinner className="h-8 w-8" />
-      </div>
-    }>
+    <Suspense
+      fallback={
+        <div className="min-h-[90vh] flex items-center justify-center">
+          <Spinner className="h-8 w-8" />
+        </div>
+      }
+    >
       <SignUpClientComponent
         email={email ?? ""}
         redirectPath={redirectPath}
@@ -46,6 +47,6 @@ const SignUpPage = async ({
       />
     </Suspense>
   );
-}
+};
 
 export default SignUpPage;

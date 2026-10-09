@@ -46,8 +46,8 @@ export default function NotFound() {
       {/* Subtext */}
       <BlurFade delay={0.25} yOffset={16}>
         <p className="mt-3 max-w-sm text-center text-sm leading-relaxed text-muted-foreground">
-          The page you&apos;re looking for may have been moved or no longer
-          exists. Double-check the URL or head somewhere safe.
+          The page you&apos;re looking for may have been moved or no longer exists. Double-check the
+          URL or head somewhere safe.
         </p>
       </BlurFade>
 
@@ -74,7 +74,10 @@ export default function NotFound() {
       <BlurFade delay={0.45} yOffset={8}>
         <p className="mt-10 text-sm text-muted-foreground">
           Still lost?{" "}
-          <Link href="/dashboard/support" className="text-primary underline-offset-4 hover:underline">
+          <Link
+            href="/dashboard/support"
+            className="text-primary underline-offset-4 hover:underline"
+          >
             Contact support
           </Link>
         </p>

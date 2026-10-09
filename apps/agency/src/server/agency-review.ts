@@ -27,8 +27,15 @@ interface ReviewContext {
 }
 
 // Upload sequence resolves document timestamp ties. Evaluation IDs give a stable fallback.
-export const newestDocumentOrder = [desc(uploadedDocumentTable.uploadedAt), desc(uploadedDocumentTable.uploadSequence), desc(uploadedDocumentTable.id)];
-export const newestEvaluationOrder = [desc(documentEvaluationTable.createdAt), desc(documentEvaluationTable.id)];
+export const newestDocumentOrder = [
+  desc(uploadedDocumentTable.uploadedAt),
+  desc(uploadedDocumentTable.uploadSequence),
+  desc(uploadedDocumentTable.id),
+];
+export const newestEvaluationOrder = [
+  desc(documentEvaluationTable.createdAt),
+  desc(documentEvaluationTable.id),
+];
 
 export function isEvaluationCurrent({
   evaluation,

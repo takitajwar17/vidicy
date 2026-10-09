@@ -6,9 +6,7 @@ import { describe, expect, it } from "vitest";
 import AgencyHome from "@/app/(agency-home)/page";
 
 async function renderMarketingHomepageMarkup() {
-  const stream = await renderToReadableStream(
-    await AgencyHome(),
-  );
+  const stream = await renderToReadableStream(await AgencyHome());
 
   await stream.allReady;
 

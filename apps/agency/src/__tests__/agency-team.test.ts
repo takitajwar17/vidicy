@@ -1,6 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { findFirst, values, set, where } = vi.hoisted(() => ({ findFirst: vi.fn(), values: vi.fn(), set: vi.fn(), where: vi.fn() }));
+const { findFirst, values, set, where } = vi.hoisted(() => ({
+  findFirst: vi.fn(),
+  values: vi.fn(),
+  set: vi.fn(),
+  where: vi.fn(),
+}));
 vi.mock("@/db", () => ({
   getDB: () => ({
     query: { agencyTeamMemberTable: { findFirst } },
@@ -44,9 +49,16 @@ describe("agency team access", () => {
   });
 
   it("links an active email invitation without granting admin access", async () => {
-    findFirst.mockResolvedValueOnce(null).mockResolvedValueOnce({ id: "invitation", userId: null, role: "member", status: "active" });
-    await expect(ensureAgencyTeamMembership(createSession())).resolves.toEqual({ role: "member", isAdmin: false });
-    expect(set).toHaveBeenCalledWith(expect.objectContaining({ userId: "user_1", joinedAt: expect.any(Date) }));
+    findFirst
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce({ id: "invitation", userId: null, role: "member", status: "active" });
+    await expect(ensureAgencyTeamMembership(createSession())).resolves.toEqual({
+      role: "member",
+      isAdmin: false,
+    });
+    expect(set).toHaveBeenCalledWith(
+      expect.objectContaining({ userId: "user_1", joinedAt: expect.any(Date) }),
+    );
     expect(where).toHaveBeenCalledOnce();
     expect(values).not.toHaveBeenCalled();
   });

@@ -2,11 +2,7 @@ import type { Metadata } from "next";
 
 import { faqSchema, faqSections } from "@/app/(marketing)/faq/content";
 import { FaqsSection } from "@/components/faqs-page";
-import {
-  PublicPage,
-  PublicPageContent,
-  PublicPageHero,
-} from "@/components/public-page-shell";
+import { PublicPage, PublicPageContent, PublicPageHero } from "@/components/public-page-shell";
 import { constructMetadata } from "@/lib/utils";
 
 export const metadata: Metadata = constructMetadata({

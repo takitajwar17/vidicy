@@ -5,7 +5,14 @@ import Link from "next/link";
 import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import BlurFade from "@/components/magicui/blur-fade";
-import { LockKeyholeIcon, AlertTriangleIcon, LayoutDashboardIcon, HomeIcon, RefreshCwIcon, type LucideIcon } from "lucide-react";
+import {
+  LockKeyholeIcon,
+  AlertTriangleIcon,
+  LayoutDashboardIcon,
+  HomeIcon,
+  RefreshCwIcon,
+  type LucideIcon,
+} from "lucide-react";
 
 const _ease = [0.16, 1, 0.3, 1];
 
@@ -43,7 +50,13 @@ export function ErrorPage({
           transition={{ duration: 0.5, ease: _ease }}
           className="mb-8 flex items-center justify-center"
         >
-          <div className={cn("relative flex h-28 w-28 items-center justify-center rounded-3xl", iconBg, iconRing)}>
+          <div
+            className={cn(
+              "relative flex h-28 w-28 items-center justify-center rounded-3xl",
+              iconBg,
+              iconRing,
+            )}
+          >
             <motion.div
               className={cn("absolute inset-0 rounded-3xl", iconBg)}
               animate={{ scale: [1, 1.12, 1] }}
@@ -84,10 +97,7 @@ export function ErrorPage({
               Try Again
             </button>
           )}
-          <Link
-            href="/"
-            className={cn(buttonVariants({ variant: "ghost", size: "lg" }), "gap-2")}
-          >
+          <Link href="/" className={cn(buttonVariants({ variant: "ghost", size: "lg" }), "gap-2")}>
             <HomeIcon className="h-4 w-4" />
             Home
           </Link>

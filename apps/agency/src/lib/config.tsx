@@ -77,8 +77,8 @@ export const siteConfig = {
       question: "Is Vidicy replacing agency reviewers?",
       answer: (
         <span>
-          No. Vidicy gives reviewers a shorter pile: what is missing, what contradicts another
-          file, and what the client must fix. The agency keeps the client relationship and the final
+          No. Vidicy gives reviewers a shorter pile: what is missing, what contradicts another file,
+          and what the client must fix. The agency keeps the client relationship and the final
           submission call.
         </span>
       ),
@@ -114,9 +114,7 @@ export const siteConfig = {
     },
     {
       title: "Company",
-      links: [
-        { href: "/enterprise", text: "Contact", icon: null },
-      ],
+      links: [{ href: "/enterprise", text: "Contact", icon: null }],
     },
     {
       title: "Social",

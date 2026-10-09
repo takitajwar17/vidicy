@@ -10,12 +10,23 @@ import { getOpenAIClient } from "@/lib/openai";
 import { createGeminiEvaluation } from "@/lib/gemini-evaluation";
 import { GEMINI_DOCUMENT_EVALUATION_MODEL } from "@/lib/gemini";
 import { queryDocumentChunksFromVectorize } from "@/lib/vectorize-query";
-import { AI_MAX_TOKENS_LARGE, AI_MAX_TOKENS_SMALL, AI_MAX_COMBINED_TEXT_LENGTH, MODIFICATION_GAP_DAYS_THRESHOLD, AI_TIMEOUT_CHAT_MS, AI_TIMEOUT_EMBEDDING_MS } from "@/constants";
+import {
+  AI_MAX_TOKENS_LARGE,
+  AI_MAX_TOKENS_SMALL,
+  AI_MAX_COMBINED_TEXT_LENGTH,
+  MODIFICATION_GAP_DAYS_THRESHOLD,
+  AI_TIMEOUT_CHAT_MS,
+  AI_TIMEOUT_EMBEDDING_MS,
+} from "@/constants";
 import { requireApplicationPermission } from "@/utils/application-auth";
 import { revalidatePath } from "next/cache";
 import { checkActionRateLimit } from "@/infra/action-rate-limit";
 import { logger, logAlert } from "@/infra/logger";
-import { extractDocumentImages, extractPdfMetadata, type PdfMetadataSignals } from "@/services/pdf-parser";
+import {
+  extractDocumentImages,
+  extractPdfMetadata,
+  type PdfMetadataSignals,
+} from "@/services/pdf-parser";
 import { ensureDocumentExtraction } from "@/services/document-pipeline";
 import { sanitizeForPrompt } from "@/services/atlas-prompt";
 import { trackUsage, USAGE_EVENTS } from "@/infra/usage-tracking";
@@ -29,7 +40,11 @@ import {
   DOCUMENT_INDEXING_STATUS,
   MARKETING_EVENT_TYPE,
 } from "@/db/schema";
-import { newestDocumentOrder, newestEvaluationOrder, publishAgencyReview } from "@/server/agency-review";
+import {
+  newestDocumentOrder,
+  newestEvaluationOrder,
+  publishAgencyReview,
+} from "@/server/agency-review";
 import { recordMarketingEvent } from "@/server/marketing/events";
 
 // ---------------------------------------------------------------------------
@@ -48,25 +63,40 @@ const EVALUATION_TRANSLATION_MODEL = "gpt-4.1-mini";
 // ---------------------------------------------------------------------------
 
 /** Structured fields extracted from a single document during Phase 1 evaluation. */
-const extractedFieldsSchema = z.object({
-  holderName: z.string().nullable().catch(null),
-  expiryDate: z.string().nullable().catch(null),       // "YYYY-MM-DD" or null
-  documentNumber: z.string().nullable().catch(null),
-  issuingAuthority: z.string().nullable().catch(null),
-  language: z.string().catch("unknown"),               // ISO 639-1, e.g. "en", "fr", "ar"
-  dateRange: z.object({ from: z.string(), to: z.string() }).nullable().catch(null),
-}).catch({ holderName: null, expiryDate: null, documentNumber: null, issuingAuthority: null, language: "unknown", dateRange: null });
+const extractedFieldsSchema = z
+  .object({
+    holderName: z.string().nullable().catch(null),
+    expiryDate: z.string().nullable().catch(null), // "YYYY-MM-DD" or null
+    documentNumber: z.string().nullable().catch(null),
+    issuingAuthority: z.string().nullable().catch(null),
+    language: z.string().catch("unknown"), // ISO 639-1, e.g. "en", "fr", "ar"
+    dateRange: z.object({ from: z.string(), to: z.string() }).nullable().catch(null),
+  })
+  .catch({
+    holderName: null,
+    expiryDate: null,
+    documentNumber: null,
+    issuingAuthority: null,
+    language: "unknown",
+    dateRange: null,
+  });
 
 type ExtractedFields = z.infer<typeof extractedFieldsSchema>;
 
 const perDocAiResponseSchema = z.object({
   status: z.enum(["ok", "needs_review", "missing_content", "wrong_document"]).catch("needs_review"),
-  score: z.number().catch(50).transform((n) => Math.round(Math.max(0, Math.min(100, n)))),
+  score: z
+    .number()
+    .catch(50)
+    .transform((n) => Math.round(Math.max(0, Math.min(100, n)))),
   issues: z.array(z.string()).catch([]),
   strengths: z.array(z.string()).catch([]),
   feedback: z.string().catch(""),
   /** AI confidence in its own evaluation (0-100). 90+ = clear machine-readable text. */
-  confidence: z.number().catch(50).transform((n) => Math.round(Math.max(0, Math.min(100, n)))),
+  confidence: z
+    .number()
+    .catch(50)
+    .transform((n) => Math.round(Math.max(0, Math.min(100, n)))),
   confidenceReason: z.string().catch(""),
   extractedFields: extractedFieldsSchema,
 });
@@ -74,7 +104,11 @@ const perDocAiResponseSchema = z.object({
 const orchestratorItemSchema = z.object({
   status: z.enum(["ok", "missing", "needs_review"]).catch("needs_review"),
   feedback: z.string().catch(""),
-  score: z.number().transform((n) => Math.round(Math.max(0, Math.min(100, n)))).optional().catch(undefined),
+  score: z
+    .number()
+    .transform((n) => Math.round(Math.max(0, Math.min(100, n))))
+    .optional()
+    .catch(undefined),
   issues: z.array(z.string()).optional().catch(undefined),
   strengths: z.array(z.string()).optional().catch(undefined),
   hasDocument: z.boolean().optional().catch(undefined),
@@ -135,11 +169,27 @@ const perDocJsonSchema = {
           ],
         },
       },
-      required: ["holderName", "expiryDate", "documentNumber", "issuingAuthority", "language", "dateRange"],
+      required: [
+        "holderName",
+        "expiryDate",
+        "documentNumber",
+        "issuingAuthority",
+        "language",
+        "dateRange",
+      ],
       additionalProperties: false,
     },
   },
-  required: ["status", "score", "issues", "strengths", "feedback", "confidence", "confidenceReason", "extractedFields"],
+  required: [
+    "status",
+    "score",
+    "issues",
+    "strengths",
+    "feedback",
+    "confidence",
+    "confidenceReason",
+    "extractedFields",
+  ],
   additionalProperties: false,
 };
 
@@ -185,7 +235,15 @@ function buildOrchestratorJsonSchema(items: Array<{ id: string }>) {
         additionalProperties: false,
       },
     },
-    required: ["overallScore", "riskLevel", "summary", "redFlags", "strengths", "recommendations", "itemFeedback"],
+    required: [
+      "overallScore",
+      "riskLevel",
+      "summary",
+      "redFlags",
+      "strengths",
+      "recommendations",
+      "itemFeedback",
+    ],
     additionalProperties: false,
   };
 }
@@ -271,7 +329,7 @@ function buildPhase1Fallback(evals: PerDocumentEvaluation[]): EvaluationData {
     totalWeight === 0
       ? 0
       : Math.round(
-          evals.reduce((sum, e) => sum + e.score * (e.isRequired ? 2 : 1), 0) / totalWeight
+          evals.reduce((sum, e) => sum + e.score * (e.isRequired ? 2 : 1), 0) / totalWeight,
         );
   const riskLevel: "low" | "medium" | "high" =
     weightedScore >= 80 ? "low" : weightedScore >= 65 ? "medium" : "high";
@@ -306,7 +364,7 @@ function buildPhase1Fallback(evals: PerDocumentEvaluation[]): EvaluationData {
       .filter((e) => e.status === "ok")
       .map((e) => `${e.documentName} meets requirements`),
     recommendations: missingRequired.map(
-      (e) => `Upload the missing required document: ${e.documentName}`
+      (e) => `Upload the missing required document: ${e.documentName}`,
     ),
     itemFeedback,
   };
@@ -322,56 +380,67 @@ function getDocumentDimension(documentName: string): { dimension: string; signal
   if (/passport|travel.*doc|national.*id|id.*card/.test(n))
     return {
       dimension: "Document Authenticity & Prior Travel Record (Dimension 5 + 4)",
-      signals: "Check visa stamps for prior travel history and compliance. Look for expired validity, name inconsistencies, or signs of tampering.",
+      signals:
+        "Check visa stamps for prior travel history and compliance. Look for expired validity, name inconsistencies, or signs of tampering.",
     };
   if (/employ|job.*offer|contract|appointment.*letter|noc|no.*objection/.test(n))
     return {
       dimension: "Ties to Home Country — Employment (Dimension 1)",
-      signals: "Does this document prove the applicant has a stable job to return to? Check employer credibility, salary continuity, leave approval, and return obligation.",
+      signals:
+        "Does this document prove the applicant has a stable job to return to? Check employer credibility, salary continuity, leave approval, and return obligation.",
     };
   if (/salary|payslip|pay.*stub|pay.*slip|income/.test(n))
     return {
       dimension: "Financial Credibility + Ties to Home Country (Dimensions 1 & 2)",
-      signals: "Verify salary is consistent with stated employment. Check for irregular deposits that suggest borrowed funds. Look for stability over multiple months.",
+      signals:
+        "Verify salary is consistent with stated employment. Check for irregular deposits that suggest borrowed funds. Look for stability over multiple months.",
     };
   if (/bank.*statement|account.*statement|financial|savings|fund/.test(n))
     return {
       dimension: "Financial Credibility (Dimension 2)",
-      signals: "Look for genuine, consistent savings — not sudden large deposits before the application. Assess whether funds cover the intended stay. Check for signs of temporarily borrowed funds.",
+      signals:
+        "Look for genuine, consistent savings — not sudden large deposits before the application. Assess whether funds cover the intended stay. Check for signs of temporarily borrowed funds.",
     };
   if (/marriage|spouse|family|birth.*cert|dependent|child|parent/.test(n))
     return {
       dimension: "Ties to Home Country — Family (Dimension 1)",
-      signals: "Dependents and family staying at home are a strong return incentive. Verify relationship, residency of family members, and that dependents are NOT also travelling.",
+      signals:
+        "Dependents and family staying at home are a strong return incentive. Verify relationship, residency of family members, and that dependents are NOT also travelling.",
     };
   if (/property|deed|land|house|rent|mortgage|lease/.test(n))
     return {
       dimension: "Ties to Home Country — Assets (Dimension 1)",
-      signals: "Property ownership is a strong tie. Verify authenticity of ownership documents and that property is in the home country.",
+      signals:
+        "Property ownership is a strong tie. Verify authenticity of ownership documents and that property is in the home country.",
     };
   if (/hotel|flight|ticket|itinerary|booking|accommodation/.test(n))
     return {
       dimension: "Trip Purpose Clarity (Dimension 3)",
-      signals: "Does the booking confirm a clear departure date? Is the duration of stay proportionate to the stated purpose? Return ticket is critical — one-way tickets are a red flag.",
+      signals:
+        "Does the booking confirm a clear departure date? Is the duration of stay proportionate to the stated purpose? Return ticket is critical — one-way tickets are a red flag.",
     };
   if (/invitation|sponsor|host|cover.*letter|purpose|intent/.test(n))
     return {
       dimension: "Trip Purpose Clarity (Dimension 3)",
-      signals: "Is the stated purpose specific and credible? Does the invitation come from a legitimate, verifiable source? Does it commit to financial responsibility? Vague purposes are red flags.",
+      signals:
+        "Is the stated purpose specific and credible? Does the invitation come from a legitimate, verifiable source? Does it commit to financial responsibility? Vague purposes are red flags.",
     };
   if (/insurance|travel.*insur|medical.*insur/.test(n))
     return {
       dimension: "Trip Purpose Clarity + Document Completeness (Dimension 3 & 5)",
-      signals: "Coverage period must match the intended stay. Coverage amount must meet destination country minimums. Gaps in coverage suggest the applicant may extend their stay.",
+      signals:
+        "Coverage period must match the intended stay. Coverage amount must meet destination country minimums. Gaps in coverage suggest the applicant may extend their stay.",
     };
   if (/business.*regist|company.*regist|trade.*licen/.test(n))
     return {
       dimension: "Ties to Home Country — Business Ownership (Dimension 1)",
-      signals: "Business ownership is a strong home-country tie. Verify the business is active and registered. Owner must return to run it — a genuine anchor.",
+      signals:
+        "Business ownership is a strong home-country tie. Verify the business is active and registered. Owner must return to run it — a genuine anchor.",
     };
   return {
     dimension: "Document Completeness & Authenticity (Dimension 5)",
-    signals: "Evaluate completeness, issuing authority credibility, internal consistency, and any signs of document fraud or alteration.",
+    signals:
+      "Evaluate completeness, issuing authority credibility, internal consistency, and any signs of document fraud or alteration.",
   };
 }
 
@@ -1341,9 +1410,16 @@ async function evaluateApplicationReadiness({
 export const evaluateDocumentsAction = createServerAction()
   .input(evaluateDocumentsSchema)
   .handler(async ({ input }) => {
-    const session = await requireApplicationPermission(input.applicationId, APPLICATION_PERMISSIONS.ACCESS_APPLICATION);
+    const session = await requireApplicationPermission(
+      input.applicationId,
+      APPLICATION_PERMISSIONS.ACCESS_APPLICATION,
+    );
     await checkActionRateLimit("evaluateDocuments", session.userId, 10);
-    trackUsage({ userId: session.userId, event: USAGE_EVENTS.EVALUATION_RUN, metadata: { applicationId: input.applicationId } });
+    trackUsage({
+      userId: session.userId,
+      event: USAGE_EVENTS.EVALUATION_RUN,
+      metadata: { applicationId: input.applicationId },
+    });
 
     const db = getDB();
 
@@ -1358,7 +1434,7 @@ export const evaluateDocumentsAction = createServerAction()
       db.query.applicantTable.findFirst({
         where: and(
           eq(applicantTable.id, input.applicantId),
-          eq(applicantTable.applicationId, input.applicationId)
+          eq(applicantTable.applicationId, input.applicationId),
         ),
       }),
     ]);
@@ -1376,21 +1452,21 @@ export const evaluateDocumentsAction = createServerAction()
       db.query.checklistItemTable.findMany({
         where: and(
           eq(checklistItemTable.applicationId, application.id),
-          eq(checklistItemTable.applicantId, input.applicantId)
+          eq(checklistItemTable.applicantId, input.applicantId),
         ),
         orderBy: [asc(checklistItemTable.sortOrder)],
       }),
       db.query.uploadedDocumentTable.findMany({
         where: and(
           eq(uploadedDocumentTable.applicationId, application.id),
-          eq(uploadedDocumentTable.applicantId, input.applicantId)
+          eq(uploadedDocumentTable.applicantId, input.applicantId),
         ),
         orderBy: newestDocumentOrder,
       }),
       db.query.documentEvaluationTable.findFirst({
         where: and(
           eq(documentEvaluationTable.applicationId, application.id),
-          eq(documentEvaluationTable.applicantId, input.applicantId)
+          eq(documentEvaluationTable.applicantId, input.applicantId),
         ),
         orderBy: newestEvaluationOrder,
       }),
@@ -1403,7 +1479,7 @@ export const evaluateDocumentsAction = createServerAction()
     if (uploadedDocuments.length === 0) {
       throw new ZSAError(
         "PRECONDITION_FAILED",
-        "Please upload at least one document before running an evaluation."
+        "Please upload at least one document before running an evaluation.",
       );
     }
 
@@ -1420,28 +1496,52 @@ Embassy: ${application.embassy}
 Applicant name: ${sanitizeForPrompt(applicant.name, 200)} (${applicant.relationship})`;
 
     const evidence = await loadEvaluationEvidence({
-      applicationId: application.id, checklistItems, uploadedDocuments, previousEvaluation, openai,
+      applicationId: application.id,
+      checklistItems,
+      uploadedDocuments,
+      previousEvaluation,
+      openai,
     });
     const { perDocumentEvaluations, docSnapshots } = await evaluateChecklistDocuments({
-      checklistItems, evidence, previousEvaluation, applicationContext,
+      checklistItems,
+      evidence,
+      previousEvaluation,
+      applicationContext,
     });
-    const prompts = buildOrchestratorPrompts({ checklistItems, perDocumentEvaluations, applicationContext });
-    const { evaluationData, scoreConfidence, ensembleDivergence } = await evaluateApplicationReadiness({
-      checklistItems, perDocumentEvaluations, ...prompts, visaType: application.visaType,
+    const prompts = buildOrchestratorPrompts({
+      checklistItems,
+      perDocumentEvaluations,
+      applicationContext,
     });
+    const { evaluationData, scoreConfidence, ensembleDivergence } =
+      await evaluateApplicationReadiness({
+        checklistItems,
+        perDocumentEvaluations,
+        ...prompts,
+        visaType: application.visaType,
+      });
 
     // ---------------------------------------------------------------------------
     // Persist evaluation and update application/applicant scores
     // ---------------------------------------------------------------------------
 
     const evaluation = await publishAgencyReview({
-      db, applicationId: application.id, userId: session.userId,
+      db,
+      applicationId: application.id,
+      userId: session.userId,
       evaluation: {
-        applicationId: application.id, applicantId: input.applicantId,
-        overallScore: evaluationData.overallScore, riskLevel: evaluationData.riskLevel,
-        summary: evaluationData.summary, redFlags: evaluationData.redFlags ?? [],
-        strengths: evaluationData.strengths ?? [], recommendations: evaluationData.recommendations ?? [],
-        itemFeedback: evaluationData.itemFeedback ?? {}, docSnapshots, scoreConfidence, ensembleDivergence,
+        applicationId: application.id,
+        applicantId: input.applicantId,
+        overallScore: evaluationData.overallScore,
+        riskLevel: evaluationData.riskLevel,
+        summary: evaluationData.summary,
+        redFlags: evaluationData.redFlags ?? [],
+        strengths: evaluationData.strengths ?? [],
+        recommendations: evaluationData.recommendations ?? [],
+        itemFeedback: evaluationData.itemFeedback ?? {},
+        docSnapshots,
+        scoreConfidence,
+        ensembleDivergence,
       },
     });
 
@@ -1455,7 +1555,9 @@ Applicant name: ${sanitizeForPrompt(applicant.name, 200)} (${applicant.relations
         riskLevel: evaluationData.riskLevel,
         overallScore: evaluationData.overallScore,
       },
-    }).catch((error) => logger.error("Failed to record review event", { applicationId: application.id, error }));
+    }).catch((error) =>
+      logger.error("Failed to record review event", { applicationId: application.id, error }),
+    );
 
     revalidatePath(`/dashboard/${application.id}`);
     revalidatePath("/dashboard");

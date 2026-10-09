@@ -23,7 +23,13 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { AGENCY_STAFF_ROLE } from "@/db/schema";
 
 export function AddStaffDialog({ disabled = false }: { disabled?: boolean }) {
@@ -41,7 +47,8 @@ export function AddStaffDialog({ disabled = false }: { disabled?: boolean }) {
         <DialogHeader className="pr-8">
           <DialogTitle>Add staff</DialogTitle>
           <DialogDescription>
-            Add a reviewer or admin to the agency team. They can sign in immediately with this email.
+            Add a reviewer or admin to the agency team. They can sign in immediately with this
+            email.
           </DialogDescription>
         </DialogHeader>
         <AddStaffForm onSuccess={() => setOpen(false)} />
@@ -74,7 +81,11 @@ function AddStaffForm({
       return;
     }
 
-    toast.success(result?.emailSent === false ? "Staff member added. Email notification failed." : "Staff member added.");
+    toast.success(
+      result?.emailSent === false
+        ? "Staff member added. Email notification failed."
+        : "Staff member added.",
+    );
     setEmail("");
     setRole(AGENCY_STAFF_ROLE.MEMBER);
     onSuccess?.();
@@ -84,7 +95,9 @@ function AddStaffForm({
   return (
     <form onSubmit={handleSubmit} className="grid gap-4">
       <div className="grid gap-2">
-        <Label className="flex h-5 items-end text-xs font-bold text-muted-foreground">Work email</Label>
+        <Label className="flex h-5 items-end text-xs font-bold text-muted-foreground">
+          Work email
+        </Label>
         <Input
           className="h-10"
           value={email}
@@ -108,7 +121,11 @@ function AddStaffForm({
         </Select>
       </div>
       <Button type="submit" className="h-10 justify-center" disabled={disabled || isPending}>
-        {isPending ? <Loader2Icon className="h-4 w-4 animate-spin" /> : <SendIcon className="h-4 w-4" />}
+        {isPending ? (
+          <Loader2Icon className="h-4 w-4 animate-spin" />
+        ) : (
+          <SendIcon className="h-4 w-4" />
+        )}
         Add staff
       </Button>
     </form>
@@ -133,11 +150,11 @@ export function StaffRoleSelect({
   }, [role]);
 
   async function handleChange(nextRole: string) {
-	    setValue(nextRole);
-	    const [, error] = await execute({
-	      staffMemberId,
-	      role: nextRole as (typeof AGENCY_STAFF_ROLE)[keyof typeof AGENCY_STAFF_ROLE],
-	    });
+    setValue(nextRole);
+    const [, error] = await execute({
+      staffMemberId,
+      role: nextRole as (typeof AGENCY_STAFF_ROLE)[keyof typeof AGENCY_STAFF_ROLE],
+    });
 
     if (error) {
       toast.error(error.message ?? "Could not update role.");
@@ -182,8 +199,18 @@ export function DisableStaffButton({
   }
 
   return (
-    <Button type="button" size="sm" variant="outline" onClick={handleDisable} disabled={disabled || isPending}>
-      {isPending ? <Loader2Icon className="h-4 w-4 animate-spin" /> : <UserMinusIcon className="h-4 w-4" />}
+    <Button
+      type="button"
+      size="sm"
+      variant="outline"
+      onClick={handleDisable}
+      disabled={disabled || isPending}
+    >
+      {isPending ? (
+        <Loader2Icon className="h-4 w-4 animate-spin" />
+      ) : (
+        <UserMinusIcon className="h-4 w-4" />
+      )}
       Disable
     </Button>
   );

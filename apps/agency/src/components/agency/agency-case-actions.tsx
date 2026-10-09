@@ -25,7 +25,13 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import {
   AGENCY_CASE_STATUS_OPTIONS,
@@ -62,10 +68,16 @@ export function AgencyCaseToolbar({
   const router = useRouter();
   const [statusValue, setStatusValue] = useState(normalizeAgencyCaseStatus(status));
   const [reviewerValue, setReviewerValue] = useState(assignedReviewerId ?? "unassigned");
-  const { execute: updateStatus, isPending: updatingStatus } = useServerAction(updateAgencyCaseStatusAction);
+  const { execute: updateStatus, isPending: updatingStatus } = useServerAction(
+    updateAgencyCaseStatusAction,
+  );
   const { execute: assignCase, isPending: assigning } = useServerAction(assignAgencyCaseAction);
-  const { execute: syncIssues, isPending: syncing } = useServerAction(syncReviewIssuesFromEvaluationAction);
-  const { execute: generateReport, isPending: reporting } = useServerAction(generateClientReportAction);
+  const { execute: syncIssues, isPending: syncing } = useServerAction(
+    syncReviewIssuesFromEvaluationAction,
+  );
+  const { execute: generateReport, isPending: reporting } = useServerAction(
+    generateClientReportAction,
+  );
   const { execute: finalize, isPending: finalizing } = useServerAction(finalizeReviewAction);
 
   useEffect(() => {
@@ -113,7 +125,9 @@ export function AgencyCaseToolbar({
       toast.error(error.message ?? "Run document review before syncing issues.");
       return;
     }
-    toast.success(`${result?.createdCount ?? 0} issue${result?.createdCount === 1 ? "" : "s"} synced.`);
+    toast.success(
+      `${result?.createdCount ?? 0} issue${result?.createdCount === 1 ? "" : "s"} synced.`,
+    );
     router.refresh();
   }
 
@@ -164,16 +178,33 @@ export function AgencyCaseToolbar({
           ))}
         </SelectContent>
       </Select>
-      <Button type="button" variant="outline" onClick={handleSyncIssues} disabled={!hasEvaluation || syncing}>
-        {syncing ? <Loader2Icon className="h-4 w-4 animate-spin" /> : <BrainCircuitIcon className="h-4 w-4" />}
+      <Button
+        type="button"
+        variant="outline"
+        onClick={handleSyncIssues}
+        disabled={!hasEvaluation || syncing}
+      >
+        {syncing ? (
+          <Loader2Icon className="h-4 w-4 animate-spin" />
+        ) : (
+          <BrainCircuitIcon className="h-4 w-4" />
+        )}
         Sync review flags
       </Button>
       <Button type="button" variant="outline" onClick={handleGenerateReport} disabled={reporting}>
-        {reporting ? <Loader2Icon className="h-4 w-4 animate-spin" /> : <FileTextIcon className="h-4 w-4" />}
+        {reporting ? (
+          <Loader2Icon className="h-4 w-4 animate-spin" />
+        ) : (
+          <FileTextIcon className="h-4 w-4" />
+        )}
         Client report
       </Button>
       <Button type="button" onClick={handleFinalize} disabled={finalizing}>
-        {finalizing ? <Loader2Icon className="h-4 w-4 animate-spin" /> : <CheckCircle2Icon className="h-4 w-4" />}
+        {finalizing ? (
+          <Loader2Icon className="h-4 w-4 animate-spin" />
+        ) : (
+          <CheckCircle2Icon className="h-4 w-4" />
+        )}
         Finalize review
       </Button>
     </div>
@@ -226,13 +257,7 @@ export function AgencyCaseStatusSelect({
   );
 }
 
-export function ReviewIssueStatusSelect({
-  issueId,
-  status,
-}: {
-  issueId: string;
-  status: string;
-}) {
+export function ReviewIssueStatusSelect({ issueId, status }: { issueId: string; status: string }) {
   const router = useRouter();
   const [value, setValue] = useState(normalizeReviewIssueStatus(status));
   const { execute, isPending } = useServerAction(updateReviewIssueStatusAction);
@@ -310,15 +335,29 @@ export function AddReviewIssueForm({ applicationId }: { applicationId: string })
     <form onSubmit={handleSubmit} className="space-y-3">
       <div className="grid gap-2">
         <Label className="text-xs font-bold text-muted-foreground">Reviewer issue</Label>
-        <Input value={title} onChange={(event) => setTitle(event.target.value)} placeholder="Missing bank statement" required />
+        <Input
+          value={title}
+          onChange={(event) => setTitle(event.target.value)}
+          placeholder="Missing bank statement"
+          required
+        />
       </div>
       <div className="grid gap-2">
         <Label className="text-xs font-bold text-muted-foreground">Description</Label>
-        <Textarea value={description} onChange={(event) => setDescription(event.target.value)} placeholder="What needs reviewer or client attention?" required />
+        <Textarea
+          value={description}
+          onChange={(event) => setDescription(event.target.value)}
+          placeholder="What needs reviewer or client attention?"
+          required
+        />
       </div>
       <div className="grid gap-2">
         <Label className="text-xs font-bold text-muted-foreground">Client action</Label>
-        <Textarea value={recommendation} onChange={(event) => setRecommendation(event.target.value)} placeholder="What should the client send or fix?" />
+        <Textarea
+          value={recommendation}
+          onChange={(event) => setRecommendation(event.target.value)}
+          placeholder="What should the client send or fix?"
+        />
       </div>
       <div className="grid gap-2">
         <Label className="text-xs font-bold text-muted-foreground">Severity</Label>
@@ -336,7 +375,11 @@ export function AddReviewIssueForm({ applicationId }: { applicationId: string })
         </Select>
       </div>
       <Button type="submit" className="w-full" disabled={isPending}>
-        {isPending ? <Loader2Icon className="h-4 w-4 animate-spin" /> : <PlusIcon className="h-4 w-4" />}
+        {isPending ? (
+          <Loader2Icon className="h-4 w-4 animate-spin" />
+        ) : (
+          <PlusIcon className="h-4 w-4" />
+        )}
         Add issue
       </Button>
     </form>

@@ -11,7 +11,9 @@ import { generateCsrfTokenValue } from "@/infra/csrf-token";
 const SEO_METADATA_PATHS = new Set(["/robots.txt", "/sitemap.xml", "/manifest.webmanifest"]);
 function getLegacySiteRedirectUrl(request: NextRequest): URL | null {
   if (request.nextUrl.hostname === CANONICAL_SITE_DOMAIN) return null;
-  if (!LEGACY_SITE_DOMAINS.includes(request.nextUrl.hostname as (typeof LEGACY_SITE_DOMAINS)[number])) {
+  if (
+    !LEGACY_SITE_DOMAINS.includes(request.nextUrl.hostname as (typeof LEGACY_SITE_DOMAINS)[number])
+  ) {
     return null;
   }
 
@@ -66,7 +68,9 @@ export async function middleware(request: NextRequest) {
   const markdownPath = getMarkdownNegotiationPath(request.nextUrl.pathname);
   const shouldServeMarkdown = markdownPath && requestWantsMarkdown(request);
   const response = shouldServeMarkdown
-    ? NextResponse.rewrite(new URL(`${MARKDOWN_AGENT_ROUTE}?path=${encodeURIComponent(markdownPath)}`, request.url))
+    ? NextResponse.rewrite(
+        new URL(`${MARKDOWN_AGENT_ROUTE}?path=${encodeURIComponent(markdownPath)}`, request.url),
+      )
     : NextResponse.next();
 
   // Check if CSRF token exists

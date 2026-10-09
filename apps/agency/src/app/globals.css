@@ -334,7 +334,7 @@
   --sidebar-accent-foreground: #ffffff;
   --sidebar-border: #43504d;
   --sidebar-ring: #9caaa6;
-  --sidebar-action: oklch(0.9390 0.0275 265.45);
+  --sidebar-action: oklch(0.939 0.0275 265.45);
   --sidebar-action-hover: oklch(0.9202 0.0382 264.37);
   --sidebar-action-active: oklch(0.9059 0.0452 266.16);
   --sidebar-action-border: oklch(0.8842 0.0501 265.38);
@@ -436,7 +436,7 @@
   --sidebar-accent-foreground: #ffffff;
   --sidebar-border: #3b4946;
   --sidebar-ring: #dfe6e1;
-  --sidebar-action: oklch(0.9390 0.0275 265.45);
+  --sidebar-action: oklch(0.939 0.0275 265.45);
   --sidebar-action-hover: oklch(0.9202 0.0382 264.37);
   --sidebar-action-active: oklch(0.9059 0.0452 266.16);
   --sidebar-action-border: oklch(0.8842 0.0501 265.38);
@@ -739,12 +739,17 @@ body {
 }
 
 .ui-overlay-readable {
-  background:
-    linear-gradient(180deg, transparent 0%, color-mix(in oklab, var(--background) 78%, black 22%) 100%);
+  background: linear-gradient(
+    180deg,
+    transparent 0%,
+    color-mix(in oklab, var(--background) 78%, black 22%) 100%
+  );
 }
 
 .ui-status-chip {
-  transition: transform 0.24s ease, opacity 0.24s ease;
+  transition:
+    transform 0.24s ease,
+    opacity 0.24s ease;
 }
 
 .ui-status-chip[data-state="entered"] {

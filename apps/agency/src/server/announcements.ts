@@ -196,13 +196,19 @@ export async function getAnnouncementsFeed(params?: {
   );
   const pollOptionsByPostId = new Map<string, typeof pollOptions>();
   for (const option of pollOptions) {
-    pollOptionsByPostId.set(option.postId, [...(pollOptionsByPostId.get(option.postId) ?? []), option]);
+    pollOptionsByPostId.set(option.postId, [
+      ...(pollOptionsByPostId.get(option.postId) ?? []),
+      option,
+    ]);
   }
 
   const pollVotesByOptionId = new Map<string, typeof pollVotes>();
   const viewerVotedOptionIds = new Set<string>();
   for (const vote of pollVotes) {
-    pollVotesByOptionId.set(vote.optionId, [...(pollVotesByOptionId.get(vote.optionId) ?? []), vote]);
+    pollVotesByOptionId.set(vote.optionId, [
+      ...(pollVotesByOptionId.get(vote.optionId) ?? []),
+      vote,
+    ]);
     if (vote.userId === session.user.id) {
       viewerVotedOptionIds.add(vote.optionId);
     }
@@ -210,7 +216,10 @@ export async function getAnnouncementsFeed(params?: {
 
   const commentsByPostId = new Map<string, typeof comments>();
   for (const comment of comments) {
-    commentsByPostId.set(comment.postId, [...(commentsByPostId.get(comment.postId) ?? []), comment]);
+    commentsByPostId.set(comment.postId, [
+      ...(commentsByPostId.get(comment.postId) ?? []),
+      comment,
+    ]);
   }
 
   return {
@@ -221,20 +230,18 @@ export async function getAnnouncementsFeed(params?: {
       upvotesCount: Number(post.upvotesCount),
       commentsCount: Number(post.commentsCount),
       hasUpvoted: post.hasUpvoted > 0,
-      pollOptions: (pollOptionsByPostId.get(post.id) ?? [])
-        .map((opt) => {
-          const optionVotes = pollVotesByOptionId.get(opt.id) ?? [];
-          return {
+      pollOptions: (pollOptionsByPostId.get(post.id) ?? []).map((opt) => {
+        const optionVotes = pollVotesByOptionId.get(opt.id) ?? [];
+        return {
           ...opt,
           votes: optionVotes.length,
           hasVoted: viewerVotedOptionIds.has(opt.id),
-          voters: optionVotes
-            .map((vote) => ({
-              userId: vote.userId,
-              name: voterDisplayNameByUserId.get(vote.userId) ?? "User",
-            })),
+          voters: optionVotes.map((vote) => ({
+            userId: vote.userId,
+            name: voterDisplayNameByUserId.get(vote.userId) ?? "User",
+          })),
         };
-        }),
+      }),
       comments: commentsByPostId.get(post.id) ?? [],
     })),
   };

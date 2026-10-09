@@ -1,6 +1,15 @@
 import { type InferSelectModel } from "drizzle-orm";
 import { createId } from "@paralleldrive/cuid2";
-import { index, integer, pgTable, text, uniqueIndex, timestamp, boolean, jsonb } from "drizzle-orm/pg-core";
+import {
+  index,
+  integer,
+  pgTable,
+  text,
+  uniqueIndex,
+  timestamp,
+  boolean,
+  jsonb,
+} from "drizzle-orm/pg-core";
 import { commonColumns } from "./_common";
 import { userTable } from "./user";
 import { visaApplicationTable } from "./visa-application";
@@ -28,7 +37,10 @@ export const REVIEW_ISSUE_SEVERITY = {
   LOW: "low",
 } as const;
 
-export const reviewIssueSeverityTuple = Object.values(REVIEW_ISSUE_SEVERITY) as [string, ...string[]];
+export const reviewIssueSeverityTuple = Object.values(REVIEW_ISSUE_SEVERITY) as [
+  string,
+  ...string[],
+];
 
 export const REVIEW_ISSUE_STATUS = {
   OPEN: "open",
@@ -75,31 +87,37 @@ export interface ClientReportActionItem {
 
 export const agencyTeamMemberTable = pgTable(
   "agency_team_member",
-	{
-	  ...commonColumns,
-	  id: text().primaryKey().$defaultFn(() => `atm_${createId()}`).notNull(),
-	  userId: text().references(() => userTable.id, { onDelete: "set null" }),
-	  email: text(),
-	  role: text({ enum: agencyStaffRoleTuple }).default(AGENCY_STAFF_ROLE.MEMBER).notNull(),
-	  status: text({ enum: agencyStaffStatusTuple }).default(AGENCY_STAFF_STATUS.ACTIVE).notNull(),
-	  invitedBy: text().references(() => userTable.id, { onDelete: "set null" }),
+  {
+    ...commonColumns,
+    id: text()
+      .primaryKey()
+      .$defaultFn(() => `atm_${createId()}`)
+      .notNull(),
+    userId: text().references(() => userTable.id, { onDelete: "set null" }),
+    email: text(),
+    role: text({ enum: agencyStaffRoleTuple }).default(AGENCY_STAFF_ROLE.MEMBER).notNull(),
+    status: text({ enum: agencyStaffStatusTuple }).default(AGENCY_STAFF_STATUS.ACTIVE).notNull(),
+    invitedBy: text().references(() => userTable.id, { onDelete: "set null" }),
     invitedAt: timestamp({ withTimezone: true, mode: "date", precision: 3 }),
     joinedAt: timestamp({ withTimezone: true, mode: "date", precision: 3 }),
-	},
-	(table) => [
-	  uniqueIndex("agency_team_member_user_unique_idx").on(table.userId),
-	  uniqueIndex("agency_team_member_email_unique_idx").on(table.email),
-	  index("agency_team_member_email_idx").on(table.email),
-	  index("agency_team_member_role_idx").on(table.role),
-	  index("agency_team_member_status_idx").on(table.status),
-	],
-  );
+  },
+  (table) => [
+    uniqueIndex("agency_team_member_user_unique_idx").on(table.userId),
+    uniqueIndex("agency_team_member_email_unique_idx").on(table.email),
+    index("agency_team_member_email_idx").on(table.email),
+    index("agency_team_member_role_idx").on(table.role),
+    index("agency_team_member_status_idx").on(table.status),
+  ],
+);
 
 export const agencyClientTable = pgTable(
   "agency_client",
   {
     ...commonColumns,
-    id: text().primaryKey().$defaultFn(() => `acl_${createId()}`).notNull(),
+    id: text()
+      .primaryKey()
+      .$defaultFn(() => `acl_${createId()}`)
+      .notNull(),
     name: text().notNull(),
     email: text(),
     phone: text(),
@@ -117,8 +135,13 @@ export const reviewIssueTable = pgTable(
   "review_issue",
   {
     ...commonColumns,
-    id: text().primaryKey().$defaultFn(() => `rissue_${createId()}`).notNull(),
-    applicationId: text().notNull().references(() => visaApplicationTable.id, { onDelete: "cascade" }),
+    id: text()
+      .primaryKey()
+      .$defaultFn(() => `rissue_${createId()}`)
+      .notNull(),
+    applicationId: text()
+      .notNull()
+      .references(() => visaApplicationTable.id, { onDelete: "cascade" }),
     applicantId: text().references(() => applicantTable.id, { onDelete: "cascade" }),
     checklistItemId: text().references(() => checklistItemTable.id, { onDelete: "set null" }),
     documentId: text().references(() => uploadedDocumentTable.id, { onDelete: "set null" }),
@@ -126,7 +149,9 @@ export const reviewIssueTable = pgTable(
     description: text().notNull(),
     recommendation: text(),
     category: text().notNull().default("document"),
-    severity: text({ enum: reviewIssueSeverityTuple }).default(REVIEW_ISSUE_SEVERITY.MEDIUM).notNull(),
+    severity: text({ enum: reviewIssueSeverityTuple })
+      .default(REVIEW_ISSUE_SEVERITY.MEDIUM)
+      .notNull(),
     status: text({ enum: reviewIssueStatusTuple }).default(REVIEW_ISSUE_STATUS.OPEN).notNull(),
     source: text({ enum: reviewIssueSourceTuple }).default(REVIEW_ISSUE_SOURCE.REVIEWER).notNull(),
     confidence: integer(),
@@ -150,9 +175,16 @@ export const clientReportTable = pgTable(
   "client_report",
   {
     ...commonColumns,
-    id: text().primaryKey().$defaultFn(() => `crep_${createId()}`).notNull(),
-    applicationId: text().notNull().references(() => visaApplicationTable.id, { onDelete: "cascade" }),
-    status: text({ enum: clientReportDeliveryStatusTuple }).default(CLIENT_REPORT_DELIVERY_STATUS.DRAFT).notNull(),
+    id: text()
+      .primaryKey()
+      .$defaultFn(() => `crep_${createId()}`)
+      .notNull(),
+    applicationId: text()
+      .notNull()
+      .references(() => visaApplicationTable.id, { onDelete: "cascade" }),
+    status: text({ enum: clientReportDeliveryStatusTuple })
+      .default(CLIENT_REPORT_DELIVERY_STATUS.DRAFT)
+      .notNull(),
     summary: text().notNull(),
     actionItems: jsonb().notNull().$type<ClientReportActionItem[]>(),
     createdById: text().references(() => userTable.id, { onDelete: "set null" }),

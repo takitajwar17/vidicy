@@ -1,52 +1,56 @@
-"use client"
+"use client";
 
-import { useState, useRef, useEffect } from "react"
-import { ChevronLeftIcon, SendIcon, PaperclipIcon, Loader2Icon, XIcon } from "lucide-react"
-import { Button } from "@/components/ui/button"
-import { Textarea } from "@/components/ui/textarea"
-import { Badge } from "@/components/ui/badge"
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import { useServerAction } from "zsa-react"
-import { useRouter } from "next/navigation"
-import Link from "next/link"
-import type { Route } from "next"
-import { toast } from "sonner"
-import { cn } from "@/lib/utils"
-import { addSupportMessageAction, markTicketAsViewedAction } from "@/actions/support.action"
-import type { SupportTicket, SupportMessage } from "@/db/schema"
+import { useState, useRef, useEffect } from "react";
+import { ChevronLeftIcon, SendIcon, PaperclipIcon, Loader2Icon, XIcon } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Textarea } from "@/components/ui/textarea";
+import { Badge } from "@/components/ui/badge";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { useServerAction } from "zsa-react";
+import { useRouter } from "next/navigation";
+import Link from "next/link";
+import type { Route } from "next";
+import { toast } from "sonner";
+import { cn } from "@/lib/utils";
+import { addSupportMessageAction, markTicketAsViewedAction } from "@/actions/support.action";
+import type { SupportTicket, SupportMessage } from "@/db/schema";
 
-const MAX_SCREENSHOTS = 3
-import { MAX_SUPPORT_FILE_SIZE } from "@/constants"
+const MAX_SCREENSHOTS = 3;
+import { MAX_SUPPORT_FILE_SIZE } from "@/constants";
 
 interface UploadedScreenshot {
-  fileKey: string
-  previewUrl: string
-  name: string
+  fileKey: string;
+  previewUrl: string;
+  name: string;
 }
 
 interface UserTicketDetailProps {
-  ticket: SupportTicket & { messages: (SupportMessage & { user?: { firstName: string | null; lastName: string | null } | null })[] }
-  onBack?: () => void
-  backHref?: Route
+  ticket: SupportTicket & {
+    messages: (SupportMessage & {
+      user?: { firstName: string | null; lastName: string | null } | null;
+    })[];
+  };
+  onBack?: () => void;
+  backHref?: Route;
 }
 
 function getStatusBadgeClass(status: string) {
   switch (status) {
     case "open":
-      return "bg-status-info/10 text-status-info border-status-info/20"
+      return "bg-status-info/10 text-status-info border-status-info/20";
     case "in_progress":
-      return "bg-status-warning/10 text-status-warning border-status-warning/20"
+      return "bg-status-warning/10 text-status-warning border-status-warning/20";
     case "resolved":
-      return "bg-status-success/10 text-status-success border-status-success/20"
+      return "bg-status-success/10 text-status-success border-status-success/20";
     case "closed":
-      return "bg-status-neutral/10 text-status-neutral border-status-neutral/20"
+      return "bg-status-neutral/10 text-status-neutral border-status-neutral/20";
     default:
-      return "bg-status-neutral/10 text-status-neutral border-status-neutral/20"
+      return "bg-status-neutral/10 text-status-neutral border-status-neutral/20";
   }
 }
 
 function ScreenshotThumbnails({ urls }: { urls: string[] | null | undefined }) {
-  if (!urls || urls.length === 0) return null
+  if (!urls || urls.length === 0) return null;
 
   return (
     <div className="mt-3 grid grid-cols-3 gap-2 border-t pt-3 border-current/10">
@@ -67,83 +71,86 @@ function ScreenshotThumbnails({ urls }: { urls: string[] | null | undefined }) {
         </a>
       ))}
     </div>
-  )
+  );
 }
 
 export function UserTicketDetail({ ticket, onBack, backHref }: UserTicketDetailProps) {
-  const [replyContent, setReplyContent] = useState("")
-  const [screenshots, setScreenshots] = useState<UploadedScreenshot[]>([])
-  const [uploading, setUploading] = useState(false)
-  const fileInputRef = useRef<HTMLInputElement>(null)
-  const scrollRef = useRef<HTMLDivElement>(null)
-  const router = useRouter()
+  const [replyContent, setReplyContent] = useState("");
+  const [screenshots, setScreenshots] = useState<UploadedScreenshot[]>([]);
+  const [uploading, setUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const router = useRouter();
 
-  const { execute: executeReply, isPending: isReplying } = useServerAction(addSupportMessageAction, {
-    onSuccess: () => {
-      setReplyContent("")
-      // Revoke object URLs to free memory
-      screenshots.forEach((s) => URL.revokeObjectURL(s.previewUrl))
-      setScreenshots([])
-      router.refresh()
+  const { execute: executeReply, isPending: isReplying } = useServerAction(
+    addSupportMessageAction,
+    {
+      onSuccess: () => {
+        setReplyContent("");
+        // Revoke object URLs to free memory
+        screenshots.forEach((s) => URL.revokeObjectURL(s.previewUrl));
+        setScreenshots([]);
+        router.refresh();
+      },
+      onError: (err) => {
+        toast.error(err.err.message || "Failed to send reply");
+      },
     },
-    onError: (err) => {
-      toast.error(err.err.message || "Failed to send reply")
-    },
-  })
+  );
 
-  const { execute: executeMarkViewed } = useServerAction(markTicketAsViewedAction)
+  const { execute: executeMarkViewed } = useServerAction(markTicketAsViewedAction);
 
   // Auto-scroll to bottom on new messages
   useEffect(() => {
     if (scrollRef.current) {
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight
+      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
-  }, [ticket.messages])
+  }, [ticket.messages]);
 
   // Fire-and-forget: mark ticket as viewed on mount
   useEffect(() => {
-    executeMarkViewed({ ticketId: ticket.id })
+    executeMarkViewed({ ticketId: ticket.id });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, []);
 
   // Reset state when ticket changes
   useEffect(() => {
-    setReplyContent("")
-    screenshots.forEach((s) => URL.revokeObjectURL(s.previewUrl))
-    setScreenshots([])
+    setReplyContent("");
+    screenshots.forEach((s) => URL.revokeObjectURL(s.previewUrl));
+    setScreenshots([]);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ticket.id])
+  }, [ticket.id]);
 
   async function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
-    const files = Array.from(e.target.files ?? [])
-    if (!files.length) return
+    const files = Array.from(e.target.files ?? []);
+    if (!files.length) return;
 
     // Reset input so same file can be re-selected
-    e.target.value = ""
+    e.target.value = "";
 
-    const available = MAX_SCREENSHOTS - screenshots.length
-    const toUpload = files.slice(0, available)
+    const available = MAX_SCREENSHOTS - screenshots.length;
+    const toUpload = files.slice(0, available);
 
     for (const file of toUpload) {
       if (file.size > MAX_SUPPORT_FILE_SIZE) {
-        toast.error(`"${file.name}" is too large (max 5 MB)`)
-        continue
+        toast.error(`"${file.name}" is too large (max 5 MB)`);
+        continue;
       }
       if (!file.type.startsWith("image/")) {
-        toast.error(`"${file.name}" is not an image`)
-        continue
+        toast.error(`"${file.name}" is not an image`);
+        continue;
       }
 
-      setUploading(true)
+      setUploading(true);
       try {
-        const fd = new FormData()
-        fd.append("file", file)
-        const res = await fetch("/api/upload-support-screenshot", { method: "POST", body: fd })
-        const json = (await res.json()) as { success?: boolean; fileKey?: string; error?: string }
+        const fd = new FormData();
+        fd.append("file", file);
+        const res = await fetch("/api/upload-support-screenshot", { method: "POST", body: fd });
+        const json = (await res.json()) as { success?: boolean; fileKey?: string; error?: string };
 
         if (!res.ok || !json.fileKey) {
-          toast.error(json.error || `Failed to upload "${file.name}"`)
-          continue
+          toast.error(json.error || `Failed to upload "${file.name}"`);
+          continue;
         }
 
         setScreenshots((prev) => [
@@ -153,20 +160,20 @@ export function UserTicketDetail({ ticket, onBack, backHref }: UserTicketDetailP
             previewUrl: URL.createObjectURL(file),
             name: file.name,
           },
-        ])
+        ]);
       } catch {
-        toast.error(`Failed to upload "${file.name}"`)
+        toast.error(`Failed to upload "${file.name}"`);
       } finally {
-        setUploading(false)
+        setUploading(false);
       }
     }
   }
 
   function removeScreenshot(index: number) {
     setScreenshots((prev) => {
-      URL.revokeObjectURL(prev[index].previewUrl)
-      return prev.filter((_, i) => i !== index)
-    })
+      URL.revokeObjectURL(prev[index].previewUrl);
+      return prev.filter((_, i) => i !== index);
+    });
   }
 
   function handleSend() {
@@ -174,19 +181,19 @@ export function UserTicketDetail({ ticket, onBack, backHref }: UserTicketDetailP
       ticketId: ticket.id,
       content: replyContent,
       screenshotUrls: screenshots.map((s) => s.fileKey),
-    })
+    });
   }
 
   function handleKeyDown(e: React.KeyboardEvent) {
     if (e.key === "Enter" && !e.shiftKey) {
-      e.preventDefault()
-      if (isReplying || uploading || (!replyContent.trim() && screenshots.length === 0)) return
-      handleSend()
+      e.preventDefault();
+      if (isReplying || uploading || (!replyContent.trim() && screenshots.length === 0)) return;
+      handleSend();
     }
   }
 
   // Messages are already fetched in ascending order (asc createdAt) from the server
-  const sortedMessages = ticket.messages
+  const sortedMessages = ticket.messages;
 
   return (
     <div className="flex flex-col h-full w-full bg-background overflow-hidden">
@@ -199,7 +206,13 @@ export function UserTicketDetail({ ticket, onBack, backHref }: UserTicketDetailP
             </Link>
           </Button>
         ) : (
-          <Button variant="ghost" size="icon" className="h-8 w-8 -ml-1" onClick={onBack} aria-label="Back to tickets">
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8 -ml-1"
+            onClick={onBack}
+            aria-label="Back to tickets"
+          >
             <ChevronLeftIcon className="h-4 w-4" />
           </Button>
         )}
@@ -216,22 +229,22 @@ export function UserTicketDetail({ ticket, onBack, backHref }: UserTicketDetailP
             variant="outline"
             className={cn(
               "capitalize text-xs px-2 py-0.5 font-semibold",
-              getStatusBadgeClass(ticket.status)
+              getStatusBadgeClass(ticket.status),
             )}
           >
             {ticket.status.replace("_", " ")}
           </Badge>
-          <Badge variant="outline" className="hidden sm:inline-flex capitalize text-xs px-2 py-0.5 font-semibold">
+          <Badge
+            variant="outline"
+            className="hidden sm:inline-flex capitalize text-xs px-2 py-0.5 font-semibold"
+          >
             {ticket.category.replace("_", " ")}
           </Badge>
         </div>
       </div>
 
       {/* Chat Area */}
-      <div
-        className="flex-1 overflow-y-auto p-4 space-y-4 bg-background/50"
-        ref={scrollRef}
-      >
+      <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-background/50" ref={scrollRef}>
         {/* Thread start divider */}
         <div className="flex justify-center">
           <div className="bg-muted/50 text-xs text-muted-foreground px-4 py-1 rounded-md font-medium tracking-wider border border-border/20">
@@ -241,9 +254,7 @@ export function UserTicketDetail({ ticket, onBack, backHref }: UserTicketDetailP
 
         {/* Original request bubble (right-aligned, user) */}
         <div className="flex flex-col gap-1 items-end">
-          <span className="text-xs font-medium text-muted-foreground">
-            You
-          </span>
+          <span className="text-xs font-medium text-muted-foreground">You</span>
           <div className="rounded-xl px-4 py-2.5 text-sm bg-primary text-primary-foreground max-w-[85%] sm:max-w-[75%]">
             <p className="leading-relaxed whitespace-pre-wrap">{ticket.description}</p>
             <ScreenshotThumbnails urls={ticket.screenshotUrls} />
@@ -266,16 +277,14 @@ export function UserTicketDetail({ ticket, onBack, backHref }: UserTicketDetailP
                   {msg.content} · {new Date(msg.createdAt).toLocaleDateString()}
                 </div>
               </div>
-            )
+            );
           }
 
           // User messages (right-aligned, no avatar)
           if (!msg.isAdminReply) {
             return (
               <div key={msg.id} className="flex flex-col gap-1 items-end">
-                <span className="text-xs font-medium text-muted-foreground">
-                  You
-                </span>
+                <span className="text-xs font-medium text-muted-foreground">You</span>
                 <div className="rounded-xl px-4 py-2.5 text-sm bg-primary text-primary-foreground max-w-[85%] sm:max-w-[75%]">
                   <p className="leading-relaxed whitespace-pre-wrap">{msg.content}</p>
                   <ScreenshotThumbnails urls={msg.screenshotUrls} />
@@ -287,17 +296,18 @@ export function UserTicketDetail({ ticket, onBack, backHref }: UserTicketDetailP
                   })}
                 </span>
               </div>
-            )
+            );
           }
 
           // Admin messages stay left-aligned to separate support replies from user replies.
-          const adminUser = msg.user
+          const adminUser = msg.user;
           const adminInitials = adminUser
-            ? `${adminUser.firstName?.[0] ?? ""}${adminUser.lastName?.[0] ?? ""}`.toUpperCase() || "ST"
-            : "ST"
+            ? `${adminUser.firstName?.[0] ?? ""}${adminUser.lastName?.[0] ?? ""}`.toUpperCase() ||
+              "ST"
+            : "ST";
           const adminName = adminUser
             ? [adminUser.firstName, adminUser.lastName].filter(Boolean).join(" ") || "Support Team"
-            : "Support Team"
+            : "Support Team";
 
           return (
             <div key={msg.id} className="flex flex-col gap-1 items-start">
@@ -306,7 +316,11 @@ export function UserTicketDetail({ ticket, onBack, backHref }: UserTicketDetailP
               </span>
               <div className="flex items-end gap-3">
                 <Avatar className="h-8 w-8 shrink-0 rounded-full">
-                  <AvatarImage src="/founder-avatar.jpeg" alt={adminName} className="object-cover" />
+                  <AvatarImage
+                    src="/founder-avatar.jpeg"
+                    alt={adminName}
+                    className="object-cover"
+                  />
                   <AvatarFallback className="rounded-full bg-primary/10 text-primary text-xs font-bold">
                     {adminInitials}
                   </AvatarFallback>
@@ -323,7 +337,7 @@ export function UserTicketDetail({ ticket, onBack, backHref }: UserTicketDetailP
                 })}
               </span>
             </div>
-          )
+          );
         })}
       </div>
 
@@ -415,5 +429,5 @@ export function UserTicketDetail({ ticket, onBack, backHref }: UserTicketDetailP
         )}
       </div>
     </div>
-  )
+  );
 }

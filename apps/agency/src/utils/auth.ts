@@ -1,8 +1,8 @@
 import "server-only";
 
 import { ROLES_ENUM, userTable } from "@/db/schema";
-import { encodeHexLowerCase } from "@oslojs/encoding"
-import ms from "ms"
+import { encodeHexLowerCase } from "@oslojs/encoding";
+import ms from "ms";
 import { getDB } from "@/db";
 import { eq } from "drizzle-orm";
 import { cookies } from "next/headers";
@@ -14,9 +14,9 @@ import {
   type CreateKVSessionParams,
   getKVSession,
   updateKVSession,
-  CURRENT_SESSION_VERSION
+  CURRENT_SESSION_VERSION,
 } from "@/infra/kv-session";
-import { cache } from "react"
+import { cache } from "react";
 import type { SessionValidationResult } from "@/types";
 import { SESSION_COOKIE_NAME, DISPOSABLE_EMAIL_CHECK_URL, MAILCHECK_API_URL } from "@/constants";
 import { ZSAError } from "zsa";
@@ -26,7 +26,7 @@ import { getCachedUnreadCount, getCachedAdminUnreadCount } from "@/server/unread
 
 const getSessionLength = () => {
   return ms("30d");
-}
+};
 
 /**
  * This file is based on https://lucia-auth.com
@@ -51,7 +51,6 @@ export const getUserFromDB = cache(async function getUserFromDB(userId: string) 
   });
 });
 
-
 /**
  * Generates a cryptographically secure session token
  * Uses Web Crypto API for 256 bits of entropy (far exceeds OWASP recommendations)
@@ -62,15 +61,15 @@ export function generateSessionToken(): string {
 
   // Convert to base64url encoding (URL-safe, no padding)
   const base64 = btoa(String.fromCharCode(...randomBytes))
-    .replace(/\+/g, '-')
-    .replace(/\//g, '_')
-    .replace(/=/g, '');
+    .replace(/\+/g, "-")
+    .replace(/\//g, "_")
+    .replace(/=/g, "");
 
   return base64;
 }
 
 async function generateSessionId(token: string): Promise<string> {
-  const hashBuffer = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(token));
+  const hashBuffer = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(token));
   return encodeHexLowerCase(new Uint8Array(hashBuffer));
 }
 
@@ -79,7 +78,7 @@ function encodeSessionCookie(userId: string, token: string): string {
 }
 
 function decodeSessionCookie(cookie: string): { userId: string; token: string } | null {
-  const idx = cookie.indexOf(':');
+  const idx = cookie.indexOf(":");
   if (idx === -1) return null;
   return { userId: cookie.slice(0, idx), token: cookie.slice(idx + 1) };
 }
@@ -105,9 +104,8 @@ export async function createSession({
     throw new Error("User not found");
   }
 
-  const adminUnreadSupportTicketsCount = user.role === "admin"
-    ? await getCachedAdminUnreadCount()
-    : undefined;
+  const adminUnreadSupportTicketsCount =
+    user.role === "admin" ? await getCachedAdminUnreadCount() : undefined;
 
   return createKVSession({
     sessionId,
@@ -133,11 +131,14 @@ export async function createAndStoreSession(
   await setSessionTokenCookie({
     token: sessionToken,
     userId,
-    expiresAt: new Date(session.expiresAt)
+    expiresAt: new Date(session.expiresAt),
   });
 }
 
-async function validateSessionToken(token: string, userId: string): Promise<SessionValidationResult | null> {
+async function validateSessionToken(
+  token: string,
+  userId: string,
+): Promise<SessionValidationResult | null> {
   const sessionId = await generateSessionId(token);
 
   const session = await getKVSession(sessionId, userId);
@@ -159,11 +160,13 @@ async function validateSessionToken(token: string, userId: string): Promise<Sess
     }
 
     // Update the user initials
-    updatedSession.user.initials = getInitials(`${updatedSession.user.firstName} ${updatedSession.user.lastName}`);
+    updatedSession.user.initials = getInitials(
+      `${updatedSession.user.firstName} ${updatedSession.user.lastName}`,
+    );
 
     // Compute unread counts (same as normal path)
     updatedSession.unreadSupportTicketsCount = await getCachedUnreadCount(userId);
-    if (updatedSession.user.role === 'admin') {
+    if (updatedSession.user.role === "admin") {
       updatedSession.adminUnreadSupportTicketsCount = await getCachedAdminUnreadCount();
     }
 
@@ -193,7 +196,11 @@ interface SetSessionTokenCookieParams {
   expiresAt: Date;
 }
 
-export async function setSessionTokenCookie({ token, userId, expiresAt }: SetSessionTokenCookieParams): Promise<void> {
+export async function setSessionTokenCookie({
+  token,
+  userId,
+  expiresAt,
+}: SetSessionTokenCookieParams): Promise<void> {
   const cookieStore = await cookies();
   cookieStore.set(SESSION_COOKIE_NAME, encodeSessionCookie(userId, token), {
     httpOnly: true,
@@ -253,57 +260,61 @@ export const getSessionFromCookie = cache(async (): Promise<SessionValidationRes
   }
 
   return validateSessionToken(decoded.token, decoded.userId);
-})
-
-export const requireVerifiedEmail = cache(async ({
-  doNotThrowError = false,
-}: {
-  doNotThrowError?: boolean;
-} = {}) => {
-  const session = await getSessionFromCookie();
-
-  if (!session) {
-    if (doNotThrowError) {
-      return null;
-    }
-    throw new ZSAError("NOT_AUTHORIZED", "Not authenticated");
-  }
-
-  if (!session?.user?.emailVerified) {
-    if (doNotThrowError) {
-      return null;
-    }
-
-    throw new ZSAError("FORBIDDEN", "Please verify your email first");
-  }
-
-  return session;
 });
 
-export const requireAdmin = cache(async ({
-  doNotThrowError = false,
-}: {
-  doNotThrowError?: boolean;
-} = {}) => {
-  const session = await getSessionFromCookie();
+export const requireVerifiedEmail = cache(
+  async ({
+    doNotThrowError = false,
+  }: {
+    doNotThrowError?: boolean;
+  } = {}) => {
+    const session = await getSessionFromCookie();
 
-  if (!session) {
-    if (doNotThrowError) {
-      return null;
-    }
-    throw new ZSAError("NOT_AUTHORIZED", "Not authenticated");
-  }
-
-  if (session.user.role !== ROLES_ENUM.ADMIN) {
-    if (doNotThrowError) {
-      return null;
+    if (!session) {
+      if (doNotThrowError) {
+        return null;
+      }
+      throw new ZSAError("NOT_AUTHORIZED", "Not authenticated");
     }
 
-    throw new ZSAError("FORBIDDEN", "Not authorized");
-  }
+    if (!session?.user?.emailVerified) {
+      if (doNotThrowError) {
+        return null;
+      }
 
-  return session;
-});
+      throw new ZSAError("FORBIDDEN", "Please verify your email first");
+    }
+
+    return session;
+  },
+);
+
+export const requireAdmin = cache(
+  async ({
+    doNotThrowError = false,
+  }: {
+    doNotThrowError?: boolean;
+  } = {}) => {
+    const session = await getSessionFromCookie();
+
+    if (!session) {
+      if (doNotThrowError) {
+        return null;
+      }
+      throw new ZSAError("NOT_AUTHORIZED", "Not authenticated");
+    }
+
+    if (session.user.role !== ROLES_ENUM.ADMIN) {
+      if (doNotThrowError) {
+        return null;
+      }
+
+      throw new ZSAError("FORBIDDEN", "Not authorized");
+    }
+
+    return session;
+  },
+);
 
 interface DisposableEmailResponse {
   disposable: string;
@@ -332,14 +343,16 @@ type ValidatorResult = {
  */
 async function checkWithDebounce(email: string): Promise<ValidatorResult> {
   try {
-    const response = await fetch(`${DISPOSABLE_EMAIL_CHECK_URL}/?email=${encodeURIComponent(email)}`);
+    const response = await fetch(
+      `${DISPOSABLE_EMAIL_CHECK_URL}/?email=${encodeURIComponent(email)}`,
+    );
 
     if (!response.ok) {
       logger.error("Debounce.io API error:", { status: response.status });
       return { success: false, isDisposable: false };
     }
 
-    const data = await response.json() as DisposableEmailResponse;
+    const data = (await response.json()) as DisposableEmailResponse;
 
     return { success: true, isDisposable: data.disposable === "true" };
   } catch (error) {
@@ -360,7 +373,7 @@ async function checkWithMailcheck(email: string): Promise<ValidatorResult> {
       return { success: false, isDisposable: false };
     }
 
-    const data = await response.json() as MailcheckResponse;
+    const data = (await response.json()) as MailcheckResponse;
     return { success: true, isDisposable: data.disposable };
   } catch (error) {
     logger.error("Failed to check disposable email with mailcheck.ai:", { error });
@@ -368,22 +381,19 @@ async function checkWithMailcheck(email: string): Promise<ValidatorResult> {
   }
 }
 
-
 /**
  * Checks if an email is allowed for sign up by verifying it's not a disposable email
  * Uses multiple services in sequence for redundancy.
  *
  * @throws {ZSAError} If email is disposable or if all services fail
  */
-export async function canSignUp(
-  {
-    email,
-    skipDisposableEmailCheck = false
-  }:
-    {
-      email: string,
-      skipDisposableEmailCheck?: boolean
-    }): Promise<void> {
+export async function canSignUp({
+  email,
+  skipDisposableEmailCheck = false,
+}: {
+  email: string;
+  skipDisposableEmailCheck?: boolean;
+}): Promise<void> {
   // Skip disposable email check in development
   if (!isProd) {
     return;
@@ -395,10 +405,7 @@ export async function canSignUp(
     return;
   }
 
-  const validators = [
-    checkWithDebounce,
-    checkWithMailcheck,
-  ];
+  const validators = [checkWithDebounce, checkWithMailcheck];
 
   for (const validator of validators) {
     const result = await validator(email);
@@ -410,10 +417,7 @@ export async function canSignUp(
 
     // If we got a successful response and it's disposable, reject the signup
     if (result.isDisposable) {
-      throw new ZSAError(
-        "PRECONDITION_FAILED",
-        "Disposable email addresses are not allowed"
-      );
+      throw new ZSAError("PRECONDITION_FAILED", "Disposable email addresses are not allowed");
     }
 
     // If we got a successful response and it's not disposable, allow the signup

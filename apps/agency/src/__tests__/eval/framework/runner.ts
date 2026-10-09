@@ -66,7 +66,11 @@ function sleep(ms: number): Promise<void> {
 
 function isRateLimitError(err: unknown): boolean {
   if (err instanceof Error) {
-    return err.message.includes("429") || err.message.includes("rate limit") || err.message.includes("quota");
+    return (
+      err.message.includes("429") ||
+      err.message.includes("rate limit") ||
+      err.message.includes("quota")
+    );
   }
   return false;
 }
@@ -111,7 +115,9 @@ export async function runEvalSuite<TOutput, TExpected>(
       try {
         if (attempt > 0) {
           const backoffMs = Math.min(2000 * Math.pow(2, attempt), 30000);
-          console.log(`  ⏳ Rate limited on "${testCase.id}", retry ${attempt}/${maxRetries} after ${backoffMs}ms`);
+          console.log(
+            `  ⏳ Rate limited on "${testCase.id}", retry ${attempt}/${maxRetries} after ${backoffMs}ms`,
+          );
           await sleep(backoffMs);
         }
         output = await producer(testCase);
@@ -194,7 +200,8 @@ function aggregateMetrics(
 ): MetricAggregate[] {
   // Exclude cases that failed entirely due to rate limiting (all scores are producer errors)
   const validCases = caseResults.filter(
-    (c) => !c.scores.every((s) => s.detail?.includes("Producer error") && s.detail?.includes("429")),
+    (c) =>
+      !c.scores.every((s) => s.detail?.includes("Producer error") && s.detail?.includes("429")),
   );
 
   return evalMetrics.map((metric) => {

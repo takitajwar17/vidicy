@@ -107,7 +107,15 @@ export interface RegressionFlag {
 // LLM-as-judge
 // ---------------------------------------------------------------------------
 
-export type JudgeDimension = "accuracy" | "helpfulness" | "relevance" | "specificity" | "safety" | "actionability" | "completeness" | "groundedness";
+export type JudgeDimension =
+  | "accuracy"
+  | "helpfulness"
+  | "relevance"
+  | "specificity"
+  | "safety"
+  | "actionability"
+  | "completeness"
+  | "groundedness";
 
 export interface JudgeScore {
   dimension: JudgeDimension;

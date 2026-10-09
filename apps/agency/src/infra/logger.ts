@@ -31,19 +31,29 @@ export class Logger {
   error(message: string, meta?: Record<string, unknown>) {
     console.error(this.format("error", message, meta));
     // Send errors to Sentry in production
-    import("@/infra/sentry").then(({ captureException, captureMessage: sentryMessage, isInitialized }) => {
-      if (!isInitialized()) return;
-      const err = meta?.error ?? meta?.welcomeError;
-      if (err instanceof Error) {
-        captureException(err, { extra: { message, ...this.context, ...meta } });
-      } else {
-        sentryMessage(message, { level: "error", extra: { ...this.context, ...meta } });
-      }
-    }).catch(() => {/* Sentry not available */});
+    import("@/infra/sentry")
+      .then(({ captureException, captureMessage: sentryMessage, isInitialized }) => {
+        if (!isInitialized()) return;
+        const err = meta?.error ?? meta?.welcomeError;
+        if (err instanceof Error) {
+          captureException(err, { extra: { message, ...this.context, ...meta } });
+        } else {
+          sentryMessage(message, { level: "error", extra: { ...this.context, ...meta } });
+        }
+      })
+      .catch(() => {
+        /* Sentry not available */
+      });
   }
-  warn(message: string, meta?: Record<string, unknown>) { console.warn(this.format("warn", message, meta)); }
-  info(message: string, meta?: Record<string, unknown>) { console.info(this.format("info", message, meta)); }
-  http(message: string, meta?: Record<string, unknown>) { console.info(this.format("http", message, meta)); }
+  warn(message: string, meta?: Record<string, unknown>) {
+    console.warn(this.format("warn", message, meta));
+  }
+  info(message: string, meta?: Record<string, unknown>) {
+    console.info(this.format("info", message, meta));
+  }
+  http(message: string, meta?: Record<string, unknown>) {
+    console.info(this.format("http", message, meta));
+  }
   debug(message: string, meta?: Record<string, unknown>) {
     // In Workers, process.env may not exist — guard safely
     const debugEnabled = typeof process !== "undefined" && process.env?.LOG_LEVEL === "debug";
@@ -69,17 +79,34 @@ export const logError = (error: Error, context?: LogContext) => {
   log.withContext(context || {}).error(error.message, { stack: error.stack, name: error.name });
 };
 
-export const logRequest = (method: string, url: string, statusCode: number, responseTime: number, context?: LogContext) => {
-  log.withContext(context || {}).http(`${method} ${url} ${statusCode}`, { method, url, statusCode, responseTime });
+export const logRequest = (
+  method: string,
+  url: string,
+  statusCode: number,
+  responseTime: number,
+  context?: LogContext,
+) => {
+  log
+    .withContext(context || {})
+    .http(`${method} ${url} ${statusCode}`, { method, url, statusCode, responseTime });
 };
 
 export const logAuth = (event: string, success: boolean, context?: LogContext) => {
   const level = success ? "info" : "warn";
-  log.withContext(context || {})[level](`Auth ${event}: ${success ? "SUCCESS" : "FAILED"}`, { authEvent: event, success });
+  log
+    .withContext(context || {})
+    [level](`Auth ${event}: ${success ? "SUCCESS" : "FAILED"}`, { authEvent: event, success });
 };
 
-export const logDatabase = (operation: string, table: string, duration?: number, context?: LogContext) => {
-  log.withContext(context || {}).debug(`Database ${operation} on ${table}`, { dbOperation: operation, table, duration });
+export const logDatabase = (
+  operation: string,
+  table: string,
+  duration?: number,
+  context?: LogContext,
+) => {
+  log
+    .withContext(context || {})
+    .debug(`Database ${operation} on ${table}`, { dbOperation: operation, table, duration });
 };
 
 // Export null winston in production to break any potential dependency chains
@@ -91,36 +118,36 @@ export const winston = isProd ? null : loggerInstance;
 // ---------------------------------------------------------------------------
 
 export type AlertCategory =
-  | "ai_api_failure"      // OpenAI/Perplexity 5xx or timeout
-  | "auth_brute_force"    // Repeated auth failures from same IP
-  | "r2_failure"          // R2 upload/delete/read failure
-  | "d1_failure"          // Database write failure
-  | "vectorize_failure"   // Embedding upsert/query failure
-  | "pipeline_timeout"    // PDF pipeline exceeded timeout
+  | "ai_api_failure" // OpenAI/Perplexity 5xx or timeout
+  | "auth_brute_force" // Repeated auth failures from same IP
+  | "r2_failure" // R2 upload/delete/read failure
+  | "d1_failure" // Database write failure
+  | "vectorize_failure" // Embedding upsert/query failure
+  | "pipeline_timeout" // PDF pipeline exceeded timeout
   | "rate_limit_exceeded" // User hitting rate limits repeatedly
-  | "critical_error";     // Unrecoverable application error
+  | "critical_error"; // Unrecoverable application error
 
 /**
  * Emit a structured alert log entry. Cloudflare Workers Logpush or
  * tail consumers can filter on `alertCategory` to route to Slack/PagerDuty.
  */
-export function logAlert(
-  category: AlertCategory,
-  message: string,
-  meta?: Record<string, unknown>,
-) {
+export function logAlert(category: AlertCategory, message: string, meta?: Record<string, unknown>) {
   log.error(`[ALERT:${category}] ${message}`, {
     alertCategory: category,
     severity: "critical",
     ...meta,
   });
   // Also send as a tagged Sentry event for alerting
-  import("@/infra/sentry").then(({ captureMessage, isInitialized }) => {
-    if (!isInitialized()) return;
-    captureMessage(`[ALERT] ${message}`, {
-      level: "fatal",
-      tags: { alertCategory: category, severity: "critical" },
-      extra: meta,
+  import("@/infra/sentry")
+    .then(({ captureMessage, isInitialized }) => {
+      if (!isInitialized()) return;
+      captureMessage(`[ALERT] ${message}`, {
+        level: "fatal",
+        tags: { alertCategory: category, severity: "critical" },
+        extra: meta,
+      });
+    })
+    .catch(() => {
+      /* Sentry not available */
     });
-  }).catch(() => {/* Sentry not available */});
 }

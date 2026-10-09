@@ -96,7 +96,11 @@ describe("sidebar navigation guards", () => {
         user={{ name: "Taki Khan", email: "taki@example.com", avatar: "" }}
       />,
     );
-    const contentSection = getSection(markup, '<section data-sidebar-content="true">', "</section>");
+    const contentSection = getSection(
+      markup,
+      '<section data-sidebar-content="true">',
+      "</section>",
+    );
     const footerSection = getSection(markup, '<footer data-sidebar-footer="true">', "</footer>");
 
     expectOrderedTitles(contentSection, ["Admin", "Support Inbox", "Get Help", "Announcements"]);
@@ -107,7 +111,11 @@ describe("sidebar navigation guards", () => {
     const markup = renderToStaticMarkup(
       <AppSidebar user={{ name: "Taki Khan", email: "taki@example.com", avatar: "" }} />,
     );
-    const contentSection = getSection(markup, '<section data-sidebar-content="true">', "</section>");
+    const contentSection = getSection(
+      markup,
+      '<section data-sidebar-content="true">',
+      "</section>",
+    );
 
     expectOrderedTitles(contentSection, [
       "Dashboard",

@@ -482,7 +482,9 @@ Mark isRequired: false only for truly optional documents. Required items first i
 
     // Serialize only the final save. AI research stays outside the transaction.
     const savedChecklist = await db.withTransaction(async () => {
-      await db.execute(sql`SELECT pg_advisory_xact_lock(hashtextextended(${`checklist:${application.id}:${applicant.id}`}, 0))`);
+      await db.execute(
+        sql`SELECT pg_advisory_xact_lock(hashtextextended(${`checklist:${application.id}:${applicant.id}`}, 0))`,
+      );
       const savedItems = await db.query.checklistItemTable.findMany({
         where: and(
           eq(checklistItemTable.applicationId, application.id),
@@ -490,7 +492,10 @@ Mark isRequired: false only for truly optional documents. Required items first i
         ),
       });
       if (savedItems.length > 0) return { items: savedItems, inserted: false };
-      return { items: await db.insert(checklistItemTable).values(rows).returning(), inserted: true };
+      return {
+        items: await db.insert(checklistItemTable).values(rows).returning(),
+        inserted: true,
+      };
     });
 
     if (!savedChecklist.inserted) return savedChecklist.items;

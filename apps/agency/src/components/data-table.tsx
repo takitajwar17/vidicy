@@ -1,6 +1,6 @@
-"use client"
+"use client";
 
-import * as React from "react"
+import * as React from "react";
 import {
   type ColumnDef,
   type ColumnFiltersState,
@@ -14,25 +14,25 @@ import {
   getPaginationRowModel,
   getSortedRowModel,
   useReactTable,
-} from "@tanstack/react-table"
+} from "@tanstack/react-table";
 import {
   ChevronLeftIcon,
   ChevronRightIcon,
   ChevronsLeftIcon,
   ChevronsRightIcon,
-} from "lucide-react"
-import type { Route } from "next"
-import { useRouter } from "next/navigation"
+} from "lucide-react";
+import type { Route } from "next";
+import { useRouter } from "next/navigation";
 
-import { Badge } from "@/components/ui/badge"
-import { Button } from "@/components/ui/button"
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select"
+} from "@/components/ui/select";
 import {
   Table,
   TableBody,
@@ -40,23 +40,23 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from "@/components/ui/table"
-import { cn } from "@/lib/utils"
+} from "@/components/ui/table";
+import { cn } from "@/lib/utils";
 
 interface DataTableProps<TData, TValue> {
-  columns: ColumnDef<TData, TValue>[]
-  data: TData[]
-  pageCount?: number
-  pageIndex?: number
-  pageSize?: number
-  onPageChange?: (pageIndex: number) => void
-  onPageSizeChange?: (pageSize: number) => void
-  totalCount?: number
-  itemNameSingular?: string
-  itemNamePlural?: string
-  pageSizeOptions?: number[]
-  getRowHref?: (row: TData) => string
-  bulkActions?: (selectedIds: string[], clearSelection: () => void) => React.ReactNode
+  columns: ColumnDef<TData, TValue>[];
+  data: TData[];
+  pageCount?: number;
+  pageIndex?: number;
+  pageSize?: number;
+  onPageChange?: (pageIndex: number) => void;
+  onPageSizeChange?: (pageSize: number) => void;
+  totalCount?: number;
+  itemNameSingular?: string;
+  itemNamePlural?: string;
+  pageSizeOptions?: number[];
+  getRowHref?: (row: TData) => string;
+  bulkActions?: (selectedIds: string[], clearSelection: () => void) => React.ReactNode;
 }
 
 export function DataTable<TData extends { id: number | string }, TValue>({
@@ -74,11 +74,11 @@ export function DataTable<TData extends { id: number | string }, TValue>({
   getRowHref,
   bulkActions,
 }: DataTableProps<TData, TValue>) {
-  const router = useRouter()
-  const [rowSelection, setRowSelection] = React.useState({})
-  const [columnVisibility, setColumnVisibility] = React.useState<VisibilityState>({})
-  const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([])
-  const [sorting, setSorting] = React.useState<SortingState>([])
+  const router = useRouter();
+  const [rowSelection, setRowSelection] = React.useState({});
+  const [columnVisibility, setColumnVisibility] = React.useState<VisibilityState>({});
+  const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([]);
+  const [sorting, setSorting] = React.useState<SortingState>([]);
 
   const table = useReactTable({
     data,
@@ -98,10 +98,10 @@ export function DataTable<TData extends { id: number | string }, TValue>({
       const current = {
         pageIndex: pageIndex ?? 0,
         pageSize: pageSize ?? 10,
-      }
-      const next = typeof updater === "function" ? updater(current) : updater
-      onPageChange?.(next.pageIndex)
-      onPageSizeChange?.(next.pageSize)
+      };
+      const next = typeof updater === "function" ? updater(current) : updater;
+      onPageChange?.(next.pageIndex);
+      onPageSizeChange?.(next.pageSize);
     },
     manualPagination: Boolean(onPageChange),
     getRowId: (row) => row.id.toString(),
@@ -116,10 +116,10 @@ export function DataTable<TData extends { id: number | string }, TValue>({
     getSortedRowModel: getSortedRowModel(),
     getFacetedRowModel: getFacetedRowModel(),
     getFacetedUniqueValues: getFacetedUniqueValues(),
-  })
+  });
 
-  const selectedIds = table.getSelectedRowModel().rows.map((row) => row.id)
-  const hasSelection = selectedIds.length > 0
+  const selectedIds = table.getSelectedRowModel().rows.map((row) => row.id);
+  const hasSelection = selectedIds.length > 0;
 
   return (
     <div className="space-y-4">
@@ -170,8 +170,8 @@ export function DataTable<TData extends { id: number | string }, TValue>({
                     getRowHref && "cursor-pointer",
                   )}
                   onClick={() => {
-                    const href = getRowHref?.(row.original)
-                    if (href) router.push(href as Route)
+                    const href = getRowHref?.(row.original);
+                    if (href) router.push(href as Route);
                   }}
                 >
                   {row.getVisibleCells().map((cell) => (
@@ -179,7 +179,7 @@ export function DataTable<TData extends { id: number | string }, TValue>({
                       key={cell.id}
                       onClick={(event) => {
                         if (cell.column.id === "select") {
-                          event.stopPropagation()
+                          event.stopPropagation();
                         }
                       }}
                     >
@@ -218,7 +218,7 @@ export function DataTable<TData extends { id: number | string }, TValue>({
             <Select
               value={`${table.getState().pagination.pageSize}`}
               onValueChange={(value) => {
-                table.setPageSize(Number(value))
+                table.setPageSize(Number(value));
               }}
             >
               <SelectTrigger className="h-8 w-[70px] focus-visible:ring-4 focus-visible:ring-primary/15 focus-visible:ring-offset-0">
@@ -273,5 +273,5 @@ export function DataTable<TData extends { id: number | string }, TValue>({
         </div>
       </div>
     </div>
-  )
+  );
 }

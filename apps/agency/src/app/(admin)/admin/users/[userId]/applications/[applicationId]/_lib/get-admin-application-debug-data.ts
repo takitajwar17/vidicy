@@ -1,9 +1,9 @@
-import "server-only"
+import "server-only";
 
-import { cache } from "react"
-import { and, asc, desc, eq, inArray } from "drizzle-orm"
+import { cache } from "react";
+import { and, asc, desc, eq, inArray } from "drizzle-orm";
 
-import { getDB } from "@/db"
+import { getDB } from "@/db";
 import {
   applicantTable,
   applicationInvitationTable,
@@ -16,14 +16,14 @@ import {
   uploadedDocumentTable,
   userTable,
   visaApplicationTable,
-} from "@/db/schema"
-import { requireAdmin } from "@/utils/auth"
+} from "@/db/schema";
+import { requireAdmin } from "@/utils/auth";
 
 export const getAdminApplicationDebugData = cache(
   async ({ userId, applicationId }: { userId: string; applicationId: string }) => {
-    await requireAdmin()
+    await requireAdmin();
 
-    const db = getDB()
+    const db = getDB();
 
     const [owner, application] = await Promise.all([
       db.query.userTable.findFirst({
@@ -43,10 +43,10 @@ export const getAdminApplicationDebugData = cache(
           eq(visaApplicationTable.userId, userId),
         ),
       }),
-    ])
+    ]);
 
     if (!owner || !application) {
-      return null
+      return null;
     }
 
     const [
@@ -97,7 +97,7 @@ export const getAdminApplicationDebugData = cache(
         where: eq(applicationInvitationTable.applicationId, applicationId),
         orderBy: [desc(applicationInvitationTable.createdAt)],
       }),
-    ])
+    ]);
 
     const relatedUserIds = Array.from(
       new Set(
@@ -109,7 +109,7 @@ export const getAdminApplicationDebugData = cache(
           ...invitations.map((record) => record.acceptedBy),
         ].filter((value): value is string => Boolean(value)),
       ),
-    )
+    );
 
     const relatedUsers =
       relatedUserIds.length > 0
@@ -124,7 +124,7 @@ export const getAdminApplicationDebugData = cache(
               emailVerified: true,
             },
           })
-        : []
+        : [];
 
     return {
       owner,
@@ -139,17 +139,17 @@ export const getAdminApplicationDebugData = cache(
       roles,
       invitations,
       relatedUsers,
-    }
+    };
   },
-)
+);
 
 export function getUserDisplayName(user: {
-  firstName: string | null
-  lastName: string | null
-  email: string | null
+  firstName: string | null;
+  lastName: string | null;
+  email: string | null;
 }) {
   if (user.firstName && user.lastName) {
-    return `${user.firstName} ${user.lastName}`
+    return `${user.firstName} ${user.lastName}`;
   }
-  return user.email ?? "Unknown user"
+  return user.email ?? "Unknown user";
 }

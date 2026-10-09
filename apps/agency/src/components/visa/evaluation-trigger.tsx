@@ -1,21 +1,21 @@
-"use client"
+"use client";
 
-import type { Route } from "next"
-import { useState } from "react"
-import Link from "next/link"
-import { Button } from "@/components/ui/button"
-import { Loader2Icon, RefreshCwIcon, BrainCircuitIcon, UploadIcon } from "lucide-react"
-import { useRouter } from "next/navigation"
-import { toast } from "sonner"
-import { evaluateDocumentsAction } from "@/actions/evaluation.action"
+import type { Route } from "next";
+import { useState } from "react";
+import Link from "next/link";
+import { Button } from "@/components/ui/button";
+import { Loader2Icon, RefreshCwIcon, BrainCircuitIcon, UploadIcon } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { toast } from "sonner";
+import { evaluateDocumentsAction } from "@/actions/evaluation.action";
 
 interface EvaluationTriggerProps {
-  applicationId: string
-  applicantId: string
-  hasDocuments: boolean
+  applicationId: string;
+  applicantId: string;
+  hasDocuments: boolean;
   /** When true, renders as a re-run (refresh icon + "Re-run" label). */
-  rerun?: boolean
-  checklistHref?: string
+  rerun?: boolean;
+  checklistHref?: string;
 }
 
 export function EvaluationTrigger({
@@ -25,27 +25,27 @@ export function EvaluationTrigger({
   rerun = false,
   checklistHref,
 }: EvaluationTriggerProps) {
-  const [loading, setLoading] = useState(false)
-  const router = useRouter()
+  const [loading, setLoading] = useState(false);
+  const router = useRouter();
 
   async function handleEvaluate() {
-    setLoading(true)
-    const [, err] = await evaluateDocumentsAction({ applicationId, applicantId })
+    setLoading(true);
+    const [, err] = await evaluateDocumentsAction({ applicationId, applicantId });
     if (err) {
       // Use Sonner toast for consistency with the rest of the app — never native alert()
-      toast.error(err.message || "Review failed. Please try again.")
+      toast.error(err.message || "Review failed. Please try again.");
     } else {
-      router.refresh()
+      router.refresh();
     }
-    setLoading(false)
+    setLoading(false);
   }
 
-  const IdleIcon = !hasDocuments ? UploadIcon : rerun ? RefreshCwIcon : BrainCircuitIcon
+  const IdleIcon = !hasDocuments ? UploadIcon : rerun ? RefreshCwIcon : BrainCircuitIcon;
   const idleLabel = hasDocuments
     ? rerun
       ? "Re-run Review"
       : "Run Review"
-    : "Upload Documents First"
+    : "Upload Documents First";
 
   if (!hasDocuments && checklistHref) {
     return (
@@ -55,7 +55,7 @@ export function EvaluationTrigger({
           {idleLabel}
         </Link>
       </Button>
-    )
+    );
   }
 
   return (
@@ -78,5 +78,5 @@ export function EvaluationTrigger({
         </>
       )}
     </Button>
-  )
+  );
 }

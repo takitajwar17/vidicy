@@ -4,11 +4,7 @@ import type { SessionValidationResult } from "@/types";
 import { getSessionFromCookie, requireVerifiedEmail } from "./auth";
 import { ZSAError } from "zsa";
 import { getDB } from "@/db";
-import {
-  visaApplicationTable,
-  APPLICATION_PERMISSIONS,
-  AGENCY_STAFF_ROLE,
-} from "@/db/schema";
+import { visaApplicationTable, APPLICATION_PERMISSIONS, AGENCY_STAFF_ROLE } from "@/db/schema";
 import { and, eq, isNotNull, isNull } from "drizzle-orm";
 import { ensureAgencyTeamMembership } from "@/server/agency-team";
 
@@ -128,6 +124,6 @@ export const requireApplicationPermission = cache(
       throw new ZSAError("FORBIDDEN", "You don't have access to this application");
     }
 
-	    return session;
-	  },
-	);
+    return session;
+  },
+);

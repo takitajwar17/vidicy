@@ -21,8 +21,7 @@ vi.mock("zsa", () => {
     createServerAction: () => {
       const chain = {
         input: () => chain,
-        handler: (fn: (args: { input: unknown }) => unknown) => (input: unknown) =>
-          fn({ input }),
+        handler: (fn: (args: { input: unknown }) => unknown) => (input: unknown) => fn({ input }),
       };
 
       return chain;
@@ -81,10 +80,19 @@ describe("isModelParameterCompatibilityError", () => {
 });
 
 describe("Vertex AI evaluation", () => {
-  const input = { systemPrompt: "system", userContent: "user", schemaName: "evaluation_test", schema: testSchema, maxTokens: 300 };
+  const input = {
+    systemPrompt: "system",
+    userContent: "user",
+    schemaName: "evaluation_test",
+    schema: testSchema,
+    maxTokens: 300,
+  };
   beforeEach(() => {
     vi.resetAllMocks();
-    generateContent.mockResolvedValue({ text: '{"ok":true}', candidates: [{ finishReason: "STOP" }] });
+    generateContent.mockResolvedValue({
+      text: '{"ok":true}',
+      candidates: [{ finishReason: "STOP" }],
+    });
   });
 
   it("uses the configured Vertex model and preserves the JSON schema", async () => {
@@ -94,19 +102,27 @@ describe("Vertex AI evaluation", () => {
       model: "gemini-evaluation-test",
       contents: [{ role: "user", parts: [{ text: "user" }] }],
       config: expect.objectContaining({
-        systemInstruction: "system", responseMimeType: "application/json", responseJsonSchema: testSchema,
-        maxOutputTokens: 8492, thinkingConfig: { thinkingLevel: ThinkingLevel.MEDIUM },
+        systemInstruction: "system",
+        responseMimeType: "application/json",
+        responseJsonSchema: testSchema,
+        maxOutputTokens: 8492,
+        thinkingConfig: { thinkingLevel: ThinkingLevel.MEDIUM },
       }),
     });
     expect(generateContent.mock.calls[0][0].config).not.toHaveProperty("temperature");
   });
 
   it("sends inline document images along with text", async () => {
-    await createGeminiEvaluation({ ...input, userContent: [
-      { type: "text", text: "Read this" }, { type: "image_url", image_url: { url: "data:image/jpeg;base64,YWJj" } },
-    ] });
+    await createGeminiEvaluation({
+      ...input,
+      userContent: [
+        { type: "text", text: "Read this" },
+        { type: "image_url", image_url: { url: "data:image/jpeg;base64,YWJj" } },
+      ],
+    });
     expect(generateContent.mock.calls[0][0].contents[0].parts).toEqual([
-      { text: "Read this" }, { inlineData: { mimeType: "image/jpeg", data: "YWJj" } },
+      { text: "Read this" },
+      { inlineData: { mimeType: "image/jpeg", data: "YWJj" } },
     ]);
   });
 
@@ -121,7 +137,7 @@ describe("Vertex AI evaluation", () => {
     { text: "", candidates: [{ finishReason: "STOP" }] },
     { text: '{"ok":true}', candidates: [{ finishReason: "MAX_TOKENS" }] },
     { text: "invalid json", candidates: [{ finishReason: "STOP" }] },
-  ])("rejects an incomplete or invalid evaluation: %j", async response => {
+  ])("rejects an incomplete or invalid evaluation: %j", async (response) => {
     generateContent.mockResolvedValue(response);
     await expect(createGeminiEvaluation(input)).rejects.toThrow();
   });

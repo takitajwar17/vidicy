@@ -94,12 +94,12 @@ export async function createKVSession({
     city: cf?.city,
     continent: cf?.continent,
     ip: await getIP(),
-    userAgent: headersList.get('user-agent'),
+    userAgent: headersList.get("user-agent"),
     user,
     authenticationType,
     unreadSupportTicketsCount,
     adminUnreadSupportTicketsCount,
-    version: CURRENT_SESSION_VERSION
+    version: CURRENT_SESSION_VERSION,
   };
 
   // Check if user has reached the session limit
@@ -123,20 +123,16 @@ export async function createKVSession({
       const sessionKey = sortedSessions[i]?.key;
       if (!sessionKey) continue;
 
-      const sessionId = sessionKey.split(':')[2];
+      const sessionId = sessionKey.split(":")[2];
       if (!sessionId) continue;
 
       await deleteKVSession(sessionId, userId);
     }
   }
 
-  await kv.put(
-    getSessionKey(userId, sessionId),
-    JSON.stringify(session),
-    {
-      expirationTtl: Math.floor((expiresAt.getTime() - Date.now()) / 1000)
-    }
-  );
+  await kv.put(getSessionKey(userId, sessionId), JSON.stringify(session), {
+    expirationTtl: Math.floor((expiresAt.getTime() - Date.now()) / 1000),
+  });
 
   return session;
 }
@@ -151,7 +147,7 @@ export async function getKVSession(sessionId: string, userId: string): Promise<K
   const sessionStr = await kv.get(getSessionKey(userId, sessionId));
   if (!sessionStr) return null;
 
-  const session = JSON.parse(sessionStr) as KVSession
+  const session = JSON.parse(sessionStr) as KVSession;
 
   if (session?.user?.createdAt) {
     session.user.createdAt = new Date(session.user.createdAt);
@@ -174,12 +170,12 @@ export async function updateKVSession(
   expiresAt: Date,
   userData?: KVSessionUser,
   unreadSupportTicketsCount?: number,
-  adminUnreadSupportTicketsCount?: number
+  adminUnreadSupportTicketsCount?: number,
 ): Promise<KVSession | null> {
   const session = await getKVSession(sessionId, userId);
   if (!session) return null;
 
-  const updatedUser = userData ?? await getUserFromDB(userId);
+  const updatedUser = userData ?? (await getUserFromDB(userId));
 
   if (!updatedUser) {
     throw new Error("User not found");
@@ -191,7 +187,8 @@ export async function updateKVSession(
     expiresAt: expiresAt.getTime(),
     user: updatedUser,
     unreadSupportTicketsCount: unreadSupportTicketsCount ?? session.unreadSupportTicketsCount,
-    adminUnreadSupportTicketsCount: adminUnreadSupportTicketsCount ?? session.adminUnreadSupportTicketsCount,
+    adminUnreadSupportTicketsCount:
+      adminUnreadSupportTicketsCount ?? session.adminUnreadSupportTicketsCount,
   };
 
   const kv = await getKV();
@@ -200,13 +197,9 @@ export async function updateKVSession(
     throw new Error("Can't connect to KV store");
   }
 
-  await kv.put(
-    getSessionKey(userId, sessionId),
-    JSON.stringify(updatedSession),
-    {
-      expirationTtl: Math.floor((expiresAt.getTime() - Date.now()) / 1000)
-    }
-  );
+  await kv.put(getSessionKey(userId, sessionId), JSON.stringify(updatedSession), {
+    expirationTtl: Math.floor((expiresAt.getTime() - Date.now()) / 1000),
+  });
 
   return updatedSession;
 }
@@ -235,8 +228,8 @@ export async function getAllSessionIdsOfUser(userId: string) {
 
   return sessions.keys.map((session) => ({
     key: session.name,
-    absoluteExpiration: session.expiration ? new Date(session.expiration * 1000) : undefined
-  }))
+    absoluteExpiration: session.expiration ? new Date(session.expiration * 1000) : undefined,
+  }));
 }
 
 /**
@@ -254,23 +247,29 @@ export async function updateAllSessionsOfUser(userId: string) {
 
   if (!newUserData) return;
 
-  const adminUnreadSupportTicketsCount = newUserData.role === "admin"
-    ? await getCachedAdminUnreadCount()
-    : undefined;
+  const adminUnreadSupportTicketsCount =
+    newUserData.role === "admin" ? await getCachedAdminUnreadCount() : undefined;
 
   await Promise.all(
     sessions.map((sessionObj) => {
       // Extract sessionId from key (format: "session:userId:sessionId")
-      const sessionId = sessionObj.key.split(':')[2];
+      const sessionId = sessionObj.key.split(":")[2];
       if (!sessionId) return Promise.resolve();
 
       // Only update non-expired sessions
       if (sessionObj.absoluteExpiration && sessionObj.absoluteExpiration.getTime() > Date.now()) {
-        return updateKVSession(sessionId, userId, sessionObj.absoluteExpiration, newUserData, unreadSupportTicketsCount, adminUnreadSupportTicketsCount);
+        return updateKVSession(
+          sessionId,
+          userId,
+          sessionObj.absoluteExpiration,
+          newUserData,
+          unreadSupportTicketsCount,
+          adminUnreadSupportTicketsCount,
+        );
       }
 
       return Promise.resolve();
-    })
+    }),
   );
 }
 
@@ -282,10 +281,10 @@ export async function deleteAllSessionsOfUser(userId: string) {
   const sessions = await getAllSessionIdsOfUser(userId);
 
   await Promise.all(
-    sessions.map(sessionObj => {
-      const sessionId = sessionObj.key.split(':')[2];
+    sessions.map((sessionObj) => {
+      const sessionId = sessionObj.key.split(":")[2];
       if (!sessionId) return Promise.resolve();
       return deleteKVSession(sessionId, userId);
-    })
+    }),
   );
 }

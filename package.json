@@ -20,7 +20,8 @@
     "cf-typegen:agency": "pnpm --filter @vidicy/agency run cf-typegen",
     "db:generate:agency": "pnpm --filter @vidicy/agency run db:generate",
     "db:migrate:dev:agency": "pnpm --filter @vidicy/agency run db:migrate:dev",
-    "dev": "pnpm --filter @vidicy/agency run dev"
+    "dev": "pnpm --filter @vidicy/agency run dev",
+    "format:check": "pnpm -r run format:check"
   },
   "volta": {
     "node": "22.18.0"

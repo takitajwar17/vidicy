@@ -2,7 +2,12 @@ import "server-only";
 
 import { and, eq, inArray, isNull, lt, ne, or, sql } from "drizzle-orm";
 import { getDB } from "@/db";
-import { DOCUMENT_EXTRACTION_STATUS, DOCUMENT_INDEXING_STATUS, uploadedDocumentTable, visaApplicationTable } from "@/db/schema";
+import {
+  DOCUMENT_EXTRACTION_STATUS,
+  DOCUMENT_INDEXING_STATUS,
+  uploadedDocumentTable,
+  visaApplicationTable,
+} from "@/db/schema";
 import { enqueueDocumentExtraction } from "@/infra/google/document-tasks";
 import { verifyInternalGoogleRequest } from "@/infra/google/internal-auth";
 import { cleanDeletedVectorMetadata } from "@/infra/google/vector-search";
@@ -21,31 +26,55 @@ export async function POST(request: Request): Promise<Response> {
     const queuedCutoff = new Date(now - 2 * 60 * 1000);
     const processingCutoff = new Date(now - 10 * 60 * 1000);
     const bucket = Math.floor(now / (15 * 60 * 1000));
-    const documents = await getDB().select({ id: uploadedDocumentTable.id })
+    const documents = await getDB()
+      .select({ id: uploadedDocumentTable.id })
       .from(uploadedDocumentTable)
-      .innerJoin(visaApplicationTable, eq(uploadedDocumentTable.applicationId, visaApplicationTable.id))
-      .where(and(
-        isNull(visaApplicationTable.trashedAt),
-        lt(uploadedDocumentTable.processingRecoveryCount, 3),
-        or(isNull(uploadedDocumentTable.processingRecoveryBucket), ne(uploadedDocumentTable.processingRecoveryBucket, String(bucket))),
-        or(
-          and(eq(uploadedDocumentTable.extractionStatus, DOCUMENT_EXTRACTION_STATUS.QUEUED), lt(uploadedDocumentTable.uploadedAt, queuedCutoff)),
-          and(
-            inArray(uploadedDocumentTable.extractionStatus, [DOCUMENT_EXTRACTION_STATUS.EXTRACTING, DOCUMENT_EXTRACTION_STATUS.FAILED]),
-            sql`coalesce(${uploadedDocumentTable.extractedAt}, ${uploadedDocumentTable.uploadedAt}) < ${processingCutoff}`,
+      .innerJoin(
+        visaApplicationTable,
+        eq(uploadedDocumentTable.applicationId, visaApplicationTable.id),
+      )
+      .where(
+        and(
+          isNull(visaApplicationTable.trashedAt),
+          lt(uploadedDocumentTable.processingRecoveryCount, 3),
+          or(
+            isNull(uploadedDocumentTable.processingRecoveryBucket),
+            ne(uploadedDocumentTable.processingRecoveryBucket, String(bucket)),
           ),
-          and(
-            inArray(uploadedDocumentTable.extractionStatus, [DOCUMENT_EXTRACTION_STATUS.COMPLETED, DOCUMENT_EXTRACTION_STATUS.PARTIAL]),
-            eq(uploadedDocumentTable.indexingStatus, DOCUMENT_INDEXING_STATUS.QUEUED),
-            sql`coalesce(${uploadedDocumentTable.extractedAt}, ${uploadedDocumentTable.uploadedAt}) < ${queuedCutoff}`,
-          ),
-          and(
-            inArray(uploadedDocumentTable.extractionStatus, [DOCUMENT_EXTRACTION_STATUS.COMPLETED, DOCUMENT_EXTRACTION_STATUS.PARTIAL]),
-            inArray(uploadedDocumentTable.indexingStatus, [DOCUMENT_INDEXING_STATUS.INDEXING, DOCUMENT_INDEXING_STATUS.FAILED]),
-            sql`coalesce(${uploadedDocumentTable.indexingAttemptedAt}, ${uploadedDocumentTable.extractedAt}, ${uploadedDocumentTable.uploadedAt}) < ${processingCutoff}`,
+          or(
+            and(
+              eq(uploadedDocumentTable.extractionStatus, DOCUMENT_EXTRACTION_STATUS.QUEUED),
+              lt(uploadedDocumentTable.uploadedAt, queuedCutoff),
+            ),
+            and(
+              inArray(uploadedDocumentTable.extractionStatus, [
+                DOCUMENT_EXTRACTION_STATUS.EXTRACTING,
+                DOCUMENT_EXTRACTION_STATUS.FAILED,
+              ]),
+              sql`coalesce(${uploadedDocumentTable.extractedAt}, ${uploadedDocumentTable.uploadedAt}) < ${processingCutoff}`,
+            ),
+            and(
+              inArray(uploadedDocumentTable.extractionStatus, [
+                DOCUMENT_EXTRACTION_STATUS.COMPLETED,
+                DOCUMENT_EXTRACTION_STATUS.PARTIAL,
+              ]),
+              eq(uploadedDocumentTable.indexingStatus, DOCUMENT_INDEXING_STATUS.QUEUED),
+              sql`coalesce(${uploadedDocumentTable.extractedAt}, ${uploadedDocumentTable.uploadedAt}) < ${queuedCutoff}`,
+            ),
+            and(
+              inArray(uploadedDocumentTable.extractionStatus, [
+                DOCUMENT_EXTRACTION_STATUS.COMPLETED,
+                DOCUMENT_EXTRACTION_STATUS.PARTIAL,
+              ]),
+              inArray(uploadedDocumentTable.indexingStatus, [
+                DOCUMENT_INDEXING_STATUS.INDEXING,
+                DOCUMENT_INDEXING_STATUS.FAILED,
+              ]),
+              sql`coalesce(${uploadedDocumentTable.indexingAttemptedAt}, ${uploadedDocumentTable.extractedAt}, ${uploadedDocumentTable.uploadedAt}) < ${processingCutoff}`,
+            ),
           ),
         ),
-      ))
+      )
       // Rotate a bounded selection each time bucket so permanently failing old
       // files cannot prevent recovery of newer uploads when the backlog is large.
       .orderBy(sql`md5(${uploadedDocumentTable.id} || ${String(bucket)})`)
@@ -53,20 +82,34 @@ export async function POST(request: Request): Promise<Response> {
     let enqueued = 0;
     let failed = 0;
     for (let offset = 0; offset < documents.length; offset += 3) {
-      const results = await Promise.allSettled(documents.slice(offset, offset + 3).map(async document => {
-        // Reserve one of three recovery attempts atomically. A lost enqueue
-        // response must not create an unlimited stream of model calls.
-        const claimed = await getDB().update(uploadedDocumentTable).set({
-          processingRecoveryCount: sql`${uploadedDocumentTable.processingRecoveryCount} + 1`,
-          processingRecoveryBucket: String(bucket),
-        }).where(and(
-          eq(uploadedDocumentTable.id, document.id),
-          lt(uploadedDocumentTable.processingRecoveryCount, 3),
-          or(isNull(uploadedDocumentTable.processingRecoveryBucket), ne(uploadedDocumentTable.processingRecoveryBucket, String(bucket))),
-        )).returning({ id: uploadedDocumentTable.id });
-        if (!claimed.length) return;
-        return enqueueDocumentExtraction({ documentId: document.id, version: `recovery:${bucket}` });
-      }));
+      const results = await Promise.allSettled(
+        documents.slice(offset, offset + 3).map(async (document) => {
+          // Reserve one of three recovery attempts atomically. A lost enqueue
+          // response must not create an unlimited stream of model calls.
+          const claimed = await getDB()
+            .update(uploadedDocumentTable)
+            .set({
+              processingRecoveryCount: sql`${uploadedDocumentTable.processingRecoveryCount} + 1`,
+              processingRecoveryBucket: String(bucket),
+            })
+            .where(
+              and(
+                eq(uploadedDocumentTable.id, document.id),
+                lt(uploadedDocumentTable.processingRecoveryCount, 3),
+                or(
+                  isNull(uploadedDocumentTable.processingRecoveryBucket),
+                  ne(uploadedDocumentTable.processingRecoveryBucket, String(bucket)),
+                ),
+              ),
+            )
+            .returning({ id: uploadedDocumentTable.id });
+          if (!claimed.length) return;
+          return enqueueDocumentExtraction({
+            documentId: document.id,
+            version: `recovery:${bucket}`,
+          });
+        }),
+      );
       for (const result of results) {
         if (result.status === "fulfilled") enqueued += 1;
         else failed += 1;

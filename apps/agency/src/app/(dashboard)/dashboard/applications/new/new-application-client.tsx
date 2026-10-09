@@ -15,14 +15,25 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { SearchableSelect } from "@/components/ui/searchable-select";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { AGENCY_CASE_PRIORITY } from "@/db/schema";
 import { COUNTRIES } from "@/constants";
 import { CASE_PRIORITY_META } from "@/lib/agency-workflow";
 import { cn } from "@/lib/utils";
-import { DESTINATION_COUNTRIES, YEAR_OPTIONS, getEmbassies, getVisaTypes } from "./new-application-constants";
+import {
+  DESTINATION_COUNTRIES,
+  YEAR_OPTIONS,
+  getEmbassies,
+  getVisaTypes,
+} from "./new-application-constants";
 
 interface StaffOption {
   userId: string;
@@ -105,10 +116,7 @@ export function NewApplicationClient({ staff }: NewApplicationClientProps) {
   const [form, setForm] = useState<IntakeForm>(DEFAULT_FORM);
   const { execute, isPending } = useServerAction(createAgencyCaseAction);
 
-  const visaTypes = useMemo(
-    () => getVisaTypes(form.destinationCountry),
-    [form.destinationCountry],
-  );
+  const visaTypes = useMemo(() => getVisaTypes(form.destinationCountry), [form.destinationCountry]);
   const embassyList = useMemo(
     () => getEmbassies(form.destinationCountry, form.currentCountry),
     [form.destinationCountry, form.currentCountry],
@@ -229,19 +237,41 @@ export function NewApplicationClient({ staff }: NewApplicationClientProps) {
             </CardHeader>
             <CardContent className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
               <Field label="Client name">
-                <Input value={form.clientName} onChange={(event) => update("clientName", event.target.value)} placeholder="Global Visa Co." />
+                <Input
+                  value={form.clientName}
+                  onChange={(event) => update("clientName", event.target.value)}
+                  placeholder="Global Visa Co."
+                />
               </Field>
               <Field label="Client email">
-                <Input type="email" value={form.clientEmail} onChange={(event) => update("clientEmail", event.target.value)} placeholder="client@example.com" />
+                <Input
+                  type="email"
+                  value={form.clientEmail}
+                  onChange={(event) => update("clientEmail", event.target.value)}
+                  placeholder="client@example.com"
+                />
               </Field>
               <Field label="Client phone">
-                <Input value={form.clientPhone} onChange={(event) => update("clientPhone", event.target.value)} placeholder="+1 555 0100" />
+                <Input
+                  value={form.clientPhone}
+                  onChange={(event) => update("clientPhone", event.target.value)}
+                  placeholder="+1 555 0100"
+                />
               </Field>
               <Field label="Applicant name">
-                <Input value={form.applicantName} onChange={(event) => update("applicantName", event.target.value)} placeholder="Rahul Mehta" />
+                <Input
+                  value={form.applicantName}
+                  onChange={(event) => update("applicantName", event.target.value)}
+                  placeholder="Rahul Mehta"
+                />
               </Field>
               <Field label="Applicant email">
-                <Input type="email" value={form.applicantEmail} onChange={(event) => update("applicantEmail", event.target.value)} placeholder="applicant@example.com" />
+                <Input
+                  type="email"
+                  value={form.applicantEmail}
+                  onChange={(event) => update("applicantEmail", event.target.value)}
+                  placeholder="applicant@example.com"
+                />
               </Field>
               <Field label="Passport country">
                 <SearchableSelect
@@ -324,7 +354,12 @@ export function NewApplicationClient({ staff }: NewApplicationClientProps) {
                 </Select>
               </Field>
               <Field label="Reviewer">
-                <Select value={form.assignedReviewerId || "unassigned"} onValueChange={(value) => update("assignedReviewerId", value === "unassigned" ? "" : value)}>
+                <Select
+                  value={form.assignedReviewerId || "unassigned"}
+                  onValueChange={(value) =>
+                    update("assignedReviewerId", value === "unassigned" ? "" : value)
+                  }
+                >
                   <SelectTrigger>
                     <SelectValue placeholder="Assign reviewer" />
                   </SelectTrigger>
@@ -353,10 +388,25 @@ export function NewApplicationClient({ staff }: NewApplicationClientProps) {
                 </div>
                 {form.approvedBefore ? (
                   <div className="grid gap-3 sm:grid-cols-2">
-                    <Input value={form.approvedVisaType} onChange={(event) => update("approvedVisaType", event.target.value)} placeholder="Visa type" />
-                    <Select value={form.approvedYear} onValueChange={(value) => update("approvedYear", value)}>
-                      <SelectTrigger><SelectValue placeholder="Year" /></SelectTrigger>
-                      <SelectContent>{YEAR_OPTIONS.map((year) => <SelectItem key={year} value={year}>{year}</SelectItem>)}</SelectContent>
+                    <Input
+                      value={form.approvedVisaType}
+                      onChange={(event) => update("approvedVisaType", event.target.value)}
+                      placeholder="Visa type"
+                    />
+                    <Select
+                      value={form.approvedYear}
+                      onValueChange={(value) => update("approvedYear", value)}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Year" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {YEAR_OPTIONS.map((year) => (
+                          <SelectItem key={year} value={year}>
+                            {year}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
                     </Select>
                   </div>
                 ) : null}
@@ -369,13 +419,32 @@ export function NewApplicationClient({ staff }: NewApplicationClientProps) {
                 {form.rejectedBefore ? (
                   <div className="grid gap-3">
                     <div className="grid gap-3 sm:grid-cols-2">
-                      <Input value={form.rejectedVisaType} onChange={(event) => update("rejectedVisaType", event.target.value)} placeholder="Visa type" />
-                      <Select value={form.rejectedYear} onValueChange={(value) => update("rejectedYear", value)}>
-                        <SelectTrigger><SelectValue placeholder="Year" /></SelectTrigger>
-                        <SelectContent>{YEAR_OPTIONS.map((year) => <SelectItem key={year} value={year}>{year}</SelectItem>)}</SelectContent>
+                      <Input
+                        value={form.rejectedVisaType}
+                        onChange={(event) => update("rejectedVisaType", event.target.value)}
+                        placeholder="Visa type"
+                      />
+                      <Select
+                        value={form.rejectedYear}
+                        onValueChange={(value) => update("rejectedYear", value)}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Year" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {YEAR_OPTIONS.map((year) => (
+                            <SelectItem key={year} value={year}>
+                              {year}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
                       </Select>
                     </div>
-                    <Textarea value={form.rejectedReason} onChange={(event) => update("rejectedReason", event.target.value)} placeholder="Refusal reason, refusal letter note, or reviewer context" />
+                    <Textarea
+                      value={form.rejectedReason}
+                      onChange={(event) => update("rejectedReason", event.target.value)}
+                      placeholder="Refusal reason, refusal letter note, or reviewer context"
+                    />
                   </div>
                 ) : null}
               </div>
@@ -392,23 +461,38 @@ export function NewApplicationClient({ staff }: NewApplicationClientProps) {
               <Field label="Received date">
                 <div className="relative">
                   <CalendarIcon className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                  <Input type="date" value={form.submittedAt} onChange={(event) => update("submittedAt", event.target.value)} className="pl-9" />
+                  <Input
+                    type="date"
+                    value={form.submittedAt}
+                    onChange={(event) => update("submittedAt", event.target.value)}
+                    className="pl-9"
+                  />
                 </div>
               </Field>
               <Field label="Internal due date">
                 <div className="relative">
                   <CalendarIcon className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                  <Input type="date" value={form.dueAt} onChange={(event) => update("dueAt", event.target.value)} className="pl-9" />
+                  <Input
+                    type="date"
+                    value={form.dueAt}
+                    onChange={(event) => update("dueAt", event.target.value)}
+                    className="pl-9"
+                  />
                 </div>
               </Field>
               <div className="rounded-xl border border-border/70 bg-muted/35 p-4 text-sm text-muted-foreground">
                 <p className="font-semibold text-foreground">Starts in intake</p>
                 <p className="mt-1">
-                  Every active staff member can see the case. The assigned reviewer owns the file once documents arrive.
+                  Every active staff member can see the case. The assigned reviewer owns the file
+                  once documents arrive.
                 </p>
               </div>
               <Button type="submit" className="w-full" disabled={isPending}>
-                {isPending ? <Loader2Icon className="h-4 w-4 animate-spin" /> : <PlusIcon className="h-4 w-4" />}
+                {isPending ? (
+                  <Loader2Icon className="h-4 w-4 animate-spin" />
+                ) : (
+                  <PlusIcon className="h-4 w-4" />
+                )}
                 Create client file
               </Button>
             </CardContent>

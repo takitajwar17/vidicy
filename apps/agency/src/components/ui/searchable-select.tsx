@@ -1,23 +1,30 @@
-"use client"
+"use client";
 
-import { useId, useState } from "react"
-import { CheckIcon, ChevronsUpDownIcon } from "lucide-react"
+import { useId, useState } from "react";
+import { CheckIcon, ChevronsUpDownIcon } from "lucide-react";
 
-import { cn } from "@/lib/utils"
-import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command"
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import { cn } from "@/lib/utils";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 
-type SelectOption = { value: string; label: string }
+type SelectOption = { value: string; label: string };
 
 interface SearchableSelectProps {
-  value: string
-  onChange: (value: string) => void
-  options: SelectOption[] | string[]
-  placeholder: string
-  searchPlaceholder?: string
-  disabled?: boolean
-  triggerClassName?: string
-  listClassName?: string
+  value: string;
+  onChange: (value: string) => void;
+  options: SelectOption[] | string[];
+  placeholder: string;
+  searchPlaceholder?: string;
+  disabled?: boolean;
+  triggerClassName?: string;
+  listClassName?: string;
 }
 
 export function SearchableSelect({
@@ -30,13 +37,13 @@ export function SearchableSelect({
   triggerClassName,
   listClassName,
 }: SearchableSelectProps) {
-  const [open, setOpen] = useState(false)
-  const listboxId = useId()
+  const [open, setOpen] = useState(false);
+  const listboxId = useId();
 
   const normalized = (options as (string | SelectOption)[]).map((option) =>
-    typeof option === "string" ? { value: option, label: option } : option
-  )
-  const selected = normalized.find((option) => option.value === value)
+    typeof option === "string" ? { value: option, label: option } : option,
+  );
+  const selected = normalized.find((option) => option.value === value);
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -52,7 +59,7 @@ export function SearchableSelect({
             "hover:bg-accent/40 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2",
             "disabled:cursor-not-allowed disabled:opacity-50",
             !selected && "text-muted-foreground",
-            triggerClassName
+            triggerClassName,
           )}
         >
           <span className="truncate">{selected ? selected.label : placeholder}</span>
@@ -71,11 +78,16 @@ export function SearchableSelect({
                   value={option.value}
                   keywords={[option.label, option.value]}
                   onSelect={() => {
-                    onChange(option.value)
-                    setOpen(false)
+                    onChange(option.value);
+                    setOpen(false);
                   }}
                 >
-                  <CheckIcon className={cn("mr-2 h-4 w-4 shrink-0", value === option.value ? "opacity-100" : "opacity-0")} />
+                  <CheckIcon
+                    className={cn(
+                      "mr-2 h-4 w-4 shrink-0",
+                      value === option.value ? "opacity-100" : "opacity-0",
+                    )}
+                  />
                   {option.label}
                 </CommandItem>
               ))}
@@ -84,5 +96,5 @@ export function SearchableSelect({
         </Command>
       </PopoverContent>
     </Popover>
-  )
+  );
 }

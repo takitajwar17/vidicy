@@ -19,12 +19,11 @@ import { formatDistanceToNow } from "date-fns";
 import type { SupportTicket, SupportMessage } from "@/db/schema";
 import { UserTicketDetail } from "./user-ticket-detail";
 import { NewTicketPanel } from "./new-ticket-panel";
-import {
-  getSupportTicketDetailAction,
-  getUserTicketsAction,
-} from "@/actions/support.action";
+import { getSupportTicketDetailAction, getUserTicketsAction } from "@/actions/support.action";
 
-export type UserTicketSummary = Awaited<ReturnType<typeof import("@/server/support").getUserSupportTicketSummaries>>["tickets"][number];
+export type UserTicketSummary = Awaited<
+  ReturnType<typeof import("@/server/support").getUserSupportTicketSummaries>
+>["tickets"][number];
 
 export type UserTicketDetailData = SupportTicket & {
   messages: SupportMessage[];
@@ -35,18 +34,9 @@ interface UserInboxClientProps {
   totalCount: number;
 }
 
-const STATUS_FILTERS = [
-  "all",
-  "open",
-  "in_progress",
-  "resolved",
-  "closed",
-] as const;
+const STATUS_FILTERS = ["all", "open", "in_progress", "resolved", "closed"] as const;
 
-export function UserInboxClient({
-  initialTickets,
-  totalCount,
-}: UserInboxClientProps) {
+export function UserInboxClient({ initialTickets, totalCount }: UserInboxClientProps) {
   const router = useRouter();
   const [selectedTicketId, setSelectedTicketId] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<"ticket" | "new" | "empty">(
@@ -54,13 +44,10 @@ export function UserInboxClient({
   );
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
-  const [locallyReadAt, setLocallyReadAt] = useState<Record<string, number>>(
-    {},
-  );
+  const [locallyReadAt, setLocallyReadAt] = useState<Record<string, number>>({});
   const [mounted, setMounted] = useState(false);
   const [tickets, setTickets] = useState(initialTickets);
-  const [selectedTicket, setSelectedTicket] =
-    useState<UserTicketDetailData | null>(null);
+  const [selectedTicket, setSelectedTicket] = useState<UserTicketDetailData | null>(null);
   const [isSelectedTicketLoading, setIsSelectedTicketLoading] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
@@ -70,42 +57,45 @@ export function UserInboxClient({
     setMounted(true);
   }, []);
 
-  const loadSelectedTicket = useCallback(async ({ ticketId }: { ticketId: string }) => {
-    const requestId = selectedTicketRequestIdRef.current + 1;
-    selectedTicketRequestIdRef.current = requestId;
+  const loadSelectedTicket = useCallback(
+    async ({ ticketId }: { ticketId: string }) => {
+      const requestId = selectedTicketRequestIdRef.current + 1;
+      selectedTicketRequestIdRef.current = requestId;
 
-    if (selectedTicket?.id !== ticketId) {
-      setSelectedTicket(null);
-    }
-    setIsSelectedTicketLoading(true);
-
-    try {
-      const [result] = await getSupportTicketDetailAction({ ticketId });
-
-      if (selectedTicketRequestIdRef.current !== requestId) {
-        return;
+      if (selectedTicket?.id !== ticketId) {
+        setSelectedTicket(null);
       }
+      setIsSelectedTicketLoading(true);
 
-      const ticketDetail = result as UserTicketDetailData | undefined;
+      try {
+        const [result] = await getSupportTicketDetailAction({ ticketId });
 
-      setSelectedTicket(
-        ticketDetail
-          ? {
-              ...ticketDetail,
-              messages: [...ticketDetail.messages].sort(
-                (leftMessage, rightMessage) =>
-                  new Date(leftMessage.createdAt).getTime() -
-                  new Date(rightMessage.createdAt).getTime(),
-              ),
-            }
-          : null,
-      );
-    } finally {
-      if (selectedTicketRequestIdRef.current === requestId) {
-        setIsSelectedTicketLoading(false);
+        if (selectedTicketRequestIdRef.current !== requestId) {
+          return;
+        }
+
+        const ticketDetail = result as UserTicketDetailData | undefined;
+
+        setSelectedTicket(
+          ticketDetail
+            ? {
+                ...ticketDetail,
+                messages: [...ticketDetail.messages].sort(
+                  (leftMessage, rightMessage) =>
+                    new Date(leftMessage.createdAt).getTime() -
+                    new Date(rightMessage.createdAt).getTime(),
+                ),
+              }
+            : null,
+        );
+      } finally {
+        if (selectedTicketRequestIdRef.current === requestId) {
+          setIsSelectedTicketLoading(false);
+        }
       }
-    }
-  }, [selectedTicket?.id]);
+    },
+    [selectedTicket?.id],
+  );
 
   // Reset tickets when server refreshes (e.g. after new ticket submitted)
   useEffect(() => {
@@ -133,10 +123,7 @@ export function UserInboxClient({
     try {
       const [result] = await getUserTicketsAction({ page: currentPage + 1 });
       if (result?.tickets) {
-        setTickets((prev) => [
-          ...prev,
-          ...(result.tickets as UserTicketSummary[]),
-        ]);
+        setTickets((prev) => [...prev, ...(result.tickets as UserTicketSummary[])]);
         setCurrentPage((p) => p + 1);
       }
     } finally {
@@ -194,16 +181,17 @@ export function UserInboxClient({
           "flex-col bg-card border-r h-full overflow-hidden",
           "w-full md:w-[40%]",
           // Hide left panel when creating new ticket or viewing a ticket on mobile
-          viewMode === "new"
-            ? "hidden"
-            : viewMode !== "empty"
-              ? "hidden md:flex"
-              : "flex",
+          viewMode === "new" ? "hidden" : viewMode !== "empty" ? "hidden md:flex" : "flex",
         )}
       >
         {/* Header */}
         <div className="shrink-0">
-          <PageHeader items={[{ href: "/dashboard", label: "Dashboard" }, { href: "/dashboard/support", label: "Support" }]} />
+          <PageHeader
+            items={[
+              { href: "/dashboard", label: "Dashboard" },
+              { href: "/dashboard/support", label: "Support" },
+            ]}
+          />
         </div>
 
         {/* Search + status filter bar */}
@@ -218,11 +206,7 @@ export function UserInboxClient({
                 onChange={(e) => setSearchQuery(e.target.value)}
               />
             </div>
-            <Button
-              size="sm"
-              onClick={onNewTicket}
-              className="h-9 gap-1.5 shrink-0"
-            >
+            <Button size="sm" onClick={onNewTicket} className="h-9 gap-1.5 shrink-0">
               <PlusIcon className="h-3.5 w-3.5" /> New thread
             </Button>
           </div>
@@ -282,9 +266,7 @@ export function UserInboxClient({
                   ticket.lastMessageContent === null
                     ? false
                     : ticket.lastMessageIsAdminReply === true;
-                const lastUpdateTs = new Date(
-                  ticket.lastUpdatedAt ?? ticket.createdAt,
-                ).getTime();
+                const lastUpdateTs = new Date(ticket.lastUpdatedAt ?? ticket.createdAt).getTime();
                 const serverReadTs = ticket.lastViewedAt
                   ? new Date(ticket.lastViewedAt).getTime()
                   : 0;
@@ -294,8 +276,7 @@ export function UserInboxClient({
                   lastIsAdminReply &&
                   lastUpdateTs > Math.max(serverReadTs, localReadTs);
 
-                const lastMessage =
-                  ticket.lastMessageContent ?? ticket.description;
+                const lastMessage = ticket.lastMessageContent ?? ticket.description;
 
                 return (
                   <button
@@ -311,9 +292,7 @@ export function UserInboxClient({
                     )}
                   >
                     {/* Active left border accent */}
-                    {isActive && (
-                      <div className="absolute left-0 top-0 bottom-0 w-1 bg-primary" />
-                    )}
+                    {isActive && <div className="absolute left-0 top-0 bottom-0 w-1 bg-primary" />}
 
                     <div className="flex flex-col gap-1 flex-1 min-w-0">
                       {/* Subject + timestamp */}
@@ -335,36 +314,37 @@ export function UserInboxClient({
                           )}
                         </div>
                         <span className="text-xs font-mono tabular-nums text-muted-foreground whitespace-nowrap shrink-0">
-                          {formatDistanceToNow(
-                            new Date(ticket.lastUpdatedAt ?? ticket.createdAt),
-                            {
-                              addSuffix: false,
-                            },
-                          )}
+                          {formatDistanceToNow(new Date(ticket.lastUpdatedAt ?? ticket.createdAt), {
+                            addSuffix: false,
+                          })}
                         </span>
                       </div>
 
                       {/* Last message preview */}
-                      <p className="text-xs truncate text-muted-foreground">
-                        {lastMessage}
-                      </p>
+                      <p className="text-xs truncate text-muted-foreground">{lastMessage}</p>
 
                       {/* Status badge + category */}
                       <div className="flex items-center gap-2 mt-1">
-                        <Badge variant="outline" className={cn(
-                          "h-5 px-1.5 text-xs capitalize font-medium border",
-                          ticket.status === "open"
-                            ? "bg-status-info/10 text-status-info border-status-info/20"
-                            : ticket.status === "in_progress"
-                              ? "bg-status-warning/10 text-status-warning border-status-warning/20"
-                              : ticket.status === "resolved"
-                                ? "bg-status-success/10 text-status-success border-status-success/20"
-                                : "bg-status-neutral/10 text-status-neutral border-status-neutral/20",
-                        )}>
+                        <Badge
+                          variant="outline"
+                          className={cn(
+                            "h-5 px-1.5 text-xs capitalize font-medium border",
+                            ticket.status === "open"
+                              ? "bg-status-info/10 text-status-info border-status-info/20"
+                              : ticket.status === "in_progress"
+                                ? "bg-status-warning/10 text-status-warning border-status-warning/20"
+                                : ticket.status === "resolved"
+                                  ? "bg-status-success/10 text-status-success border-status-success/20"
+                                  : "bg-status-neutral/10 text-status-neutral border-status-neutral/20",
+                          )}
+                        >
                           {ticket.status.replace(/_/g, " ")}
                         </Badge>
 
-                        <Badge variant="outline" className="h-5 px-1.5 text-xs capitalize font-medium bg-primary/5 text-primary/70 border-primary/10">
+                        <Badge
+                          variant="outline"
+                          className="h-5 px-1.5 text-xs capitalize font-medium bg-primary/5 text-primary/70 border-primary/10"
+                        >
                           {ticket.category.replace(/_/g, " ")}
                         </Badge>
                       </div>
@@ -435,7 +415,8 @@ export function UserInboxClient({
               <div>
                 <h2 className="text-xl font-semibold">How can we help?</h2>
                 <p className="text-sm text-muted-foreground mt-1 leading-relaxed">
-                  Select a support thread from the left, or start a new one with the case or file where you are stuck.
+                  Select a support thread from the left, or start a new one with the case or file
+                  where you are stuck.
                 </p>
               </div>
               <Button onClick={onNewTicket} className="gap-2">

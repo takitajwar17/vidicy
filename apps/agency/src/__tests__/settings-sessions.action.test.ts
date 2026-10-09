@@ -27,8 +27,7 @@ vi.mock("zsa", () => {
     createServerAction: () => {
       const chain = {
         input: () => chain,
-        handler: (fn: (args: { input: unknown }) => unknown) => (input: unknown) =>
-          fn({ input }),
+        handler: (fn: (args: { input: unknown }) => unknown) => (input: unknown) => fn({ input }),
       };
 
       return chain;

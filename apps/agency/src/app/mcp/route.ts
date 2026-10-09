@@ -35,32 +35,33 @@ function getMcpHeaders() {
 }
 
 function jsonRpcResult(id: JsonRpcRequestBody["id"], result: Record<string, unknown>) {
-  return NextResponse.json({
-    jsonrpc: "2.0",
-    id,
-    result,
-  }, {
-    headers: getMcpHeaders(),
-  });
+  return NextResponse.json(
+    {
+      jsonrpc: "2.0",
+      id,
+      result,
+    },
+    {
+      headers: getMcpHeaders(),
+    },
+  );
 }
 
-function jsonRpcError(
-  id: JsonRpcRequestBody["id"],
-  code: number,
-  message: string,
-  status = 400,
-) {
-  return NextResponse.json({
-    jsonrpc: "2.0",
-    id,
-    error: {
-      code,
-      message,
+function jsonRpcError(id: JsonRpcRequestBody["id"], code: number, message: string, status = 400) {
+  return NextResponse.json(
+    {
+      jsonrpc: "2.0",
+      id,
+      error: {
+        code,
+        message,
+      },
     },
-  }, {
-    status,
-    headers: getMcpHeaders(),
-  });
+    {
+      status,
+      headers: getMcpHeaders(),
+    },
+  );
 }
 
 function buildInstructions() {
@@ -131,19 +132,26 @@ export async function POST(request: Request): Promise<Response> {
 
   if (body.method === "tools/call") {
     const name = typeof body.params?.name === "string" ? body.params.name : "";
-    const args = typeof body.params?.arguments === "object" && body.params.arguments !== null
-      ? body.params.arguments as Record<string, unknown>
-      : {};
+    const args =
+      typeof body.params?.arguments === "object" && body.params.arguments !== null
+        ? (body.params.arguments as Record<string, unknown>)
+        : {};
 
     if (name === "get_public_markdown") {
       const path = typeof args.path === "string" ? args.path : "";
       if (!isSupportedPublicMarkdownPath(path)) {
-        return jsonRpcResult(body.id ?? null, buildToolCallError("Unsupported public markdown path."));
+        return jsonRpcResult(
+          body.id ?? null,
+          buildToolCallError("Unsupported public markdown path."),
+        );
       }
 
       const payload = getPublicMarkdownPayload(path);
       if (!payload) {
-        return jsonRpcResult(body.id ?? null, buildToolCallError("No markdown payload is available for that path."));
+        return jsonRpcResult(
+          body.id ?? null,
+          buildToolCallError("No markdown payload is available for that path."),
+        );
       }
 
       return jsonRpcResult(body.id ?? null, {

@@ -50,12 +50,15 @@ describe("middleware", () => {
     }
   });
 
-  it.each(["www.vidicy.com", "agency.vidicy.com"])("redirects the agency alias %s and preserves the path and query", async (hostname) => {
-    const response = await middleware(new NextRequest(`https://${hostname}/docs?a=1`));
+  it.each(["www.vidicy.com", "agency.vidicy.com"])(
+    "redirects the agency alias %s and preserves the path and query",
+    async (hostname) => {
+      const response = await middleware(new NextRequest(`https://${hostname}/docs?a=1`));
 
-    expect(response.status).toBe(308);
-    expect(response.headers.get("location")).toBe(`${CANONICAL_SITE_URL}/docs?a=1`);
-  });
+      expect(response.status).toBe(308);
+      expect(response.headers.get("location")).toBe(`${CANONICAL_SITE_URL}/docs?a=1`);
+    },
+  );
 
   it("leaves canonical SEO metadata routes without a csrf cookie", async () => {
     const response = await middleware(new NextRequest(`${CANONICAL_SITE_URL}/sitemap.xml`));

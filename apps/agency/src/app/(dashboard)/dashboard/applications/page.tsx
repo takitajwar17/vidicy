@@ -150,102 +150,102 @@ export default async function ApplicationsPage({
           actionLabel="New client file"
         />
       ) : (
-          <AgencyTableCard
-            title="Case queue"
-            description="Passports, forms, statements, letters, and client fixes by case."
-          >
-            <AgencyTable className={APPLICATIONS_TABLE_TEXT_CLASS}>
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="pl-5">Application ID</TableHead>
-                  <TableHead>Client</TableHead>
-                  <TableHead>Applicant</TableHead>
-                  <TableHead>Visa</TableHead>
-                  <TableHead>Submitted</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Risk</TableHead>
-                  <TableHead>Priority</TableHead>
-                  <TableHead>Reviewer</TableHead>
-                  <TableHead className="pr-5 text-right">Issues</TableHead>
+        <AgencyTableCard
+          title="Case queue"
+          description="Passports, forms, statements, letters, and client fixes by case."
+        >
+          <AgencyTable className={APPLICATIONS_TABLE_TEXT_CLASS}>
+            <TableHeader>
+              <TableRow>
+                <TableHead className="pl-5">Application ID</TableHead>
+                <TableHead>Client</TableHead>
+                <TableHead>Applicant</TableHead>
+                <TableHead>Visa</TableHead>
+                <TableHead>Submitted</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead>Risk</TableHead>
+                <TableHead>Priority</TableHead>
+                <TableHead>Reviewer</TableHead>
+                <TableHead className="pr-5 text-right">Issues</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {rows.map((row) => (
+                <TableRow key={row.application.id}>
+                  <TableCell className="pl-5">
+                    <Link
+                      href={`/dashboard/${row.application.id}` as Route}
+                      className="font-bold text-primary"
+                    >
+                      {getDisplayCaseNumber(row.application.caseNumber, row.application.id)}
+                    </Link>
+                  </TableCell>
+                  <TableCell className={APPLICATIONS_TABLE_CELL_CLASS}>
+                    {row.application.clientName ?? "Unassigned"}
+                  </TableCell>
+                  <TableCell className={APPLICATIONS_TABLE_CELL_CLASS}>
+                    {row.primaryApplicant?.name ?? "Pending"}
+                  </TableCell>
+                  <TableCell>
+                    {formatAgencyVisaLabel({
+                      destinationCountry: row.application.destinationCountry,
+                      visaType: row.application.visaType,
+                    })}
+                  </TableCell>
+                  <TableCell>
+                    {formatShortDate(row.application.submittedAt ?? row.application.createdAt)}
+                  </TableCell>
+                  <TableCell>
+                    <CaseStatusBadge
+                      status={row.application.agencyStatus}
+                      className={APPLICATIONS_TABLE_BADGE_CLASS}
+                    />
+                  </TableCell>
+                  <TableCell>
+                    <RiskBadge
+                      riskLevel={row.latestEvaluation?.riskLevel ?? row.application.riskLevel}
+                      className={APPLICATIONS_TABLE_BADGE_CLASS}
+                    />
+                  </TableCell>
+                  <TableCell>
+                    <PriorityBadge
+                      priority={row.application.priority}
+                      className={APPLICATIONS_TABLE_TEXT_CLASS}
+                    />
+                  </TableCell>
+                  <TableCell>
+                    <ReviewerAvatar
+                      name={row.reviewer ? formatReviewerDisplayName(row.reviewer) : null}
+                      email={row.reviewer?.email ?? null}
+                      avatar={row.reviewer?.avatar ?? null}
+                      className={`${APPLICATIONS_TABLE_TEXT_CLASS} ${APPLICATIONS_TABLE_REVIEWER_CLASS}`}
+                      avatarClassName={APPLICATIONS_TABLE_AVATAR_CLASS}
+                      labelClassName={`${APPLICATIONS_TABLE_TEXT_CLASS} ${APPLICATIONS_TABLE_REVIEWER_LABEL_CLASS}`}
+                    />
+                  </TableCell>
+                  <TableCell className="pr-5 text-right">
+                    <span
+                      className={
+                        row.openIssueCount > 0
+                          ? "font-bold text-destructive"
+                          : "font-medium text-muted-foreground"
+                      }
+                    >
+                      {row.openIssueCount}
+                    </span>
+                  </TableCell>
                 </TableRow>
-              </TableHeader>
-              <TableBody>
-                {rows.map((row) => (
-                  <TableRow key={row.application.id}>
-                    <TableCell className="pl-5">
-                      <Link
-                        href={`/dashboard/${row.application.id}` as Route}
-                        className="font-bold text-primary"
-                      >
-                        {getDisplayCaseNumber(row.application.caseNumber, row.application.id)}
-                      </Link>
-                    </TableCell>
-                    <TableCell className={APPLICATIONS_TABLE_CELL_CLASS}>
-                      {row.application.clientName ?? "Unassigned"}
-                    </TableCell>
-                    <TableCell className={APPLICATIONS_TABLE_CELL_CLASS}>
-                      {row.primaryApplicant?.name ?? "Pending"}
-                    </TableCell>
-                    <TableCell>
-                      {formatAgencyVisaLabel({
-                        destinationCountry: row.application.destinationCountry,
-                        visaType: row.application.visaType,
-                      })}
-                    </TableCell>
-                    <TableCell>
-                      {formatShortDate(row.application.submittedAt ?? row.application.createdAt)}
-                    </TableCell>
-                    <TableCell>
-                      <CaseStatusBadge
-                        status={row.application.agencyStatus}
-                        className={APPLICATIONS_TABLE_BADGE_CLASS}
-                      />
-                    </TableCell>
-                    <TableCell>
-                      <RiskBadge
-                        riskLevel={row.latestEvaluation?.riskLevel ?? row.application.riskLevel}
-                        className={APPLICATIONS_TABLE_BADGE_CLASS}
-                      />
-                    </TableCell>
-                    <TableCell>
-                      <PriorityBadge
-                        priority={row.application.priority}
-                        className={APPLICATIONS_TABLE_TEXT_CLASS}
-                      />
-                    </TableCell>
-                    <TableCell>
-                      <ReviewerAvatar
-                        name={row.reviewer ? formatReviewerDisplayName(row.reviewer) : null}
-                        email={row.reviewer?.email ?? null}
-                        avatar={row.reviewer?.avatar ?? null}
-                        className={`${APPLICATIONS_TABLE_TEXT_CLASS} ${APPLICATIONS_TABLE_REVIEWER_CLASS}`}
-                        avatarClassName={APPLICATIONS_TABLE_AVATAR_CLASS}
-                        labelClassName={`${APPLICATIONS_TABLE_TEXT_CLASS} ${APPLICATIONS_TABLE_REVIEWER_LABEL_CLASS}`}
-                      />
-                    </TableCell>
-                    <TableCell className="pr-5 text-right">
-                      <span
-                        className={
-                          row.openIssueCount > 0
-                            ? "font-bold text-destructive"
-                            : "font-medium text-muted-foreground"
-                        }
-                      >
-                        {row.openIssueCount}
-                      </span>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </AgencyTable>
-            <AgencyPagination
-              page={page}
-              hasNextPage={hasNextPage}
-              previousHref={getApplicationsHref({ page: page - 1, query, status })}
-              nextHref={getApplicationsHref({ page: page + 1, query, status })}
-              endLabel="End of queue"
-            />
-          </AgencyTableCard>
+              ))}
+            </TableBody>
+          </AgencyTable>
+          <AgencyPagination
+            page={page}
+            hasNextPage={hasNextPage}
+            previousHref={getApplicationsHref({ page: page - 1, query, status })}
+            nextHref={getApplicationsHref({ page: page + 1, query, status })}
+            endLabel="End of queue"
+          />
+        </AgencyTableCard>
       )}
     </AgencyPageShell>
   );

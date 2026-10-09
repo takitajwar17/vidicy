@@ -51,8 +51,7 @@ vi.mock("zsa", () => {
     createServerAction: () => {
       const chain = {
         input: () => chain,
-        handler: (fn: (args: { input: unknown }) => unknown) => (input: unknown) =>
-          fn({ input }),
+        handler: (fn: (args: { input: unknown }) => unknown) => (input: unknown) => fn({ input }),
       };
 
       return chain;
@@ -198,13 +197,8 @@ describe("googleSSOCallbackAction", () => {
       lastName: "Con",
       emailVerified: new Date("2026-10-11T02:50:26.053Z"),
     };
-    const mockFindFirst = vi
-      .fn()
-      .mockResolvedValueOnce(null)
-      .mockResolvedValueOnce(null);
-    const mockReturning = vi
-      .fn()
-      .mockResolvedValueOnce([createdUser]);
+    const mockFindFirst = vi.fn().mockResolvedValueOnce(null).mockResolvedValueOnce(null);
+    const mockReturning = vi.fn().mockResolvedValueOnce([createdUser]);
 
     mockGetDB.mockReturnValue({
       query: {
@@ -250,9 +244,7 @@ describe("googleSSOCallbackAction", () => {
       lastName: "Con",
       emailVerified: new Date("2026-10-11T02:50:26.053Z"),
     };
-    const mockFindFirst = vi
-      .fn()
-      .mockResolvedValueOnce(existingUser);
+    const mockFindFirst = vi.fn().mockResolvedValueOnce(existingUser);
     const mockInsert = vi.fn();
 
     mockGetDB.mockReturnValue({
@@ -288,13 +280,8 @@ describe("googleSSOCallbackAction", () => {
       lastName: "Con",
       emailVerified: new Date("2026-10-11T02:50:26.053Z"),
     };
-    const mockFindFirst = vi
-      .fn()
-      .mockResolvedValueOnce(null)
-      .mockResolvedValueOnce(null);
-    const mockReturning = vi
-      .fn()
-      .mockResolvedValueOnce([createdUser]);
+    const mockFindFirst = vi.fn().mockResolvedValueOnce(null).mockResolvedValueOnce(null);
+    const mockReturning = vi.fn().mockResolvedValueOnce([createdUser]);
 
     mockGetDB.mockReturnValue({
       query: {

@@ -11,7 +11,11 @@ import { applicantTable } from "./applicant";
 import { checklistItemTable } from "./checklist";
 import { uploadedDocumentTable, documentEvaluationTable } from "./document";
 import { chatMessageTable, chatConversationTable } from "./chat";
-import { applicationMembershipTable, applicationRoleTable, applicationInvitationTable } from "./collaboration";
+import {
+  applicationMembershipTable,
+  applicationRoleTable,
+  applicationInvitationTable,
+} from "./collaboration";
 import { supportTicketTable, supportMessageTable } from "./support";
 import {
   agencyClientTable,
@@ -30,9 +34,9 @@ export const userRelations = relations(userTable, ({ many }) => ({
 
 export const visaApplicationRelations = relations(visaApplicationTable, ({ one, many }) => ({
   user: one(userTable, {
-	  fields: [visaApplicationTable.userId],
-	  references: [userTable.id],
-	}),
+    fields: [visaApplicationTable.userId],
+    references: [userTable.id],
+  }),
   applicants: many(applicantTable),
   checklistItems: many(checklistItemTable),
   uploadedDocuments: many(uploadedDocumentTable),
@@ -68,17 +72,20 @@ export const marketingContactRelations = relations(marketingContactTable, ({ one
   }),
 }));
 
-export const marketingSequenceEnrollmentRelations = relations(marketingSequenceEnrollmentTable, ({ many, one }) => ({
-  user: one(userTable, {
-    fields: [marketingSequenceEnrollmentTable.userId],
-    references: [userTable.id],
+export const marketingSequenceEnrollmentRelations = relations(
+  marketingSequenceEnrollmentTable,
+  ({ many, one }) => ({
+    user: one(userTable, {
+      fields: [marketingSequenceEnrollmentTable.userId],
+      references: [userTable.id],
+    }),
+    application: one(visaApplicationTable, {
+      fields: [marketingSequenceEnrollmentTable.applicationId],
+      references: [visaApplicationTable.id],
+    }),
+    sends: many(marketingEmailSendTable),
   }),
-  application: one(visaApplicationTable, {
-    fields: [marketingSequenceEnrollmentTable.applicationId],
-    references: [visaApplicationTable.id],
-  }),
-  sends: many(marketingEmailSendTable),
-}));
+);
 
 export const marketingEmailSendRelations = relations(marketingEmailSendTable, ({ one }) => ({
   enrollment: one(marketingSequenceEnrollmentTable, {

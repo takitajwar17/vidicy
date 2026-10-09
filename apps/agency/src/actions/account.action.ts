@@ -50,11 +50,15 @@ export const deleteAccountAction = createServerAction()
     await transferOrDeleteOwnedApplicationsForUser({ userId });
 
     // 2. Remove legacy application memberships and agency team access.
-    await db.delete(applicationMembershipTable).where(eq(applicationMembershipTable.userId, userId));
+    await db
+      .delete(applicationMembershipTable)
+      .where(eq(applicationMembershipTable.userId, userId));
     await db.delete(agencyTeamMemberTable).where(eq(agencyTeamMemberTable.userId, userId));
 
     // 3. Nullify legacy application invitation references where this user invited or accepted.
-    await db.delete(applicationInvitationTable).where(eq(applicationInvitationTable.invitedBy, userId));
+    await db
+      .delete(applicationInvitationTable)
+      .where(eq(applicationInvitationTable.invitedBy, userId));
     await db
       .update(applicationInvitationTable)
       .set({ acceptedBy: null })
@@ -78,9 +82,7 @@ export const deleteAccountAction = createServerAction()
         .select({ screenshotUrls: supportMessageTable.screenshotUrls })
         .from(supportMessageTable)
         .where(inArray(supportMessageTable.ticketId, ticketIds));
-      allScreenshotKeys = allScreenshotKeys.concat(
-        messages.flatMap((m) => m.screenshotUrls ?? [])
-      );
+      allScreenshotKeys = allScreenshotKeys.concat(messages.flatMap((m) => m.screenshotUrls ?? []));
     }
 
     // Best-effort R2 cleanup for all support screenshots
@@ -192,7 +194,10 @@ export const exportUserDataAction = createServerAction()
       [applicants, checklistItems, documents, evaluations, chatMessages, memberships, invitations] =
         await Promise.all([
           db.select().from(applicantTable).where(inArray(applicantTable.applicationId, appIds)),
-          db.select().from(checklistItemTable).where(inArray(checklistItemTable.applicationId, appIds)),
+          db
+            .select()
+            .from(checklistItemTable)
+            .where(inArray(checklistItemTable.applicationId, appIds)),
           db
             .select({
               id: uploadedDocumentTable.id,
@@ -214,10 +219,19 @@ export const exportUserDataAction = createServerAction()
             })
             .from(uploadedDocumentTable)
             .where(inArray(uploadedDocumentTable.applicationId, appIds)),
-          db.select().from(documentEvaluationTable).where(inArray(documentEvaluationTable.applicationId, appIds)),
+          db
+            .select()
+            .from(documentEvaluationTable)
+            .where(inArray(documentEvaluationTable.applicationId, appIds)),
           db.select().from(chatMessageTable).where(inArray(chatMessageTable.applicationId, appIds)),
-          db.select().from(applicationMembershipTable).where(inArray(applicationMembershipTable.applicationId, appIds)),
-          db.select().from(applicationInvitationTable).where(inArray(applicationInvitationTable.applicationId, appIds)),
+          db
+            .select()
+            .from(applicationMembershipTable)
+            .where(inArray(applicationMembershipTable.applicationId, appIds)),
+          db
+            .select()
+            .from(applicationInvitationTable)
+            .where(inArray(applicationInvitationTable.applicationId, appIds)),
         ]);
     }
 
@@ -245,31 +259,17 @@ export const exportUserDataAction = createServerAction()
       dataSubject: user,
       applications: applications.map((app) => ({
         ...app,
-        applicants: applicants.filter(
-          (a) => a.applicationId === app.id
-        ),
-        checklistItems: checklistItems.filter(
-          (c) => c.applicationId === app.id
-        ),
-        documents: documents.filter(
-          (d) => d.applicationId === app.id
-        ),
-        evaluations: evaluations.filter(
-          (e) => e.applicationId === app.id
-        ),
-        chatMessages: chatMessages.filter(
-          (m) => m.applicationId === app.id
-        ),
-        memberships: memberships.filter(
-          (m) => m.applicationId === app.id
-        ),
-        invitations: invitations.filter(
-          (i) => i.applicationId === app.id
-        ),
-	      })),
-	      supportTickets,
-	      agencyStaffMembership,
-	      _notice:
+        applicants: applicants.filter((a) => a.applicationId === app.id),
+        checklistItems: checklistItems.filter((c) => c.applicationId === app.id),
+        documents: documents.filter((d) => d.applicationId === app.id),
+        evaluations: evaluations.filter((e) => e.applicationId === app.id),
+        chatMessages: chatMessages.filter((m) => m.applicationId === app.id),
+        memberships: memberships.filter((m) => m.applicationId === app.id),
+        invitations: invitations.filter((i) => i.applicationId === app.id),
+      })),
+      supportTickets,
+      agencyStaffMembership,
+      _notice:
         "This export contains all personal data held by Vidicy. " +
         "Uploaded document files (PDFs) are not included in this JSON export due to size constraints. " +
         "To request document file copies, contact support.",

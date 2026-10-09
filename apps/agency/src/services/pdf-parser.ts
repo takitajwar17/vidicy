@@ -1,10 +1,10 @@
-import "server-only"
-import { logger } from "@/infra/logger"
-import { AI_TIMEOUT_CHAT_MS } from "@/constants"
-import { getOpenAIClient, isModelAvailabilityError, isTimeoutLikeAIError } from "@/lib/openai"
-import { ThinkingLevel } from "@google/genai"
-import { GEMINI_DOCUMENT_EXTRACTION_MODEL, getGeminiClient } from "@/lib/gemini"
-import { buildGeminiDocumentPrompt, GEMINI_DOCUMENT_EMPTY_SENTINEL } from "@/lib/gemini-document"
+import "server-only";
+import { logger } from "@/infra/logger";
+import { AI_TIMEOUT_CHAT_MS } from "@/constants";
+import { getOpenAIClient, isModelAvailabilityError, isTimeoutLikeAIError } from "@/lib/openai";
+import { ThinkingLevel } from "@google/genai";
+import { GEMINI_DOCUMENT_EXTRACTION_MODEL, getGeminiClient } from "@/lib/gemini";
+import { buildGeminiDocumentPrompt, GEMINI_DOCUMENT_EMPTY_SENTINEL } from "@/lib/gemini-document";
 
 /**
  * Shared PDF text extraction service.
@@ -20,63 +20,63 @@ import { buildGeminiDocumentPrompt, GEMINI_DOCUMENT_EMPTY_SENTINEL } from "@/lib
 
 export interface PdfParseResult {
   /** Extracted plain text. Empty string on failure. */
-  text: string
+  text: string;
   /** Whether text was successfully extracted. */
-  success: boolean
+  success: boolean;
   /** Human-readable error message when success is false. */
-  error?: string
+  error?: string;
 }
 
-const OPENAI_DOC_EXTRACT_PRIMARY_MODEL = "gpt-4.1"
-const OPENAI_DOC_EXTRACT_FALLBACK_MODEL = "gpt-4.1-mini"
-const OPENAI_DOC_EXTRACT_MAX_CHARS = 120_000
-const OPENAI_DOC_EXTRACT_EMPTY_SENTINEL = GEMINI_DOCUMENT_EMPTY_SENTINEL
-export const MAX_PDF_PAGE_COUNT = 40
+const OPENAI_DOC_EXTRACT_PRIMARY_MODEL = "gpt-4.1";
+const OPENAI_DOC_EXTRACT_FALLBACK_MODEL = "gpt-4.1-mini";
+const OPENAI_DOC_EXTRACT_MAX_CHARS = 120_000;
+const OPENAI_DOC_EXTRACT_EMPTY_SENTINEL = GEMINI_DOCUMENT_EMPTY_SENTINEL;
+export const MAX_PDF_PAGE_COUNT = 40;
 
 export interface RenderedPdfPageImage {
-  pageNumber: number
-  imageDataUrl: string
+  pageNumber: number;
+  imageDataUrl: string;
 }
 
 export interface RenderedPdfPagesResult {
-  pages: RenderedPdfPageImage[]
-  success: boolean
-  pageCount: number
-  error?: string
+  pages: RenderedPdfPageImage[];
+  success: boolean;
+  pageCount: number;
+  error?: string;
 }
 
 export interface PdfPageAiExtractionPage {
-  pageNumber: number
-  text: string
-  success: boolean
-  error?: string
+  pageNumber: number;
+  text: string;
+  success: boolean;
+  error?: string;
 }
 
 export interface PdfPageAiExtractionResult {
-  pages: PdfPageAiExtractionPage[]
-  success: boolean
-  text: string
-  error?: string
+  pages: PdfPageAiExtractionPage[];
+  success: boolean;
+  text: string;
+  error?: string;
 }
 
 interface OpenAIDocumentExtractionParams {
-  bytes?: Uint8Array
-  dataUrl?: string
-  mimeType: "application/pdf" | `image/${string}`
-  filename: string
-  promptOverride?: string
+  bytes?: Uint8Array;
+  dataUrl?: string;
+  mimeType: "application/pdf" | `image/${string}`;
+  filename: string;
+  promptOverride?: string;
 }
 
 interface ExtractTextFromPdfOptions {
-  enableOpenAiFallback?: boolean
+  enableOpenAiFallback?: boolean;
 }
 
 export function buildDocumentExtractionPrompt({
   mimeType,
 }: {
-  mimeType: "application/pdf" | `image/${string}`
+  mimeType: "application/pdf" | `image/${string}`;
 }): string {
-  const isPdf = mimeType === "application/pdf"
+  const isPdf = mimeType === "application/pdf";
 
   if (isPdf) {
     return (
@@ -84,7 +84,7 @@ export function buildDocumentExtractionPrompt({
       " Preserve original wording, numbers, dates, and line breaks where possible." +
       " Return plain text only (no markdown, no explanation)." +
       ` If nothing is readable, return exactly: ${OPENAI_DOC_EXTRACT_EMPTY_SENTINEL}`
-    )
+    );
   }
 
   return (
@@ -98,20 +98,20 @@ export function buildDocumentExtractionPrompt({
     "READABLE_TEXT:\n" +
     "<verbatim extracted text>\n" +
     `If there is no readable text, still provide IMAGE_DESCRIPTION, then write exactly ${OPENAI_DOC_EXTRACT_EMPTY_SENTINEL} on the line after READABLE_TEXT:.`
-  )
+  );
 }
 
 function shouldUseGeminiDocumentExtraction(): boolean {
-  if (process.env.NODE_ENV === "test") return false
-  const flag = process.env.GEMINI_DOCUMENT_EXTRACTION?.toLowerCase()
-  return flag !== "0" && flag !== "false"
+  if (process.env.NODE_ENV === "test") return false;
+  const flag = process.env.GEMINI_DOCUMENT_EXTRACTION?.toLowerCase();
+  return flag !== "0" && flag !== "false";
 }
 
 function shouldUseOpenAIDocumentExtractionFallback(): boolean {
-  const flag = process.env.OPENAI_DOCUMENT_EXTRACTION_FALLBACK?.toLowerCase()
-  if (flag === "0" || flag === "false") return false
-  if (process.env.NODE_ENV === "test") return false
-  return true
+  const flag = process.env.OPENAI_DOCUMENT_EXTRACTION_FALLBACK?.toLowerCase();
+  if (flag === "0" || flag === "false") return false;
+  if (process.env.NODE_ENV === "test") return false;
+  return true;
 }
 
 function buildPdfPageImageExtractionPrompt(): string {
@@ -120,38 +120,38 @@ function buildPdfPageImageExtractionPrompt(): string {
     " Preserve original wording, numbers, dates, and line breaks where possible." +
     " Return plain text only (no markdown, no explanation)." +
     ` If nothing is readable, return exactly: ${OPENAI_DOC_EXTRACT_EMPTY_SENTINEL}`
-  )
+  );
 }
 
 async function loadPdfJsDocument(bytes: Uint8Array) {
-  const { DOMMatrix, ImageData, Path2D } = await import("@napi-rs/canvas")
-  const graphics = globalThis as unknown as Record<string, unknown>
-  graphics.DOMMatrix ??= DOMMatrix
-  graphics.ImageData ??= ImageData
-  graphics.Path2D ??= Path2D
-  const { createIsomorphicCanvasFactory, getDocumentProxy } = await import("unpdf")
-  const CanvasFactory = await createIsomorphicCanvasFactory(() => import("@napi-rs/canvas"))
-  return getDocumentProxy(bytes, { CanvasFactory })
+  const { DOMMatrix, ImageData, Path2D } = await import("@napi-rs/canvas");
+  const graphics = globalThis as unknown as Record<string, unknown>;
+  graphics.DOMMatrix ??= DOMMatrix;
+  graphics.ImageData ??= ImageData;
+  graphics.Path2D ??= Path2D;
+  const { createIsomorphicCanvasFactory, getDocumentProxy } = await import("unpdf");
+  const CanvasFactory = await createIsomorphicCanvasFactory(() => import("@napi-rs/canvas"));
+  return getDocumentProxy(bytes, { CanvasFactory });
 }
 
 async function extractTextFromPdfNative(bytes: Uint8Array): Promise<PdfParseResult> {
   try {
-    const { getDocumentProxy, extractText } = await import("unpdf")
-    const pdf = await getDocumentProxy(bytes)
-    const { text } = await extractText(pdf, { mergePages: true })
+    const { getDocumentProxy, extractText } = await import("unpdf");
+    const pdf = await getDocumentProxy(bytes);
+    const { text } = await extractText(pdf, { mergePages: true });
 
     if (!text || text.trim().length === 0) {
       return {
         text: "",
         success: false,
         error: "No extractable text — document may be scanned or image-only",
-      }
+      };
     }
 
-    return { text: text.trim(), success: true }
+    return { text: text.trim(), success: true };
   } catch (err) {
-    const message = err instanceof Error ? err.message : String(err)
-    return { text: "", success: false, error: message }
+    const message = err instanceof Error ? err.message : String(err);
+    return { text: "", success: false, error: message };
   }
 }
 
@@ -163,37 +163,37 @@ async function callOpenAITextExtraction({
   filename,
   promptOverride,
 }: {
-  model: string
-  bytes?: Uint8Array
-  dataUrl?: string
-  mimeType: "application/pdf" | `image/${string}`
-  filename: string
-  promptOverride?: string
+  model: string;
+  bytes?: Uint8Array;
+  dataUrl?: string;
+  mimeType: "application/pdf" | `image/${string}`;
+  filename: string;
+  promptOverride?: string;
 }): Promise<PdfParseResult> {
-  const openai = getOpenAIClient()
+  const openai = getOpenAIClient();
   const dataUrl =
-    providedDataUrl ?? (bytes ? `data:${mimeType};base64,${bufferToBase64(bytes)}` : null)
+    providedDataUrl ?? (bytes ? `data:${mimeType};base64,${bufferToBase64(bytes)}` : null);
   if (!dataUrl) {
-    throw new Error("Document extraction requires bytes or a data URL")
+    throw new Error("Document extraction requires bytes or a data URL");
   }
 
-  const isPdf = mimeType === "application/pdf"
-  const prompt = promptOverride ?? buildDocumentExtractionPrompt({ mimeType })
+  const isPdf = mimeType === "application/pdf";
+  const prompt = promptOverride ?? buildDocumentExtractionPrompt({ mimeType });
 
   const content = [
     { type: "input_text" as const, text: prompt },
     isPdf
-      ? ({
+      ? {
           type: "input_file" as const,
           filename,
           file_data: dataUrl,
-        })
-      : ({
+        }
+      : {
           type: "input_image" as const,
           detail: "high" as const,
           image_url: dataUrl,
-        }),
-  ]
+        },
+  ];
 
   const response = await openai.responses.create(
     {
@@ -202,31 +202,31 @@ async function callOpenAITextExtraction({
       max_output_tokens: 6_000,
     },
     { signal: AbortSignal.timeout(AI_TIMEOUT_CHAT_MS) },
-  )
+  );
 
-  const raw = response.output_text?.trim() ?? ""
+  const raw = response.output_text?.trim() ?? "";
   if (!raw || raw === OPENAI_DOC_EXTRACT_EMPTY_SENTINEL) {
     return {
       text: "",
       success: false,
       error: "No extractable text — document may be scanned or image-only",
-    }
+    };
   }
 
   return {
     text: raw.slice(0, OPENAI_DOC_EXTRACT_MAX_CHARS),
     success: true,
-  }
+  };
 }
 
 async function callGeminiTextExtraction({
   bytes,
   mimeType,
 }: {
-  bytes: Uint8Array
-  mimeType: "application/pdf" | `image/${string}`
+  bytes: Uint8Array;
+  mimeType: "application/pdf" | `image/${string}`;
 }): Promise<PdfParseResult> {
-  const gemini = getGeminiClient()
+  const gemini = getGeminiClient();
   const response = await gemini.models.generateContent({
     model: GEMINI_DOCUMENT_EXTRACTION_MODEL,
     contents: [
@@ -243,44 +243,44 @@ async function callGeminiTextExtraction({
       abortSignal: AbortSignal.timeout(AI_TIMEOUT_CHAT_MS),
       httpOptions: { timeout: AI_TIMEOUT_CHAT_MS },
     },
-  })
+  });
 
-  const candidate = response.candidates?.[0]
+  const candidate = response.candidates?.[0];
   if (candidate?.finishReason && candidate.finishReason !== "STOP") {
-    throw new Error(`Gemini document extraction did not complete: ${candidate.finishReason}`)
+    throw new Error(`Gemini document extraction did not complete: ${candidate.finishReason}`);
   }
 
-  const raw = response.text?.trim() ?? ""
+  const raw = response.text?.trim() ?? "";
   if (!raw || raw === GEMINI_DOCUMENT_EMPTY_SENTINEL) {
     return {
       text: "",
       success: false,
       error: "No extractable text — document may be scanned or image-only",
-    }
+    };
   }
 
-  return { text: raw.slice(0, OPENAI_DOC_EXTRACT_MAX_CHARS), success: true }
+  return { text: raw.slice(0, OPENAI_DOC_EXTRACT_MAX_CHARS), success: true };
 }
 
 async function extractTextWithGemini({
   bytes,
   mimeType,
 }: {
-  bytes: Uint8Array
-  mimeType: "application/pdf" | `image/${string}`
+  bytes: Uint8Array;
+  mimeType: "application/pdf" | `image/${string}`;
 }): Promise<PdfParseResult> {
   try {
-    const result = await callGeminiTextExtraction({ bytes, mimeType })
+    const result = await callGeminiTextExtraction({ bytes, mimeType });
     logger.info("Recovered document text with Gemini document extraction", {
       provider: "vertex-ai",
       model: GEMINI_DOCUMENT_EXTRACTION_MODEL,
       mimeType,
-    })
-    return result
+    });
+    return result;
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error)
-    logger.warn("Gemini document extraction failed", { error: message, mimeType })
-    return { text: "", success: false, error: message }
+    const message = error instanceof Error ? error.message : String(error);
+    logger.warn("Gemini document extraction failed", { error: message, mimeType });
+    return { text: "", success: false, error: message };
   }
 }
 
@@ -299,24 +299,24 @@ async function extractTextWithOpenAIDocumentFallback({
       mimeType,
       filename,
       promptOverride,
-    })
+    });
   } catch (primaryError) {
     const shouldRetryFallback =
       isModelAvailabilityError({
         error: primaryError,
         model: OPENAI_DOC_EXTRACT_PRIMARY_MODEL,
-      }) || isTimeoutLikeAIError({ error: primaryError })
+      }) || isTimeoutLikeAIError({ error: primaryError });
 
     if (!shouldRetryFallback) {
-      const message = primaryError instanceof Error ? primaryError.message : String(primaryError)
-      return { text: "", success: false, error: message }
+      const message = primaryError instanceof Error ? primaryError.message : String(primaryError);
+      return { text: "", success: false, error: message };
     }
 
     logger.warn("Primary OpenAI document extraction model failed; retrying fallback", {
       model: OPENAI_DOC_EXTRACT_PRIMARY_MODEL,
       fallbackModel: OPENAI_DOC_EXTRACT_FALLBACK_MODEL,
       error: primaryError,
-    })
+    });
 
     try {
       return await callOpenAITextExtraction({
@@ -326,10 +326,11 @@ async function extractTextWithOpenAIDocumentFallback({
         mimeType,
         filename,
         promptOverride,
-      })
+      });
     } catch (fallbackError) {
-      const message = fallbackError instanceof Error ? fallbackError.message : String(fallbackError)
-      return { text: "", success: false, error: message }
+      const message =
+        fallbackError instanceof Error ? fallbackError.message : String(fallbackError);
+      return { text: "", success: false, error: message };
     }
   }
 }
@@ -344,36 +345,36 @@ export async function extractTextFromPdf(
   bytes: Uint8Array,
   { enableOpenAiFallback = true }: ExtractTextFromPdfOptions = {},
 ): Promise<PdfParseResult> {
-  const nativeResult = await extractTextFromPdfNative(bytes)
+  const nativeResult = await extractTextFromPdfNative(bytes);
   if (nativeResult.success) {
-    return nativeResult
+    return nativeResult;
   }
 
   if (shouldUseGeminiDocumentExtraction()) {
-    const geminiResult = await extractTextWithGemini({ bytes, mimeType: "application/pdf" })
-    if (geminiResult.success) return geminiResult
+    const geminiResult = await extractTextWithGemini({ bytes, mimeType: "application/pdf" });
+    if (geminiResult.success) return geminiResult;
   }
 
   if (!enableOpenAiFallback || !shouldUseOpenAIDocumentExtractionFallback()) {
-    return nativeResult
+    return nativeResult;
   }
 
   const fallbackResult = await extractTextWithOpenAIDocumentFallback({
     bytes,
     mimeType: "application/pdf",
     filename: "uploaded-document.pdf",
-  })
+  });
 
   if (fallbackResult.success) {
-    logger.info("Recovered document text with OpenAI extraction fallback")
-    return fallbackResult
+    logger.info("Recovered document text with OpenAI extraction fallback");
+    return fallbackResult;
   }
 
   return {
     text: "",
     success: false,
     error: [nativeResult.error, fallbackResult.error].filter(Boolean).join(" | "),
-  }
+  };
 }
 
 /**
@@ -385,13 +386,13 @@ export async function extractTextFromImage({
   mimeType,
   filename,
 }: {
-  bytes: Uint8Array
-  mimeType: `image/${string}`
-  filename?: string
+  bytes: Uint8Array;
+  mimeType: `image/${string}`;
+  filename?: string;
 }): Promise<PdfParseResult> {
   if (shouldUseGeminiDocumentExtraction()) {
-    const geminiResult = await extractTextWithGemini({ bytes, mimeType })
-    if (geminiResult.success) return geminiResult
+    const geminiResult = await extractTextWithGemini({ bytes, mimeType });
+    if (geminiResult.success) return geminiResult;
   }
 
   if (!shouldUseOpenAIDocumentExtractionFallback()) {
@@ -399,65 +400,62 @@ export async function extractTextFromImage({
       text: "",
       success: false,
       error: "OpenAI document extraction fallback is disabled",
-    }
+    };
   }
 
   return extractTextWithOpenAIDocumentFallback({
     bytes,
     mimeType,
     filename: filename ?? "uploaded-image",
-  })
+  });
 }
 
 export async function getPdfPageCount(bytes: Uint8Array): Promise<number> {
-  const pdf = await loadPdfJsDocument(bytes)
-  return pdf.numPages
+  const pdf = await loadPdfJsDocument(bytes);
+  return pdf.numPages;
 }
 
 export async function renderPdfPagesForExtraction({
   bytes,
   maxPages = MAX_PDF_PAGE_COUNT,
 }: {
-  bytes: Uint8Array
-  maxPages?: number
+  bytes: Uint8Array;
+  maxPages?: number;
 }): Promise<RenderedPdfPagesResult> {
   try {
-    const pdf = await loadPdfJsDocument(bytes)
-    const totalPages = pdf.numPages
-    const pagesToRender = Math.min(totalPages, maxPages)
-    const pages: RenderedPdfPageImage[] = []
+    const pdf = await loadPdfJsDocument(bytes);
+    const totalPages = pdf.numPages;
+    const pagesToRender = Math.min(totalPages, maxPages);
+    const pages: RenderedPdfPageImage[] = [];
 
     for (let pageNumber = 1; pageNumber <= pagesToRender; pageNumber++) {
       try {
-        const page = await pdf.getPage(pageNumber)
-        const defaultViewport = page.getViewport({ scale: 1 })
-        const scale = Math.min(1200 / defaultViewport.width, 2.0)
-        const viewport = page.getViewport({ scale })
+        const page = await pdf.getPage(pageNumber);
+        const defaultViewport = page.getViewport({ scale: 1 });
+        const scale = Math.min(1200 / defaultViewport.width, 2.0);
+        const viewport = page.getViewport({ scale });
 
-        const { createCanvas } = await import("@napi-rs/canvas")
-        const canvas = createCanvas(
-          Math.round(viewport.width),
-          Math.round(viewport.height),
-        )
-        const context = canvas.getContext("2d")
+        const { createCanvas } = await import("@napi-rs/canvas");
+        const canvas = createCanvas(Math.round(viewport.width), Math.round(viewport.height));
+        const context = canvas.getContext("2d");
         if (!context) {
-          throw new Error("PDF canvas 2D context unavailable")
+          throw new Error("PDF canvas 2D context unavailable");
         }
 
         await page.render({
           canvas: null,
           canvasContext: context as unknown as CanvasRenderingContext2D,
           viewport,
-        }).promise
+        }).promise;
 
-        const base64 = canvas.toBuffer("image/jpeg", 85).toString("base64")
+        const base64 = canvas.toBuffer("image/jpeg", 85).toString("base64");
 
         pages.push({
           pageNumber,
           imageDataUrl: `data:image/jpeg;base64,${base64}`,
-        })
+        });
       } catch (pageError) {
-        logger.warn("PDF extraction page render failed", { pageNumber, error: pageError })
+        logger.warn("PDF extraction page render failed", { pageNumber, error: pageError });
       }
     }
 
@@ -466,15 +464,15 @@ export async function renderPdfPagesForExtraction({
       success: pages.length > 0,
       pageCount: totalPages,
       error: pages.length === 0 ? "No pages could be rendered" : undefined,
-    }
+    };
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error)
+    const message = error instanceof Error ? error.message : String(error);
     return {
       pages: [],
       success: false,
       pageCount: 0,
       error: message,
-    }
+    };
   }
 }
 
@@ -482,8 +480,8 @@ export async function extractTextFromRenderedPdfPages({
   pages,
   filenamePrefix = "uploaded-document",
 }: {
-  pages: RenderedPdfPageImage[]
-  filenamePrefix?: string
+  pages: RenderedPdfPageImage[];
+  filenamePrefix?: string;
 }): Promise<PdfPageAiExtractionResult> {
   if (pages.length === 0) {
     return {
@@ -491,7 +489,7 @@ export async function extractTextFromRenderedPdfPages({
       success: false,
       text: "",
       error: "No rendered PDF pages available for AI extraction",
-    }
+    };
   }
 
   if (!shouldUseOpenAIDocumentExtractionFallback()) {
@@ -500,11 +498,11 @@ export async function extractTextFromRenderedPdfPages({
       success: false,
       text: "",
       error: "OpenAI document extraction fallback is disabled",
-    }
+    };
   }
 
-  const sortedPages = [...pages].sort((left, right) => left.pageNumber - right.pageNumber)
-  const extractedPages: PdfPageAiExtractionPage[] = []
+  const sortedPages = [...pages].sort((left, right) => left.pageNumber - right.pageNumber);
+  const extractedPages: PdfPageAiExtractionPage[] = [];
 
   for (const page of sortedPages) {
     const result = await extractTextWithOpenAIDocumentFallback({
@@ -512,60 +510,61 @@ export async function extractTextFromRenderedPdfPages({
       mimeType: "image/jpeg",
       filename: `${filenamePrefix}-page-${page.pageNumber}.jpg`,
       promptOverride: buildPdfPageImageExtractionPrompt(),
-    })
+    });
 
     extractedPages.push({
       pageNumber: page.pageNumber,
       text: result.success ? result.text.trim() : "",
       success: result.success,
       error: result.error,
-    })
+    });
   }
 
   const text = extractedPages
     .filter((page) => page.success && page.text.length > 0)
     .map((page) => page.text)
     .join("\n\n")
-    .slice(0, OPENAI_DOC_EXTRACT_MAX_CHARS)
+    .slice(0, OPENAI_DOC_EXTRACT_MAX_CHARS);
 
   if (text.length === 0) {
     return {
       pages: extractedPages,
       success: false,
       text: "",
-      error: extractedPages
-        .map((page) => page.error)
-        .filter(Boolean)
-        .join(" | ") || "No extractable text found across rendered PDF pages",
-    }
+      error:
+        extractedPages
+          .map((page) => page.error)
+          .filter(Boolean)
+          .join(" | ") || "No extractable text found across rendered PDF pages",
+    };
   }
 
   return {
     pages: extractedPages,
     success: true,
     text,
-  }
+  };
 }
 
 export interface PdfMetadataSignals {
   /** Authoring application (e.g. "Microsoft Word", "Adobe Acrobat") */
-  creator: string | null
+  creator: string | null;
   /** PDF renderer/library (e.g. "Adobe PDF Library 21.0") */
-  producer: string | null
+  producer: string | null;
   /** Parsed creation date, null if absent or unparseable */
-  creationDate: Date | null
+  creationDate: Date | null;
   /** Parsed last-modification date, null if absent or unparseable */
-  modDate: Date | null
+  modDate: Date | null;
   /** True if ModDate is meaningfully later than CreationDate */
-  isModified: boolean
+  isModified: boolean;
   /** Days between creation and last modification, null if dates unavailable */
-  modificationGapDays: number | null
+  modificationGapDays: number | null;
   /** True if creation date is in the future (impossible for a genuine document) */
-  creationInFuture: boolean
+  creationInFuture: boolean;
   /** True if all metadata fields are empty (stripped metadata is suspicious) */
-  hasNoMetadata: boolean
+  hasNoMetadata: boolean;
   /** Total page count */
-  pageCount: number
+  pageCount: number;
 }
 
 /**
@@ -573,15 +572,15 @@ export interface PdfMetadataSignals {
  * Returns null if the string is absent, malformed, or produces an invalid Date.
  */
 function parsePdfDate(raw: unknown): Date | null {
-  if (!raw || typeof raw !== "string") return null
+  if (!raw || typeof raw !== "string") return null;
   // Strip leading "D:" prefix
-  const s = raw.replace(/^D:/, "")
+  const s = raw.replace(/^D:/, "");
   // Extract components — everything after the seconds is optional timezone
-  const m = s.match(/^(\d{4})(\d{2})(\d{2})(\d{2})(\d{2})(\d{2})/)
-  if (!m) return null
-  const [, y, mo, d, h, min, sec] = m
-  const date = new Date(`${y}-${mo}-${d}T${h}:${min}:${sec}Z`)
-  return isNaN(date.getTime()) ? null : date
+  const m = s.match(/^(\d{4})(\d{2})(\d{2})(\d{2})(\d{2})(\d{2})/);
+  if (!m) return null;
+  const [, y, mo, d, h, min, sec] = m;
+  const date = new Date(`${y}-${mo}-${d}T${h}:${min}:${sec}Z`);
+  return isNaN(date.getTime()) ? null : date;
 }
 
 /**
@@ -593,58 +592,77 @@ function parsePdfDate(raw: unknown): Date | null {
  */
 export async function extractPdfMetadata(bytes: Uint8Array): Promise<PdfMetadataSignals> {
   const safe: PdfMetadataSignals = {
-    creator: null, producer: null, creationDate: null, modDate: null,
-    isModified: false, modificationGapDays: null, creationInFuture: false,
-    hasNoMetadata: false, pageCount: 0,
-  }
+    creator: null,
+    producer: null,
+    creationDate: null,
+    modDate: null,
+    isModified: false,
+    modificationGapDays: null,
+    creationInFuture: false,
+    hasNoMetadata: false,
+    pageCount: 0,
+  };
 
   try {
-    const { DOMMatrix, ImageData, Path2D } = await import("@napi-rs/canvas")
-  const graphics = globalThis as unknown as Record<string, unknown>
-  graphics.DOMMatrix ??= DOMMatrix
-  graphics.ImageData ??= ImageData
-  graphics.Path2D ??= Path2D
-  const { getResolvedPDFJS } = await import("unpdf")
-    const { getDocument } = await getResolvedPDFJS()
+    const { DOMMatrix, ImageData, Path2D } = await import("@napi-rs/canvas");
+    const graphics = globalThis as unknown as Record<string, unknown>;
+    graphics.DOMMatrix ??= DOMMatrix;
+    graphics.ImageData ??= ImageData;
+    graphics.Path2D ??= Path2D;
+    const { getResolvedPDFJS } = await import("unpdf");
+    const { getDocument } = await getResolvedPDFJS();
 
-    const pdf = await getDocument({ data: bytes }).promise
+    const pdf = await getDocument({ data: bytes }).promise;
 
-    const { info } = await pdf.getMetadata() as { info: Record<string, unknown>; metadata: unknown }
+    const { info } = (await pdf.getMetadata()) as {
+      info: Record<string, unknown>;
+      metadata: unknown;
+    };
 
-    const creator = typeof info.Creator === "string" ? info.Creator.trim() || null : null
-    const producer = typeof info.Producer === "string" ? info.Producer.trim() || null : null
-    const creationDate = parsePdfDate(info.CreationDate)
-    const modDate = parsePdfDate(info.ModDate)
-    const pageCount = pdf.numPages
+    const creator = typeof info.Creator === "string" ? info.Creator.trim() || null : null;
+    const producer = typeof info.Producer === "string" ? info.Producer.trim() || null : null;
+    const creationDate = parsePdfDate(info.CreationDate);
+    const modDate = parsePdfDate(info.ModDate);
+    const pageCount = pdf.numPages;
 
-    const hasNoMetadata = !creator && !producer && !creationDate && !modDate
+    const hasNoMetadata = !creator && !producer && !creationDate && !modDate;
 
-    let isModified = false
-    let modificationGapDays: number | null = null
+    let isModified = false;
+    let modificationGapDays: number | null = null;
     if (creationDate && modDate) {
-      const gapMs = modDate.getTime() - creationDate.getTime()
-      modificationGapDays = Math.round(gapMs / 86_400_000)
+      const gapMs = modDate.getTime() - creationDate.getTime();
+      modificationGapDays = Math.round(gapMs / 86_400_000);
       // Only flag as modified if ModDate is at least 1 minute later than CreationDate
-      isModified = gapMs > 60_000
+      isModified = gapMs > 60_000;
     }
 
-    const creationInFuture = creationDate ? creationDate > new Date() : false
+    const creationInFuture = creationDate ? creationDate > new Date() : false;
 
-    return { creator, producer, creationDate, modDate, isModified, modificationGapDays, creationInFuture, hasNoMetadata, pageCount }
+    return {
+      creator,
+      producer,
+      creationDate,
+      modDate,
+      isModified,
+      modificationGapDays,
+      creationInFuture,
+      hasNoMetadata,
+      pageCount,
+    };
   } catch {
-    return safe
+    return safe;
   }
 }
 
 export interface DocumentImagesResult {
   /** Base64 data URLs (JPEG or original format) for each page/image, ready for GPT-4o Vision. */
-  images: string[]
+  images: string[];
   /** Whether at least one image was successfully produced. */
-  success: boolean
+  success: boolean;
   /** Total page count for PDFs, 1 for image files. */
-  pageCount: number
+  pageCount: number;
   /** Human-readable error if success is false. */
-  error?: string
+  error?: string;
 }
 
 /**
@@ -665,30 +683,35 @@ export async function extractDocumentImages(
   // --- Image files: encode bytes directly as a base64 data URL ---
   if (mimeType.startsWith("image/")) {
     try {
-      const base64 = bufferToBase64(bytes)
+      const base64 = bufferToBase64(bytes);
       return {
         images: [`data:${mimeType};base64,${base64}`],
         success: true,
         pageCount: 1,
-      }
+      };
     } catch (err) {
-      const message = err instanceof Error ? err.message : String(err)
-      return { images: [], success: false, pageCount: 0, error: message }
+      const message = err instanceof Error ? err.message : String(err);
+      return { images: [], success: false, pageCount: 0, error: message };
     }
   }
 
   // --- PDFs: render pages via PDF.js and the Node canvas ---
   if (mimeType !== "application/pdf") {
-    return { images: [], success: false, pageCount: 0, error: `Unsupported MIME type: ${mimeType}` }
+    return {
+      images: [],
+      success: false,
+      pageCount: 0,
+      error: `Unsupported MIME type: ${mimeType}`,
+    };
   }
 
-  const renderedPages = await renderPdfPagesForExtraction({ bytes, maxPages })
+  const renderedPages = await renderPdfPagesForExtraction({ bytes, maxPages });
   return {
     images: renderedPages.pages.map((page) => page.imageDataUrl),
     success: renderedPages.success,
     pageCount: renderedPages.pageCount,
     error: renderedPages.error,
-  }
+  };
 }
 
 /**
@@ -696,10 +719,10 @@ export async function extractDocumentImages(
  * Uses btoa with a typed-array-safe approach that works in all runtimes.
  */
 function bufferToBase64(bytes: Uint8Array): string {
-  let binary = ""
-  const chunkSize = 8192
+  let binary = "";
+  const chunkSize = 8192;
   for (let i = 0; i < bytes.length; i += chunkSize) {
-    binary += String.fromCharCode(...bytes.subarray(i, i + chunkSize))
+    binary += String.fromCharCode(...bytes.subarray(i, i + chunkSize));
   }
-  return btoa(binary)
+  return btoa(binary);
 }

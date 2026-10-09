@@ -1,4 +1,4 @@
-import { formatDistanceToNow } from "date-fns"
+import { formatDistanceToNow } from "date-fns";
 import {
   FileTextIcon,
   LayoutListIcon,
@@ -6,8 +6,8 @@ import {
   MessageSquareIcon,
   ShieldAlertIcon,
   SparklesIcon,
-} from "lucide-react"
-import type { AnnouncementAttachment } from "@/lib/announcements"
+} from "lucide-react";
+import type { AnnouncementAttachment } from "@/lib/announcements";
 
 export type AnnouncementType =
   | "announcement"
@@ -15,94 +15,94 @@ export type AnnouncementType =
   | "maintenance"
   | "poll"
   | "event"
-  | "action_required"
+  | "action_required";
 
-export type AnnouncementPriority = "normal" | "important" | "critical"
-type AnnouncementIcon = typeof MegaphoneIcon
+export type AnnouncementPriority = "normal" | "important" | "critical";
+type AnnouncementIcon = typeof MegaphoneIcon;
 
 export type PollOption = {
-  id: string
-  label: string
-  votes: number
-  hasVoted: boolean
-  voters: Array<{ userId: string; name: string }>
-}
+  id: string;
+  label: string;
+  votes: number;
+  hasVoted: boolean;
+  voters: Array<{ userId: string; name: string }>;
+};
 
 export type AnnouncementComment = {
-  id: string
-  postId: string
-  userId: string
-  parentId: string | null
-  body: string
-  firstName: string | null
-  lastName: string | null
-  email: string | null
-  avatar?: string | null
-  role?: string | null
-  createdAt?: Date | string | number | null
-}
+  id: string;
+  postId: string;
+  userId: string;
+  parentId: string | null;
+  body: string;
+  firstName: string | null;
+  lastName: string | null;
+  email: string | null;
+  avatar?: string | null;
+  role?: string | null;
+  createdAt?: Date | string | number | null;
+};
 
 export type FeedPost = {
-  id: string
-  title: string
-  body: string
-  attachments?: AnnouncementAttachment[] | null
-  ctaLabel?: string | null
-  ctaUrl?: string | null
-  embedTitle?: string | null
-  embedUrl?: string | null
-  type: AnnouncementType
-  priority: AnnouncementPriority
-  pinned: boolean
-  commentsEnabled: boolean
-  pollSingleChoice: boolean
-  pollNamedVotes: boolean
-  pollAllowVoteChange: boolean
-  pollCloseAt: Date | string | null
-  upvotesCount: number
-  hasUpvoted: boolean
-  commentsCount: number
-  isRead: boolean
-  pollOptions: PollOption[]
-  comments: AnnouncementComment[]
-  authorFirstName?: string | null
-  authorLastName?: string | null
-  authorEmail?: string | null
-  authorAvatar?: string | null
-  authorRole?: string | null
-  publishedAt?: Date | string | number | null
-}
+  id: string;
+  title: string;
+  body: string;
+  attachments?: AnnouncementAttachment[] | null;
+  ctaLabel?: string | null;
+  ctaUrl?: string | null;
+  embedTitle?: string | null;
+  embedUrl?: string | null;
+  type: AnnouncementType;
+  priority: AnnouncementPriority;
+  pinned: boolean;
+  commentsEnabled: boolean;
+  pollSingleChoice: boolean;
+  pollNamedVotes: boolean;
+  pollAllowVoteChange: boolean;
+  pollCloseAt: Date | string | null;
+  upvotesCount: number;
+  hasUpvoted: boolean;
+  commentsCount: number;
+  isRead: boolean;
+  pollOptions: PollOption[];
+  comments: AnnouncementComment[];
+  authorFirstName?: string | null;
+  authorLastName?: string | null;
+  authorEmail?: string | null;
+  authorAvatar?: string | null;
+  authorRole?: string | null;
+  publishedAt?: Date | string | number | null;
+};
 
-export type Feed = { viewerRole: string; posts: FeedPost[] }
+export type Feed = { viewerRole: string; posts: FeedPost[] };
 
 export type AnnouncementComposerState = {
-  title: string
-  body: string
-  type: AnnouncementType
-  priority: AnnouncementPriority
-  pinned: boolean
-  commentsEnabled: boolean
-  pollSingleChoice: boolean
-  pollNamedVotes: boolean
-  pollAllowVoteChange: boolean
-  pollCloseAt: string
-  pollOptionsText: string
-  attachmentsText: string
-  ctaLabel: string
-  ctaUrl: string
-  embedTitle: string
-  embedUrl: string
-  sendEmail: boolean
-}
+  title: string;
+  body: string;
+  type: AnnouncementType;
+  priority: AnnouncementPriority;
+  pinned: boolean;
+  commentsEnabled: boolean;
+  pollSingleChoice: boolean;
+  pollNamedVotes: boolean;
+  pollAllowVoteChange: boolean;
+  pollCloseAt: string;
+  pollOptionsText: string;
+  attachmentsText: string;
+  ctaLabel: string;
+  ctaUrl: string;
+  embedTitle: string;
+  embedUrl: string;
+  sendEmail: boolean;
+};
 
-export const maxVisualDepth = 4
+export const maxVisualDepth = 4;
 
 export const announcementTypeMeta: Record<
   AnnouncementType,
   {
-    label: string
-    icon: AnnouncementIcon
-    badgeClassName: string
+    label: string;
+    icon: AnnouncementIcon;
+    badgeClassName: string;
   }
 > = {
   announcement: {
@@ -123,26 +123,28 @@ export const announcementTypeMeta: Record<
   poll: {
     label: "Poll",
     icon: LayoutListIcon,
-    badgeClassName: "border-status-info/20 bg-status-info/10 text-status-info dark:text-status-info",
+    badgeClassName:
+      "border-status-info/20 bg-status-info/10 text-status-info dark:text-status-info",
   },
   event: {
     label: "Event",
     icon: SparklesIcon,
-    badgeClassName: "border-fuchsia-500/20 bg-fuchsia-500/10 text-fuchsia-700 dark:text-fuchsia-300",
+    badgeClassName:
+      "border-fuchsia-500/20 bg-fuchsia-500/10 text-fuchsia-700 dark:text-fuchsia-300",
   },
   action_required: {
     label: "Action required",
     icon: MessageSquareIcon,
     badgeClassName: "border-rose-500/20 bg-rose-500/10 text-rose-700 dark:text-rose-300",
   },
-}
+};
 
 export const announcementPriorityMeta: Record<
   AnnouncementPriority,
   {
-    label: string
-    badgeClassName: string
-    accentClassName: string
+    label: string;
+    badgeClassName: string;
+    accentClassName: string;
   }
 > = {
   normal: {
@@ -160,7 +162,7 @@ export const announcementPriorityMeta: Record<
     badgeClassName: "border-destructive/20 bg-destructive/10 text-destructive",
     accentClassName: "bg-destructive",
   },
-}
+};
 
 export function createEmptyComposerState(): AnnouncementComposerState {
   return {
@@ -181,7 +183,7 @@ export function createEmptyComposerState(): AnnouncementComposerState {
     embedTitle: "",
     embedUrl: "",
     sendEmail: false,
-  }
+  };
 }
 
 export function getInitials(value: string) {
@@ -189,33 +191,33 @@ export function getInitials(value: string) {
     .split(/\s+/)
     .map((part) => part.trim())
     .filter(Boolean)
-    .slice(0, 2)
+    .slice(0, 2);
 
   if (parts.length === 0) {
-    return "U"
+    return "U";
   }
 
-  return parts.map((part) => part.charAt(0).toUpperCase()).join("")
+  return parts.map((part) => part.charAt(0).toUpperCase()).join("");
 }
 
 export function formatRelativeTimestamp(value?: Date | string | number | null) {
   if (!value) {
-    return "Just now"
+    return "Just now";
   }
 
-  const date = value instanceof Date ? value : new Date(value)
+  const date = value instanceof Date ? value : new Date(value);
   if (Number.isNaN(date.getTime())) {
-    return "Just now"
+    return "Just now";
   }
 
-  return formatDistanceToNow(date, { addSuffix: true })
+  return formatDistanceToNow(date, { addSuffix: true });
 }
 
 export function getHostLabel(url: string) {
   try {
-    return new URL(url).hostname.replace(/^www\./, "")
+    return new URL(url).hostname.replace(/^www\./, "");
   } catch {
-    return url
+    return url;
   }
 }
 
@@ -227,11 +229,11 @@ export function parseAttachmentLines(value: string): AnnouncementAttachment[] {
     .map((line) => {
       const [labelPart, urlPart] = line.includes("|")
         ? line.split("|", 2).map((part) => part.trim())
-        : [line, line]
+        : [line, line];
 
       return {
         label: labelPart,
         url: urlPart,
-      }
-    })
+      };
+    });
 }

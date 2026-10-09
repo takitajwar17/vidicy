@@ -127,7 +127,8 @@ export const chatCases: EvalTestCase<ChatTestInput, ChatExpected>[] = [
   },
   {
     id: "financial-strength-question",
-    description: "Question about financial readiness — should reference bank statement and evaluation",
+    description:
+      "Question about financial readiness — should reference bank statement and evaluation",
     input: {
       message: "Do I have enough funds in my bank account for the visa?",
       systemPrompt: BASE_SYSTEM_PROMPT + "\n\n" + DOCUMENT_CONTEXT + "\n\n" + EVALUATION_CONTEXT,
@@ -164,7 +165,8 @@ export const chatCases: EvalTestCase<ChatTestInput, ChatExpected>[] = [
         },
         {
           role: "assistant",
-          content: "I can see you've uploaded your passport, bank statement, and employment letter. Your passport is valid until December 2030, which gives you plenty of validity. Your bank statement shows a closing balance of BDT 890,000. Let me know which document you'd like me to review in detail.",
+          content:
+            "I can see you've uploaded your passport, bank statement, and employment letter. Your passport is valid until December 2030, which gives you plenty of validity. Your bank statement shows a closing balance of BDT 890,000. Let me know which document you'd like me to review in detail.",
         },
       ],
     },
@@ -178,7 +180,8 @@ export const chatCases: EvalTestCase<ChatTestInput, ChatExpected>[] = [
     id: "applicant-specific-advice",
     description: "Question about applicant's specific situation — should give personalised advice",
     input: {
-      message: "Given my profile as a software engineer from Bangladesh, what are my chances of getting the visa?",
+      message:
+        "Given my profile as a software engineer from Bangladesh, what are my chances of getting the visa?",
       systemPrompt: BASE_SYSTEM_PROMPT + "\n\n" + DOCUMENT_CONTEXT + "\n\n" + EVALUATION_CONTEXT,
     },
     expected: {

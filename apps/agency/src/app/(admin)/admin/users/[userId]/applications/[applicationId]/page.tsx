@@ -1,90 +1,90 @@
-import type { Metadata, Route } from "next"
-import { format } from "date-fns"
-import { notFound } from "next/navigation"
+import type { Metadata, Route } from "next";
+import { format } from "date-fns";
+import { notFound } from "next/navigation";
 
-import { PageHeader } from "@/components/page-header"
-import { Badge } from "@/components/ui/badge"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { ReadOnlyDetailsCard } from "./_components/read-only-details-card"
-import { ReadOnlyTableCard } from "./_components/read-only-table-card"
+import { PageHeader } from "@/components/page-header";
+import { Badge } from "@/components/ui/badge";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { ReadOnlyDetailsCard } from "./_components/read-only-details-card";
+import { ReadOnlyTableCard } from "./_components/read-only-table-card";
 import {
   getAdminApplicationDebugData,
   getUserDisplayName,
-} from "./_lib/get-admin-application-debug-data"
+} from "./_lib/get-admin-application-debug-data";
 
 interface AdminApplicationDetailPageProps {
-  params: Promise<{ userId: string; applicationId: string }>
+  params: Promise<{ userId: string; applicationId: string }>;
 }
 
 function formatDateTime(value: Date | null | undefined): string {
-  if (!value) return "—"
-  return format(value, "PPpp")
+  if (!value) return "—";
+  return format(value, "PPpp");
 }
 
 function formatBytes(bytes: number | null | undefined): string {
-  if (typeof bytes !== "number") return "—"
-  if (bytes === 0) return "0 B"
-  const units = ["B", "KB", "MB", "GB"]
-  const exponent = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), units.length - 1)
-  const size = bytes / Math.pow(1024, exponent)
-  return `${size.toFixed(size >= 10 || exponent === 0 ? 0 : 1)} ${units[exponent]}`
+  if (typeof bytes !== "number") return "—";
+  if (bytes === 0) return "0 B";
+  const units = ["B", "KB", "MB", "GB"];
+  const exponent = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), units.length - 1);
+  const size = bytes / Math.pow(1024, exponent);
+  return `${size.toFixed(size >= 10 || exponent === 0 ? 0 : 1)} ${units[exponent]}`;
 }
 
 function normalizeText(value: string | null | undefined): string {
-  if (!value) return "—"
-  return value.replace(/_/g, " ")
+  if (!value) return "—";
+  return value.replace(/_/g, " ");
 }
 
 function truncateText(value: string | null | undefined, max = 120): string {
-  if (!value) return "—"
-  if (value.length <= max) return value
-  return `${value.slice(0, max)}...`
+  if (!value) return "—";
+  if (value.length <= max) return value;
+  return `${value.slice(0, max)}...`;
 }
 
 function formatBoolean(value: unknown): string {
-  if (value === 1 || value === true) return "Yes"
-  if (value === 0 || value === false) return "No"
-  return "—"
+  if (value === 1 || value === true) return "Yes";
+  if (value === 0 || value === false) return "No";
+  return "—";
 }
 
 export async function generateMetadata({
   params,
 }: AdminApplicationDetailPageProps): Promise<Metadata> {
-  const { userId, applicationId } = await params
-  const data = await getAdminApplicationDebugData({ userId, applicationId })
+  const { userId, applicationId } = await params;
+  const data = await getAdminApplicationDebugData({ userId, applicationId });
 
   if (!data) {
     return {
       title: "Application not found",
       description: "The requested admin application debug view could not be found",
-    }
+    };
   }
 
   return {
     title: `Application debug: ${data.application.id}`,
     description: `Read-only admin diagnostics for ${data.application.id}`,
-  }
+  };
 }
 
 export default async function AdminApplicationDetailPage({
   params,
 }: AdminApplicationDetailPageProps) {
-  const { userId, applicationId } = await params
-  const data = await getAdminApplicationDebugData({ userId, applicationId })
+  const { userId, applicationId } = await params;
+  const data = await getAdminApplicationDebugData({ userId, applicationId });
 
   if (!data) {
-    notFound()
+    notFound();
   }
 
-  const ownerDisplayName = getUserDisplayName(data.owner)
-  const relatedUsersById = new Map(data.relatedUsers.map((user) => [user.id, user]))
+  const ownerDisplayName = getUserDisplayName(data.owner);
+  const relatedUsersById = new Map(data.relatedUsers.map((user) => [user.id, user]));
 
   const formatUserReference = (userId: string | null | undefined) => {
-    if (!userId) return "—"
-    const relatedUser = relatedUsersById.get(userId)
-    if (!relatedUser) return userId
-    return `${getUserDisplayName(relatedUser)} (${userId})`
-  }
+    if (!userId) return "—";
+    const relatedUser = relatedUsersById.get(userId);
+    if (!relatedUser) return userId;
+    return `${getUserDisplayName(relatedUser)} (${userId})`;
+  };
 
   return (
     <>
@@ -109,11 +109,11 @@ export default async function AdminApplicationDetailPage({
                   <CardHeader>
                     <CardTitle className="flex items-center justify-between gap-4">
                       <span>{data.application.name || "Untitled application"}</span>
-	                      <div className="flex flex-wrap items-center gap-2">
-	                        <Badge variant="outline" className="capitalize">
-	                          {normalizeText(data.application.status)}
-	                        </Badge>
-	                        {data.application.trashedAt ? (
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Badge variant="outline" className="capitalize">
+                          {normalizeText(data.application.status)}
+                        </Badge>
+                        {data.application.trashedAt ? (
                           <Badge variant="secondary">Trashed</Badge>
                         ) : null}
                       </div>
@@ -128,7 +128,8 @@ export default async function AdminApplicationDetailPage({
                         <span className="text-muted-foreground">Owner:</span> {ownerDisplayName}
                       </div>
                       <div>
-                        <span className="text-muted-foreground">Owner User ID:</span> {data.owner.id}
+                        <span className="text-muted-foreground">Owner User ID:</span>{" "}
+                        {data.owner.id}
                       </div>
                       <div>
                         <span className="text-muted-foreground">Route:</span>{" "}
@@ -136,7 +137,8 @@ export default async function AdminApplicationDetailPage({
                         {data.application.visaType})
                       </div>
                       <div>
-                        <span className="text-muted-foreground">Embassy:</span> {data.application.embassy}
+                        <span className="text-muted-foreground">Embassy:</span>{" "}
+                        {data.application.embassy}
                       </div>
                       <div>
                         <span className="text-muted-foreground">Risk level:</span>{" "}
@@ -182,12 +184,15 @@ export default async function AdminApplicationDetailPage({
                   <ReadOnlyDetailsCard
                     title="Application Details"
                     description="Core fields from `visa_application`."
-	                    items={[
-	                      { label: "Application ID", value: data.application.id },
-	                      { label: "Name", value: data.application.name || "—" },
-	                      { label: "Status", value: normalizeText(data.application.status) },
-	                      { label: "Outcome date", value: formatDateTime(data.application.outcomeDate) },
-	                    ]}
+                    items={[
+                      { label: "Application ID", value: data.application.id },
+                      { label: "Name", value: data.application.name || "—" },
+                      { label: "Status", value: normalizeText(data.application.status) },
+                      {
+                        label: "Outcome date",
+                        value: formatDateTime(data.application.outcomeDate),
+                      },
+                    ]}
                   />
                   <ReadOnlyDetailsCard
                     title="Owner Details"
@@ -217,12 +222,28 @@ export default async function AdminApplicationDetailPage({
                         </div>
                       ),
                     },
-                    { header: "Relationship", render: (row) => normalizeText(row.relationship), className: "capitalize" },
-                    { header: "Role", render: (row) => normalizeText(row.role), className: "capitalize" },
+                    {
+                      header: "Relationship",
+                      render: (row) => normalizeText(row.relationship),
+                      className: "capitalize",
+                    },
+                    {
+                      header: "Role",
+                      render: (row) => normalizeText(row.role),
+                      className: "capitalize",
+                    },
                     { header: "Linked User", render: (row) => formatUserReference(row.userId) },
                     { header: "Email", render: (row) => row.email ?? "—" },
-                    { header: "Readiness", render: (row) => row.readinessScore ?? "—", className: "tabular-nums" },
-                    { header: "Created", render: (row) => formatDateTime(row.createdAt), className: "tabular-nums" },
+                    {
+                      header: "Readiness",
+                      render: (row) => row.readinessScore ?? "—",
+                      className: "tabular-nums",
+                    },
+                    {
+                      header: "Created",
+                      render: (row) => formatDateTime(row.createdAt),
+                      className: "tabular-nums",
+                    },
                   ]}
                 />
 
@@ -237,11 +258,17 @@ export default async function AdminApplicationDetailPage({
                       render: (row) => (
                         <div>
                           <div className="font-medium">{row.documentName}</div>
-                          <div className="text-xs text-muted-foreground">{truncateText(row.description, 100)}</div>
+                          <div className="text-xs text-muted-foreground">
+                            {truncateText(row.description, 100)}
+                          </div>
                         </div>
                       ),
                     },
-                    { header: "Applicant ID", render: (row) => row.applicantId ?? "—", className: "font-mono text-xs" },
+                    {
+                      header: "Applicant ID",
+                      render: (row) => row.applicantId ?? "—",
+                      className: "font-mono text-xs",
+                    },
                     {
                       header: "Required",
                       render: (row) => (
@@ -256,7 +283,11 @@ export default async function AdminApplicationDetailPage({
                       className: "capitalize",
                     },
                     { header: "Sort", render: (row) => row.sortOrder, className: "tabular-nums" },
-                    { header: "Updated", render: (row) => formatDateTime(row.updatedAt), className: "tabular-nums" },
+                    {
+                      header: "Updated",
+                      render: (row) => formatDateTime(row.updatedAt),
+                      className: "tabular-nums",
+                    },
                   ]}
                 />
 
@@ -275,21 +306,41 @@ export default async function AdminApplicationDetailPage({
                         </div>
                       ),
                     },
-                    { header: "Checklist Item", render: (row) => row.checklistItemId ?? "—", className: "font-mono text-xs" },
+                    {
+                      header: "Checklist Item",
+                      render: (row) => row.checklistItemId ?? "—",
+                      className: "font-mono text-xs",
+                    },
                     { header: "Type", render: (row) => row.mimeType, className: "text-xs" },
-                    { header: "Size", render: (row) => formatBytes(row.fileSize), className: "tabular-nums" },
-                    { header: "Pages", render: (row) => row.pageCount ?? "—", className: "tabular-nums" },
+                    {
+                      header: "Size",
+                      render: (row) => formatBytes(row.fileSize),
+                      className: "tabular-nums",
+                    },
+                    {
+                      header: "Pages",
+                      render: (row) => row.pageCount ?? "—",
+                      className: "tabular-nums",
+                    },
                     {
                       header: "Extraction",
-                      render: (row) => <Badge variant="outline">{normalizeText(row.extractionStatus)}</Badge>,
+                      render: (row) => (
+                        <Badge variant="outline">{normalizeText(row.extractionStatus)}</Badge>
+                      ),
                       className: "capitalize",
                     },
                     {
                       header: "Indexing",
-                      render: (row) => <Badge variant="outline">{normalizeText(row.indexingStatus)}</Badge>,
+                      render: (row) => (
+                        <Badge variant="outline">{normalizeText(row.indexingStatus)}</Badge>
+                      ),
                       className: "capitalize",
                     },
-                    { header: "Uploaded", render: (row) => formatDateTime(row.uploadedAt), className: "tabular-nums" },
+                    {
+                      header: "Uploaded",
+                      render: (row) => formatDateTime(row.uploadedAt),
+                      className: "tabular-nums",
+                    },
                   ]}
                 />
 
@@ -304,19 +355,39 @@ export default async function AdminApplicationDetailPage({
                       render: (row) => (
                         <div>
                           <div className="font-mono text-xs">{row.id}</div>
-                          <div className="text-xs text-muted-foreground">{truncateText(row.summary, 90)}</div>
+                          <div className="text-xs text-muted-foreground">
+                            {truncateText(row.summary, 90)}
+                          </div>
                         </div>
                       ),
                     },
-                    { header: "Applicant ID", render: (row) => row.applicantId ?? "—", className: "font-mono text-xs" },
-                    { header: "Score", render: (row) => row.overallScore, className: "tabular-nums font-medium" },
+                    {
+                      header: "Applicant ID",
+                      render: (row) => row.applicantId ?? "—",
+                      className: "font-mono text-xs",
+                    },
+                    {
+                      header: "Score",
+                      render: (row) => row.overallScore,
+                      className: "tabular-nums font-medium",
+                    },
                     {
                       header: "Risk",
-                      render: (row) => <Badge variant="outline">{normalizeText(row.riskLevel)}</Badge>,
+                      render: (row) => (
+                        <Badge variant="outline">{normalizeText(row.riskLevel)}</Badge>
+                      ),
                       className: "capitalize",
                     },
-                    { header: "Red flags", render: (row) => row.redFlags?.length ?? 0, className: "tabular-nums" },
-                    { header: "Created", render: (row) => formatDateTime(row.createdAt), className: "tabular-nums" },
+                    {
+                      header: "Red flags",
+                      render: (row) => row.redFlags?.length ?? 0,
+                      className: "tabular-nums",
+                    },
+                    {
+                      header: "Created",
+                      render: (row) => formatDateTime(row.createdAt),
+                      className: "tabular-nums",
+                    },
                   ]}
                 />
 
@@ -336,8 +407,16 @@ export default async function AdminApplicationDetailPage({
                           </div>
                         ),
                       },
-                      { header: "Created", render: (row) => formatDateTime(row.createdAt), className: "tabular-nums" },
-                      { header: "Updated", render: (row) => formatDateTime(row.updatedAt), className: "tabular-nums" },
+                      {
+                        header: "Created",
+                        render: (row) => formatDateTime(row.createdAt),
+                        className: "tabular-nums",
+                      },
+                      {
+                        header: "Updated",
+                        render: (row) => formatDateTime(row.updatedAt),
+                        className: "tabular-nums",
+                      },
                     ]}
                   />
                   <ReadOnlyTableCard
@@ -360,8 +439,16 @@ export default async function AdminApplicationDetailPage({
                         render: (row) => <Badge variant="outline">{normalizeText(row.role)}</Badge>,
                         className: "capitalize",
                       },
-                      { header: "Conversation", render: (row) => row.conversationId ?? "—", className: "font-mono text-xs" },
-                      { header: "Created", render: (row) => formatDateTime(row.createdAt), className: "tabular-nums" },
+                      {
+                        header: "Conversation",
+                        render: (row) => row.conversationId ?? "—",
+                        className: "font-mono text-xs",
+                      },
+                      {
+                        header: "Created",
+                        render: (row) => formatDateTime(row.createdAt),
+                        className: "tabular-nums",
+                      },
                     ]}
                   />
                 </div>
@@ -374,11 +461,19 @@ export default async function AdminApplicationDetailPage({
                     rows={data.memberships}
                     columns={[
                       { header: "User", render: (row) => formatUserReference(row.userId) },
-                      { header: "Role ID", render: (row) => row.roleId, className: "font-mono text-xs" },
+                      {
+                        header: "Role ID",
+                        render: (row) => row.roleId,
+                        className: "font-mono text-xs",
+                      },
                       { header: "System role", render: (row) => formatBoolean(row.isSystemRole) },
                       { header: "Active", render: (row) => formatBoolean(row.isActive) },
                       { header: "Invited by", render: (row) => formatUserReference(row.invitedBy) },
-                      { header: "Joined", render: (row) => formatDateTime(row.joinedAt), className: "tabular-nums" },
+                      {
+                        header: "Joined",
+                        render: (row) => formatDateTime(row.joinedAt),
+                        className: "tabular-nums",
+                      },
                     ]}
                   />
                   <ReadOnlyTableCard
@@ -397,7 +492,11 @@ export default async function AdminApplicationDetailPage({
                         ),
                       },
                       { header: "Editable", render: (row) => formatBoolean(row.isEditable) },
-                      { header: "Permissions", render: (row) => row.permissions?.length ?? 0, className: "tabular-nums" },
+                      {
+                        header: "Permissions",
+                        render: (row) => row.permissions?.length ?? 0,
+                        className: "tabular-nums",
+                      },
                       { header: "Description", render: (row) => truncateText(row.description, 80) },
                     ]}
                   />
@@ -408,20 +507,31 @@ export default async function AdminApplicationDetailPage({
                     rows={data.invitations}
                     columns={[
                       { header: "Email", render: (row) => row.email },
-                      { header: "Role ID", render: (row) => row.roleId, className: "font-mono text-xs" },
+                      {
+                        header: "Role ID",
+                        render: (row) => row.roleId,
+                        className: "font-mono text-xs",
+                      },
                       { header: "Invited by", render: (row) => formatUserReference(row.invitedBy) },
-                      { header: "Accepted by", render: (row) => formatUserReference(row.acceptedBy) },
+                      {
+                        header: "Accepted by",
+                        render: (row) => formatUserReference(row.acceptedBy),
+                      },
                       { header: "Accepted", render: (row) => (row.acceptedAt ? "Yes" : "No") },
-                      { header: "Expires", render: (row) => formatDateTime(row.expiresAt), className: "tabular-nums" },
+                      {
+                        header: "Expires",
+                        render: (row) => formatDateTime(row.expiresAt),
+                        className: "tabular-nums",
+                      },
                     ]}
                   />
                 </div>
 
-	                <div className="grid gap-6 lg:grid-cols-2">
-	                  <ReadOnlyTableCard
-	                    title="Related User Lookup"
-	                    count={data.relatedUsers.length}
-	                    description="User records referenced by applicants, memberships, and invitations."
+                <div className="grid gap-6 lg:grid-cols-2">
+                  <ReadOnlyTableCard
+                    title="Related User Lookup"
+                    count={data.relatedUsers.length}
+                    description="User records referenced by applicants, memberships, and invitations."
                     rows={data.relatedUsers}
                     columns={[
                       {
@@ -445,5 +555,5 @@ export default async function AdminApplicationDetailPage({
         </div>
       </div>
     </>
-  )
+  );
 }

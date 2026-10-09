@@ -7,11 +7,7 @@ import { and, asc, desc, eq } from "drizzle-orm";
 import type OpenAI from "openai";
 import { getRuntimeContext } from "@/infra/runtime-context";
 
-import {
-  getOpenAIClient,
-  isModelAvailabilityError,
-  isTimeoutLikeAIError,
-} from "@/lib/openai";
+import { getOpenAIClient, isModelAvailabilityError, isTimeoutLikeAIError } from "@/lib/openai";
 import { AI_TIMEOUT_CHAT_MS, AI_TIMEOUT_EMBEDDING_MS } from "@/constants";
 import { buildAtlasSystemPrompt } from "@/services/atlas-prompt";
 import { authorizeApplicationRouteAccess } from "@/app/api/_utils/application-route-auth";
@@ -33,7 +29,6 @@ import {
 } from "@/db/schema";
 import { trackUsage, USAGE_EVENTS } from "@/infra/usage-tracking";
 
-
 interface ChatStreamDeltaEvent {
   type: "delta";
   delta: string;
@@ -51,10 +46,7 @@ interface ChatStreamErrorEvent {
   message: string;
 }
 
-type ChatStreamEvent =
-  | ChatStreamDeltaEvent
-  | ChatStreamDoneEvent
-  | ChatStreamErrorEvent;
+type ChatStreamEvent = ChatStreamDeltaEvent | ChatStreamDoneEvent | ChatStreamErrorEvent;
 
 interface StreamAttemptResult {
   content: string;
@@ -236,11 +228,7 @@ async function streamAssistantResponseWithFallback({
   return { assistantContent: fallbackAttempt.content, modelUsed: fallbackModel };
 }
 
-function getFriendlyAIErrorMessage({
-  error,
-}: {
-  error: unknown;
-}): string {
+function getFriendlyAIErrorMessage({ error }: { error: unknown }): string {
   if (isTimeoutLikeAIError({ error })) {
     return "The review support service is taking too long to respond. Please try again in a moment.";
   }
@@ -364,10 +352,12 @@ export async function POST(request: Request) {
           returnMetadata: "all",
         });
 
-        const relevantChunks = (vectorResults.matches as Array<{
-          score: number;
-          metadata?: Record<string, unknown>;
-        }>)
+        const relevantChunks = (
+          vectorResults.matches as Array<{
+            score: number;
+            metadata?: Record<string, unknown>;
+          }>
+        )
           .filter((match) => match.score > 0.4)
           .map((match) => (match.metadata?.content as string) || "")
           .filter(Boolean);

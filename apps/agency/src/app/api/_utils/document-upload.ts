@@ -118,8 +118,10 @@ export async function handleDocumentUploadRoute({
       return NextResponse.json({ error: "A file is required" }, { status: 400 });
     }
 
-    if ((applicantIdField !== null && typeof applicantIdField !== "string")
-      || (checklistItemId !== null && typeof checklistItemId !== "string")) {
+    if (
+      (applicantIdField !== null && typeof applicantIdField !== "string") ||
+      (checklistItemId !== null && typeof checklistItemId !== "string")
+    ) {
       return NextResponse.json({ error: "Document identifiers must be text" }, { status: 400 });
     }
     if (typeof applicationId !== "string" || applicationId.trim() === "") {

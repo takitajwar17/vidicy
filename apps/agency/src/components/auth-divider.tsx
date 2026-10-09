@@ -4,10 +4,7 @@ import type React from "react";
  * Horizontal divider with centered text label — used between
  * social-login buttons and the email form on auth pages.
  */
-export function AuthDivider({
-  children,
-  ...props
-}: React.ComponentProps<"div">) {
+export function AuthDivider({ children, ...props }: React.ComponentProps<"div">) {
   return (
     <div className="relative flex items-center gap-3 py-2" {...props}>
       <div className="h-px flex-1 bg-border" />

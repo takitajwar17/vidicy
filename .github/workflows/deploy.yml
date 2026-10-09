@@ -43,6 +43,7 @@ jobs:
       - name: Check code and tests
         run: |
           pnpm lint
+          pnpm format:check
           pnpm typecheck
           pnpm test
 

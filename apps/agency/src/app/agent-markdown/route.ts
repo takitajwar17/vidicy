@@ -8,7 +8,10 @@ import {
   getPublicMarkdownPayload,
 } from "@/lib/public-agent-markdown";
 
-function buildMarkdownResponse(payload: { body: string; extraHeaders?: HeadersInit }, includeBody: boolean): Response {
+function buildMarkdownResponse(
+  payload: { body: string; extraHeaders?: HeadersInit },
+  includeBody: boolean,
+): Response {
   const headers = new Headers({
     "Content-Type": getPublicMarkdownContentType(),
     Vary: "Accept",

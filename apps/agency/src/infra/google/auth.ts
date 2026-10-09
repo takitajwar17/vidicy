@@ -11,7 +11,11 @@ export function getGoogleAuth(): GoogleAuth {
 }
 
 /** Never put API request bodies or authorization headers into application logs. */
-export async function googleJsonRequest<T>({ url, method = "POST", data }: {
+export async function googleJsonRequest<T>({
+  url,
+  method = "POST",
+  data,
+}: {
   url: string;
   method?: "GET" | "POST";
   data?: unknown;
@@ -27,13 +31,18 @@ export async function googleJsonRequest<T>({ url, method = "POST", data }: {
       retryConfig: {
         retry: 3,
         httpMethodsToRetry: ["GET", "POST"],
-        statusCodesToRetry: [[429, 429], [500, 599]],
+        statusCodesToRetry: [
+          [429, 429],
+          [500, 599],
+        ],
       },
     });
     return response.data;
   } catch (error) {
-    const status = typeof error === "object" && error !== null && "response" in error
-      ? (error.response as { status?: number } | undefined)?.status : undefined;
+    const status =
+      typeof error === "object" && error !== null && "response" in error
+        ? (error.response as { status?: number } | undefined)?.status
+        : undefined;
     throw new Error(`Google Cloud API request failed${status ? ` (HTTP ${status})` : ""}`);
   }
 }

@@ -16,14 +16,17 @@ async function buildDirectoryResponse(request: Request, includeBody: boolean) {
   const publicJwk = await getConfiguredPublicDirectoryJwk();
 
   if (!publicJwk) {
-    return NextResponse.json({
-      error: "WEB_BOT_AUTH_PUBLIC_JWK is not configured.",
-    }, {
-      status: 503,
-      headers: {
-        "Content-Type": "application/json; charset=utf-8",
+    return NextResponse.json(
+      {
+        error: "WEB_BOT_AUTH_PUBLIC_JWK is not configured.",
       },
-    });
+      {
+        status: 503,
+        headers: {
+          "Content-Type": "application/json; charset=utf-8",
+        },
+      },
+    );
   }
 
   const headers = new Headers({

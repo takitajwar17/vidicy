@@ -27,7 +27,11 @@ export async function GET(request: Request) {
 
     const isAdmin = session.user.role === "admin";
     const ownPrefix = `support-screenshots/${session.user.id}/`;
-    if (!isAdmin && !fileKey.startsWith(ownPrefix) && !fileKey.startsWith("support-screenshots/admin/")) {
+    if (
+      !isAdmin &&
+      !fileKey.startsWith(ownPrefix) &&
+      !fileKey.startsWith("support-screenshots/admin/")
+    ) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
     const { env } = await getRuntimeContext({ async: true });
@@ -36,23 +40,33 @@ export async function GET(request: Request) {
     if (!object) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
     if (!isAdmin) {
-      let hasAccess = fileKey.startsWith(ownPrefix)
-        && isSupportScreenshotOwnedBy({ fileKey, object, userId: session.user.id });
+      let hasAccess =
+        fileKey.startsWith(ownPrefix) &&
+        isSupportScreenshotOwnedBy({ fileKey, object, userId: session.user.id });
       if (!hasAccess && fileKey.startsWith("support-screenshots/admin/")) {
         const db = getDB();
         const tickets = await db.query.supportTicketTable.findMany({
           where: eq(supportTicketTable.userId, session.user.id),
           columns: { id: true, userId: true, screenshotUrls: true },
         });
-        hasAccess = tickets.some(ticket => ticket.screenshotUrls?.includes(fileKey)
-          && isSupportScreenshotOwnedBy({ fileKey, object, userId: ticket.userId }));
+        hasAccess = tickets.some(
+          (ticket) =>
+            ticket.screenshotUrls?.includes(fileKey) &&
+            isSupportScreenshotOwnedBy({ fileKey, object, userId: ticket.userId }),
+        );
         if (!hasAccess && tickets.length > 0) {
           const messages = await db.query.supportMessageTable.findMany({
-            where: inArray(supportMessageTable.ticketId, tickets.map(ticket => ticket.id)),
+            where: inArray(
+              supportMessageTable.ticketId,
+              tickets.map((ticket) => ticket.id),
+            ),
             columns: { screenshotUrls: true, userId: true },
           });
-          hasAccess = messages.some(message => message.screenshotUrls?.includes(fileKey)
-            && isSupportScreenshotOwnedBy({ fileKey, object, userId: message.userId }));
+          hasAccess = messages.some(
+            (message) =>
+              message.screenshotUrls?.includes(fileKey) &&
+              isSupportScreenshotOwnedBy({ fileKey, object, userId: message.userId }),
+          );
         }
       }
       if (!hasAccess) return NextResponse.json({ error: "Forbidden" }, { status: 403 });

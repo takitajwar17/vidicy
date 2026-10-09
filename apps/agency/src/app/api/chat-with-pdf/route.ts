@@ -6,11 +6,7 @@ import { NextResponse } from "next/server";
 import { and, asc, desc, eq } from "drizzle-orm";
 import { getRuntimeContext } from "@/infra/runtime-context";
 import OpenAI from "openai";
-import {
-  getOpenAIClient,
-  isModelAvailabilityError,
-  isTimeoutLikeAIError,
-} from "@/lib/openai";
+import { getOpenAIClient, isModelAvailabilityError, isTimeoutLikeAIError } from "@/lib/openai";
 import { AI_TIMEOUT_CHAT_MS } from "@/constants";
 import { buildAtlasSystemPrompt } from "@/services/atlas-prompt";
 
@@ -63,7 +59,12 @@ export async function POST(request: Request) {
     if (!parsed.success) {
       return NextResponse.json({ error: parsed.error.issues[0].message }, { status: 400 });
     }
-    const { applicationId, conversationId, message: userText, thumbnail: thumbnailDataUrl } = parsed.data;
+    const {
+      applicationId,
+      conversationId,
+      message: userText,
+      thumbnail: thumbnailDataUrl,
+    } = parsed.data;
 
     // 3. Validate
     if (!file || !(file instanceof File)) {
@@ -343,12 +344,18 @@ export async function POST(request: Request) {
           });
           if (isPrimaryTimeoutLike || isFallbackTimeoutLike) {
             return NextResponse.json(
-              { error: "The review support service is taking too long to respond. Please try again in a moment." },
+              {
+                error:
+                  "The review support service is taking too long to respond. Please try again in a moment.",
+              },
               { status: 504 },
             );
           }
           return NextResponse.json(
-            { error: "The review support service is temporarily unavailable. Please try again shortly." },
+            {
+              error:
+                "The review support service is temporarily unavailable. Please try again shortly.",
+            },
             { status: 503 },
           );
         }
@@ -358,7 +365,10 @@ export async function POST(request: Request) {
           error: aiErr,
         });
         return NextResponse.json(
-          { error: "The review support service is temporarily unavailable. Please try again shortly." },
+          {
+            error:
+              "The review support service is temporarily unavailable. Please try again shortly.",
+          },
           { status: 503 },
         );
       }

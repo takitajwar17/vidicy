@@ -15,20 +15,22 @@ export function onRequestError(
   context: { routerKind: string; routePath: string; routeType: string; renderSource: string },
 ) {
   // Import lazily to avoid bundling on client
-  import("@/infra/sentry").then(({ captureException }) => {
-    captureException(error, {
-      tags: {
-        routerKind: context.routerKind,
-        routePath: context.routePath,
-        routeType: context.routeType,
-        renderSource: context.renderSource,
-      },
-      extra: {
-        method: request.method,
-        url: request.url,
-      },
+  import("@/infra/sentry")
+    .then(({ captureException }) => {
+      captureException(error, {
+        tags: {
+          routerKind: context.routerKind,
+          routePath: context.routePath,
+          routeType: context.routeType,
+          renderSource: context.renderSource,
+        },
+        extra: {
+          method: request.method,
+          url: request.url,
+        },
+      });
+    })
+    .catch(() => {
+      // Sentry not available — error already logged by Next.js
     });
-  }).catch(() => {
-    // Sentry not available — error already logged by Next.js
-  });
 }

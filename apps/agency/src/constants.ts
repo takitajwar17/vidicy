@@ -3,16 +3,15 @@ import type { Route } from "next";
 export const SITE_NAME = "Vidicy";
 export const SITE_DESCRIPTION =
   "AI visa review software for agencies: check client documents, spot missing requirements, manage cases, and send clear follow-ups before submission.";
-export const CANONICAL_SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? "https://vidicy-agency-vw6akohvja-as.a.run.app";
+export const CANONICAL_SITE_URL =
+  process.env.NEXT_PUBLIC_SITE_URL ?? "https://vidicy-agency-vw6akohvja-as.a.run.app";
 export const CANONICAL_SITE_DOMAIN = new URL(CANONICAL_SITE_URL).hostname;
 export const OPEN_GRAPH_IMAGE_PATH = "/og_image.png";
 export const OPEN_GRAPH_IMAGE_WIDTH = 1200;
 export const OPEN_GRAPH_IMAGE_HEIGHT = 630;
 export const SITE_URL =
   process.env.NEXT_PUBLIC_SITE_URL ??
-  (process.env.NODE_ENV === "development"
-    ? "http://localhost:3002"
-    : CANONICAL_SITE_URL);
+  (process.env.NODE_ENV === "development" ? "http://localhost:3002" : CANONICAL_SITE_URL);
 export const API_CATALOG_PATH = "/.well-known/api-catalog";
 export const AGENT_CARD_PATH = "/.well-known/agent-card.json";
 export const AGENT_SKILLS_INDEX_PATH = "/.well-known/agent-skills/index.json";

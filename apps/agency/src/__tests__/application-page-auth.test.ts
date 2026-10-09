@@ -1,18 +1,16 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const {
-  mockGetApplicationAccessForCurrentSession,
-  mockNotFound,
-  mockRedirect,
-} = vi.hoisted(() => ({
-  mockGetApplicationAccessForCurrentSession: vi.fn(),
-  mockNotFound: vi.fn(() => {
-    throw new Error("NOT_FOUND");
+const { mockGetApplicationAccessForCurrentSession, mockNotFound, mockRedirect } = vi.hoisted(
+  () => ({
+    mockGetApplicationAccessForCurrentSession: vi.fn(),
+    mockNotFound: vi.fn(() => {
+      throw new Error("NOT_FOUND");
+    }),
+    mockRedirect: vi.fn((href: string) => {
+      throw new Error(`REDIRECT:${href}`);
+    }),
   }),
-  mockRedirect: vi.fn((href: string) => {
-    throw new Error(`REDIRECT:${href}`);
-  }),
-}));
+);
 
 vi.mock("next/navigation", () => ({
   notFound: mockNotFound,

@@ -72,7 +72,7 @@ describe("GET /api/health", () => {
     const response = await GET();
 
     expect(response.status).toBe(200);
-    const body = await response.json() as {
+    const body = (await response.json()) as {
       status: string;
       components: {
         postgres: { status: string };

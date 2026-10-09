@@ -5,12 +5,12 @@ import {
   OPEN_GRAPH_IMAGE_PATH,
   OPEN_GRAPH_IMAGE_WIDTH,
 } from "@/constants";
-import { clsx, type ClassValue } from "clsx"
+import { clsx, type ClassValue } from "clsx";
 import { Metadata } from "next";
-import { twMerge } from "tailwind-merge"
+import { twMerge } from "tailwind-merge";
 
 export function cn(...inputs: ClassValue[]) {
-  return twMerge(clsx(inputs))
+  return twMerge(clsx(inputs));
 }
 
 export function absoluteUrl(path: string) {

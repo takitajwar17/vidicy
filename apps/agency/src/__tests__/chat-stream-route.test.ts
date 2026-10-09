@@ -75,7 +75,9 @@ vi.mock("@/infra/logger", () => ({
 import { POST as chatStreamPOST } from "@/app/api/chat-stream/route";
 
 function createTransientD1Error() {
-  const cause = new Error("D1 DB storage operation exceeded timeout which caused object to be reset.");
+  const cause = new Error(
+    "D1 DB storage operation exceeded timeout which caused object to be reset.",
+  );
   const error = new Error(
     'Failed query: insert into "chat_message" ("id", "applicationId", "conversationId", "role", "content", "thumbnailDataUrl", "createdAt") values (?, ?, ?, ?, ?, null, ?) returning "id", "applicationId", "conversationId", "role", "content", "thumbnailDataUrl", "createdAt"',
   ) as Error & { cause?: unknown };
@@ -181,15 +183,23 @@ describe("/api/chat-stream", () => {
 
   it("bounds a JSON stream without a Content-Length header", async () => {
     const cancelled = vi.fn();
-    const response = await chatStreamPOST(new Request("https://example.com/chat", {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: new ReadableStream<Uint8Array>({
-        pull: (() => { let chunks = 0; return (controller: ReadableStreamDefaultController<Uint8Array>) => {
-          if (++chunks <= 4) controller.enqueue(new Uint8Array(128 * 1024));
-          else controller.close();
-        }; })(), cancel: cancelled,
-      }), duplex: "half",
-    } as RequestInit & { duplex: string }));
+    const response = await chatStreamPOST(
+      new Request("https://example.com/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: new ReadableStream<Uint8Array>({
+          pull: (() => {
+            let chunks = 0;
+            return (controller: ReadableStreamDefaultController<Uint8Array>) => {
+              if (++chunks <= 4) controller.enqueue(new Uint8Array(128 * 1024));
+              else controller.close();
+            };
+          })(),
+          cancel: cancelled,
+        }),
+        duplex: "half",
+      } as RequestInit & { duplex: string }),
+    );
     expect(response?.status).toBe(413);
     expect(cancelled).toHaveBeenCalled();
     expect(mockAuthorizeApplicationRouteAccess).not.toHaveBeenCalled();
@@ -200,10 +210,14 @@ describe("/api/chat-stream", () => {
     { applicationId: "app_123", conversationId: {}, message: "Hello" },
     { applicationId: "app_123", conversationId: "conv_123", message: {} },
     { applicationId: "app_123", conversationId: "conv_123", message: "x".repeat(16_001) },
-  ])("rejects invalid chat fields before application access", async body => {
-    const response = await chatStreamPOST(new Request("https://example.com/api/chat-stream", {
-      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
-    }));
+  ])("rejects invalid chat fields before application access", async (body) => {
+    const response = await chatStreamPOST(
+      new Request("https://example.com/api/chat-stream", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      }),
+    );
     expect(response?.status).toBe(400);
     expect(mockAuthorizeApplicationRouteAccess).not.toHaveBeenCalled();
     expect(mockGetDB).not.toHaveBeenCalled();

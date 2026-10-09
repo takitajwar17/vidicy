@@ -81,12 +81,7 @@ const AnnouncementMarkdown = dynamic(() =>
 
 function RedditUpvoteIcon({ className }: { className?: string }) {
   return (
-    <svg
-      aria-hidden="true"
-      viewBox="0 0 20 20"
-      fill="currentColor"
-      className={className}
-    >
+    <svg aria-hidden="true" viewBox="0 0 20 20" fill="currentColor" className={className}>
       <path d="M10 2.5 3 9.5h3.9v8h6.2v-8H17L10 2.5Z" />
     </svg>
   );
@@ -340,7 +335,10 @@ function PostCard({
               <div className="min-w-0 space-y-2">
                 <div className="flex flex-wrap items-center gap-2">
                   <p className="truncate font-semibold text-foreground">{author.name}</p>
-                  <Badge variant="outline" className={cn("gap-1 rounded-full px-3", typeMeta.badgeClassName)}>
+                  <Badge
+                    variant="outline"
+                    className={cn("gap-1 rounded-full px-3", typeMeta.badgeClassName)}
+                  >
                     <typeMeta.icon className="h-3.5 w-3.5" />
                     {typeMeta.label}
                   </Badge>
@@ -415,7 +413,9 @@ function PostCard({
                 </div>
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-sm font-medium">{attachment.label}</p>
-                  <p className="truncate text-xs text-muted-foreground">{getHostLabel(attachment.url)}</p>
+                  <p className="truncate text-xs text-muted-foreground">
+                    {getHostLabel(attachment.url)}
+                  </p>
                 </div>
                 <ExternalLinkIcon className="h-4 w-4 text-muted-foreground transition-colors group-hover:text-primary" />
               </a>
@@ -983,7 +983,10 @@ export function AnnouncementsFeedClient({
                       {index > 0 ? <Separator /> : null}
                       <div className="space-y-2">
                         <div className="flex items-center gap-2">
-                          <Badge variant="outline" className={cn("gap-1 rounded-full px-3", meta.badgeClassName)}>
+                          <Badge
+                            variant="outline"
+                            className={cn("gap-1 rounded-full px-3", meta.badgeClassName)}
+                          >
                             <meta.icon className="h-3.5 w-3.5" />
                             {meta.label}
                           </Badge>
@@ -1020,9 +1023,18 @@ export function AnnouncementsFeedClient({
                 </SheetTrigger>
                 {(
                   [
-                    ["Lead with the outcome", "Use the title like a headline and the first paragraph like the executive summary."],
-                    ["Keep actions explicit", "Use action-required posts when the reader needs to do something after reading."],
-                    ["Use rich content sparingly", "Attachments, embeds, and CTAs should add clarity, not visual noise."],
+                    [
+                      "Lead with the outcome",
+                      "Use the title like a headline and the first paragraph like the executive summary.",
+                    ],
+                    [
+                      "Keep actions explicit",
+                      "Use action-required posts when the reader needs to do something after reading.",
+                    ],
+                    [
+                      "Use rich content sparingly",
+                      "Attachments, embeds, and CTAs should add clarity, not visual noise.",
+                    ],
                   ] as const
                 ).map(([title, body]) => (
                   <div key={title} className="rounded-2xl border bg-background/70 p-3">
@@ -1176,9 +1188,7 @@ export function AnnouncementsFeedClient({
                     <Input
                       placeholder="https://..."
                       value={newPost.ctaUrl}
-                      onChange={(e) =>
-                        setNewPost((prev) => ({ ...prev, ctaUrl: e.target.value }))
-                      }
+                      onChange={(e) => setNewPost((prev) => ({ ...prev, ctaUrl: e.target.value }))}
                     />
                   </div>
                 </div>

@@ -3,11 +3,7 @@ import "server-only";
 import { NextResponse } from "next/server";
 
 import packageJson from "../../../../package.json";
-import {
-  A2A_PROTOCOL_VERSION,
-  CANONICAL_SITE_URL,
-  MCP_ENDPOINT_PATH,
-} from "@/constants";
+import { A2A_PROTOCOL_VERSION, CANONICAL_SITE_URL, MCP_ENDPOINT_PATH } from "@/constants";
 import { getPublishedAgentSkills } from "@/lib/agent-skills";
 
 function getAgentCard() {

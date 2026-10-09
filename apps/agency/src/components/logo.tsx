@@ -42,10 +42,7 @@ export default function Logo({
 
   if (surface === "light") {
     return (
-      <span
-        className="inline-flex items-center"
-        {...props}
-      >
+      <span className="inline-flex items-center" {...props}>
         <Image
           src={sources.dark}
           alt={alt}
@@ -61,10 +58,7 @@ export default function Logo({
 
   if (surface === "dark") {
     return (
-      <span
-        className="inline-flex items-center"
-        {...props}
-      >
+      <span className="inline-flex items-center" {...props}>
         <Image
           src={sources.light}
           alt={alt}
@@ -79,10 +73,7 @@ export default function Logo({
   }
 
   return (
-    <span
-      className="inline-flex items-center"
-      {...props}
-    >
+    <span className="inline-flex items-center" {...props}>
       <Image
         src={sources.dark}
         alt={alt}

@@ -11,7 +11,11 @@ describe("tsconfig scope", () => {
     }
 
     const configFile = ts.readConfigFile(configPath, ts.sys.readFile);
-    const parsed = ts.parseJsonConfigFileContent(configFile.config, ts.sys, path.dirname(configPath));
+    const parsed = ts.parseJsonConfigFileContent(
+      configFile.config,
+      ts.sys,
+      path.dirname(configPath),
+    );
 
     const normalizedRootFiles = parsed.fileNames.map((file) =>
       path.normalize(path.resolve(path.dirname(configPath), file)),

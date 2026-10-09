@@ -37,8 +37,7 @@ vi.mock("zsa", () => {
     createServerAction: () => {
       const chain = {
         input: () => chain,
-        handler: (fn: (args: { input: unknown }) => unknown) => (input: unknown) =>
-          fn({ input }),
+        handler: (fn: (args: { input: unknown }) => unknown) => (input: unknown) => fn({ input }),
       };
 
       return chain;
@@ -119,10 +118,12 @@ describe("verifyEmailAction behavior", () => {
   beforeEach(() => {
     vi.clearAllMocks();
 
-    mockKvGet.mockResolvedValue(JSON.stringify({
-      userId: "usr_123",
-      expiresAt: "2030-01-01T00:00:00.000Z",
-    }));
+    mockKvGet.mockResolvedValue(
+      JSON.stringify({
+        userId: "usr_123",
+        expiresAt: "2030-01-01T00:00:00.000Z",
+      }),
+    );
     mockKvDelete.mockResolvedValue(undefined);
 
     mockGetRuntimeContext.mockReturnValue({

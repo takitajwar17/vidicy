@@ -4,11 +4,7 @@
  * Every metric returns a score in [0, 1] and a pass/fail flag.
  */
 
-import type {
-  EvalMetric,
-  ChecklistItemOutput,
-  OrchestratorEvalOutput,
-} from "./types";
+import type { EvalMetric, ChecklistItemOutput, OrchestratorEvalOutput } from "./types";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -84,11 +80,7 @@ export function schemaCompleteness(
 /**
  * Checks a numeric value falls within [min, max].
  */
-export function scoreRange(
-  min: number,
-  max: number,
-  threshold = 1.0,
-): EvalMetric<number> {
+export function scoreRange(min: number, max: number, threshold = 1.0): EvalMetric<number> {
   return {
     name: "scoreRange",
     threshold,
@@ -112,7 +104,8 @@ export function textSimilarity(threshold = 0.3): EvalMetric<string, string> {
     name: "textSimilarity",
     threshold,
     score({ output, expected }) {
-      if (!expected) return { name: "textSimilarity", score: 0, passed: false, detail: "No expected text" };
+      if (!expected)
+        return { name: "textSimilarity", score: 0, passed: false, detail: "No expected text" };
       const sim = jaccardSimilarity(tokenize(output), tokenize(expected));
       return {
         name: "textSimilarity",
@@ -127,10 +120,7 @@ export function textSimilarity(threshold = 0.3): EvalMetric<string, string> {
 /**
  * Checks that all required items appear in a list (case-insensitive substring match).
  */
-export function listCompleteness(
-  requiredItems: string[],
-  threshold = 0.8,
-): EvalMetric<string[]> {
+export function listCompleteness(requiredItems: string[], threshold = 0.8): EvalMetric<string[]> {
   return {
     name: "listCompleteness",
     threshold,
@@ -162,7 +152,8 @@ export function groundedness(threshold = 0.5): EvalMetric<string> {
     name: "groundedness",
     threshold,
     score({ output, context }) {
-      if (!context) return { name: "groundedness", score: 0, passed: false, detail: "No context provided" };
+      if (!context)
+        return { name: "groundedness", score: 0, passed: false, detail: "No context provided" };
       const outputTokens = tokenize(output);
       const contextTokens = new Set(tokenize(context));
       if (outputTokens.length === 0) return { name: "groundedness", score: 0, passed: false };
@@ -181,10 +172,7 @@ export function groundedness(threshold = 0.5): EvalMetric<string> {
 /**
  * Checks whether output text contains any of the given keywords.
  */
-export function containsKeywords(
-  keywords: string[],
-  threshold = 0.8,
-): EvalMetric<string> {
+export function containsKeywords(keywords: string[], threshold = 0.8): EvalMetric<string> {
   return {
     name: "containsKeywords",
     threshold,
@@ -196,7 +184,10 @@ export function containsKeywords(
         name: "containsKeywords",
         score: ratio,
         passed: ratio >= threshold,
-        detail: ratio < threshold ? `Missing: ${keywords.filter((kw) => !outputLower.includes(kw.toLowerCase())).join(", ")}` : undefined,
+        detail:
+          ratio < threshold
+            ? `Missing: ${keywords.filter((kw) => !outputLower.includes(kw.toLowerCase())).join(", ")}`
+            : undefined,
       };
     },
   };
@@ -243,8 +234,10 @@ export function checklistItemSchema(threshold = 1.0): EvalMetric<ChecklistItemOu
 
       for (const item of output) {
         const problems: string[] = [];
-        if (!item.documentName || typeof item.documentName !== "string") problems.push("missing documentName");
-        if (!item.description || typeof item.description !== "string") problems.push("missing description");
+        if (!item.documentName || typeof item.documentName !== "string")
+          problems.push("missing documentName");
+        if (!item.description || typeof item.description !== "string")
+          problems.push("missing description");
         if (typeof item.isRequired !== "boolean") problems.push("missing isRequired");
         if (typeof item.sortOrder !== "number") problems.push("missing sortOrder");
         // commonMistakes can be empty string but must be string
@@ -309,7 +302,10 @@ export function checklistRequiredDocs(
         name: "checklistRequiredDocs",
         score: ratio,
         passed: ratio >= threshold,
-        detail: ratio < 1 ? `Missing: ${requiredDocs.filter((r) => !found.includes(r)).join(", ")}` : undefined,
+        detail:
+          ratio < 1
+            ? `Missing: ${requiredDocs.filter((r) => !found.includes(r)).join(", ")}`
+            : undefined,
       };
     },
   };
@@ -387,7 +383,10 @@ export function itemFeedbackCoverage(
         name: "itemFeedbackCoverage",
         score: ratio,
         passed: ratio >= threshold,
-        detail: ratio < 1 ? `Missing feedback for: ${expectedItemIds.filter((id) => !found.includes(id)).join(", ")}` : undefined,
+        detail:
+          ratio < 1
+            ? `Missing feedback for: ${expectedItemIds.filter((id) => !found.includes(id)).join(", ")}`
+            : undefined,
       };
     },
   };

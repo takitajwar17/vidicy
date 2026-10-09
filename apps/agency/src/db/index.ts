@@ -56,7 +56,9 @@ function createDatabase(pool: Pool) {
     }
   }
 
-  async function batch<const T extends readonly BatchItem<"pg">[]>(queries: T): Promise<BatchResponse<T>> {
+  async function batch<const T extends readonly BatchItem<"pg">[]>(
+    queries: T,
+  ): Promise<BatchResponse<T>> {
     return withTransaction(async () => {
       const values: unknown[] = [];
       for (const query of queries) {

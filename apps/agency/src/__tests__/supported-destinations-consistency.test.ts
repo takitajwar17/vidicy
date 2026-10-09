@@ -14,7 +14,7 @@ describe("supported destinations consistency", () => {
 
     for (const options of [...Object.values(VISA_TYPES_BY_DESTINATION), DEFAULT_VISA_TYPES]) {
       expect(options.length).toBeGreaterThan(0);
-      expect(new Set(options.map(option => option.value)).size).toBe(options.length);
+      expect(new Set(options.map((option) => option.value)).size).toBe(options.length);
       for (const option of options) {
         expect(option.value.trim()).not.toBe("");
         expect(option.label.trim()).not.toBe("");

@@ -93,66 +93,66 @@ export default async function IssuesPage({
           actionLabel="View cases"
         />
       ) : (
-          <AgencyTableCard
-            title="Issue queue"
-            description="What the reviewer or client still needs to fix."
-          >
-            <AgencyTable>
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="pl-5">Issue</TableHead>
-                  <TableHead>Case</TableHead>
-                  <TableHead>Client</TableHead>
-                  <TableHead>Applicant</TableHead>
-                  <TableHead>Severity</TableHead>
-                  <TableHead>Created</TableHead>
-                  <TableHead className="pr-5">Status</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {rows.map(({ issue, application, applicant }) => (
-                  <TableRow key={issue.id}>
-                    <TableCell className="max-w-[360px] pl-5">
-                      <p
-                        className="truncate font-bold"
-                        title={`${issue.title}: ${issue.description}`}
+        <AgencyTableCard
+          title="Issue queue"
+          description="What the reviewer or client still needs to fix."
+        >
+          <AgencyTable>
+            <TableHeader>
+              <TableRow>
+                <TableHead className="pl-5">Issue</TableHead>
+                <TableHead>Case</TableHead>
+                <TableHead>Client</TableHead>
+                <TableHead>Applicant</TableHead>
+                <TableHead>Severity</TableHead>
+                <TableHead>Created</TableHead>
+                <TableHead className="pr-5">Status</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {rows.map(({ issue, application, applicant }) => (
+                <TableRow key={issue.id}>
+                  <TableCell className="max-w-[360px] pl-5">
+                    <p
+                      className="truncate font-bold"
+                      title={`${issue.title}: ${issue.description}`}
+                    >
+                      {issue.title}
+                    </p>
+                  </TableCell>
+                  <TableCell>
+                    {application ? (
+                      <Link
+                        href={`/dashboard/${application.id}` as Route}
+                        className="font-bold text-primary"
                       >
-                        {issue.title}
-                      </p>
-                    </TableCell>
-                    <TableCell>
-                      {application ? (
-                        <Link
-                          href={`/dashboard/${application.id}` as Route}
-                          className="font-bold text-primary"
-                        >
-                          {getDisplayCaseNumber(application.caseNumber, application.id)}
-                        </Link>
-                      ) : (
-                        "Missing case"
-                      )}
-                    </TableCell>
-                    <TableCell>{application?.clientName ?? "Unassigned"}</TableCell>
-                    <TableCell>{applicant?.name ?? "Applicant pending"}</TableCell>
-                    <TableCell>
-                      <IssueSeverityBadge severity={issue.severity} />
-                    </TableCell>
-                    <TableCell>{formatShortDate(issue.createdAt)}</TableCell>
-                    <TableCell className="pr-5">
-                      <ReviewIssueStatusSelect issueId={issue.id} status={issue.status} />
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </AgencyTable>
-            <AgencyPagination
-              page={page}
-              hasNextPage={hasNextPage}
-              previousHref={getIssuesHref({ page: page - 1, query })}
-              nextHref={getIssuesHref({ page: page + 1, query })}
-              endLabel="End of queue"
-            />
-          </AgencyTableCard>
+                        {getDisplayCaseNumber(application.caseNumber, application.id)}
+                      </Link>
+                    ) : (
+                      "Missing case"
+                    )}
+                  </TableCell>
+                  <TableCell>{application?.clientName ?? "Unassigned"}</TableCell>
+                  <TableCell>{applicant?.name ?? "Applicant pending"}</TableCell>
+                  <TableCell>
+                    <IssueSeverityBadge severity={issue.severity} />
+                  </TableCell>
+                  <TableCell>{formatShortDate(issue.createdAt)}</TableCell>
+                  <TableCell className="pr-5">
+                    <ReviewIssueStatusSelect issueId={issue.id} status={issue.status} />
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </AgencyTable>
+          <AgencyPagination
+            page={page}
+            hasNextPage={hasNextPage}
+            previousHref={getIssuesHref({ page: page - 1, query })}
+            nextHref={getIssuesHref({ page: page + 1, query })}
+            endLabel="End of queue"
+          />
+        </AgencyTableCard>
       )}
     </AgencyPageShell>
   );

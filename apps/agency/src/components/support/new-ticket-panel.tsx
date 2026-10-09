@@ -11,9 +11,7 @@ interface NewTicketPanelProps {
   onBack: () => void;
 }
 
-export function NewTicketPanel({
-  onBack,
-}: NewTicketPanelProps) {
+export function NewTicketPanel({ onBack }: NewTicketPanelProps) {
   const router = useRouter();
 
   function handleSuccess() {
@@ -34,18 +32,13 @@ export function NewTicketPanel({
 
       <div className="flex-1 flex items-center justify-center p-6">
         <div className="max-w-xl w-full">
-          <Button
-            type="button"
-            variant="ghost"
-            onClick={onBack}
-            className="mb-6 -ml-2"
-          >
+          <Button type="button" variant="ghost" onClick={onBack} className="mb-6 -ml-2">
             <ChevronLeftIcon className="h-4 w-4" />
             Back to support threads
           </Button>
           <p className="text-sm text-muted-foreground mb-6 leading-relaxed text-center">
-            Describe your issue and we&apos;ll get back to you as soon as
-            possible. For bugs, include steps to reproduce.
+            Describe your issue and we&apos;ll get back to you as soon as possible. For bugs,
+            include steps to reproduce.
           </p>
           <SubmitTicketForm onSuccess={handleSuccess} />
         </div>

@@ -1,6 +1,16 @@
 import { type InferSelectModel } from "drizzle-orm";
 import { createId } from "@paralleldrive/cuid2";
-import { AnyPgColumn, integer, index, pgTable, text, uniqueIndex, timestamp, boolean, jsonb } from "drizzle-orm/pg-core";
+import {
+  AnyPgColumn,
+  integer,
+  index,
+  pgTable,
+  text,
+  uniqueIndex,
+  timestamp,
+  boolean,
+  jsonb,
+} from "drizzle-orm/pg-core";
 import { commonColumns } from "./_common";
 import { userTable } from "./user";
 import type { AnnouncementAttachment } from "@/lib/announcements";
@@ -14,7 +24,10 @@ export const ANNOUNCEMENT_TYPE = {
   ACTION_REQUIRED: "action_required",
 } as const;
 
-export const announcementTypeTuple = Object.values(ANNOUNCEMENT_TYPE) as [(typeof ANNOUNCEMENT_TYPE)[keyof typeof ANNOUNCEMENT_TYPE], ...(typeof ANNOUNCEMENT_TYPE)[keyof typeof ANNOUNCEMENT_TYPE][]];
+export const announcementTypeTuple = Object.values(ANNOUNCEMENT_TYPE) as [
+  (typeof ANNOUNCEMENT_TYPE)[keyof typeof ANNOUNCEMENT_TYPE],
+  ...(typeof ANNOUNCEMENT_TYPE)[keyof typeof ANNOUNCEMENT_TYPE][],
+];
 
 export const ANNOUNCEMENT_PRIORITY = {
   NORMAL: "normal",

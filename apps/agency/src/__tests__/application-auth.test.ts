@@ -1,14 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const {
-  mockRequireVerifiedEmail,
-  mockFindApplication,
-  mockEnsureAgencyTeamMembership,
-} = vi.hoisted(() => ({
-  mockRequireVerifiedEmail: vi.fn(),
-  mockFindApplication: vi.fn(),
-  mockEnsureAgencyTeamMembership: vi.fn(),
-}));
+const { mockRequireVerifiedEmail, mockFindApplication, mockEnsureAgencyTeamMembership } =
+  vi.hoisted(() => ({
+    mockRequireVerifiedEmail: vi.fn(),
+    mockFindApplication: vi.fn(),
+    mockEnsureAgencyTeamMembership: vi.fn(),
+  }));
 
 vi.mock("react", () => ({
   cache: <T extends (...args: any[]) => any>(fn: T) => fn,
@@ -46,11 +43,11 @@ vi.mock("@/db/schema", () => ({
     EDIT_COMPONENTS: "edit_components",
     DELETE_COMPONENTS: "delete_components",
   },
-	  AGENCY_STAFF_ROLE: {
-	    ADMIN: "admin",
-	    MEMBER: "member",
-	  },
-	}));
+  AGENCY_STAFF_ROLE: {
+    ADMIN: "admin",
+    MEMBER: "member",
+  },
+}));
 
 vi.mock("@/server/agency-team", () => ({
   ensureAgencyTeamMembership: mockEnsureAgencyTeamMembership,

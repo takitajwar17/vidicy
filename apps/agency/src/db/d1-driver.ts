@@ -94,13 +94,7 @@ function buildTableRecoveryMetadataByName(tables: TablesRelationalConfig) {
   return tableMetadataByName;
 }
 
-function findMatchingParenthesis({
-  sqlText,
-  startIndex,
-}: {
-  sqlText: string;
-  startIndex: number;
-}) {
+function findMatchingParenthesis({ sqlText, startIndex }: { sqlText: string; startIndex: number }) {
   let depth = 0;
   let inSingleQuote = false;
   let inDoubleQuote = false;
@@ -239,15 +233,15 @@ function findTopLevelKeywordIndex({
 function normalizeSqlIdentifier(identifier: string) {
   const trimmedIdentifier = identifier.trim();
   const withoutLeadingQuote =
-    trimmedIdentifier.startsWith('"')
-    || trimmedIdentifier.startsWith("`")
-    || trimmedIdentifier.startsWith("[")
+    trimmedIdentifier.startsWith('"') ||
+    trimmedIdentifier.startsWith("`") ||
+    trimmedIdentifier.startsWith("[")
       ? trimmedIdentifier.slice(1)
       : trimmedIdentifier;
 
-  return withoutLeadingQuote.endsWith('"')
-    || withoutLeadingQuote.endsWith("`")
-    || withoutLeadingQuote.endsWith("]")
+  return withoutLeadingQuote.endsWith('"') ||
+    withoutLeadingQuote.endsWith("`") ||
+    withoutLeadingQuote.endsWith("]")
     ? withoutLeadingQuote.slice(0, -1)
     : withoutLeadingQuote;
 }
@@ -292,9 +286,7 @@ function buildOrderByCaseClause({
     return "";
   }
 
-  const whenClauses = primaryKeyValues
-    .map((_, index) => `when ? then ${index}`)
-    .join(" ");
+  const whenClauses = primaryKeyValues.map((_, index) => `when ? then ${index}`).join(" ");
 
   return ` order by case ${escapeSqlIdentifier(primaryKeyColumnName)} ${whenClauses} end`;
 }
@@ -339,9 +331,7 @@ function buildInsertRecoveryContext({
     return null;
   }
 
-  const valuesKeywordIndex = queryString
-    .toLowerCase()
-    .indexOf(" values ", columnsEndIndex);
+  const valuesKeywordIndex = queryString.toLowerCase().indexOf(" values ", columnsEndIndex);
   if (valuesKeywordIndex === -1) {
     return null;
   }
@@ -366,9 +356,7 @@ function buildInsertRecoveryContext({
   const columnsSql = queryString.slice(columnsStartIndex + 1, columnsEndIndex);
   const valuesSql = queryString.slice(valuesStartIndex, valuesEndIndex);
   const returningClause =
-    returningIndex === -1
-      ? null
-      : queryString.slice(returningIndex + " returning ".length).trim();
+    returningIndex === -1 ? null : queryString.slice(returningIndex + " returning ".length).trim();
 
   const insertColumns = splitTopLevelCsv(columnsSql).map(normalizeSqlIdentifier);
   const tuples = extractValuesTuples(valuesSql);
@@ -424,12 +412,8 @@ function buildInsertRecoveryContext({
   };
 }
 
-function createRecoveredRunResponse({
-  rowCount,
-}: {
-  rowCount: number;
-}) {
-  return ({
+function createRecoveredRunResponse({ rowCount }: { rowCount: number }) {
+  return {
     success: true,
     results: [],
     meta: {
@@ -438,7 +422,7 @@ function createRecoveredRunResponse({
       rows_read: rowCount,
       rows_written: rowCount,
     },
-  } as unknown) as D1Response;
+  } as unknown as D1Response;
 }
 
 function buildInsertRecoveryLookupQuery({
@@ -467,11 +451,7 @@ function buildInsertRecoveryLookupQuery({
   };
 }
 
-function logRecoveredInsert({
-  context,
-}: {
-  context: InsertRecoveryContext;
-}) {
+function logRecoveredInsert({ context }: { context: InsertRecoveryContext }) {
   logger.warn("Recovered ambiguous D1 insert by re-reading committed rows", {
     primaryKeyCount: context.primaryKeyValues.length,
     tableName: context.tableName,
@@ -565,14 +545,19 @@ function executeWithBaseQueryCache<TResult>({
   }>;
   queryString: string;
 }) {
-  return (preparedQuery as unknown as QueryWithCacheAccessor<TResult>)
-    .queryWithCache(queryString, params, execute);
+  return (preparedQuery as unknown as QueryWithCacheAccessor<TResult>).queryWithCache(
+    queryString,
+    params,
+    execute,
+  );
 }
 
 function getJoinsNotNullableMap(preparedQuery: unknown) {
-  return (preparedQuery as {
-    joinsNotNullableMap?: Record<string, boolean>;
-  }).joinsNotNullableMap;
+  return (
+    preparedQuery as {
+      joinsNotNullableMap?: Record<string, boolean>;
+    }
+  ).joinsNotNullableMap;
 }
 
 function mapResultRow(
@@ -581,45 +566,48 @@ function mapResultRow(
   joinsNotNullableMap: Record<string, boolean> | undefined,
 ) {
   const nullifyMap: Record<string, false | string> = {};
-  const result = columns.reduce<Record<string, unknown>>((currentResult, { path, field }, columnIndex) => {
-    let decoder: DriverValueDecoder<unknown, unknown>;
-    if (is(field, Column)) {
-      decoder = field;
-    } else if (is(field, SQL)) {
-      decoder = (field as DecodableSql).decoder;
-    } else {
-      decoder = (field as unknown as AliasedFieldWithDecoder).sql.decoder;
-    }
-
-    let node: Record<string, unknown> = currentResult;
-    for (const [pathChunkIndex, pathChunk] of path.entries()) {
-      if (pathChunkIndex < path.length - 1) {
-        if (!(pathChunk in node)) {
-          node[pathChunk] = {};
-        }
-
-        node = node[pathChunk] as Record<string, unknown>;
+  const result = columns.reduce<Record<string, unknown>>(
+    (currentResult, { path, field }, columnIndex) => {
+      let decoder: DriverValueDecoder<unknown, unknown>;
+      if (is(field, Column)) {
+        decoder = field;
+      } else if (is(field, SQL)) {
+        decoder = (field as DecodableSql).decoder;
       } else {
-        const rawValue = row[columnIndex];
-        const value = rawValue === null ? null : decoder.mapFromDriverValue(rawValue);
-        node[pathChunk] = value;
+        decoder = (field as unknown as AliasedFieldWithDecoder).sql.decoder;
+      }
 
-        if (joinsNotNullableMap && is(field, Column) && path.length === 2) {
-          const objectName = path[0];
-          if (!(objectName in nullifyMap)) {
-            nullifyMap[objectName] = value === null ? getTableName(field.table) : false;
-          } else if (
-            typeof nullifyMap[objectName] === "string"
-            && nullifyMap[objectName] !== getTableName(field.table)
-          ) {
-            nullifyMap[objectName] = false;
+      let node: Record<string, unknown> = currentResult;
+      for (const [pathChunkIndex, pathChunk] of path.entries()) {
+        if (pathChunkIndex < path.length - 1) {
+          if (!(pathChunk in node)) {
+            node[pathChunk] = {};
+          }
+
+          node = node[pathChunk] as Record<string, unknown>;
+        } else {
+          const rawValue = row[columnIndex];
+          const value = rawValue === null ? null : decoder.mapFromDriverValue(rawValue);
+          node[pathChunk] = value;
+
+          if (joinsNotNullableMap && is(field, Column) && path.length === 2) {
+            const objectName = path[0];
+            if (!(objectName in nullifyMap)) {
+              nullifyMap[objectName] = value === null ? getTableName(field.table) : false;
+            } else if (
+              typeof nullifyMap[objectName] === "string" &&
+              nullifyMap[objectName] !== getTableName(field.table)
+            ) {
+              nullifyMap[objectName] = false;
+            }
           }
         }
       }
-    }
 
-    return currentResult;
-  }, {});
+      return currentResult;
+    },
+    {},
+  );
 
   if (joinsNotNullableMap && Object.keys(nullifyMap).length > 0) {
     for (const [objectName, tableName] of Object.entries(nullifyMap)) {
@@ -632,7 +620,9 @@ function mapResultRow(
   return result;
 }
 
-class RecoveringD1PreparedQuery<T extends PreparedQueryConfig = PreparedQueryConfig> extends SQLitePreparedQuery<{
+class RecoveringD1PreparedQuery<
+  T extends PreparedQueryConfig = PreparedQueryConfig,
+> extends SQLitePreparedQuery<{
   type: "async";
   run: D1Response;
   all: T["all"];
@@ -737,8 +727,8 @@ class RecoveringD1PreparedQuery<T extends PreparedQueryConfig = PreparedQueryCon
         });
       } catch (retryError) {
         if (
-          !isRetryableD1WriteError({ error: retryError })
-          && !isUniqueConstraintError({ error: retryError })
+          !isRetryableD1WriteError({ error: retryError }) &&
+          !isUniqueConstraintError({ error: retryError })
         ) {
           throw retryError;
         }
@@ -798,7 +788,10 @@ class RecoveringD1PreparedQuery<T extends PreparedQueryConfig = PreparedQueryCon
 
       return await executeWithBaseQueryCache({
         execute: async () => {
-          return this.stmt.bind(...params).all().then(({ results }) => this.mapAllResult(results));
+          return this.stmt
+            .bind(...params)
+            .all()
+            .then(({ results }) => this.mapAllResult(results));
         },
         params,
         preparedQuery: this,
@@ -816,7 +809,11 @@ class RecoveringD1PreparedQuery<T extends PreparedQueryConfig = PreparedQueryCon
       this.logger.logQuery(this.query.sql, params);
 
       return await executeWithBaseQueryCache({
-        execute: async () => this.stmt.bind(...params).all().then(({ results }) => results[0]),
+        execute: async () =>
+          this.stmt
+            .bind(...params)
+            .all()
+            .then(({ results }) => results[0]),
         params,
         preparedQuery: this,
         queryString: this.query.sql,
@@ -909,8 +906,10 @@ class RecoveringD1PreparedQuery<T extends PreparedQueryConfig = PreparedQueryCon
   }
 }
 
-class RecoveringD1Session<TFullSchema extends Record<string, unknown>, TSchema extends TablesRelationalConfig>
-  extends SQLiteSession<"async", D1Result, TFullSchema, TSchema> {
+class RecoveringD1Session<
+  TFullSchema extends Record<string, unknown>,
+  TSchema extends TablesRelationalConfig,
+> extends SQLiteSession<"async", D1Result, TFullSchema, TSchema> {
   private readonly cache: Cache;
   private readonly client: D1Database;
   private readonly dialectRef: SQLiteAsyncDialect;
@@ -971,7 +970,9 @@ class RecoveringD1Session<TFullSchema extends Record<string, unknown>, TSchema e
     const preparedQueries: Array<RecoveringD1PreparedQuery> = [];
     const builtQueries: D1PreparedStatement[] = [];
 
-    for (const query of queries as unknown as Array<{ _prepare: () => RecoveringD1PreparedQuery }>) {
+    for (const query of queries as unknown as Array<{
+      _prepare: () => RecoveringD1PreparedQuery;
+    }>) {
       const preparedQuery = query._prepare();
       const builtQuery = preparedQuery.getQuery();
       preparedQueries.push(preparedQuery);
@@ -1003,12 +1004,7 @@ class RecoveringD1Session<TFullSchema extends Record<string, unknown>, TSchema e
     transaction: (tx: RecoveringD1Transaction<TFullSchema, TSchema>) => T | Promise<T>,
     config?: SQLiteTransactionConfig,
   ) {
-    const tx = new RecoveringD1Transaction(
-      "async",
-      this.dialectRef,
-      this,
-      this.schema,
-    );
+    const tx = new RecoveringD1Transaction("async", this.dialectRef, this, this.schema);
     await this.run(sql.raw(`begin${config?.behavior ? ` ${config.behavior}` : ""}`));
 
     try {
@@ -1022,8 +1018,10 @@ class RecoveringD1Session<TFullSchema extends Record<string, unknown>, TSchema e
   }
 }
 
-class RecoveringD1Transaction<TFullSchema extends Record<string, unknown>, TSchema extends TablesRelationalConfig>
-  extends SQLiteTransaction<"async", D1Result, TFullSchema, TSchema> {
+class RecoveringD1Transaction<
+  TFullSchema extends Record<string, unknown>,
+  TSchema extends TablesRelationalConfig,
+> extends SQLiteTransaction<"async", D1Result, TFullSchema, TSchema> {
   private readonly dialectRef: SQLiteAsyncDialect;
   private readonly sessionRef: SQLiteSession<"async", D1Result, TFullSchema, TSchema>;
 
@@ -1080,10 +1078,7 @@ export function drizzleWithInsertRecovery<
 
   let schema: RelationalSchemaConfig<TablesRelationalConfig> | undefined;
   if (config.schema) {
-    const tablesConfig = extractTablesRelationalConfig(
-      config.schema,
-      createTableRelationsHelpers,
-    );
+    const tablesConfig = extractTablesRelationalConfig(config.schema, createTableRelationsHelpers);
     tableMetadataByName = buildTableRecoveryMetadataByName(tablesConfig.tables);
 
     schema = {
@@ -1104,7 +1099,12 @@ export function drizzleWithInsertRecovery<
     },
   });
 
-  const db = new DrizzleD1Database("async", dialect, session, schema) as DrizzleD1Database<TSchema> & {
+  const db = new DrizzleD1Database(
+    "async",
+    dialect,
+    session,
+    schema,
+  ) as DrizzleD1Database<TSchema> & {
     $cache?: CacheWithInvalidate;
     $client: TClient;
   };

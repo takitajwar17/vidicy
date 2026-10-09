@@ -48,9 +48,15 @@ describe("public CTA copy", () => {
 
   it("keeps representative public pages free of the removed evaluation CTA block", () => {
     const enterpriseMarkup = renderToStaticMarkup(
-      <MarketingLayout><EnterprisePage /></MarketingLayout>,
+      <MarketingLayout>
+        <EnterprisePage />
+      </MarketingLayout>,
     );
-    const termsMarkup = renderToStaticMarkup(<LegalLayout><TermsPage /></LegalLayout>);
+    const termsMarkup = renderToStaticMarkup(
+      <LegalLayout>
+        <TermsPage />
+      </LegalLayout>,
+    );
 
     for (const markup of [enterpriseMarkup, termsMarkup]) {
       expect(markup).not.toContain(SHARED_PRE_FOOTER_HEADING);

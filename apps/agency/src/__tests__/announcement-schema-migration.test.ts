@@ -51,7 +51,9 @@ describe("announcement schema migration", () => {
     expect(forwardMigration).toContain(
       "ALTER TABLE `announcement_read` ADD COLUMN `updateCounter` integer DEFAULT 0;",
     );
-    expect(journal.entries.some((entry) => entry.tag === "0009_add_announcement_update_counters")).toBe(true);
+    expect(
+      journal.entries.some((entry) => entry.tag === "0009_add_announcement_update_counters"),
+    ).toBe(true);
     expect(latestSnapshot.tables.announcement_post.columns?.updateCounter?.default).toBe(0);
     expect(latestSnapshot.tables.announcement_comment.columns?.updateCounter?.default).toBe(0);
   });

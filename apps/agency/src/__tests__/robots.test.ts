@@ -12,7 +12,11 @@ import {
 describe("public robots.txt", () => {
   it("declares a validator-safe crawl policy", () => {
     const policy = robots();
-    expect(policy.rules).toEqual({ userAgent: "*", allow: "/", disallow: [...PUBLIC_ROBOTS_DISALLOW_PATHS] });
+    expect(policy.rules).toEqual({
+      userAgent: "*",
+      allow: "/",
+      disallow: [...PUBLIC_ROBOTS_DISALLOW_PATHS],
+    });
     expect(policy.host).toBe(CANONICAL_SITE_DOMAIN);
     expect(policy.sitemap).toBe(`${CANONICAL_SITE_URL}/sitemap.xml`);
   });

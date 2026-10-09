@@ -1,67 +1,84 @@
-"use client"
+"use client";
 
-import { useState, useReducer, useMemo, useEffect, useRef, memo, useCallback } from "react"
-import { useRouter } from "next/navigation"
-import { SearchIcon, MessageSquareIcon, FilterIcon, XIcon, ChevronDownIcon, Loader2Icon } from "lucide-react"
-import { Input } from "@/components/ui/input"
-import { Badge } from "@/components/ui/badge"
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import { ScrollArea } from "@/components/ui/scroll-area"
-import { Separator } from "@/components/ui/separator"
-import { cn } from "@/lib/utils"
-import { TicketDetail } from "./ticket-detail"
-import { formatDistanceToNow } from "date-fns"
-import type { SupportTicket, SupportMessage } from "@/db/schema"
-import { PageHeader } from "@/components/page-header"
-import { Button } from "@/components/ui/button"
-import { Switch } from "@/components/ui/switch"
+import { useState, useReducer, useMemo, useEffect, useRef, memo, useCallback } from "react";
+import { useRouter } from "next/navigation";
 import {
-  Collapsible,
-  CollapsibleContent,
-} from "@/components/ui/collapsible"
-import { getAllTicketsAction, getSupportTicketDetailAction } from "@/actions/support.action"
+  SearchIcon,
+  MessageSquareIcon,
+  FilterIcon,
+  XIcon,
+  ChevronDownIcon,
+  Loader2Icon,
+} from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Separator } from "@/components/ui/separator";
+import { cn } from "@/lib/utils";
+import { TicketDetail } from "./ticket-detail";
+import { formatDistanceToNow } from "date-fns";
+import type { SupportTicket, SupportMessage } from "@/db/schema";
+import { PageHeader } from "@/components/page-header";
+import { Button } from "@/components/ui/button";
+import { Switch } from "@/components/ui/switch";
+import { Collapsible, CollapsibleContent } from "@/components/ui/collapsible";
+import { getAllTicketsAction, getSupportTicketDetailAction } from "@/actions/support.action";
 
-type TicketSummaryWithMeta = Awaited<ReturnType<typeof import("@/server/support").getAllSupportTicketSummaries>>["tickets"][number];
+type TicketSummaryWithMeta = Awaited<
+  ReturnType<typeof import("@/server/support").getAllSupportTicketSummaries>
+>["tickets"][number];
 
 type TicketDetailWithMeta = SupportTicket & {
-  userFirstName: string | null
-  userLastName: string | null
-  userEmail: string | null
-  userAvatar: string | null
-  messages: (SupportMessage & { isSystemMessage: boolean })[]
-}
+  userFirstName: string | null;
+  userLastName: string | null;
+  userEmail: string | null;
+  userAvatar: string | null;
+  messages: (SupportMessage & { isSystemMessage: boolean })[];
+};
 
-type TicketListRequestMode = "replace" | "append"
+type TicketListRequestMode = "replace" | "append";
 
 export interface TicketListState {
-  tickets: TicketSummaryWithMeta[]
-  currentPage: number
-  isLoadingMore: boolean
-  isFiltering: boolean
-  activeRequestId: number
+  tickets: TicketSummaryWithMeta[];
+  currentPage: number;
+  isLoadingMore: boolean;
+  isFiltering: boolean;
+  activeRequestId: number;
 }
 
 interface CreateInitialTicketListStateInput {
-  tickets: TicketSummaryWithMeta[]
+  tickets: TicketSummaryWithMeta[];
 }
 
 type TicketListAction =
   | { type: "RESET_FROM_SERVER"; requestId: number; tickets: TicketSummaryWithMeta[] }
   | { type: "START_REQUEST"; requestId: number; mode: TicketListRequestMode }
-  | { type: "RESOLVE_REQUEST"; requestId: number; mode: TicketListRequestMode; page: number; tickets: TicketSummaryWithMeta[] }
-  | { type: "FINISH_REQUEST"; requestId: number; mode: TicketListRequestMode }
+  | {
+      type: "RESOLVE_REQUEST";
+      requestId: number;
+      mode: TicketListRequestMode;
+      page: number;
+      tickets: TicketSummaryWithMeta[];
+    }
+  | { type: "FINISH_REQUEST"; requestId: number; mode: TicketListRequestMode };
 
-export function createInitialTicketListState({ tickets }: CreateInitialTicketListStateInput): TicketListState {
+export function createInitialTicketListState({
+  tickets,
+}: CreateInitialTicketListStateInput): TicketListState {
   return {
     tickets,
     currentPage: 1,
     isLoadingMore: false,
     isFiltering: false,
     activeRequestId: 0,
-  }
+  };
 }
 
-export function ticketListReducer(state: TicketListState, action: TicketListAction): TicketListState {
+export function ticketListReducer(
+  state: TicketListState,
+  action: TicketListAction,
+): TicketListState {
   switch (action.type) {
     case "RESET_FROM_SERVER":
       return {
@@ -70,62 +87,67 @@ export function ticketListReducer(state: TicketListState, action: TicketListActi
         isLoadingMore: false,
         isFiltering: false,
         activeRequestId: action.requestId,
-      }
+      };
     case "START_REQUEST":
       return {
         ...state,
         activeRequestId: action.requestId,
         isFiltering: action.mode === "replace",
         isLoadingMore: action.mode === "append",
-      }
+      };
     case "RESOLVE_REQUEST":
       if (action.requestId !== state.activeRequestId) {
-        return state
+        return state;
       }
 
       return {
         ...state,
-        tickets:
-          action.mode === "append"
-            ? [...state.tickets, ...action.tickets]
-            : action.tickets,
+        tickets: action.mode === "append" ? [...state.tickets, ...action.tickets] : action.tickets,
         currentPage: action.page,
-      }
+      };
     case "FINISH_REQUEST":
       if (action.requestId !== state.activeRequestId) {
-        return state
+        return state;
       }
 
       return {
         ...state,
         isFiltering: action.mode === "replace" ? false : state.isFiltering,
         isLoadingMore: action.mode === "append" ? false : state.isLoadingMore,
-      }
+      };
     default:
-      return state
+      return state;
   }
 }
 
 interface SupportInboxClientProps {
-  initialTickets: TicketSummaryWithMeta[]
-  totalCount: number
-  initialSelectedId?: string
-  initialSelectedTicket?: TicketDetailWithMeta | null
+  initialTickets: TicketSummaryWithMeta[];
+  totalCount: number;
+  initialSelectedId?: string;
+  initialSelectedTicket?: TicketDetailWithMeta | null;
 }
 
 function getInitials(first?: string | null, last?: string | null) {
-  return `${(first?.[0] || "").toUpperCase()}${(last?.[0] || "").toUpperCase()}` || "U"
+  return `${(first?.[0] || "").toUpperCase()}${(last?.[0] || "").toUpperCase()}` || "U";
 }
 
 interface TicketItemProps {
-  ticket: TicketSummaryWithMeta
-  isActive: boolean
-  localReadTs: number
-  onSelect: (id: string) => void
+  ticket: TicketSummaryWithMeta;
+  isActive: boolean;
+  localReadTs: number;
+  onSelect: (id: string) => void;
 }
 
-const TicketItem = memo(function TicketItem({ ticket, isActive, localReadTs, onSelect }: TicketItemProps) {
-  const userName = [ticket.userFirstName, ticket.userLastName].filter(Boolean).join(' ') || ticket.userEmail || 'User'
+const TicketItem = memo(function TicketItem({
+  ticket,
+  isActive,
+  localReadTs,
+  onSelect,
+}: TicketItemProps) {
+  const userName =
+    [ticket.userFirstName, ticket.userLastName].filter(Boolean).join(" ") ||
+    ticket.userEmail ||
+    "User";
 
   // Robust Unread Logic:
   // 1. Must not be the active chat
@@ -134,21 +156,25 @@ const TicketItem = memo(function TicketItem({ ticket, isActive, localReadTs, onS
   const lastIsUser =
     ticket.lastMessageContent === null
       ? true
-      : !ticket.lastMessageIsAdminReply && !ticket.lastMessageIsSystemMessage
+      : !ticket.lastMessageIsAdminReply && !ticket.lastMessageIsSystemMessage;
 
-  const lastUpdateTs = new Date(ticket.lastUpdatedAt || ticket.createdAt).getTime()
-  const serverReadTs = ticket.adminLastViewedAt ? new Date(ticket.adminLastViewedAt).getTime() : 0
+  const lastUpdateTs = new Date(ticket.lastUpdatedAt || ticket.createdAt).getTime();
+  const serverReadTs = ticket.adminLastViewedAt ? new Date(ticket.adminLastViewedAt).getTime() : 0;
 
-  const isUnread = !isActive && lastIsUser && lastUpdateTs > Math.max(serverReadTs, localReadTs)
+  const isUnread = !isActive && lastIsUser && lastUpdateTs > Math.max(serverReadTs, localReadTs);
 
-  const lastMessage = ticket.lastMessageContent || ticket.description
+  const lastMessage = ticket.lastMessageContent || ticket.description;
 
   return (
     <button
       onClick={() => onSelect(ticket.id)}
       className={cn(
         "flex items-start gap-3 px-4 lg:px-5 py-4 text-left transition-all border-b last:border-b-0 group w-full relative",
-        isActive ? "bg-primary/[0.03] shadow-inner" : isUnread ? "bg-primary/[0.06]" : "hover:bg-muted/50"
+        isActive
+          ? "bg-primary/[0.03] shadow-inner"
+          : isUnread
+            ? "bg-primary/[0.06]"
+            : "hover:bg-muted/50",
       )}
     >
       <Avatar className="h-10 w-10 border shadow-xs shrink-0 mt-0.5">
@@ -160,65 +186,80 @@ const TicketItem = memo(function TicketItem({ ticket, isActive, localReadTs, onS
 
       <div className="flex-1 min-w-0 flex flex-col gap-1">
         <div className="flex justify-between items-center mb-0.5">
-          <span className={cn(
-            "font-semibold text-sm truncate transition-colors",
-            isUnread ? "text-foreground" : "text-muted-foreground/90",
-            isActive && "text-primary"
-          )}>{userName}</span>
+          <span
+            className={cn(
+              "font-semibold text-sm truncate transition-colors",
+              isUnread ? "text-foreground" : "text-muted-foreground/90",
+              isActive && "text-primary",
+            )}
+          >
+            {userName}
+          </span>
           <span className="text-xs text-muted-foreground whitespace-nowrap font-mono tabular-nums ml-2">
-            {formatDistanceToNow(new Date(ticket.lastUpdatedAt || ticket.createdAt), { addSuffix: false })}
+            {formatDistanceToNow(new Date(ticket.lastUpdatedAt || ticket.createdAt), {
+              addSuffix: false,
+            })}
           </span>
         </div>
 
         <div className="flex items-center gap-2">
-          <h3 className={cn(
-            "text-sm truncate leading-tight transition-colors",
-            isUnread ? "font-bold text-foreground" : "font-medium text-foreground/80"
-          )}>
+          <h3
+            className={cn(
+              "text-sm truncate leading-tight transition-colors",
+              isUnread ? "font-bold text-foreground" : "font-medium text-foreground/80",
+            )}
+          >
             {ticket.subject}
           </h3>
-          {isUnread && (
-            <div className="h-2 w-2 rounded-full bg-primary shrink-0 animate-pulse" />
-          )}
+          {isUnread && <div className="h-2 w-2 rounded-full bg-primary shrink-0 animate-pulse" />}
         </div>
 
-        <p className={cn(
-          "text-xs truncate leading-snug transition-colors",
-          isUnread ? "text-foreground/70 font-medium" : "text-muted-foreground/60"
-        )}>
+        <p
+          className={cn(
+            "text-xs truncate leading-snug transition-colors",
+            isUnread ? "text-foreground/70 font-medium" : "text-muted-foreground/60",
+          )}
+        >
           {lastMessage}
         </p>
 
-          <div className="mt-2 flex items-center gap-2">
-            <Badge variant="outline" className={cn(
+        <div className="mt-2 flex items-center gap-2">
+          <Badge
+            variant="outline"
+            className={cn(
               "h-5 px-1.5 text-xs capitalize font-medium border",
-              ticket.status === 'open' ? "bg-status-info/10 text-status-info border-status-info/20" :
-              ticket.status === 'in_progress' ? "bg-status-warning/10 text-status-warning border-status-warning/20" :
-              ticket.status === 'resolved' ? "bg-status-success/10 text-status-success border-status-success/20" :
-              "bg-status-neutral/10 text-status-neutral border-status-neutral/20"
-            )}>
-              {ticket.status.replace('_', ' ')}
-            </Badge>
+              ticket.status === "open"
+                ? "bg-status-info/10 text-status-info border-status-info/20"
+                : ticket.status === "in_progress"
+                  ? "bg-status-warning/10 text-status-warning border-status-warning/20"
+                  : ticket.status === "resolved"
+                    ? "bg-status-success/10 text-status-success border-status-success/20"
+                    : "bg-status-neutral/10 text-status-neutral border-status-neutral/20",
+            )}
+          >
+            {ticket.status.replace("_", " ")}
+          </Badge>
 
-            <Badge variant="outline" className="h-5 px-1.5 text-xs capitalize font-medium bg-primary/5 text-primary/70 border-primary/10">
-              {ticket.category.replace(/_/g, " ")}
-            </Badge>
-          </div>
+          <Badge
+            variant="outline"
+            className="h-5 px-1.5 text-xs capitalize font-medium bg-primary/5 text-primary/70 border-primary/10"
+          >
+            {ticket.category.replace(/_/g, " ")}
+          </Badge>
+        </div>
       </div>
 
-      {isActive && (
-        <div className="absolute left-0 top-0 bottom-0 w-1 bg-primary" />
-      )}
+      {isActive && <div className="absolute left-0 top-0 bottom-0 w-1 bg-primary" />}
     </button>
-  )
-})
+  );
+});
 
 interface FilterState {
-  searchQuery: string
-  statusFilter: string
-  categoryFilter: string
-  groupByUser: boolean
-  isFiltersOpen: boolean
+  searchQuery: string;
+  statusFilter: string;
+  categoryFilter: string;
+  groupByUser: boolean;
+  isFiltersOpen: boolean;
 }
 
 type FilterAction =
@@ -227,17 +268,24 @@ type FilterAction =
   | { type: "SET_CATEGORY"; value: string }
   | { type: "SET_GROUP_BY_USER"; value: boolean }
   | { type: "SET_FILTERS_OPEN"; value: boolean }
-  | { type: "RESET_FILTERS" }
+  | { type: "RESET_FILTERS" };
 
 function filterReducer(state: FilterState, action: FilterAction): FilterState {
   switch (action.type) {
-    case "SET_SEARCH": return { ...state, searchQuery: action.value }
-    case "SET_STATUS": return { ...state, statusFilter: action.value }
-    case "SET_CATEGORY": return { ...state, categoryFilter: action.value }
-    case "SET_GROUP_BY_USER": return { ...state, groupByUser: action.value }
-    case "SET_FILTERS_OPEN": return { ...state, isFiltersOpen: action.value }
-    case "RESET_FILTERS": return { ...state, statusFilter: "all", categoryFilter: "all", groupByUser: false }
-    default: return state
+    case "SET_SEARCH":
+      return { ...state, searchQuery: action.value };
+    case "SET_STATUS":
+      return { ...state, statusFilter: action.value };
+    case "SET_CATEGORY":
+      return { ...state, categoryFilter: action.value };
+    case "SET_GROUP_BY_USER":
+      return { ...state, groupByUser: action.value };
+    case "SET_FILTERS_OPEN":
+      return { ...state, isFiltersOpen: action.value };
+    case "RESET_FILTERS":
+      return { ...state, statusFilter: "all", categoryFilter: "all", groupByUser: false };
+    default:
+      return state;
   }
 }
 
@@ -247,20 +295,24 @@ export function SupportInboxClient({
   initialSelectedId,
   initialSelectedTicket = null,
 }: SupportInboxClientProps) {
-  const router = useRouter()
-  const [selectedTicketId, setSelectedTicketId] = useState<string | null>(initialSelectedId ?? null)
-  const [selectedTicket, setSelectedTicket] = useState<TicketDetailWithMeta | null>(initialSelectedTicket)
-  const [isSelectedTicketLoading, setIsSelectedTicketLoading] = useState(false)
-  const [locallyReadAt, setLocallyReadAt] = useState<Record<string, number>>({})
-  const [mounted, setMounted] = useState(false)
+  const router = useRouter();
+  const [selectedTicketId, setSelectedTicketId] = useState<string | null>(
+    initialSelectedId ?? null,
+  );
+  const [selectedTicket, setSelectedTicket] = useState<TicketDetailWithMeta | null>(
+    initialSelectedTicket,
+  );
+  const [isSelectedTicketLoading, setIsSelectedTicketLoading] = useState(false);
+  const [locallyReadAt, setLocallyReadAt] = useState<Record<string, number>>({});
+  const [mounted, setMounted] = useState(false);
   const [ticketListState, dispatchTicketList] = useReducer(
     ticketListReducer,
     { tickets: initialTickets },
     createInitialTicketListState,
-  )
-  const isFirstFilterRender = useRef(true)
-  const selectedTicketRequestIdRef = useRef(0)
-  const ticketListRequestIdRef = useRef(0)
+  );
+  const isFirstFilterRender = useRef(true);
+  const selectedTicketRequestIdRef = useRef(0);
+  const ticketListRequestIdRef = useRef(0);
 
   const [filters, dispatch] = useReducer(filterReducer, {
     searchQuery: "",
@@ -268,180 +320,191 @@ export function SupportInboxClient({
     categoryFilter: "all",
     groupByUser: false,
     isFiltersOpen: false,
-  })
+  });
 
   useEffect(() => {
-    setMounted(true)
-  }, [])
+    setMounted(true);
+  }, []);
 
-  const loadSelectedTicket = useCallback(async ({ ticketId }: { ticketId: string }) => {
-    const requestId = selectedTicketRequestIdRef.current + 1
-    selectedTicketRequestIdRef.current = requestId
+  const loadSelectedTicket = useCallback(
+    async ({ ticketId }: { ticketId: string }) => {
+      const requestId = selectedTicketRequestIdRef.current + 1;
+      selectedTicketRequestIdRef.current = requestId;
 
-    if (selectedTicket?.id !== ticketId) {
-      setSelectedTicket(null)
-    }
-    setIsSelectedTicketLoading(true)
-
-    try {
-      const [result] = await getSupportTicketDetailAction({ ticketId })
-
-      if (selectedTicketRequestIdRef.current !== requestId) {
-        return
+      if (selectedTicket?.id !== ticketId) {
+        setSelectedTicket(null);
       }
+      setIsSelectedTicketLoading(true);
 
-      setSelectedTicket((result as TicketDetailWithMeta | undefined) ?? null)
-    } finally {
-      if (selectedTicketRequestIdRef.current === requestId) {
-        setIsSelectedTicketLoading(false)
+      try {
+        const [result] = await getSupportTicketDetailAction({ ticketId });
+
+        if (selectedTicketRequestIdRef.current !== requestId) {
+          return;
+        }
+
+        setSelectedTicket((result as TicketDetailWithMeta | undefined) ?? null);
+      } finally {
+        if (selectedTicketRequestIdRef.current === requestId) {
+          setIsSelectedTicketLoading(false);
+        }
       }
-    }
-  }, [selectedTicket?.id])
+    },
+    [selectedTicket?.id],
+  );
 
-  const requestTickets = useCallback(async ({
-    page,
-    mode,
-  }: {
-    page: number
-    mode: TicketListRequestMode
-  }) => {
-    const requestId = ticketListRequestIdRef.current + 1
-    ticketListRequestIdRef.current = requestId
+  const requestTickets = useCallback(
+    async ({ page, mode }: { page: number; mode: TicketListRequestMode }) => {
+      const requestId = ticketListRequestIdRef.current + 1;
+      ticketListRequestIdRef.current = requestId;
 
-    dispatchTicketList({ type: "START_REQUEST", requestId, mode })
+      dispatchTicketList({ type: "START_REQUEST", requestId, mode });
 
-    try {
-      const [result] = await getAllTicketsAction({
-        page,
-        status: filters.statusFilter !== "all" ? filters.statusFilter : undefined,
-        category: filters.categoryFilter !== "all" ? filters.categoryFilter : undefined,
-      })
-
-      if (result?.tickets) {
-        dispatchTicketList({
-          type: "RESOLVE_REQUEST",
-          requestId,
-          mode,
+      try {
+        const [result] = await getAllTicketsAction({
           page,
-          tickets: result.tickets as TicketSummaryWithMeta[],
-        })
+          status: filters.statusFilter !== "all" ? filters.statusFilter : undefined,
+          category: filters.categoryFilter !== "all" ? filters.categoryFilter : undefined,
+        });
+
+        if (result?.tickets) {
+          dispatchTicketList({
+            type: "RESOLVE_REQUEST",
+            requestId,
+            mode,
+            page,
+            tickets: result.tickets as TicketSummaryWithMeta[],
+          });
+        }
+      } finally {
+        dispatchTicketList({ type: "FINISH_REQUEST", requestId, mode });
       }
-    } finally {
-      dispatchTicketList({ type: "FINISH_REQUEST", requestId, mode })
-    }
-  }, [filters.categoryFilter, filters.statusFilter])
+    },
+    [filters.categoryFilter, filters.statusFilter],
+  );
 
   // Reset tickets when initialTickets refresh (e.g. via router.refresh)
   useEffect(() => {
-    const requestId = ticketListRequestIdRef.current + 1
-    ticketListRequestIdRef.current = requestId
+    const requestId = ticketListRequestIdRef.current + 1;
+    ticketListRequestIdRef.current = requestId;
 
-    dispatchTicketList({ type: "RESET_FROM_SERVER", requestId, tickets: initialTickets })
-  }, [initialTickets])
+    dispatchTicketList({ type: "RESET_FROM_SERVER", requestId, tickets: initialTickets });
+  }, [initialTickets]);
 
   useEffect(() => {
     if (!selectedTicketId) {
-      selectedTicketRequestIdRef.current += 1
-      setSelectedTicket(null)
-      setIsSelectedTicketLoading(false)
-      return
+      selectedTicketRequestIdRef.current += 1;
+      setSelectedTicket(null);
+      setIsSelectedTicketLoading(false);
+      return;
     }
 
     if (!ticketListState.tickets.some((ticket) => ticket.id === selectedTicketId)) {
-      return
+      return;
     }
 
-    void loadSelectedTicket({ ticketId: selectedTicketId })
-  }, [ticketListState.tickets, selectedTicketId, loadSelectedTicket])
+    void loadSelectedTicket({ ticketId: selectedTicketId });
+  }, [ticketListState.tickets, selectedTicketId, loadSelectedTicket]);
 
   // Re-fetch from server when filters change (skip initial mount)
   useEffect(() => {
     if (isFirstFilterRender.current) {
-      isFirstFilterRender.current = false
-      return
+      isFirstFilterRender.current = false;
+      return;
     }
-    void requestTickets({ page: 1, mode: "replace" })
-  }, [filters.statusFilter, filters.categoryFilter, requestTickets])
+    void requestTickets({ page: 1, mode: "replace" });
+  }, [filters.statusFilter, filters.categoryFilter, requestTickets]);
 
   // Auto-clear selection when the selected ticket is removed (e.g. after delete)
   useEffect(() => {
-    if (selectedTicketId && !ticketListState.tickets.find((ticket) => ticket.id === selectedTicketId)) {
-      selectedTicketRequestIdRef.current += 1
-      setSelectedTicket(null)
-      setIsSelectedTicketLoading(false)
-      setSelectedTicketId(null)
+    if (
+      selectedTicketId &&
+      !ticketListState.tickets.find((ticket) => ticket.id === selectedTicketId)
+    ) {
+      selectedTicketRequestIdRef.current += 1;
+      setSelectedTicket(null);
+      setIsSelectedTicketLoading(false);
+      setSelectedTicketId(null);
     }
-  }, [ticketListState.tickets, selectedTicketId])
+  }, [ticketListState.tickets, selectedTicketId]);
 
   // Auto-refresh every 30 seconds to pick up new messages/tickets
   useEffect(() => {
-    const id = setInterval(() => router.refresh(), 30_000)
-    return () => clearInterval(id)
-  }, [router])
+    const id = setInterval(() => router.refresh(), 30_000);
+    return () => clearInterval(id);
+  }, [router]);
 
   async function handleLoadMore() {
     await requestTickets({
       page: ticketListState.currentPage + 1,
       mode: "append",
-    })
+    });
   }
 
   const filteredTickets = useMemo(() => {
-    return ticketListState.tickets.filter(ticket => {
-      const searchLower = filters.searchQuery.toLowerCase()
-      const userName = `${ticket.userFirstName || ""} ${ticket.userLastName || ""}`.toLowerCase()
+    return ticketListState.tickets.filter((ticket) => {
+      const searchLower = filters.searchQuery.toLowerCase();
+      const userName = `${ticket.userFirstName || ""} ${ticket.userLastName || ""}`.toLowerCase();
 
       const matchesMain =
         userName.includes(searchLower) ||
         ticket.subject.toLowerCase().includes(searchLower) ||
         ticket.userEmail?.toLowerCase().includes(searchLower) ||
-        ticket.description.toLowerCase().includes(searchLower)
+        ticket.description.toLowerCase().includes(searchLower);
 
-      const matchesMessages = ticket.messageSearchText.toLowerCase().includes(searchLower)
+      const matchesMessages = ticket.messageSearchText.toLowerCase().includes(searchLower);
 
-      const matchesSearch = matchesMain || matchesMessages
-      const matchesStatus = filters.statusFilter === "all" || ticket.status === filters.statusFilter
-      const matchesCategory = filters.categoryFilter === "all" || ticket.category === filters.categoryFilter
+      const matchesSearch = matchesMain || matchesMessages;
+      const matchesStatus =
+        filters.statusFilter === "all" || ticket.status === filters.statusFilter;
+      const matchesCategory =
+        filters.categoryFilter === "all" || ticket.category === filters.categoryFilter;
 
-      return matchesSearch && matchesStatus && matchesCategory
-    })
-  }, [ticketListState.tickets, filters.searchQuery, filters.statusFilter, filters.categoryFilter])
+      return matchesSearch && matchesStatus && matchesCategory;
+    });
+  }, [ticketListState.tickets, filters.searchQuery, filters.statusFilter, filters.categoryFilter]);
 
   const groupedTickets = useMemo(() => {
     if (!filters.groupByUser) return null;
 
     const groups: Record<string, TicketSummaryWithMeta[]> = {};
-    filteredTickets.forEach(ticket => {
+    filteredTickets.forEach((ticket) => {
       const key = ticket.userId || ticket.userEmail || "anonymous";
       if (!groups[key]) groups[key] = [];
       groups[key].push(ticket);
     });
 
     return Object.entries(groups).sort(([, a], [, b]) => {
-      const latestA = Math.max(...a.map(t => new Date(t.lastUpdatedAt || t.createdAt).getTime()));
-      const latestB = Math.max(...b.map(t => new Date(t.lastUpdatedAt || t.createdAt).getTime()));
+      const latestA = Math.max(...a.map((t) => new Date(t.lastUpdatedAt || t.createdAt).getTime()));
+      const latestB = Math.max(...b.map((t) => new Date(t.lastUpdatedAt || t.createdAt).getTime()));
       return latestB - latestA;
     });
-  }, [filteredTickets, filters.groupByUser])
+  }, [filteredTickets, filters.groupByUser]);
 
-  const handleSelectTicket = useCallback((id: string) => {
-    if (selectedTicketId !== id) {
-      setSelectedTicket(null)
-      setIsSelectedTicketLoading(true)
-    }
-    setSelectedTicketId(id)
-    setLocallyReadAt(prev => ({ ...prev, [id]: Date.now() }))
-  }, [selectedTicketId])
+  const handleSelectTicket = useCallback(
+    (id: string) => {
+      if (selectedTicketId !== id) {
+        setSelectedTicket(null);
+        setIsSelectedTicketLoading(true);
+      }
+      setSelectedTicketId(id);
+      setLocallyReadAt((prev) => ({ ...prev, [id]: Date.now() }));
+    },
+    [selectedTicketId],
+  );
 
   const clearFilters = () => {
-    dispatch({ type: "RESET_FILTERS" })
-  }
+    dispatch({ type: "RESET_FILTERS" });
+  };
 
   if (!mounted) {
-    return <div className="flex-1 bg-background" />
+    return <div className="flex-1 bg-background" />;
   }
 
-  const activeFiltersCount = (filters.statusFilter !== "all" ? 1 : 0) + (filters.categoryFilter !== "all" ? 1 : 0) + (filters.groupByUser ? 1 : 0)
+  const activeFiltersCount =
+    (filters.statusFilter !== "all" ? 1 : 0) +
+    (filters.categoryFilter !== "all" ? 1 : 0) +
+    (filters.groupByUser ? 1 : 0);
 
   const renderTicketItem = (ticket: TicketSummaryWithMeta) => (
     <TicketItem
@@ -451,19 +514,26 @@ export function SupportInboxClient({
       localReadTs={locallyReadAt[ticket.id] || 0}
       onSelect={handleSelectTicket}
     />
-  )
+  );
 
   return (
     <div className="flex-1 flex min-h-0 w-full bg-background overflow-hidden border-t">
       {/* Left Sidebar — full width on mobile, 40% on md+ */}
-      <div className={cn(
-        "flex-col bg-card border-r min-w-0 h-full overflow-hidden",
-        "w-full md:w-[40%]",
-        // On mobile: hide list panel when a ticket is selected
-        selectedTicketId ? "hidden md:flex" : "flex"
-      )}>
+      <div
+        className={cn(
+          "flex-col bg-card border-r min-w-0 h-full overflow-hidden",
+          "w-full md:w-[40%]",
+          // On mobile: hide list panel when a ticket is selected
+          selectedTicketId ? "hidden md:flex" : "flex",
+        )}
+      >
         <div className="shrink-0">
-          <PageHeader items={[{ href: "/admin", label: "Admin" }, { href: "/admin/support", label: "Support Inbox" }]} />
+          <PageHeader
+            items={[
+              { href: "/admin", label: "Admin" },
+              { href: "/admin/support", label: "Support Inbox" },
+            ]}
+          />
         </div>
 
         <div className="px-4 lg:px-6 py-4 border-b shrink-0 bg-background/50 backdrop-blur-sm z-20">
@@ -482,7 +552,8 @@ export function SupportInboxClient({
               size="icon"
               className={cn(
                 "h-10 w-10 shrink-0 rounded-xl transition-all",
-                filters.isFiltersOpen && "bg-primary text-primary-foreground hover:bg-primary/90 shadow-sm"
+                filters.isFiltersOpen &&
+                  "bg-primary text-primary-foreground hover:bg-primary/90 shadow-sm",
               )}
               onClick={() => dispatch({ type: "SET_FILTERS_OPEN", value: !filters.isFiltersOpen })}
             >
@@ -497,20 +568,30 @@ export function SupportInboxClient({
             </Button>
           </div>
 
-          <Collapsible open={filters.isFiltersOpen} onOpenChange={(open: boolean) => dispatch({ type: "SET_FILTERS_OPEN", value: open })} className="w-full">
+          <Collapsible
+            open={filters.isFiltersOpen}
+            onOpenChange={(open: boolean) => dispatch({ type: "SET_FILTERS_OPEN", value: open })}
+            className="w-full"
+          >
             <CollapsibleContent className="pt-3 data-[state=closed]:animate-collapsible-up data-[state=open]:animate-collapsible-down overflow-hidden">
               <div className="space-y-3 bg-muted/30 p-3 rounded-xl border border-border/50 shadow-inner">
                 <div className="flex items-center justify-between px-1">
-                  <span className="text-xs font-semibold uppercase text-foreground tracking-wider leading-none">Group by User</span>
+                  <span className="text-xs font-semibold uppercase text-foreground tracking-wider leading-none">
+                    Group by User
+                  </span>
                   <Switch
                     checked={filters.groupByUser}
-                    onCheckedChange={(checked: boolean) => dispatch({ type: "SET_GROUP_BY_USER", value: checked })}
+                    onCheckedChange={(checked: boolean) =>
+                      dispatch({ type: "SET_GROUP_BY_USER", value: checked })
+                    }
                     className="data-[state=checked]:bg-primary scale-75 origin-right"
                   />
                 </div>
 
                 <div className="space-y-1.5">
-                  <span className="text-xs font-semibold uppercase text-muted-foreground/60 tracking-wider leading-none ml-1">Status</span>
+                  <span className="text-xs font-semibold uppercase text-muted-foreground/60 tracking-wider leading-none ml-1">
+                    Status
+                  </span>
                   <div className="flex flex-wrap gap-1.5">
                     {["all", "open", "in_progress", "resolved", "closed"].map((s) => {
                       const isSelected = filters.statusFilter === s;
@@ -530,7 +611,9 @@ export function SupportInboxClient({
                 </div>
 
                 <div className="space-y-1.5">
-                  <span className="text-xs font-semibold uppercase text-muted-foreground/60 tracking-wider leading-none ml-1">Category</span>
+                  <span className="text-xs font-semibold uppercase text-muted-foreground/60 tracking-wider leading-none ml-1">
+                    Category
+                  </span>
                   <div className="flex flex-wrap gap-1.5">
                     {["all", "bug", "feedback", "question", "feature_request", "other"].map((c) => {
                       const isSelected = filters.categoryFilter === c;
@@ -571,70 +654,88 @@ export function SupportInboxClient({
               <div className="h-6 w-6 animate-spin rounded-full border-2 border-primary border-t-transparent" />
             </div>
           ) : (
-          <div className="flex flex-col">
-            {filters.groupByUser && groupedTickets ? (
-              groupedTickets.map(([userId, tickets]) => {
-                const firstTicket = tickets[0];
-                const userName = [firstTicket.userFirstName, firstTicket.userLastName].filter(Boolean).join(' ') || firstTicket.userEmail || 'User'
+            <div className="flex flex-col">
+              {filters.groupByUser && groupedTickets
+                ? groupedTickets.map(([userId, tickets]) => {
+                    const firstTicket = tickets[0];
+                    const userName =
+                      [firstTicket.userFirstName, firstTicket.userLastName]
+                        .filter(Boolean)
+                        .join(" ") ||
+                      firstTicket.userEmail ||
+                      "User";
 
-                return (
-                  <div key={userId} className="flex flex-col">
-                    <div className="px-4 lg:px-6 py-2 bg-muted/30 border-b flex items-center justify-between shadow-inner gap-4">
-                      <div className="flex items-center gap-2 min-w-0">
-                        <span className="text-xs font-semibold text-primary/60 truncate max-w-[140px]">{userName}</span>
-                        <Separator orientation="vertical" className="h-2 opacity-20 shrink-0" />
-                        <span className="text-xs font-mono text-muted-foreground/60 truncate tabular-nums min-w-0">{firstTicket.userEmail}</span>
+                    return (
+                      <div key={userId} className="flex flex-col">
+                        <div className="px-4 lg:px-6 py-2 bg-muted/30 border-b flex items-center justify-between shadow-inner gap-4">
+                          <div className="flex items-center gap-2 min-w-0">
+                            <span className="text-xs font-semibold text-primary/60 truncate max-w-[140px]">
+                              {userName}
+                            </span>
+                            <Separator orientation="vertical" className="h-2 opacity-20 shrink-0" />
+                            <span className="text-xs font-mono text-muted-foreground/60 truncate tabular-nums min-w-0">
+                              {firstTicket.userEmail}
+                            </span>
+                          </div>
+                          <Badge
+                            variant="secondary"
+                            className="h-5 text-xs px-2 font-semibold bg-primary/10 text-primary border-none rounded-full shrink-0"
+                          >
+                            {tickets.length} {tickets.length === 1 ? "Ticket" : "Tickets"}
+                          </Badge>
+                        </div>
+                        {tickets.map(renderTicketItem)}
                       </div>
-                      <Badge variant="secondary" className="h-5 text-xs px-2 font-semibold bg-primary/10 text-primary border-none rounded-full shrink-0">
-                        {tickets.length} {tickets.length === 1 ? 'Ticket' : 'Tickets'}
-                      </Badge>
-                    </div>
-                    {tickets.map(renderTicketItem)}
+                    );
+                  })
+                : filteredTickets.map(renderTicketItem)}
+              {filteredTickets.length === 0 && (
+                <div className="p-12 text-center text-muted-foreground flex flex-col items-center gap-4 mt-10">
+                  <div className="flex h-16 w-16 items-center justify-center rounded-full bg-primary/10">
+                    <MessageSquareIcon className="h-8 w-8 text-primary" />
                   </div>
-                )
-              })
-            ) : (
-              filteredTickets.map(renderTicketItem)
-            )}
-            {filteredTickets.length === 0 && (
-              <div className="p-12 text-center text-muted-foreground flex flex-col items-center gap-4 mt-10">
-                <div className="flex h-16 w-16 items-center justify-center rounded-full bg-primary/10">
-                  <MessageSquareIcon className="h-8 w-8 text-primary" />
+                  <div className="space-y-1">
+                    <p className="text-base font-semibold text-foreground">No conversations</p>
+                    <p className="text-sm opacity-60">No tickets match your current filters</p>
+                  </div>
                 </div>
-                <div className="space-y-1">
-                  <p className="text-base font-semibold text-foreground">No conversations</p>
-                  <p className="text-sm opacity-60">No tickets match your current filters</p>
+              )}
+              {ticketListState.tickets.length < totalCount && (
+                <div className="py-3 flex justify-center border-t">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={handleLoadMore}
+                    disabled={ticketListState.isLoadingMore}
+                    className="gap-2 text-xs"
+                  >
+                    {ticketListState.isLoadingMore ? (
+                      <>
+                        <Loader2Icon className="h-3.5 w-3.5 animate-spin" />
+                        Loading...
+                      </>
+                    ) : (
+                      <>
+                        <ChevronDownIcon className="h-3.5 w-3.5" />
+                        Load {totalCount - ticketListState.tickets.length} more
+                      </>
+                    )}
+                  </Button>
                 </div>
-              </div>
-            )}
-            {ticketListState.tickets.length < totalCount && (
-              <div className="py-3 flex justify-center border-t">
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={handleLoadMore}
-                  disabled={ticketListState.isLoadingMore}
-                  className="gap-2 text-xs"
-                >
-                  {ticketListState.isLoadingMore ? (
-                    <><Loader2Icon className="h-3.5 w-3.5 animate-spin" />Loading...</>
-                  ) : (
-                    <><ChevronDownIcon className="h-3.5 w-3.5" />Load {totalCount - ticketListState.tickets.length} more</>
-                  )}
-                </Button>
-              </div>
-            )}
-          </div>
+              )}
+            </div>
           )}
         </ScrollArea>
       </div>
 
       {/* Right Main Area — full screen on mobile when active, flex-1 on md+ */}
-      <div className={cn(
-        "flex-col min-w-0 bg-muted/30 dark:bg-background h-full overflow-hidden flex-1",
-        // On mobile: hide chat area when no ticket is selected
-        !selectedTicketId ? "hidden md:flex" : "flex"
-      )}>
+      <div
+        className={cn(
+          "flex-col min-w-0 bg-muted/30 dark:bg-background h-full overflow-hidden flex-1",
+          // On mobile: hide chat area when no ticket is selected
+          !selectedTicketId ? "hidden md:flex" : "flex",
+        )}
+      >
         {selectedTicket ? (
           <TicketDetail ticket={selectedTicket} onBack={() => setSelectedTicketId(null)} />
         ) : isSelectedTicketLoading ? (
@@ -645,9 +746,7 @@ export function SupportInboxClient({
               </div>
               <div className="space-y-1">
                 <h2 className="text-lg font-semibold">Loading conversation</h2>
-                <p className="text-sm text-muted-foreground">
-                  Fetching the latest ticket details.
-                </p>
+                <p className="text-sm text-muted-foreground">Fetching the latest ticket details.</p>
               </div>
             </div>
           </div>
@@ -660,7 +759,8 @@ export function SupportInboxClient({
               <div className="space-y-2">
                 <h2 className="text-2xl font-semibold">Support Desk</h2>
                 <p className="text-sm text-muted-foreground max-w-sm mx-auto leading-relaxed font-medium">
-                  Select a user conversation from the left to start responding to tickets and managing support requests.
+                  Select a user conversation from the left to start responding to tickets and
+                  managing support requests.
                 </p>
               </div>
             </div>
@@ -668,5 +768,5 @@ export function SupportInboxClient({
         )}
       </div>
     </div>
-  )
+  );
 }

@@ -34,7 +34,8 @@ export function getAnnouncementActorProfile(input: {
   }
 
   return {
-    name: [input.firstName, input.lastName].filter(Boolean).join(" ").trim() || input.email || "User",
+    name:
+      [input.firstName, input.lastName].filter(Boolean).join(" ").trim() || input.email || "User",
     email: input.email ?? null,
     avatar: input.avatar ?? null,
   };

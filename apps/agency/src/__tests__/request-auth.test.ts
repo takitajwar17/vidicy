@@ -67,9 +67,7 @@ describe("isRequestFromSite", () => {
   });
 
   it("allows requests without origin headers", () => {
-    expect(
-      isRequestFromSite(makeRequest("https://vidicy.com/api/get-session", {})),
-    ).toBe(true);
+    expect(isRequestFromSite(makeRequest("https://vidicy.com/api/get-session", {}))).toBe(true);
   });
 });
 

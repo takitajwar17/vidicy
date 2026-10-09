@@ -22,7 +22,10 @@ import { supportTicketStatusTuple, supportTicketCategoryTuple } from "@/db/schem
 
 const submitTicketSchema = z.object({
   subject: z.string().min(1, "Subject is required").max(255, "Subject is too long"),
-  description: z.string().min(10, "Please provide more detail").max(5000, "Description is too long"),
+  description: z
+    .string()
+    .min(10, "Please provide more detail")
+    .max(5000, "Description is too long"),
   category: z.enum(["bug", "feedback", "question", "feature_request", "other"]),
   screenshotUrls: z.array(z.string().min(1)).max(3).optional(),
 });
@@ -35,7 +38,8 @@ export const submitSupportTicketAction = createServerAction()
 
     const headersList = await headers();
     const userAgent = headersList.get("user-agent") ?? undefined;
-    const ipAddress = headersList.get("cf-connecting-ip") ?? headersList.get("x-forwarded-for") ?? undefined;
+    const ipAddress =
+      headersList.get("cf-connecting-ip") ?? headersList.get("x-forwarded-for") ?? undefined;
 
     return withRateLimit(
       async () => {
@@ -53,7 +57,7 @@ export const submitSupportTicketAction = createServerAction()
         userIdentifier: session.user.id,
         limit: 5,
         windowInSeconds: Math.floor(ms("1 hour") / 1000),
-      }
+      },
     );
   });
 
@@ -105,8 +109,16 @@ export const deleteTicketAction = createServerAction()
   });
 
 const getAllTicketsSchema = z.object({
-  status: z.string().optional().transform(value => value === "all" ? undefined : value).pipe(z.enum(supportTicketStatusTuple).optional()),
-  category: z.string().optional().transform(value => value === "all" ? undefined : value).pipe(z.enum(supportTicketCategoryTuple).optional()),
+  status: z
+    .string()
+    .optional()
+    .transform((value) => (value === "all" ? undefined : value))
+    .pipe(z.enum(supportTicketStatusTuple).optional()),
+  category: z
+    .string()
+    .optional()
+    .transform((value) => (value === "all" ? undefined : value))
+    .pipe(z.enum(supportTicketCategoryTuple).optional()),
   page: z.number().min(1).default(1),
 });
 
@@ -133,18 +145,20 @@ export const markTicketAsViewedByAdminAction = createServerAction()
   });
 
 export const addSupportMessageAction = createServerAction()
-  .input(z.object({
-    ticketId: z.string(),
-    content: z.string().min(1, "Message cannot be empty").max(5000),
-    screenshotUrls: z.array(z.string().min(1)).max(3).optional(),
-    isAdminReply: z.boolean().optional().default(false),
-  }))
+  .input(
+    z.object({
+      ticketId: z.string(),
+      content: z.string().min(1, "Message cannot be empty").max(5000),
+      screenshotUrls: z.array(z.string().min(1)).max(3).optional(),
+      isAdminReply: z.boolean().optional().default(false),
+    }),
+  )
   .handler(async ({ input }) => {
     const session = await getSessionFromCookie();
     if (!session) throw new ZSAError("NOT_AUTHORIZED", "Not authenticated");
 
     // Only allow admin to set isAdminReply to true
-    const isAdmin = session.user.role === 'admin';
+    const isAdmin = session.user.role === "admin";
     const requestedAsAdmin = input.isAdminReply && isAdmin;
 
     return withRateLimit(
@@ -161,6 +175,6 @@ export const addSupportMessageAction = createServerAction()
         userIdentifier: session.user.id,
         limit: 30,
         windowInSeconds: Math.floor(ms("1 hour") / 1000),
-      }
+      },
     );
   });

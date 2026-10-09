@@ -74,75 +74,69 @@ export default function Header() {
 
   return (
     <>
-    <a
-      href="#main-content"
-      className="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-100 focus:px-4 focus:py-2 focus:bg-primary focus:text-primary-foreground focus:rounded-md focus:outline-none"
-    >
-      Skip to main content
-    </a>
-    <header
-      data-scrolled={addBorder ? "true" : "false"}
-      className={cn(
-        "public-topbar fixed top-0 inset-x-0 z-50 border-b border-transparent backdrop-blur-xl transition-all duration-300 ease-out"
-      )}
-    >
-      <div className="flex items-center justify-between px-4 py-4 sm:px-6 md:px-12 lg:px-20">
-        <Link
-          href="/"
-          aria-label="Vidicy Agency home"
-          className="public-landing-ink flex items-center"
-        >
-          <Logo
-            alt="Vidicy"
-            className="h-5 w-auto sm:h-7"
-            surface="light"
-            variant="horizontal"
-          />
-        </Link>
-
-        <nav aria-label="Primary" className="hidden items-center gap-7 lg:flex">
-          {marketingTopBarLinks.map((item) => {
-            const isActive = isActiveTopBarLink({
-              href: item.href,
-              pathname,
-              hash: currentHash,
-            });
-
-            return (
-              <Link
-                key={item.href}
-                href={item.href as Route}
-                className={cn(
-                  "public-nav-link text-sm font-semibold transition-colors",
-                  isActive && "font-bold",
-                )}
-                data-active={isActive}
-              >
-                {item.label}
-              </Link>
-            );
-          })}
-        </nav>
-
-        <div className="flex items-center gap-2 sm:gap-3">
+      <a
+        href="#main-content"
+        className="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-100 focus:px-4 focus:py-2 focus:bg-primary focus:text-primary-foreground focus:rounded-md focus:outline-none"
+      >
+        Skip to main content
+      </a>
+      <header
+        data-scrolled={addBorder ? "true" : "false"}
+        className={cn(
+          "public-topbar fixed top-0 inset-x-0 z-50 border-b border-transparent backdrop-blur-xl transition-all duration-300 ease-out",
+        )}
+      >
+        <div className="flex items-center justify-between px-4 py-4 sm:px-6 md:px-12 lg:px-20">
           <Link
-            className="public-auth-link px-1 text-sm font-semibold transition-colors sm:px-2"
-            href="/sign-in"
+            href="/"
+            aria-label="Vidicy Agency home"
+            className="public-landing-ink flex items-center"
           >
-            Log in
+            <Logo alt="Vidicy" className="h-5 w-auto sm:h-7" surface="light" variant="horizontal" />
           </Link>
-          {hidePrimaryCta ? null : (
-            <Link
-              className="public-button-primary rounded-2xl px-3.5 py-2 text-sm font-semibold transition-colors sm:px-4 sm:py-2.5"
-              href="/sign-up"
-            >
-              Sign up
-            </Link>
-          )}
-        </div>
-      </div>
 
-    </header>
+          <nav aria-label="Primary" className="hidden items-center gap-7 lg:flex">
+            {marketingTopBarLinks.map((item) => {
+              const isActive = isActiveTopBarLink({
+                href: item.href,
+                pathname,
+                hash: currentHash,
+              });
+
+              return (
+                <Link
+                  key={item.href}
+                  href={item.href as Route}
+                  className={cn(
+                    "public-nav-link text-sm font-semibold transition-colors",
+                    isActive && "font-bold",
+                  )}
+                  data-active={isActive}
+                >
+                  {item.label}
+                </Link>
+              );
+            })}
+          </nav>
+
+          <div className="flex items-center gap-2 sm:gap-3">
+            <Link
+              className="public-auth-link px-1 text-sm font-semibold transition-colors sm:px-2"
+              href="/sign-in"
+            >
+              Log in
+            </Link>
+            {hidePrimaryCta ? null : (
+              <Link
+                className="public-button-primary rounded-2xl px-3.5 py-2 text-sm font-semibold transition-colors sm:px-4 sm:py-2.5"
+                href="/sign-up"
+              >
+                Sign up
+              </Link>
+            )}
+          </div>
+        </div>
+      </header>
     </>
   );
 }

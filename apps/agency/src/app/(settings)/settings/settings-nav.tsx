@@ -1,14 +1,9 @@
 "use client";
 
-import type { Route } from 'next'
+import type { Route } from "next";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import {
-  User,
-  Smartphone,
-  Lock,
-  KeyRound,
-} from "lucide-react";
+import { User, Smartphone, Lock, KeyRound } from "lucide-react";
 import { useMediaQuery } from "@/hooks/useMediaQuery";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -39,7 +34,7 @@ const settingsNavItems: SettingsNavItem[] = [
 
 export function SettingsNav() {
   const pathname = usePathname();
-  const isLgAndSmaller = useMediaQuery('LG_AND_SMALLER')
+  const isLgAndSmaller = useMediaQuery("LG_AND_SMALLER");
 
   return (
     <div className="w-full flex items-center justify-between gap-4">
@@ -53,11 +48,7 @@ export function SettingsNav() {
         <Tabs value={pathname}>
           <TabsList className="h-auto p-1">
             {settingsNavItems.map((item) => (
-              <TabsTrigger
-                key={item.href}
-                value={item.href}
-                asChild
-              >
+              <TabsTrigger key={item.href} value={item.href} asChild>
                 <Link href={item.href} className="flex items-center gap-2">
                   <item.icon className="h-4 w-4" />
                   {item.title}

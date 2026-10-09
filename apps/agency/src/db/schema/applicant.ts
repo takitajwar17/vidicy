@@ -7,60 +7,72 @@ import { visaApplicationTable, riskLevelTuple } from "./visa-application";
 
 // Applicant relationship types
 export const APPLICANT_RELATIONSHIP = {
-  PRIMARY: 'primary',
-  SPOUSE: 'spouse',
-  CHILD: 'child',
-  PARENT: 'parent',
-  SIBLING: 'sibling',
-  OTHER: 'other',
+  PRIMARY: "primary",
+  SPOUSE: "spouse",
+  CHILD: "child",
+  PARENT: "parent",
+  SIBLING: "sibling",
+  OTHER: "other",
 } as const;
 
-export const applicantRelationshipTuple = Object.values(APPLICANT_RELATIONSHIP) as [string, ...string[]];
+export const applicantRelationshipTuple = Object.values(APPLICANT_RELATIONSHIP) as [
+  string,
+  ...string[],
+];
 
 // Legacy applicant role retained for older records.
 export const APPLICANT_ROLE = {
-  OWNER: 'owner',
-  ADMIN: 'admin',
-  MEMBER: 'member',
-  GUEST: 'guest',
+  OWNER: "owner",
+  ADMIN: "admin",
+  MEMBER: "member",
+  GUEST: "guest",
 } as const;
 
 export const applicantRoleTuple = Object.values(APPLICANT_ROLE) as [string, ...string[]];
 
 // Applicant table — one per person in the visa application
-export const applicantTable = pgTable("applicant", {
-  ...commonColumns,
-  id: text().primaryKey().$defaultFn(() => `appl_${createId()}`).notNull(),
-  applicationId: text().notNull().references(() => visaApplicationTable.id, { onDelete: 'cascade' }),
-  name: text().notNull(),
-  relationship: text({ enum: applicantRelationshipTuple }).notNull(),
-  /**
-   * Legacy applicant role. Agency reviewers work from agency_team_member;
-   * applicant rows keep this value for older records and compatibility.
-   */
-  role: text({ enum: applicantRoleTuple }).notNull().default(APPLICANT_ROLE.OWNER),
-  dateOfBirth: text(),
-  passportNumber: text(),
-  /** Nationality / passport-issuing country for this specific applicant */
-  nationality: text(),
-  readinessScore: integer(),
-  riskLevel: text({ enum: riskLevelTuple }),
-  email: text(),
-  /** Set once a user account is linked to this applicant */
-  userId: text().references(() => userTable.id, { onDelete: 'set null' }),
-  // Per-applicant visa history
-  approvedBefore: boolean(),
-  approvedVisaType: text(),
-  approvedYear: text(),
-  rejectedBefore: boolean(),
-  rejectedVisaType: text(),
-  rejectedYear: text(),
-  rejectedReason: text(),
-}, (table) => ([
-  index('applicant_app_id_idx').on(table.applicationId),
-  index('applicant_user_id_idx').on(table.userId),
-  index('applicant_app_created_idx').on(table.applicationId, table.createdAt),
-  uniqueIndex('applicant_app_email_unique_idx').on(table.applicationId, table.email),
-]));
+export const applicantTable = pgTable(
+  "applicant",
+  {
+    ...commonColumns,
+    id: text()
+      .primaryKey()
+      .$defaultFn(() => `appl_${createId()}`)
+      .notNull(),
+    applicationId: text()
+      .notNull()
+      .references(() => visaApplicationTable.id, { onDelete: "cascade" }),
+    name: text().notNull(),
+    relationship: text({ enum: applicantRelationshipTuple }).notNull(),
+    /**
+     * Legacy applicant role. Agency reviewers work from agency_team_member;
+     * applicant rows keep this value for older records and compatibility.
+     */
+    role: text({ enum: applicantRoleTuple }).notNull().default(APPLICANT_ROLE.OWNER),
+    dateOfBirth: text(),
+    passportNumber: text(),
+    /** Nationality / passport-issuing country for this specific applicant */
+    nationality: text(),
+    readinessScore: integer(),
+    riskLevel: text({ enum: riskLevelTuple }),
+    email: text(),
+    /** Set once a user account is linked to this applicant */
+    userId: text().references(() => userTable.id, { onDelete: "set null" }),
+    // Per-applicant visa history
+    approvedBefore: boolean(),
+    approvedVisaType: text(),
+    approvedYear: text(),
+    rejectedBefore: boolean(),
+    rejectedVisaType: text(),
+    rejectedYear: text(),
+    rejectedReason: text(),
+  },
+  (table) => [
+    index("applicant_app_id_idx").on(table.applicationId),
+    index("applicant_user_id_idx").on(table.userId),
+    index("applicant_app_created_idx").on(table.applicationId, table.createdAt),
+    uniqueIndex("applicant_app_email_unique_idx").on(table.applicationId, table.email),
+  ],
+);
 
 export type Applicant = InferSelectModel<typeof applicantTable>;

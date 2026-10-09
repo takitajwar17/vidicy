@@ -156,5 +156,4 @@ describe("next config", () => {
       else env.ANALYZE = originalAnalyze;
     }
   });
-
 });

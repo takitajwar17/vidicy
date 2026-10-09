@@ -5,13 +5,7 @@ import { useRouter } from "next/navigation";
 import { useServerAction } from "zsa-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   AlertDialog,
   AlertDialogCancel,
@@ -33,11 +27,9 @@ export function DangerZoneCard() {
   const [confirmText, setConfirmText] = useState("");
   const [dialogOpen, setDialogOpen] = useState(false);
 
-  const { execute: executeExport, isPending: isExporting } =
-    useServerAction(exportUserDataAction);
+  const { execute: executeExport, isPending: isExporting } = useServerAction(exportUserDataAction);
 
-  const { execute: executeDelete, isPending: isDeleting } =
-    useServerAction(deleteAccountAction);
+  const { execute: executeDelete, isPending: isDeleting } = useServerAction(deleteAccountAction);
 
   async function handleExport() {
     const [data, error] = await executeExport({ csrfToken });
@@ -94,12 +86,7 @@ export function DangerZoneCard() {
               Download your profile, sign-in, and review-desk account records as JSON.
             </p>
           </div>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handleExport}
-            disabled={isExporting}
-          >
+          <Button variant="outline" size="sm" onClick={handleExport} disabled={isExporting}>
             {isExporting ? (
               <Loader2 className="mr-2 h-4 w-4 animate-spin" />
             ) : (
@@ -114,8 +101,8 @@ export function DangerZoneCard() {
           <div className="min-w-0 space-y-0.5">
             <span className="text-sm font-medium">Delete My Account</span>
             <p className="text-xs text-muted-foreground">
-              Permanently delete your account and all data, including
-              client files, documents, and review history.
+              Permanently delete your account and all data, including client files, documents, and
+              review history.
             </p>
           </div>
           <AlertDialog open={dialogOpen} onOpenChange={setDialogOpen}>
@@ -127,13 +114,10 @@ export function DangerZoneCard() {
             </AlertDialogTrigger>
             <AlertDialogContent>
               <AlertDialogHeader>
-                <AlertDialogTitle>
-                  Are you absolutely sure?
-                </AlertDialogTitle>
+                <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
                 <AlertDialogDescription className="space-y-2">
                   <span className="block">
-                    This action is <strong>permanent and irreversible</strong>.
-                    It will delete:
+                    This action is <strong>permanent and irreversible</strong>. It will delete:
                   </span>
                   <span className="block">
                     • All visa cases, documents, and evaluations
@@ -143,15 +127,11 @@ export function DangerZoneCard() {
                     • All chat history and generated review content
                     <br />
                     • All support tickets
-                    <br />
-                    • Your account and profile information
+                    <br />• Your account and profile information
                   </span>
                   <span className="block mt-4">
-                    Type{" "}
-                    <strong className="font-mono text-foreground">
-                      DELETE MY ACCOUNT
-                    </strong>{" "}
-                    to confirm.
+                    Type <strong className="font-mono text-foreground">DELETE MY ACCOUNT</strong> to
+                    confirm.
                   </span>
                 </AlertDialogDescription>
               </AlertDialogHeader>
@@ -163,17 +143,11 @@ export function DangerZoneCard() {
                 autoComplete="off"
               />
               <AlertDialogFooter>
-                <AlertDialogCancel
-                  onClick={() => setConfirmText("")}
-                >
-                  Cancel
-                </AlertDialogCancel>
+                <AlertDialogCancel onClick={() => setConfirmText("")}>Cancel</AlertDialogCancel>
                 <Button
                   variant="destructive"
                   onClick={handleDelete}
-                  disabled={
-                    confirmText !== "DELETE MY ACCOUNT" || isDeleting
-                  }
+                  disabled={confirmText !== "DELETE MY ACCOUNT" || isDeleting}
                 >
                   {isDeleting ? (
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />

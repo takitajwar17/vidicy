@@ -2,12 +2,7 @@
 
 import * as React from "react";
 import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useServerAction } from "zsa-react";
 import { deleteSessionAction } from "./sessions.action";
 import { Badge } from "@/components/ui/badge";
@@ -26,10 +21,9 @@ import { toast } from "sonner";
 import { useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
 import type { SessionWithMeta } from "@/types";
-import { capitalize } from 'remeda'
+import { capitalize } from "remeda";
 
-
-const regionNames = new Intl.DisplayNames(['en'], { type: 'region' });
+const regionNames = new Intl.DisplayNames(["en"], { type: "region" });
 
 export function SessionsClient({ sessions }: { sessions: SessionWithMeta[] }) {
   const router = useRouter();
@@ -39,16 +33,19 @@ export function SessionsClient({ sessions }: { sessions: SessionWithMeta[] }) {
       toast.success("Device signed out");
       dialogCloseRef.current?.click();
       router.refresh();
-    }
+    },
   });
 
   return (
     <div className="flex flex-col gap-4">
       {sessions.map((session) => (
-        <Card key={session.id} className={cn(
-          "overflow-hidden rounded-xl border-border/80 shadow-[var(--shadow-dashboard)] transition-colors",
-          session.isCurrentSession && "border-primary/25 bg-primary/[0.04]"
-        )}>
+        <Card
+          key={session.id}
+          className={cn(
+            "overflow-hidden rounded-xl border-border/80 shadow-[var(--shadow-dashboard)] transition-colors",
+            session.isCurrentSession && "border-primary/25 bg-primary/[0.04]",
+          )}
+        >
           <CardHeader className="p-4 sm:p-6">
             <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
               <div className="flex-1 space-y-1.5 min-w-0">
@@ -59,7 +56,10 @@ export function SessionsClient({ sessions }: { sessions: SessionWithMeta[] }) {
                       : session.country || "Unknown location"}
                   </CardTitle>
                   {session.isCurrentSession && (
-                    <Badge variant="outline" className="border-primary/25 bg-primary/10 text-primary">
+                    <Badge
+                      variant="outline"
+                      className="border-primary/25 bg-primary/10 text-primary"
+                    >
                       Current session
                     </Badge>
                   )}
@@ -69,21 +69,29 @@ export function SessionsClient({ sessions }: { sessions: SessionWithMeta[] }) {
                     </Badge>
                   )}
                 </div>
-                
+
                 <div className="flex flex-wrap items-center text-xs text-muted-foreground gap-x-1.5 gap-y-1">
                   <span className="font-mono tabular-nums">
                     {formatDistanceToNow(session.createdAt)} ago
                   </span>
                   <span>•</span>
                   <span className="truncate">
-                    {session.parsedUserAgent?.browser.name ?? "Unknown browser"} on {session.parsedUserAgent?.os.name ?? "Unknown OS"}
+                    {session.parsedUserAgent?.browser.name ?? "Unknown browser"} on{" "}
+                    {session.parsedUserAgent?.os.name ?? "Unknown OS"}
                   </span>
                 </div>
 
                 <CardDescription className="text-xs line-clamp-2 sm:line-clamp-none">
-                  {session.parsedUserAgent?.device.vendor ?? ""} {session.parsedUserAgent?.device.model ?? ""} 
-                  {(!session.parsedUserAgent?.device.vendor && !session.parsedUserAgent?.device.model) && "Generic Device"}
-                  <span className="hidden sm:inline"> • {session.parsedUserAgent?.browser.name} {session.parsedUserAgent?.browser.major}</span>
+                  {session.parsedUserAgent?.device.vendor ?? ""}{" "}
+                  {session.parsedUserAgent?.device.model ?? ""}
+                  {!session.parsedUserAgent?.device.vendor &&
+                    !session.parsedUserAgent?.device.model &&
+                    "Generic Device"}
+                  <span className="hidden sm:inline">
+                    {" "}
+                    • {session.parsedUserAgent?.browser.name}{" "}
+                    {session.parsedUserAgent?.browser.major}
+                  </span>
                 </CardDescription>
               </div>
 
@@ -91,7 +99,11 @@ export function SessionsClient({ sessions }: { sessions: SessionWithMeta[] }) {
                 {!session?.isCurrentSession && (
                   <Dialog>
                     <DialogTrigger asChild>
-                      <Button size="sm" variant="destructive" className="w-full sm:w-auto h-8 text-xs bg-destructive/10 text-destructive hover:bg-destructive/20 border-destructive/20">
+                      <Button
+                        size="sm"
+                        variant="destructive"
+                        className="w-full sm:w-auto h-8 text-xs bg-destructive/10 text-destructive hover:bg-destructive/20 border-destructive/20"
+                      >
                         Sign out device
                       </Button>
                     </DialogTrigger>
@@ -104,7 +116,9 @@ export function SessionsClient({ sessions }: { sessions: SessionWithMeta[] }) {
                       </DialogHeader>
                       <DialogFooter className="mt-6 flex flex-col sm:flex-row gap-2">
                         <DialogClose ref={dialogCloseRef} asChild>
-                          <Button variant="outline" className="w-full sm:w-auto">Cancel</Button>
+                          <Button variant="outline" className="w-full sm:w-auto">
+                            Cancel
+                          </Button>
                         </DialogClose>
                         <Button
                           variant="destructive"

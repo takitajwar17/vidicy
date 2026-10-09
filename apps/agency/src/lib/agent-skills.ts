@@ -18,11 +18,7 @@ export interface PublishedAgentSkillIndexEntry {
   digest: string;
 }
 
-function createSkillContent(input: {
-  name: string;
-  description: string;
-  body: string[];
-}) {
+function createSkillContent(input: { name: string; description: string; body: string[] }) {
   return [
     "---",
     `name: ${input.name}`,
@@ -95,7 +91,9 @@ async function sha256Hex(value: string) {
   return Buffer.from(digest).toString("hex");
 }
 
-export async function getPublishedAgentSkillIndexEntries(): Promise<PublishedAgentSkillIndexEntry[]> {
+export async function getPublishedAgentSkillIndexEntries(): Promise<
+  PublishedAgentSkillIndexEntry[]
+> {
   const entries = await Promise.all(
     publishedAgentSkills.map(async (skill) => ({
       name: skill.slug,

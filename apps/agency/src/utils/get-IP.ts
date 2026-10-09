@@ -19,16 +19,17 @@ export async function getIP() {
     return clientIp && isIP(clientIp) ? clientIp : null;
   }
 
-  const ip = headersList.get('cf-connecting-ip')
-    || headersList.get('x-forwarded-for')
-    || headersList.get('x-real-ip')
-    || headersList.get('true-client-ip')
-    || headersList.get('x-client-ip')
-    || headersList.get('x-cluster-client-ip')
-    || null;
+  const ip =
+    headersList.get("cf-connecting-ip") ||
+    headersList.get("x-forwarded-for") ||
+    headersList.get("x-real-ip") ||
+    headersList.get("true-client-ip") ||
+    headersList.get("x-client-ip") ||
+    headersList.get("x-cluster-client-ip") ||
+    null;
 
   if (!ip) {
-    return null
+    return null;
   }
 
   return ip;

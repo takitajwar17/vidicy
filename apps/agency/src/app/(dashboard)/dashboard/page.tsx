@@ -52,13 +52,7 @@ function formatReadyRateDetail({
   return `${readyToSubmit} of ${formatCountLabel(totalApplications, "file")} ready`;
 }
 
-function formatIssuePatternDetail({
-  caseCount,
-  high,
-}: {
-  caseCount: number;
-  high: number;
-}) {
+function formatIssuePatternDetail({ caseCount, high }: { caseCount: number; high: number }) {
   const caseLabel = formatCountLabel(caseCount, "case");
   if (high === 0) return caseLabel;
   return `${caseLabel} · ${formatCountLabel(high, "high-priority issue")}`;
@@ -248,7 +242,9 @@ export default async function DashboardPage() {
                         <p className="text-sm font-bold">
                           {member.inReview === 0 ? "No active cases" : `${member.inReview} active`}
                         </p>
-                        <p className="text-xs text-muted-foreground">{member.completed} ready files</p>
+                        <p className="text-xs text-muted-foreground">
+                          {member.completed} ready files
+                        </p>
                       </div>
                     </div>
                   ))
@@ -267,7 +263,7 @@ export default async function DashboardPage() {
                 href={"/dashboard/applications" as Route}
                 className="text-xs font-bold text-primary"
               >
-                  View all client files
+                View all client files
               </Link>
             }
           >

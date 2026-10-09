@@ -1,9 +1,6 @@
 import { and, eq, isNull } from "drizzle-orm";
 
-import {
-  MARKETING_EVENT_TYPE,
-  marketingEventTable,
-} from "@/db/schema";
+import { MARKETING_EVENT_TYPE, marketingEventTable } from "@/db/schema";
 import { getDB } from "@/db";
 
 type Database = ReturnType<typeof getDB>;

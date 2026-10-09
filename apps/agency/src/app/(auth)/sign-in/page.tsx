@@ -17,17 +17,16 @@ const SignInPage = async ({
   searchParams: Promise<{ email?: string; redirect?: string }>;
 }) => {
   const { email, redirect: redirectParam } = await searchParams;
-  const [session, config] = await Promise.all([
-    getSessionFromCookie(),
-    getConfig(),
-  ]);
+  const [session, config] = await Promise.all([getSessionFromCookie(), getConfig()]);
   const redirectPath = normalizeRedirectPath(redirectParam);
 
   if (session) {
-    return redirect(getSessionRedirectPath({
-      session,
-      verifiedRedirectPath: redirectPath,
-    }) as Route);
+    return redirect(
+      getSessionRedirectPath({
+        session,
+        verifiedRedirectPath: redirectPath,
+      }) as Route,
+    );
   }
 
   return (
@@ -36,7 +35,7 @@ const SignInPage = async ({
       redirectPath={redirectPath}
       isGoogleSSOEnabled={config.isGoogleSSOEnabled}
     />
-  )
-}
+  );
+};
 
 export default SignInPage;

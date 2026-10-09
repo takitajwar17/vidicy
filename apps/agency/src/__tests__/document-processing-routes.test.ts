@@ -242,13 +242,20 @@ describe("legacy document processing routes", () => {
   });
 
   it.each([
-    ["application/json", '{}'],
+    ["application/json", "{}"],
     ["multipart/form-data", "missing boundary"],
-    ["multipart/form-data; boundary=expected", "--expected\r\nContent-Disposition: form-data; name=\"message\"\r\n\r\ntruncated"],
+    [
+      "multipart/form-data; boundary=expected",
+      '--expected\r\nContent-Disposition: form-data; name="message"\r\n\r\ntruncated',
+    ],
   ])("returns 400 for malformed form input: %s", async (contentType, body) => {
-    const response = await chatWithPdfPOST(new Request("https://example.com/upload", {
-      method: "POST", headers: { "Content-Type": contentType }, body,
-    }));
+    const response = await chatWithPdfPOST(
+      new Request("https://example.com/upload", {
+        method: "POST",
+        headers: { "Content-Type": contentType },
+        body,
+      }),
+    );
     expect(response?.status).toBe(400);
     expect(mockAuthorizeApplicationRouteAccess).not.toHaveBeenCalled();
   });
@@ -256,37 +263,54 @@ describe("legacy document processing routes", () => {
   it("bounds a chunked upload body before parsing ignored fields", async () => {
     const cancelled = vi.fn();
     const stream = new ReadableStream<Uint8Array>({
-      pull: (() => { let chunks = 0; return (controller: ReadableStreamDefaultController<Uint8Array>) => {
-        if (++chunks <= 13) controller.enqueue(new Uint8Array(1024 * 1024));
-        else controller.close();
-      }; })(),
+      pull: (() => {
+        let chunks = 0;
+        return (controller: ReadableStreamDefaultController<Uint8Array>) => {
+          if (++chunks <= 13) controller.enqueue(new Uint8Array(1024 * 1024));
+          else controller.close();
+        };
+      })(),
       cancel: cancelled,
     });
-    const response = await chatWithPdfPOST(new Request("https://example.com/upload", {
-      method: "POST", headers: { "Content-Type": "multipart/form-data; boundary=upload" },
-      body: stream, duplex: "half",
-    } as RequestInit & { duplex: string }));
+    const response = await chatWithPdfPOST(
+      new Request("https://example.com/upload", {
+        method: "POST",
+        headers: { "Content-Type": "multipart/form-data; boundary=upload" },
+        body: stream,
+        duplex: "half",
+      } as RequestInit & { duplex: string }),
+    );
     expect(response?.status).toBe(413);
     expect(cancelled).toHaveBeenCalled();
     expect(mockAuthorizeApplicationRouteAccess).not.toHaveBeenCalled();
   });
 
-  it.each(["applicationId", "conversationId", "message", "thumbnail"])("rejects a File in chat field %s", async field => {
-    const form = new FormData();
-    form.set("file", new File(["pdf"], "passport.pdf", { type: "application/pdf" }));
-    form.set("applicationId", "app_123");
-    form.set(field, new File(["invalid"], "field.txt"));
-    const response = await chatWithPdfPOST(new Request("https://example.com/api/chat-with-pdf", { method: "POST", body: form }));
-    expect(response?.status).toBe(400);
-    expect(mockAuthorizeApplicationRouteAccess).not.toHaveBeenCalled();
-  });
+  it.each(["applicationId", "conversationId", "message", "thumbnail"])(
+    "rejects a File in chat field %s",
+    async (field) => {
+      const form = new FormData();
+      form.set("file", new File(["pdf"], "passport.pdf", { type: "application/pdf" }));
+      form.set("applicationId", "app_123");
+      form.set(field, new File(["invalid"], "field.txt"));
+      const response = await chatWithPdfPOST(
+        new Request("https://example.com/api/chat-with-pdf", { method: "POST", body: form }),
+      );
+      expect(response?.status).toBe(400);
+      expect(mockAuthorizeApplicationRouteAccess).not.toHaveBeenCalled();
+    },
+  );
 
-  it.each([["message", 16_001], ["thumbnail", 512_001]] as const)("rejects oversized chat field %s", async (field, length) => {
+  it.each([
+    ["message", 16_001],
+    ["thumbnail", 512_001],
+  ] as const)("rejects oversized chat field %s", async (field, length) => {
     const form = new FormData();
     form.set("file", new File(["pdf"], "passport.pdf", { type: "application/pdf" }));
     form.set("applicationId", "app_123");
     form.set(field, "x".repeat(length));
-    const response = await chatWithPdfPOST(new Request("https://example.com/api/chat-with-pdf", { method: "POST", body: form }));
+    const response = await chatWithPdfPOST(
+      new Request("https://example.com/api/chat-with-pdf", { method: "POST", body: form }),
+    );
     expect(response?.status).toBe(400);
     expect(mockAuthorizeApplicationRouteAccess).not.toHaveBeenCalled();
   });
@@ -305,7 +329,10 @@ describe("legacy document processing routes", () => {
     });
 
     const formData = new FormData();
-    formData.set("file", new File([new Uint8Array([1, 2, 3])], "passport.pdf", { type: "application/pdf" }));
+    formData.set(
+      "file",
+      new File([new Uint8Array([1, 2, 3])], "passport.pdf", { type: "application/pdf" }),
+    );
     formData.set("applicationId", "app_123");
     formData.set("conversationId", "conv_123");
     formData.set("message", "What does this document show?");

@@ -1,13 +1,7 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { useRouter } from "next/navigation";
 import { forgotPasswordAction } from "./forgot-password.action";
@@ -15,7 +9,14 @@ import { useServerAction } from "zsa-react";
 import { toast } from "sonner";
 import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import {
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from "@/components/ui/form";
 import { z } from "zod";
 import { Captcha } from "@/components/captcha";
 import { forgotPasswordSchema } from "@/schemas/forgot-password.schema";
@@ -42,11 +43,11 @@ export default function ForgotPasswordClientComponent({
 
   useEffect(() => {
     if (email) {
-      form.setValue('email', email);
+      form.setValue("email", email);
     }
   }, [email, form]);
 
-  const captchaToken = useWatch({ control: form.control, name: 'captchaToken' })
+  const captchaToken = useWatch({ control: form.control, name: "captchaToken" });
 
   const { execute: sendResetLink, isSuccess } = useServerAction(forgotPasswordAction, {
     onError: (error) => {
@@ -66,7 +67,7 @@ export default function ForgotPasswordClientComponent({
     sendResetLink({
       ...data,
       email: data.email ?? email,
-      csrfToken
+      csrfToken,
     });
   };
 
@@ -77,15 +78,12 @@ export default function ForgotPasswordClientComponent({
           <CardHeader>
             <CardTitle>Check your email</CardTitle>
             <CardDescription>
-              If an account exists with that email, we&apos;ve sent you instructions to reset your password.
+              If an account exists with that email, we&apos;ve sent you instructions to reset your
+              password.
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <Button
-              variant="outline"
-              className="w-full"
-              onClick={() => router.push("/sign-in")}
-            >
+            <Button variant="outline" className="w-full" onClick={() => router.push("/sign-in")}>
               Back to login
             </Button>
           </CardContent>
@@ -98,9 +96,7 @@ export default function ForgotPasswordClientComponent({
     <div className="container mx-auto px-4 flex flex-col items-center justify-center min-h-screen">
       <Card className="w-full max-w-md">
         <CardHeader>
-          <CardTitle>
-            {email ? "Change Password" : "Forgot Password"}
-          </CardTitle>
+          <CardTitle>{email ? "Change Password" : "Forgot Password"}</CardTitle>
           <CardDescription>
             Enter your email address and we&apos;ll send you instructions to reset your password.
           </CardDescription>
@@ -131,7 +127,7 @@ export default function ForgotPasswordClientComponent({
               <div className="flex flex-col justify-center items-center">
                 <Captcha
                   enabled={isTurnstileEnabled}
-                  onSuccess={(token: string) => form.setValue('captchaToken', token)}
+                  onSuccess={(token: string) => form.setValue("captchaToken", token)}
                   validationError={form.formState.errors.captchaToken?.message}
                 />
 
@@ -169,7 +165,6 @@ export default function ForgotPasswordClientComponent({
           </Button>
         )}
       </div>
-
     </div>
   );
 }

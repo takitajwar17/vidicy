@@ -5,7 +5,10 @@ import type { PoolClient } from "pg";
 
 import { getDB } from "@/db";
 import { uploadedDocumentTable } from "@/db/schema";
-import { getDocumentTaskLockPool, isDocumentExtractionTaskPayload } from "@/infra/google/document-tasks";
+import {
+  getDocumentTaskLockPool,
+  isDocumentExtractionTaskPayload,
+} from "@/infra/google/document-tasks";
 import { logger } from "@/infra/logger";
 import { verifyInternalGoogleRequest } from "@/infra/google/internal-auth";
 import { queueDocumentExtraction } from "@/services/document-pipeline";
@@ -74,7 +77,8 @@ export async function POST(request: Request): Promise<Response> {
       [`vidicy:document-extraction:${documentId}`],
     );
     hasLock = lock.rows[0]?.acquired === true;
-    if (!hasLock) return Response.json({ error: "Document extraction is already running" }, { status: 503 });
+    if (!hasLock)
+      return Response.json({ error: "Document extraction is already running" }, { status: 503 });
 
     const document = await database.query.uploadedDocumentTable.findFirst({
       where: eq(uploadedDocumentTable.id, documentId),
@@ -92,13 +96,19 @@ export async function POST(request: Request): Promise<Response> {
         extractionStatus: result.extraction.extractionStatus,
         indexingStatus: result.indexing.indexingStatus,
       });
-      return Response.json({ error: "Document processing failed; retry required" }, { status: 503 });
+      return Response.json(
+        { error: "Document processing failed; retry required" },
+        { status: 503 },
+      );
     }
     return new Response(null, { status: 204 });
   } catch {
     // Do not log OCR text, source documents, authorization tokens or raw SDK errors.
     logger.error("Document extraction task failed", { documentId });
-    return Response.json({ error: "Document processing is unavailable; retry required" }, { status: 503 });
+    return Response.json(
+      { error: "Document processing is unavailable; retry required" },
+      { status: 503 },
+    );
   } finally {
     if (lockConnection && hasLockConnectionError) {
       lockConnection.removeListener("error", handleLockConnectionError);
@@ -108,7 +118,9 @@ export async function POST(request: Request): Promise<Response> {
     if (lockConnection) {
       if (hasLock) {
         try {
-          await lockConnection.query("SELECT pg_advisory_unlock(hashtextextended($1, 0))", [`vidicy:document-extraction:${documentId}`]);
+          await lockConnection.query("SELECT pg_advisory_unlock(hashtextextended($1, 0))", [
+            `vidicy:document-extraction:${documentId}`,
+          ]);
         } catch {
           // A connection that might still hold an advisory lock cannot return
           // to the pool. Destroy it so PostgreSQL releases all session locks.

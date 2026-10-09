@@ -17,17 +17,9 @@ export function PublicSiteShell({ children }: { children: ReactNode }) {
   );
 }
 
-export function PublicPage({
-  children,
-  className,
-}: {
-  children: ReactNode;
-  className?: string;
-}) {
+export function PublicPage({ children, className }: { children: ReactNode; className?: string }) {
   return (
-    <div className={cn("min-h-screen bg-background pt-16 sm:pt-20", className)}>
-      {children}
-    </div>
+    <div className={cn("min-h-screen bg-background pt-16 sm:pt-20", className)}>{children}</div>
   );
 }
 

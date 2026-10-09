@@ -1,6 +1,6 @@
-import type { ReactNode } from "react"
+import type { ReactNode } from "react";
 
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Table,
   TableBody,
@@ -8,12 +8,12 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from "@/components/ui/table"
+} from "@/components/ui/table";
 
 export interface ReadOnlyTableColumn<T> {
-  header: string
-  render: (row: T) => ReactNode
-  className?: string
+  header: string;
+  render: (row: T) => ReactNode;
+  className?: string;
 }
 
 export function ReadOnlyTableCard<T>({
@@ -24,12 +24,12 @@ export function ReadOnlyTableCard<T>({
   count,
   emptyMessage,
 }: {
-  title: string
-  description: string
-  rows: T[]
-  columns: ReadonlyArray<ReadOnlyTableColumn<T>>
-  count?: number
-  emptyMessage?: string
+  title: string;
+  description: string;
+  rows: T[];
+  columns: ReadonlyArray<ReadOnlyTableColumn<T>>;
+  count?: number;
+  emptyMessage?: string;
 }) {
   return (
     <Card>
@@ -42,9 +42,7 @@ export function ReadOnlyTableCard<T>({
       </CardHeader>
       <CardContent>
         {rows.length === 0 ? (
-          <p className="text-sm text-muted-foreground">
-            {emptyMessage ?? "No records found."}
-          </p>
+          <p className="text-sm text-muted-foreground">{emptyMessage ?? "No records found."}</p>
         ) : (
           <Table>
             <TableHeader>
@@ -60,7 +58,10 @@ export function ReadOnlyTableCard<T>({
               {rows.map((row, rowIndex) => (
                 <TableRow key={rowIndex}>
                   {columns.map((column, columnIndex) => (
-                    <TableCell key={`${rowIndex}-${column.header}-${columnIndex}`} className={column.className}>
+                    <TableCell
+                      key={`${rowIndex}-${column.header}-${columnIndex}`}
+                      className={column.className}
+                    >
                       {column.render(row)}
                     </TableCell>
                   ))}
@@ -71,5 +72,5 @@ export function ReadOnlyTableCard<T>({
         )}
       </CardContent>
     </Card>
-  )
+  );
 }

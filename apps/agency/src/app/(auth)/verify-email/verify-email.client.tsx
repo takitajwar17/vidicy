@@ -16,7 +16,11 @@ export default function VerifyEmailClientComponent({ token }: { token: string })
   const router = useRouter();
   const hasCalledVerification = useRef(false);
 
-  const { execute: handleVerification, isPending, error } = useServerAction(verifyEmailAction, {
+  const {
+    execute: handleVerification,
+    isPending,
+    error,
+  } = useServerAction(verifyEmailAction, {
     onError: ({ err }) => {
       toast.dismiss();
       toast.error(err.message || "Failed to verify email");
@@ -74,9 +78,7 @@ export default function VerifyEmailClientComponent({ token }: { token: string })
             <div className="flex flex-col items-center space-y-4">
               <Spinner size="large" />
               <CardTitle>Verifying Email</CardTitle>
-              <CardDescription>
-                Please wait while we verify your email address...
-              </CardDescription>
+              <CardDescription>Please wait while we verify your email address...</CardDescription>
             </div>
           </CardHeader>
         </Card>
@@ -90,16 +92,10 @@ export default function VerifyEmailClientComponent({ token }: { token: string })
         <Card className="w-full max-w-md">
           <CardHeader>
             <CardTitle>Verification failed</CardTitle>
-            <CardDescription>
-              {error?.message || "Failed to verify email"}
-            </CardDescription>
+            <CardDescription>{error?.message || "Failed to verify email"}</CardDescription>
           </CardHeader>
           <CardContent>
-            <Button
-              variant="outline"
-              className="w-full"
-              onClick={() => router.push("/sign-in")}
-            >
+            <Button variant="outline" className="w-full" onClick={() => router.push("/sign-in")}>
               Back to sign in
             </Button>
           </CardContent>
@@ -119,11 +115,7 @@ export default function VerifyEmailClientComponent({ token }: { token: string })
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <Button
-              variant="outline"
-              className="w-full"
-              onClick={() => router.push("/sign-in")}
-            >
+            <Button variant="outline" className="w-full" onClick={() => router.push("/sign-in")}>
               Back to sign in
             </Button>
           </CardContent>

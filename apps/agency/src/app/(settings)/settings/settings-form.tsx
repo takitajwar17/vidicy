@@ -28,41 +28,41 @@ import { useCsrfToken } from "@/components/csrf-provider";
 const SETTINGS_CARD_CLASS = "rounded-xl border-border/80 shadow-[var(--shadow-dashboard)]";
 
 export function SettingsForm() {
-  const router = useRouter()
+  const router = useRouter();
   const csrfToken = useCsrfToken();
 
   const { execute: updateUserProfile } = useServerAction(updateUserProfileAction, {
     onError: (error) => {
-      toast.dismiss()
-      toast.error(error.err?.message)
+      toast.dismiss();
+      toast.error(error.err?.message);
     },
     onStart: () => {
-      toast.loading("Updating profile...")
+      toast.loading("Updating profile...");
     },
     onSuccess: () => {
-      toast.dismiss()
-      toast.success("Profile updated successfully")
-      router.refresh()
-    }
-  })
+      toast.dismiss();
+      toast.success("Profile updated successfully");
+      router.refresh();
+    },
+  });
 
   const session = useSessionStore((state) => state.session);
   const isLoading = useSessionStore((state) => state.isLoading);
   const form = useForm<z.infer<typeof userSettingsSchema>>({
     resolver: zodResolver(userSettingsSchema),
     defaultValues: {
-      firstName: '',
-      lastName: '',
-    }
+      firstName: "",
+      lastName: "",
+    },
   });
 
   useEffect(() => {
     form.reset({
-      firstName: session?.user.firstName ?? '',
-      lastName: session?.user.lastName ?? '',
+      firstName: session?.user.firstName ?? "",
+      lastName: session?.user.lastName ?? "",
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [session])
+  }, [session]);
 
   if (!session || isLoading) {
     return (
@@ -102,16 +102,14 @@ export function SettingsForm() {
   }
 
   async function onSubmit(values: z.infer<typeof userSettingsSchema>) {
-    updateUserProfile({ ...values, csrfToken })
+    updateUserProfile({ ...values, csrfToken });
   }
 
   return (
     <Card className={SETTINGS_CARD_CLASS}>
       <CardHeader>
         <CardTitle>Profile Settings</CardTitle>
-        <CardDescription>
-          Set the name your team sees on assigned client files.
-        </CardDescription>
+        <CardDescription>Set the name your team sees on assigned client files.</CardDescription>
       </CardHeader>
       <CardContent>
         <Form {...form}>
@@ -145,26 +143,17 @@ export function SettingsForm() {
               />
             </div>
 
-
             <FormItem>
               <FormLabel>Email</FormLabel>
               <FormControl>
-                <Input
-                  type="email"
-                  disabled
-                  value={session.user.email ?? ''}
-                />
+                <Input type="email" disabled value={session.user.email ?? ""} />
               </FormControl>
-              <FormDescription>
-                This is the email your agency uses for access.
-              </FormDescription>
+              <FormDescription>This is the email your agency uses for access.</FormDescription>
               <FormMessage />
             </FormItem>
 
             <div className="flex justify-end">
-              <Button type="submit">
-                Save changes
-              </Button>
+              <Button type="submit">Save changes</Button>
             </div>
           </form>
         </Form>

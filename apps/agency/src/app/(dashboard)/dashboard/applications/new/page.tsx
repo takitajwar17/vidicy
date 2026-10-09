@@ -12,11 +12,11 @@ export default async function Page() {
         .filter((member) => member.userId && member.user)
         .map((member) => ({
           userId: member.userId!,
-	          label:
-	            `${member.user?.firstName ?? ""} ${member.user?.lastName ?? ""}`.trim() ||
-	            member.user?.email ||
-	            member.email ||
-	            "Reviewer",
+          label:
+            `${member.user?.firstName ?? ""} ${member.user?.lastName ?? ""}`.trim() ||
+            member.user?.email ||
+            member.email ||
+            "Reviewer",
         }))}
     />
   );

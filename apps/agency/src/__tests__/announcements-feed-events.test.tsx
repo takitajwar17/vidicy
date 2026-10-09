@@ -166,29 +166,68 @@ describe("announcement controls", () => {
     await fire(button(render(), "Post comment"), "onClick");
     expect(find(render(), (element) => element.props.value === "My draft")).toBeDefined();
     expect(actions.error).toHaveBeenCalledWith("Comment rejected");
-    actions.refresh.mockResolvedValueOnce([{ ...feed, posts: [{ ...post, title: "Refreshed update" }] }, null]);
+    actions.refresh.mockResolvedValueOnce([
+      { ...feed, posts: [{ ...post, title: "Refreshed update" }] },
+      null,
+    ]);
     actions.comment.mockResolvedValueOnce([{ id: "new_comment" }, null]);
     await fire(button(render(), "Post comment"), "onClick");
     expect(elements(render()).some((element) => element.props.value === "My draft")).toBe(false);
     await vi.waitFor(() => {
-      const refreshed = find(parent(), element => typeof element.type === "function" && element.type.name === "PostCard");
+      const refreshed = find(
+        parent(),
+        (element) => typeof element.type === "function" && element.type.name === "PostCard",
+      );
       expect((refreshed.props.post as FeedPost).title).toBe("Refreshed update");
     });
   });
 
   it("disables comment controls until submission finishes", async () => {
     const parent = frame(() => AnnouncementsFeedClient({ initialFeed: feed, isAdmin: false }));
-    const render = childFrame(find(parent(), element => typeof element.type === "function" && element.type.name === "PostCard"));
-    await fire(find(render(), element => element.type === "button" && typeof element.props.onClick === "function"), "onClick");
-    await fire(find(render(), element => element.props.placeholder === "Share your feedback, ask a question, or add more context"), "onChange", { target: { value: "Pending draft" } });
+    const render = childFrame(
+      find(
+        parent(),
+        (element) => typeof element.type === "function" && element.type.name === "PostCard",
+      ),
+    );
+    await fire(
+      find(
+        render(),
+        (element) => element.type === "button" && typeof element.props.onClick === "function",
+      ),
+      "onClick",
+    );
+    await fire(
+      find(
+        render(),
+        (element) =>
+          element.props.placeholder === "Share your feedback, ask a question, or add more context",
+      ),
+      "onChange",
+      { target: { value: "Pending draft" } },
+    );
     let finish!: (value: unknown) => void;
-    actions.comment.mockReturnValueOnce(new Promise(resolve => { finish = resolve; }));
+    actions.comment.mockReturnValueOnce(
+      new Promise((resolve) => {
+        finish = resolve;
+      }),
+    );
     const submission = fire(button(render(), "Post comment"), "onClick");
-    expect(find(render(), element => element.props.placeholder === "Share your feedback, ask a question, or add more context").props.disabled).toBe(true);
+    expect(
+      find(
+        render(),
+        (element) =>
+          element.props.placeholder === "Share your feedback, ask a question, or add more context",
+      ).props.disabled,
+    ).toBe(true);
     expect(button(render(), "Post comment").props.disabled).toBe(true);
     finish([null, { message: "Comment rejected" }]);
     await submission;
-    const input = find(render(), element => element.props.placeholder === "Share your feedback, ask a question, or add more context");
+    const input = find(
+      render(),
+      (element) =>
+        element.props.placeholder === "Share your feedback, ask a question, or add more context",
+    );
     expect(input.props.disabled).toBe(false);
     expect(input.props.value).toBe("Pending draft");
   });

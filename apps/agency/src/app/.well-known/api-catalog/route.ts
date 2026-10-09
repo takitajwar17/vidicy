@@ -1,11 +1,7 @@
 import "server-only";
 
 import { NextResponse } from "next/server";
-import {
-  AGENT_DISCOVERY_LINK_HEADER,
-  API_CATALOG_PATH,
-  CANONICAL_SITE_URL,
-} from "@/constants";
+import { AGENT_DISCOVERY_LINK_HEADER, API_CATALOG_PATH, CANONICAL_SITE_URL } from "@/constants";
 
 const API_CATALOG_CONTENT_TYPE =
   'application/linkset+json; profile="https://www.rfc-editor.org/info/rfc9727"';

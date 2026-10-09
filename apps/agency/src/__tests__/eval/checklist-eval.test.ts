@@ -18,7 +18,11 @@ import {
   checklistRequiredDocs,
 } from "./framework/metrics";
 import { llmJudgeMetric } from "./framework/llm-judge";
-import { checklistCases, type ChecklistInput, type ChecklistExpected } from "./datasets/checklist-cases";
+import {
+  checklistCases,
+  type ChecklistInput,
+  type ChecklistExpected,
+} from "./datasets/checklist-cases";
 import type { ChecklistItemOutput, EvalTestCase } from "./framework/types";
 
 // ---------------------------------------------------------------------------
@@ -100,7 +104,10 @@ async function produceChecklist(
 
   // Handle various response shapes (same as production)
   const items: ChecklistItemOutput[] =
-    raw.items || raw.checklist || (Array.isArray(raw) ? raw : Object.values(raw).find((v) => Array.isArray(v))) || [];
+    raw.items ||
+    raw.checklist ||
+    (Array.isArray(raw) ? raw : Object.values(raw).find((v) => Array.isArray(v))) ||
+    [];
 
   return items;
 }
@@ -111,63 +118,63 @@ async function produceChecklist(
 
 describe("Checklist Generation Evaluation", () => {
   it("passes all quality metrics across visa scenarios", { timeout: 300_000 }, async () => {
-      const baseline = loadBaseline("checklist-generation");
+    const baseline = loadBaseline("checklist-generation");
 
-      const { result, regressions } = await runEvalSuite<ChecklistItemOutput[], ChecklistExpected>({
-        suiteName: "checklist-generation",
-        cases: checklistCases,
-        producer: produceChecklist,
-        baseline,
-        metrics: [
-          // Item count within bounds — we use a wrapper since per-case bounds vary
-          {
-            name: "checklistItemCount",
-            threshold: 1.0,
-            score({ output, expected }) {
-              const min = expected?.minItems ?? 5;
-              const max = expected?.maxItems ?? 18;
-              return checklistItemCount(min, max).score({ output, expected });
-            },
+    const { result, regressions } = await runEvalSuite<ChecklistItemOutput[], ChecklistExpected>({
+      suiteName: "checklist-generation",
+      cases: checklistCases,
+      producer: produceChecklist,
+      baseline,
+      metrics: [
+        // Item count within bounds — we use a wrapper since per-case bounds vary
+        {
+          name: "checklistItemCount",
+          threshold: 1.0,
+          score({ output, expected }) {
+            const min = expected?.minItems ?? 5;
+            const max = expected?.maxItems ?? 18;
+            return checklistItemCount(min, max).score({ output, expected });
           },
-          checklistItemSchema(),
-          checklistNoDuplicates(),
-          // Required docs — per-case expected docs
-          {
-            name: "checklistRequiredDocs",
-            threshold: 0.8,
-            score({ output, expected }) {
-              const requiredDocs = expected?.requiredDocNames ?? [];
-              return checklistRequiredDocs(requiredDocs).score({ output, expected });
-            },
+        },
+        checklistItemSchema(),
+        checklistNoDuplicates(),
+        // Required docs — per-case expected docs
+        {
+          name: "checklistRequiredDocs",
+          threshold: 0.8,
+          score({ output, expected }) {
+            const requiredDocs = expected?.requiredDocNames ?? [];
+            return checklistRequiredDocs(requiredDocs).score({ output, expected });
           },
-          // LLM-as-judge (optional)
-          {
-            name: "llmJudge(accuracy,completeness,specificity)",
-            threshold: 0.7,
-            async score({ output, input }) {
-              const metric = llmJudgeMetric(["accuracy", "completeness", "specificity"]);
-              return metric.score({
-                output: JSON.stringify(output, null, 2),
-                input: JSON.stringify(input),
-              });
-            },
+        },
+        // LLM-as-judge (optional)
+        {
+          name: "llmJudge(accuracy,completeness,specificity)",
+          threshold: 0.7,
+          async score({ output, input }) {
+            const metric = llmJudgeMetric(["accuracy", "completeness", "specificity"]);
+            return metric.score({
+              output: JSON.stringify(output, null, 2),
+              input: JSON.stringify(input),
+            });
           },
-        ],
-      });
-
-      printResults(result, regressions);
-      saveResults(result);
-
-      // Assert aggregate pass rates meet minimum thresholds
-      // LLM outputs are non-deterministic, so we check aggregates rather than per-case
-      for (const agg of result.aggregates) {
-        if (agg.name.startsWith("llmJudge")) continue; // skip when not enabled
-        expect(
-          agg.passRate,
-          `Aggregate ${agg.name}: pass rate ${(agg.passRate * 100).toFixed(0)}% below 70%`,
-        ).toBeGreaterThanOrEqual(0.7);
-      }
-
-      expect(regressions).toHaveLength(0);
+        },
+      ],
     });
+
+    printResults(result, regressions);
+    saveResults(result);
+
+    // Assert aggregate pass rates meet minimum thresholds
+    // LLM outputs are non-deterministic, so we check aggregates rather than per-case
+    for (const agg of result.aggregates) {
+      if (agg.name.startsWith("llmJudge")) continue; // skip when not enabled
+      expect(
+        agg.passRate,
+        `Aggregate ${agg.name}: pass rate ${(agg.passRate * 100).toFixed(0)}% below 70%`,
+      ).toBeGreaterThanOrEqual(0.7);
+    }
+
+    expect(regressions).toHaveLength(0);
+  });
 });

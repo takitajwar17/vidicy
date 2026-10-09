@@ -1,10 +1,6 @@
 "use server";
 
-import {
-  deleteSessionTokenCookie,
-  getSessionFromCookie,
-  invalidateSession
-} from "@/utils/auth";
+import { deleteSessionTokenCookie, getSessionFromCookie, invalidateSession } from "@/utils/auth";
 import { RATE_LIMITS, withRateLimit } from "@/infra/with-rate-limit";
 import { createServerAction, ZSAError } from "zsa";
 import { z } from "zod";
@@ -17,25 +13,18 @@ const signOutSchema = z.object({
 export const signOutAction = createServerAction()
   .input(signOutSchema)
   .handler(async ({ input }) => {
-    return withRateLimit(
-      async () => {
-        // Validate CSRF token
-        if (!(await validateCsrfToken(input.csrfToken))) {
-          throw new ZSAError("FORBIDDEN", "Invalid request");
-        }
+    return withRateLimit(async () => {
+      // Validate CSRF token
+      if (!(await validateCsrfToken(input.csrfToken))) {
+        throw new ZSAError("FORBIDDEN", "Invalid request");
+      }
 
-        const session = await getSessionFromCookie()
+      const session = await getSessionFromCookie();
 
-        if (!session) return;
+      if (!session) return;
 
-        await invalidateSession(
-          session.id,
-          session.userId
-        );
+      await invalidateSession(session.id, session.userId);
 
-        await deleteSessionTokenCookie();
-      },
-      RATE_LIMITS.SIGN_OUT
-    );
+      await deleteSessionTokenCookie();
+    }, RATE_LIMITS.SIGN_OUT);
   });
-

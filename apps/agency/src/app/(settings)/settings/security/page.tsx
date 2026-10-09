@@ -14,9 +14,7 @@ export default async function SecurityPage() {
   return (
     <div className="flex flex-col gap-4 md:gap-6">
       <div className="space-y-1">
-        <h1 className="text-2xl font-bold tracking-tight text-foreground md:text-3xl">
-          Security
-        </h1>
+        <h1 className="text-2xl font-bold tracking-tight text-foreground md:text-3xl">Security</h1>
         <p className="text-sm text-muted-foreground">
           Password access and account safeguards for the review desk.
         </p>

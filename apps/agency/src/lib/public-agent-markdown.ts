@@ -53,7 +53,8 @@ function buildHomepageMarkdown(): MarkdownPayload {
   const body = [
     createFrontmatter({
       title: "Vidicy Agency",
-      description: "Visa file review for agency desks handling passports, forms, statements, and client fixes.",
+      description:
+        "Visa file review for agency desks handling passports, forms, statements, and client fixes.",
       canonicalPath: "/",
     }),
     "# Vidicy Agency",

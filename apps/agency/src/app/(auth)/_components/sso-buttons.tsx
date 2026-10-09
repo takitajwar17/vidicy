@@ -1,4 +1,4 @@
-import { Button } from "@/components/ui/button"
+import { Button } from "@/components/ui/button";
 import { useConfigStore } from "@/state/config";
 import Google from "@/icons/google";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -13,14 +13,12 @@ export default function SSOButtons({
   redirectPath?: string;
   isGoogleSSOEnabled?: boolean;
 }) {
-  const storedIsGoogleSSOEnabled = useConfigStore((state) => state.isGoogleSSOEnabled)
+  const storedIsGoogleSSOEnabled = useConfigStore((state) => state.isGoogleSSOEnabled);
   const resolvedIsGoogleSSOEnabled =
     typeof isGoogleSSOEnabled === "boolean" ? isGoogleSSOEnabled : storedIsGoogleSSOEnabled;
 
   if (typeof resolvedIsGoogleSSOEnabled !== "boolean") {
-    return (
-      <Skeleton className="h-11 w-full" />
-    )
+    return <Skeleton className="h-11 w-full" />;
   }
 
   const googleAuthHref = getAuthRouteHref("/sso/google", redirectPath);
@@ -29,7 +27,7 @@ export default function SSOButtons({
     <>
       {resolvedIsGoogleSSOEnabled && (
         <>
-          <Button className="h-11 w-full text-sm" asChild size='lg'>
+          <Button className="h-11 w-full text-sm" asChild size="lg">
             <a href={googleAuthHref}>
               <Google className="w-[22px] h-[22px] mr-1" />
               {isSignIn ? "Sign in with Google" : "Sign up with Google"}
@@ -38,5 +36,5 @@ export default function SSOButtons({
         </>
       )}
     </>
-  )
+  );
 }

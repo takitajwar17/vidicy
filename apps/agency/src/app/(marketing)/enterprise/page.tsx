@@ -1,20 +1,17 @@
-import type { Metadata } from "next"
-import { EnterpriseForm } from "./_enterprise-form"
-import { CANONICAL_SITE_URL } from "@/constants"
-import { constructMetadata } from "@/lib/utils"
-import {
-  PublicPage,
-  PublicPageContent,
-  PublicPageHero,
-} from "@/components/public-page-shell"
+import type { Metadata } from "next";
+import { EnterpriseForm } from "./_enterprise-form";
+import { CANONICAL_SITE_URL } from "@/constants";
+import { constructMetadata } from "@/lib/utils";
+import { PublicPage, PublicPageContent, PublicPageHero } from "@/components/public-page-shell";
 
 export const metadata: Metadata = constructMetadata({
   title: "Enterprise visa document review",
-  description: "Pilot Vidicy on real agency files: passports, forms, bank statements, issue queues, and client fix lists.",
+  description:
+    "Pilot Vidicy on real agency files: passports, forms, bank statements, issue queues, and client fix lists.",
   alternates: {
     canonical: "/enterprise",
   },
-})
+});
 
 const enterpriseServiceSchema = {
   "@context": "https://schema.org",
@@ -57,5 +54,5 @@ export default function EnterprisePage() {
         <EnterpriseForm />
       </PublicPageContent>
     </PublicPage>
-  )
+  );
 }

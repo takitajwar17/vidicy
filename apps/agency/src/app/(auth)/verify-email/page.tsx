@@ -27,7 +27,7 @@ export default async function VerifyEmailPage({
     if (session) {
       return redirect(getSessionRedirectPath({ session }) as Route);
     }
-    return redirect('/sign-in');
+    return redirect("/sign-in");
   }
 
   return <VerifyEmailClientComponent token={token} />;

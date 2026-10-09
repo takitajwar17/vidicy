@@ -59,31 +59,19 @@ function collectErrorMessages({
   return messages;
 }
 
-function sleep({
-  ms,
-}: {
-  ms: number;
-}) {
+function sleep({ ms }: { ms: number }) {
   return new Promise((resolve) => {
     setTimeout(resolve, ms);
   });
 }
 
-export function isRetryableD1WriteError({
-  error,
-}: {
-  error: unknown;
-}) {
+export function isRetryableD1WriteError({ error }: { error: unknown }) {
   return collectErrorMessages({ error }).some((message) =>
     RETRYABLE_D1_ERROR_SNIPPETS.some((snippet) => message.includes(snippet)),
   );
 }
 
-export function isUniqueConstraintError({
-  error,
-}: {
-  error: unknown;
-}) {
+export function isUniqueConstraintError({ error }: { error: unknown }) {
   return collectErrorMessages({ error }).some((message) =>
     UNIQUE_CONSTRAINT_ERROR_SNIPPETS.some((snippet) => message.includes(snippet)),
   );

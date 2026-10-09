@@ -3,7 +3,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 const { constructed } = vi.hoisted(() => ({ constructed: vi.fn() }));
 vi.mock("pg", () => ({
   Pool: class {
-    constructor(options: unknown) { constructed(options); }
+    constructor(options: unknown) {
+      constructed(options);
+    }
     on() {}
   },
 }));
@@ -28,6 +30,8 @@ describe("PostgreSQL configuration", () => {
     const { getDB } = await import("@/db");
     expect(getDB()).toBe(getDB());
     expect(constructed).toHaveBeenCalledTimes(1);
-    expect(constructed).toHaveBeenCalledWith(expect.objectContaining({ connectionTimeoutMillis: 10_000 }));
+    expect(constructed).toHaveBeenCalledWith(
+      expect.objectContaining({ connectionTimeoutMillis: 10_000 }),
+    );
   });
 });

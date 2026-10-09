@@ -1,34 +1,34 @@
-import { PageHeader } from "@/components/page-header"
-import { UsersTableWrapper } from "@/components/admin/users-table-wrapper"
-import type { Metadata } from "next"
-import { NuqsAdapter } from "nuqs/adapters/next/app"
-import { PAGE_SIZE_OPTIONS } from "../admin-constants"
-import { getAdminUsersPage } from "@/server/admin-users"
+import { PageHeader } from "@/components/page-header";
+import { UsersTableWrapper } from "@/components/admin/users-table-wrapper";
+import type { Metadata } from "next";
+import { NuqsAdapter } from "nuqs/adapters/next/app";
+import { PAGE_SIZE_OPTIONS } from "../admin-constants";
+import { getAdminUsersPage } from "@/server/admin-users";
 
 export const metadata: Metadata = {
   title: "Users",
   description: "Manage and monitor all user accounts",
-}
+};
 
 function parsePositiveInteger(value: string | undefined, fallback: number) {
-  const parsed = Number.parseInt(value ?? String(fallback), 10)
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback
+  const parsed = Number.parseInt(value ?? String(fallback), 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
 }
 
 export default async function AdminUsersPage({
   searchParams,
 }: {
-  searchParams: Promise<{ email?: string; page?: string; pageSize?: string }>
+  searchParams: Promise<{ email?: string; page?: string; pageSize?: string }>;
 }) {
-  const params = await searchParams
-  const initialPage = parsePositiveInteger(params.page, 1)
-  const initialPageSize = parsePositiveInteger(params.pageSize, PAGE_SIZE_OPTIONS[0])
-  const initialEmailFilter = params.email ?? ""
+  const params = await searchParams;
+  const initialPage = parsePositiveInteger(params.page, 1);
+  const initialPageSize = parsePositiveInteger(params.pageSize, PAGE_SIZE_OPTIONS[0]);
+  const initialEmailFilter = params.email ?? "";
   const initialData = await getAdminUsersPage({
     emailFilter: initialEmailFilter,
     page: initialPage,
     pageSize: initialPageSize,
-  })
+  });
 
   return (
     <NuqsAdapter>
@@ -53,5 +53,5 @@ export default async function AdminUsersPage({
         </div>
       </div>
     </NuqsAdapter>
-  )
+  );
 }

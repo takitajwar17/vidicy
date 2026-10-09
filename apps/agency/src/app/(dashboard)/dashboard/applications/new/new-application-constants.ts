@@ -2,11 +2,27 @@ import { EMBASSY_DATA } from "./new-application-embassy-map";
 export { YEAR_OPTIONS } from "@/constants";
 
 export const DESTINATION_COUNTRIES = [
-  "United States", "United Kingdom", "Canada", "Australia", "Germany", "France",
-  "Netherlands", "Sweden", "Denmark", "Norway", "Finland", "Switzerland", "Austria",
-  "Belgium", "Ireland", "Schengen Area (Europe)", "New Zealand", "Japan", "Singapore",
+  "United States",
+  "United Kingdom",
+  "Canada",
+  "Australia",
+  "Germany",
+  "France",
+  "Netherlands",
+  "Sweden",
+  "Denmark",
+  "Norway",
+  "Finland",
+  "Switzerland",
+  "Austria",
+  "Belgium",
+  "Ireland",
+  "Schengen Area (Europe)",
+  "New Zealand",
+  "Japan",
+  "Singapore",
   "South Korea",
-]
+];
 
 // ---------------------------------------------------------------------------
 // Dynamic visa types keyed by destination — contextual, not generic
@@ -29,11 +45,14 @@ export const VISA_TYPES_BY_DESTINATION: Record<string, { value: string; label: s
     { value: "Student", label: "Student (formerly Tier 4)" },
     { value: "Skilled Worker", label: "Skilled Worker" },
     { value: "Family - Partner or Spouse", label: "Family Visa – Partner or Spouse" },
-    { value: "Family - Dependant", label: "Dependant Visa (Skilled Worker Dependant / Student Dependant)" },
+    {
+      value: "Family - Dependant",
+      label: "Dependant Visa (Skilled Worker Dependant / Student Dependant)",
+    },
     { value: "Graduate", label: "Graduate Route" },
     { value: "Transit", label: "Transit (Direct Airside / Short Stay)" },
   ],
-  "Canada": [
+  Canada: [
     { value: "Visitor", label: "Visitor / Tourist" },
     { value: "Student Permit", label: "Study Permit" },
     { value: "Open Work Permit", label: "Open Work Permit" },
@@ -43,7 +62,7 @@ export const VISA_TYPES_BY_DESTINATION: Record<string, { value: string; label: s
     { value: "Working Holiday IEC", label: "International Experience Canada (IEC)" },
     { value: "Transit", label: "Transit Visa" },
   ],
-  "Australia": [
+  Australia: [
     { value: "Visitor (600)", label: "Visitor Visa (Subclass 600)" },
     { value: "Student (500)", label: "Student Visa (Subclass 500)" },
     { value: "Working Holiday (417)", label: "Working Holiday (Subclass 417)" },
@@ -52,39 +71,54 @@ export const VISA_TYPES_BY_DESTINATION: Record<string, { value: string; label: s
     { value: "Partner (820/801)", label: "Partner Visa (Subclass 820 / 801)" },
     { value: "Transit (771)", label: "Transit Visa (Subclass 771)" },
   ],
-  "Germany": [
+  Germany: [
     { value: "Schengen Visitor (Type C)", label: "Schengen Visitor Visa (Type C)" },
-    { value: "National Study (Type D)", label: "National Visa for Study Purposes (Visum zu Studienzwecken)" },
+    {
+      value: "National Study (Type D)",
+      label: "National Visa for Study Purposes (Visum zu Studienzwecken)",
+    },
     { value: "EU Blue Card", label: "EU Blue Card (Blaue Karte EU)" },
     { value: "Visa for Qualified Professionals", label: "Visa for Qualified Professionals" },
     { value: "Job Seeker", label: "Job Seeker Visa" },
     { value: "Family Reunification", label: "Visa for Family Reunification (Familiennachzug)" },
     { value: "Airport Transit (ATV)", label: "Airport Transit Visa (Type A)" },
   ],
-  "France": [
+  France: [
     { value: "Schengen Visitor (Type C)", label: "Schengen Visitor Visa (Type C)" },
     { value: "National Study (Type D)", label: "Long-Stay Student Visa (VLS-TS — Étudiant)" },
-    { value: "National Work (Type D)", label: "Long-Stay Visa Equivalent to Residence Permit (VLS-TS) – Employee (Salarié)" },
+    {
+      value: "National Work (Type D)",
+      label: "Long-Stay Visa Equivalent to Residence Permit (VLS-TS) – Employee (Salarié)",
+    },
     { value: "Talent Passport", label: "Talent Passport (Passeport Talent)" },
-    { value: "Family Reunification", label: "Visa for Family Reunification (Regroupement familial)" },
-    { value: "Airport Transit (ATV)", label: "Airport Transit Visa (Type A — Transit aéroportuaire)" },
+    {
+      value: "Family Reunification",
+      label: "Visa for Family Reunification (Regroupement familial)",
+    },
+    {
+      value: "Airport Transit (ATV)",
+      label: "Airport Transit Visa (Type A — Transit aéroportuaire)",
+    },
   ],
-  "Netherlands": [
+  Netherlands: [
     { value: "Schengen Visitor (Type C)", label: "Schengen Visitor Visa (Type C)" },
-    { value: "National Study (Type D)", label: "Residence Permit for Study (MVV entry required if outside NL)" },
+    {
+      value: "National Study (Type D)",
+      label: "Residence Permit for Study (MVV entry required if outside NL)",
+    },
     { value: "Highly Skilled Migrant", label: "Highly Skilled Migrant (Kennismigrant)" },
     { value: "EU Blue Card Netherlands", label: "EU Blue Card" },
     { value: "Family Reunification", label: "Residence Permit for Family and Relatives" },
     { value: "Airport Transit (ATV)", label: "Airport Transit Visa (Type A)" },
   ],
-  "Sweden": [
+  Sweden: [
     { value: "Schengen Visitor (Type C)", label: "Schengen Visitor Visa (Type C)" },
     { value: "National Study (Type D)", label: "Residence Permit for Studies" },
     { value: "National Work (Type D)", label: "Work Permit (Arbetstillstånd)" },
     { value: "Family Reunification", label: "Residence Permit to Move to Someone in Sweden" },
     { value: "Airport Transit (ATV)", label: "Airport Transit Visa (Type A)" },
   ],
-  "Denmark": [
+  Denmark: [
     { value: "Schengen Visitor (Type C)", label: "Schengen Visitor Visa (Type C)" },
     { value: "National Study (Type D)", label: "Residence Permit for Higher Education" },
     { value: "National Work (Type D)", label: "Pay Limit Scheme" },
@@ -92,45 +126,52 @@ export const VISA_TYPES_BY_DESTINATION: Record<string, { value: string; label: s
     { value: "Family Reunification", label: "Family Reunification Residence Permit" },
     { value: "Airport Transit (ATV)", label: "Airport Transit Visa (Type A)" },
   ],
-  "Norway": [
+  Norway: [
     { value: "Schengen Visitor (Type C)", label: "Schengen Visitor Visa (Type C)" },
     { value: "National Study (Type D)", label: "Residence Permit for Studies" },
     { value: "National Work (Type D)", label: "Residence Permit for Skilled Workers" },
     { value: "Family Reunification", label: "Residence Permit for Family Immigration" },
     { value: "Airport Transit (ATV)", label: "Airport Transit Visa (Type A)" },
   ],
-  "Finland": [
+  Finland: [
     { value: "Schengen Visitor (Type C)", label: "Schengen Visitor Visa (Type C)" },
     { value: "National Study (Type D)", label: "Residence Permit for Studies" },
     { value: "National Work (Type D)", label: "Residence Permit for an Employed Person (TTOL)" },
     { value: "Family Reunification", label: "Residence Permit on the Basis of Family Ties" },
     { value: "Airport Transit (ATV)", label: "Airport Transit Visa (Type A)" },
   ],
-  "Switzerland": [
+  Switzerland: [
     { value: "Schengen Visitor (Type C)", label: "Schengen Visitor Visa (Type C — short stay)" },
     { value: "National Study (Type D)", label: "National Visa (Type D) for Study" },
     { value: "National Work (Type D)", label: "National Visa (Type D) for Gainful Employment" },
     { value: "Family Reunification", label: "Family Reunification Visa (Type D)" },
     { value: "Airport Transit (ATV)", label: "Airport Transit Visa (Type A)" },
   ],
-  "Austria": [
+  Austria: [
     { value: "Schengen Visitor (Type C)", label: "Schengen Visitor Visa (Type C)" },
     { value: "National Study (Type D)", label: "Residence Permit – Student" },
     { value: "National Work (Type D)", label: "Red-White-Red Card / EU Blue Card" },
     { value: "Family Reunification", label: "Residence Permit – Family Member" },
     { value: "Airport Transit (ATV)", label: "Airport Transit Visa (Type A)" },
   ],
-  "Belgium": [
+  Belgium: [
     { value: "Schengen Visitor (Type C)", label: "Schengen Visitor Visa (Type C)" },
     { value: "National Study (Type D)", label: "Long Stay Visa (Type D) for Studies" },
-    { value: "National Work (Type D)", label: "Single Permit (Combined Work and Residence Permit)" },
+    {
+      value: "National Work (Type D)",
+      label: "Single Permit (Combined Work and Residence Permit)",
+    },
     { value: "Family Reunification", label: "Visa D for Family Reunification" },
     { value: "Airport Transit (ATV)", label: "Airport Transit Visa (Type A)" },
   ],
-  "Ireland": [
+  Ireland: [
     { value: "Short Stay (C)", label: "Short Stay 'C' Visa (up to 90 days)" },
     { value: "Long Stay Study (D)", label: "Long Stay 'D' Visa – Study" },
-    { value: "Long Stay Work (D)", label: "Long Stay 'D' Visa – Employment (Critical Skills Employment Permit / General Employment Permit)" },
+    {
+      value: "Long Stay Work (D)",
+      label:
+        "Long Stay 'D' Visa – Employment (Critical Skills Employment Permit / General Employment Permit)",
+    },
     { value: "Join Family", label: "Long Stay 'D' Visa – Join Family Member" },
     { value: "Transit", label: "Transit Visa" },
   ],
@@ -147,18 +188,24 @@ export const VISA_TYPES_BY_DESTINATION: Record<string, { value: string; label: s
     { value: "Partner of a Worker", label: "Partner of a Worker Work Visa" },
     { value: "Transit", label: "Transit Visa" },
   ],
-  "Japan": [
+  Japan: [
     { value: "Short-Stay Tourist", label: "Temporary Visitor Visa (15 / 30 / 90 days)" },
     { value: "Student", label: "Student Visa" },
     { value: "Specified Skilled Worker", label: "Specified Skilled Worker (i) – Specified Skills" },
-    { value: "Specified Skilled Worker (ii)", label: "Specified Skilled Worker (ii) – Advanced Specified Skills" },
-    { value: "Engineer / IT Work", label: "Engineer / Specialist in Humanities / International Services" },
+    {
+      value: "Specified Skilled Worker (ii)",
+      label: "Specified Skilled Worker (ii) – Advanced Specified Skills",
+    },
+    {
+      value: "Engineer / IT Work",
+      label: "Engineer / Specialist in Humanities / International Services",
+    },
     { value: "Working Holiday", label: "Working Holiday" },
     { value: "Spouse / Family", label: "Spouse or Child of Japanese National" },
     { value: "Spouse of Permanent Resident", label: "Spouse or Child of Permanent Resident" },
     { value: "Transit", label: "Transit" },
   ],
-  "Singapore": [
+  Singapore: [
     { value: "Tourist", label: "Short-Term Visit Pass" },
     { value: "Employment Pass", label: "Employment Pass (EP)" },
     { value: "S Pass", label: "S Pass (Mid-Level Workers)" },
@@ -176,7 +223,7 @@ export const VISA_TYPES_BY_DESTINATION: Record<string, { value: string; label: s
     { value: "H-1 Working Holiday", label: "H-1 — Working Holiday" },
     { value: "B-2 Transit", label: "B-2 — Transit" },
   ],
-}
+};
 
 /** Falls back to a generic set when a destination has no specific mapping */
 export const DEFAULT_VISA_TYPES = [
@@ -186,14 +233,14 @@ export const DEFAULT_VISA_TYPES = [
   { value: "Business", label: "Business" },
   { value: "Family", label: "Family / Spouse" },
   { value: "Transit", label: "Transit" },
-]
+];
 
 // ---------------------------------------------------------------------------
 // Helper: get visa types for a destination (falls back to generic list)
 // ---------------------------------------------------------------------------
 
 export function getVisaTypes(destination: string): { value: string; label: string }[] {
-  return VISA_TYPES_BY_DESTINATION[destination] ?? DEFAULT_VISA_TYPES
+  return VISA_TYPES_BY_DESTINATION[destination] ?? DEFAULT_VISA_TYPES;
 }
 
 // ---------------------------------------------------------------------------
@@ -202,5 +249,5 @@ export function getVisaTypes(destination: string): { value: string; label: strin
 // ---------------------------------------------------------------------------
 
 export function getEmbassies(destination: string, applyingFrom: string): string[] | null {
-  return EMBASSY_DATA[destination]?.[applyingFrom] ?? null
+  return EMBASSY_DATA[destination]?.[applyingFrom] ?? null;
 }

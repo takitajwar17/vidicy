@@ -75,20 +75,33 @@ function readScreenshot(key: string) {
 describe("support attachment ownership", () => {
   it("stores a valid screenshot with the authenticated uploader metadata", async () => {
     const form = new FormData();
-    form.set("file", new File([new Uint8Array([1, 2, 3])], "screenshot.png", { type: "image/png" }));
-    const response = await uploadScreenshot(new Request("https://example.com/api/upload-support-screenshot", { method: "POST", body: form }));
+    form.set(
+      "file",
+      new File([new Uint8Array([1, 2, 3])], "screenshot.png", { type: "image/png" }),
+    );
+    const response = await uploadScreenshot(
+      new Request("https://example.com/api/upload-support-screenshot", {
+        method: "POST",
+        body: form,
+      }),
+    );
     expect(response?.status).toBe(200);
     expect(mocks.put).toHaveBeenCalledWith(
-      expect.stringContaining("support-screenshots/user_1/"), new Uint8Array([1, 2, 3]),
+      expect.stringContaining("support-screenshots/user_1/"),
+      new Uint8Array([1, 2, 3]),
       { httpMetadata: { contentType: "image/png" }, customMetadata: { uploadedBy: "user_1" } },
     );
   });
 
   it("rejects malformed screenshot multipart bodies", async () => {
     mocks.session.mockResolvedValue({ user: { id: "user_1", role: "user" } });
-    const response = await uploadScreenshot(new Request("https://example.com/api/upload-support-screenshot", {
-      method: "POST", headers: { "content-type": "multipart/form-data" }, body: "invalid",
-    }));
+    const response = await uploadScreenshot(
+      new Request("https://example.com/api/upload-support-screenshot", {
+        method: "POST",
+        headers: { "content-type": "multipart/form-data" },
+        body: "invalid",
+      }),
+    );
     expect(response?.status).toBe(400);
   });
 
@@ -100,11 +113,16 @@ describe("support attachment ownership", () => {
       pull(controller) {
         if (chunks++ < 8) controller.enqueue(new Uint8Array(1024 * 1024));
         else controller.close();
-      }, cancel,
+      },
+      cancel,
     });
-    const response = await uploadScreenshot(new Request("https://example.com/api/upload-support-screenshot", {
-      method: "POST", body: stream, duplex: "half",
-    } as RequestInit));
+    const response = await uploadScreenshot(
+      new Request("https://example.com/api/upload-support-screenshot", {
+        method: "POST",
+        body: stream,
+        duplex: "half",
+      } as RequestInit),
+    );
     expect(response?.status).toBe(413);
     expect(cancel).toHaveBeenCalledOnce();
     expect(mocks.head).not.toHaveBeenCalled();

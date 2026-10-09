@@ -47,7 +47,11 @@ export interface GoogleStorageListOptions {
 export interface GoogleStorageBucket {
   get(key: string): Promise<GoogleStorageObjectBody | null>;
   head(key: string): Promise<GoogleStorageObject | null>;
-  put(key: string, value: string | ArrayBuffer | ArrayBufferView | Blob | ReadableStream<Uint8Array>, options?: GoogleStoragePutOptions): Promise<GoogleStorageObject>;
+  put(
+    key: string,
+    value: string | ArrayBuffer | ArrayBufferView | Blob | ReadableStream<Uint8Array>,
+    options?: GoogleStoragePutOptions,
+  ): Promise<GoogleStorageObject>;
   delete(keys: string | string[]): Promise<void>;
   list(options?: GoogleStorageListOptions): Promise<{
     objects: GoogleStorageObject[];
@@ -65,10 +69,18 @@ function getStorage(): Storage {
 }
 
 function isNotFound(error: unknown): boolean {
-  return typeof error === "object" && error !== null && "code" in error && Number(error.code) === 404;
+  return (
+    typeof error === "object" && error !== null && "code" in error && Number(error.code) === 404
+  );
 }
 
-function describeObject({ key, metadata }: { key: string; metadata: FileMetadata }): GoogleStorageObject {
+function describeObject({
+  key,
+  metadata,
+}: {
+  key: string;
+  metadata: FileMetadata;
+}): GoogleStorageObject {
   const httpMetadata: GoogleObjectHttpMetadata = {
     contentType: metadata.contentType,
     contentLanguage: metadata.contentLanguage,
@@ -133,7 +145,9 @@ export function createGoogleStorageBucket(): GoogleStorageBucket {
       const file = bucket.file(key, { generation: metadata.generation });
       let body: ReadableStream<Uint8Array> | undefined;
       const readBody = function (): ReadableStream<Uint8Array> {
-        body ??= Readable.toWeb(file.createReadStream({ decompress: false })) as ReadableStream<Uint8Array>;
+        body ??= Readable.toWeb(
+          file.createReadStream({ decompress: false }),
+        ) as ReadableStream<Uint8Array>;
         return body;
       };
       const arrayBuffer = function (): Promise<ArrayBuffer> {
@@ -141,10 +155,16 @@ export function createGoogleStorageBucket(): GoogleStorageBucket {
       };
       return {
         ...describeObject({ key, metadata }),
-        get body() { return readBody(); },
+        get body() {
+          return readBody();
+        },
         arrayBuffer,
-        async text() { return new TextDecoder().decode(await arrayBuffer()); },
-        async json<T = unknown>() { return JSON.parse(new TextDecoder().decode(await arrayBuffer())) as T; },
+        async text() {
+          return new TextDecoder().decode(await arrayBuffer());
+        },
+        async json<T = unknown>() {
+          return JSON.parse(new TextDecoder().decode(await arrayBuffer())) as T;
+        },
       };
     },
     async head(key) {
@@ -153,10 +173,14 @@ export function createGoogleStorageBucket(): GoogleStorageBucket {
     },
     async put(key, value, options = {}) {
       const file = getBucket().file(key);
-      const bytes = typeof value === "string" ? Buffer.from(value)
-        : value instanceof ArrayBuffer ? Buffer.from(value)
-          : ArrayBuffer.isView(value) ? Buffer.from(value.buffer, value.byteOffset, value.byteLength)
-            : Buffer.from(await new Response(value).arrayBuffer());
+      const bytes =
+        typeof value === "string"
+          ? Buffer.from(value)
+          : value instanceof ArrayBuffer
+            ? Buffer.from(value)
+            : ArrayBuffer.isView(value)
+              ? Buffer.from(value.buffer, value.byteOffset, value.byteLength)
+              : Buffer.from(await new Response(value).arrayBuffer());
       await file.save(bytes, {
         resumable: false,
         validation: "crc32c",
@@ -166,15 +190,21 @@ export function createGoogleStorageBucket(): GoogleStorageBucket {
         },
       });
       const metadata = await readMetadata(file);
-      if (!metadata) throw new Error("Cloud Storage upload completed but object metadata is unavailable");
+      if (!metadata)
+        throw new Error("Cloud Storage upload completed but object metadata is unavailable");
       return describeObject({ key, metadata });
     },
     async delete(keys) {
-      await Promise.all((Array.isArray(keys) ? keys : [keys]).map(key => getBucket().file(key).delete({ ignoreNotFound: true })));
+      await Promise.all(
+        (Array.isArray(keys) ? keys : [keys]).map((key) =>
+          getBucket().file(key).delete({ ignoreNotFound: true }),
+        ),
+      );
     },
     async list(options = {}) {
       const limit = options.limit ?? 1000;
-      if (!Number.isInteger(limit) || limit < 1 || limit > 1000) throw new Error("Storage list limit must be between 1 and 1000");
+      if (!Number.isInteger(limit) || limit < 1 || limit > 1000)
+        throw new Error("Storage list limit must be between 1 and 1000");
       const [files, nextQuery, response] = await getBucket().getFiles({
         autoPaginate: false,
         prefix: options.prefix,
@@ -183,7 +213,7 @@ export function createGoogleStorageBucket(): GoogleStorageBucket {
         delimiter: options.delimiter,
       });
       return {
-        objects: files.map(file => describeObject({ key: file.name, metadata: file.metadata })),
+        objects: files.map((file) => describeObject({ key: file.name, metadata: file.metadata })),
         truncated: Boolean(nextQuery?.pageToken),
         cursor: nextQuery?.pageToken,
         delimitedPrefixes: (response as { prefixes?: string[] } | undefined)?.prefixes ?? [],

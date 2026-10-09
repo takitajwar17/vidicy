@@ -34,7 +34,8 @@ export const SUBPROCESSORS: SubprocessorEntry[] = [
   },
   {
     name: "Google",
-    purpose: "Hosting, document storage, database, AI document processing, and authentication services",
+    purpose:
+      "Hosting, document storage, database, AI document processing, and authentication services",
     location: "Global; primary application storage in Singapore",
     website: "https://google.com",
   },

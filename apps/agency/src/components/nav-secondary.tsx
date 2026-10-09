@@ -1,9 +1,9 @@
-"use client"
+"use client";
 
-import * as React from "react"
-import { LucideIcon } from "lucide-react"
-import Link from "next/link"
-import type { Route } from "next"
+import * as React from "react";
+import { LucideIcon } from "lucide-react";
+import Link from "next/link";
+import type { Route } from "next";
 import {
   SidebarGroup,
   SidebarGroupContent,
@@ -12,7 +12,7 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
   useSidebar,
-} from "@/components/ui/sidebar"
+} from "@/components/ui/sidebar";
 
 export function NavSecondary({
   items,
@@ -20,14 +20,14 @@ export function NavSecondary({
   ...props
 }: {
   items: {
-    title: string
-    url: string
-    icon: LucideIcon
-    badge?: number | string | null
-  }[]
-  label?: string
+    title: string;
+    url: string;
+    icon: LucideIcon;
+    badge?: number | string | null;
+  }[];
+  label?: string;
 } & React.ComponentPropsWithoutRef<typeof SidebarGroup>) {
-  const { setOpenMobile } = useSidebar()
+  const { setOpenMobile } = useSidebar();
 
   return (
     <SidebarGroup {...props}>
@@ -56,5 +56,5 @@ export function NavSecondary({
         </SidebarMenu>
       </SidebarGroupContent>
     </SidebarGroup>
-  )
+  );
 }

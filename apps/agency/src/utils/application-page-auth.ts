@@ -4,23 +4,25 @@ import { notFound, redirect } from "next/navigation";
 import { PENDING_VERIFICATION_ROUTE } from "@/constants";
 import { getApplicationAccessForCurrentSession } from "./application-auth";
 
-export const requireApplicationPagePermission = cache(async (applicationId: string, permission?: string) => {
-  const { hasAccess, session } = await getApplicationAccessForCurrentSession(
-    applicationId,
-    permission,
-  );
+export const requireApplicationPagePermission = cache(
+  async (applicationId: string, permission?: string) => {
+    const { hasAccess, session } = await getApplicationAccessForCurrentSession(
+      applicationId,
+      permission,
+    );
 
-  if (!session) {
-    redirect("/sign-in");
-  }
+    if (!session) {
+      redirect("/sign-in");
+    }
 
-  if (!session.user.emailVerified) {
-    redirect(PENDING_VERIFICATION_ROUTE);
-  }
+    if (!session.user.emailVerified) {
+      redirect(PENDING_VERIFICATION_ROUTE);
+    }
 
-  if (!hasAccess) {
-    notFound();
-  }
+    if (!hasAccess) {
+      notFound();
+    }
 
-  return session;
-});
+    return session;
+  },
+);

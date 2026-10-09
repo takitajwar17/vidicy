@@ -6,7 +6,10 @@ import { verifyEmailText } from "@/react-email/verify-email";
 import { supportTicketAdminText } from "@/react-email/support-ticket-admin";
 import { supportTicketReplyText } from "@/react-email/support-ticket-reply";
 import { supportTicketUserReplyText } from "@/react-email/support-ticket-user-reply";
-import { applicantInvitationText, applicantAddedNotificationText } from "@/react-email/applicant-invitation";
+import {
+  applicantInvitationText,
+  applicantAddedNotificationText,
+} from "@/react-email/applicant-invitation";
 import { agencyTeamAccessText } from "@/react-email/agency-team-access";
 import isProd from "./is-prod";
 import { logger } from "@/infra/logger";
@@ -41,7 +44,7 @@ async function sendEmail({
   const response = await fetch("https://api.resend.com/emails", {
     method: "POST",
     headers: {
-      "Authorization": `Bearer ${process.env.RESEND_API_KEY}`,
+      Authorization: `Bearer ${process.env.RESEND_API_KEY}`,
       "Content-Type": "application/json",
     } as const,
     body: JSON.stringify({
@@ -65,7 +68,7 @@ async function sendEmail({
 export async function sendPasswordResetEmail({
   email,
   resetToken,
-  username
+  username,
 }: {
   email: string;
   resetToken: string;
@@ -74,9 +77,9 @@ export async function sendPasswordResetEmail({
   const resetUrl = `${SITE_URL}/reset-password?token=${resetToken}`;
 
   if (!isProd) {
-    logger.warn('Password reset url: ', { resetUrl })
+    logger.warn("Password reset url: ", { resetUrl });
 
-    return
+    return;
   }
 
   const text = resetPasswordText({ resetLink: resetUrl, username });
@@ -92,7 +95,7 @@ export async function sendPasswordResetEmail({
 export async function sendVerificationEmail({
   email,
   verificationToken,
-  username
+  username,
 }: {
   email: string;
   verificationToken: string;
@@ -101,9 +104,9 @@ export async function sendVerificationEmail({
   const verificationUrl = `${SITE_URL}/verify-email?token=${verificationToken}`;
 
   if (!isProd) {
-    logger.warn('Verification url: ', { verificationUrl })
+    logger.warn("Verification url: ", { verificationUrl });
 
-    return
+    return;
   }
 
   const text = verifyEmailText({ verificationLink: verificationUrl, username });
@@ -164,12 +167,22 @@ export async function sendSupportTicketAdminNotification({
   const adminEmail = ADMIN_EMAIL;
 
   if (!isProd) {
-    logger.warn('Support ticket submitted (admin notification skipped in dev)', { ticketId, subject })
-    return
+    logger.warn("Support ticket submitted (admin notification skipped in dev)", {
+      ticketId,
+      subject,
+    });
+    return;
   }
 
-  const text = supportTicketAdminText({ ticketId, subject, category, description, userName, userEmail });
-  const emailSubject = `[Support] New ${category.replace(/_/g, ' ')} ticket: ${subject}`;
+  const text = supportTicketAdminText({
+    ticketId,
+    subject,
+    category,
+    description,
+    userName,
+    userEmail,
+  });
+  const emailSubject = `[Support] New ${category.replace(/_/g, " ")} ticket: ${subject}`;
 
   await sendEmail({
     to: [adminEmail],
@@ -197,8 +210,8 @@ export async function sendSupportTicketReplyNotification({
   const supportUrl = `${SITE_URL}/dashboard/support/${ticketId}`;
 
   if (!isProd) {
-    logger.warn('Support ticket reply notification skipped in dev', { ticketId, subject, status })
-    return
+    logger.warn("Support ticket reply notification skipped in dev", { ticketId, subject, status });
+    return;
   }
 
   const text = supportTicketReplyText({ subject, status, adminReply, userName, supportUrl });
@@ -222,7 +235,11 @@ export async function sendApplicantInvitationEmail({
   applicationName: string;
 }) {
   if (!isProd) {
-    logger.warn("Applicant invitation email (skipped in dev)", { email, inviterName, applicationName });
+    logger.warn("Applicant invitation email (skipped in dev)", {
+      email,
+      inviterName,
+      applicationName,
+    });
     return;
   }
 
@@ -248,7 +265,12 @@ export async function sendApplicantAddedNotificationEmail({
   applicationId: string;
 }) {
   if (!isProd) {
-    logger.warn("Applicant added notification (skipped in dev)", { email, inviterName, applicationName, applicationId });
+    logger.warn("Applicant added notification (skipped in dev)", {
+      email,
+      inviterName,
+      applicationName,
+      applicationId,
+    });
     return;
   }
 
@@ -304,11 +326,22 @@ export async function sendSupportTicketUserReplyNotification({
   const adminEmail = ADMIN_EMAIL;
 
   if (!isProd) {
-    logger.warn('Support ticket user reply (admin notification skipped in dev)', { ticketId, subject, userEmail })
-    return
+    logger.warn("Support ticket user reply (admin notification skipped in dev)", {
+      ticketId,
+      subject,
+      userEmail,
+    });
+    return;
   }
 
-  const text = supportTicketUserReplyText({ ticketId, subject, category, userName, userEmail, messageContent });
+  const text = supportTicketUserReplyText({
+    ticketId,
+    subject,
+    category,
+    userName,
+    userEmail,
+    messageContent,
+  });
   const emailSubject = `[Support] User replied: ${subject}`;
 
   await sendEmail({

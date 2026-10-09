@@ -10,13 +10,20 @@ import {
   userTable,
 } from "@/db/schema";
 import { eq, desc, asc, and, inArray, count, or, gt, isNull, isNotNull, sql } from "drizzle-orm";
-import { sendSupportTicketAdminNotification, sendSupportTicketReplyNotification, sendSupportTicketUserReplyNotification } from "@/utils/email";
+import {
+  sendSupportTicketAdminNotification,
+  sendSupportTicketReplyNotification,
+  sendSupportTicketUserReplyNotification,
+} from "@/utils/email";
 import { deleteFromR2, getR2Bucket } from "@/lib/r2";
 import { logger } from "@/infra/logger";
 import { ZSAError } from "zsa";
 import { SUPPORT_TICKETS_PER_PAGE } from "@/constants";
 import { invalidateUnreadCount, invalidateAdminUnreadCount } from "@/server/unread-counts";
-import { isSupportScreenshotOwnedBy, validateSupportScreenshots } from "@/server/support-attachments";
+import {
+  isSupportScreenshotOwnedBy,
+  validateSupportScreenshots,
+} from "@/server/support-attachments";
 import { sendEmailBestEffort } from "@/lib/best-effort-email";
 
 export async function submitSupportTicket({
@@ -35,10 +42,13 @@ export async function submitSupportTicket({
   ipAddress?: string;
 }) {
   const session = await getSessionFromCookie();
-  if (!session) throw new ZSAError("NOT_AUTHORIZED", "You must be signed in to submit a support ticket");
+  if (!session)
+    throw new ZSAError("NOT_AUTHORIZED", "You must be signed in to submit a support ticket");
 
   const validatedScreenshots = await validateSupportScreenshots({
-    keys: screenshotUrls, userId: session.user.id, isAdmin: session.user.role === "admin",
+    keys: screenshotUrls,
+    userId: session.user.id,
+    isAdmin: session.user.role === "admin",
   });
 
   const db = getDB();
@@ -60,18 +70,22 @@ export async function submitSupportTicket({
 
   await invalidateAdminUnreadCount();
 
-  const userName = [session.user.firstName, session.user.lastName].filter(Boolean).join(' ') || session.user.email || 'User';
+  const userName =
+    [session.user.firstName, session.user.lastName].filter(Boolean).join(" ") ||
+    session.user.email ||
+    "User";
 
   // Send admin notification (non-fatal)
   await sendEmailBestEffort({
-    send: () => sendSupportTicketAdminNotification({
-      ticketId: ticket.id,
-      subject,
-      category,
-      description,
-      userName,
-      userEmail: session.user.email || '',
-    }),
+    send: () =>
+      sendSupportTicketAdminNotification({
+        ticketId: ticket.id,
+        subject,
+        category,
+        description,
+        userName,
+        userEmail: session.user.email || "",
+      }),
     logger,
     message: "Failed to send support ticket admin notification",
     context: {
@@ -100,11 +114,7 @@ function getEmptySupportTicketMessageSummary(): SupportTicketMessageSummary {
   };
 }
 
-async function getSupportTicketMessageSummaryMap({
-  ticketIds,
-}: {
-  ticketIds: string[];
-}) {
+async function getSupportTicketMessageSummaryMap({ ticketIds }: { ticketIds: string[] }) {
   if (ticketIds.length === 0) {
     return new Map<string, SupportTicketMessageSummary>();
   }
@@ -217,8 +227,8 @@ export async function getUserSupportTickets({ page = 1 }: { page?: number } = {}
       with: {
         messages: {
           orderBy: [asc(supportMessageTable.createdAt)],
-        }
-      }
+        },
+      },
     }),
     db
       .select({ total: count() })
@@ -237,7 +247,7 @@ export async function getSupportTicketById({ ticketId }: { ticketId: string }) {
   if (!session) throw new ZSAError("NOT_AUTHORIZED", "You must be signed in");
 
   const db = getDB();
-  const isAdmin = session.user.role === 'admin';
+  const isAdmin = session.user.role === "admin";
 
   const ticket = await db.query.supportTicketTable.findFirst({
     where: isAdmin
@@ -261,11 +271,11 @@ export async function getSupportTicketById({ ticketId }: { ticketId: string }) {
               lastName: true,
               email: true,
               avatar: true,
-            }
-          }
-        }
-      }
-    }
+            },
+          },
+        },
+      },
+    },
   });
 
   if (!ticket) throw new ZSAError("NOT_FOUND", "Ticket not found");
@@ -330,10 +340,7 @@ export async function getAllSupportTicketSummaries({
       .orderBy(desc(supportTicketTable.lastUpdatedAt))
       .limit(SUPPORT_TICKETS_PER_PAGE)
       .offset(offset),
-    db
-      .select({ total: count() })
-      .from(supportTicketTable)
-      .where(whereClause),
+    db.select({ total: count() }).from(supportTicketTable).where(whereClause),
   ]);
 
   const messageSummaryMap = await getSupportTicketMessageSummaryMap({
@@ -400,25 +407,23 @@ export async function getAllSupportTickets({
       .orderBy(desc(supportTicketTable.lastUpdatedAt))
       .limit(SUPPORT_TICKETS_PER_PAGE)
       .offset(offset),
-    db
-      .select({ total: count() })
-      .from(supportTicketTable)
-      .where(whereClause),
+    db.select({ total: count() }).from(supportTicketTable).where(whereClause),
   ]);
 
   // Fetch messages for each ticket (depends on ticket IDs from above)
-  const ticketIds = tickets.map(t => t.id);
-  const messages = ticketIds.length > 0
-    ? await db.query.supportMessageTable.findMany({
-      where: inArray(supportMessageTable.ticketId, ticketIds),
-      orderBy: [desc(supportMessageTable.createdAt)],
-    })
-    : [];
+  const ticketIds = tickets.map((t) => t.id);
+  const messages =
+    ticketIds.length > 0
+      ? await db.query.supportMessageTable.findMany({
+          where: inArray(supportMessageTable.ticketId, ticketIds),
+          orderBy: [desc(supportMessageTable.createdAt)],
+        })
+      : [];
 
   return {
-    tickets: tickets.map(t => ({
+    tickets: tickets.map((t) => ({
       ...t,
-      messages: messages.filter(m => m.ticketId === t.id),
+      messages: messages.filter((m) => m.ticketId === t.id),
     })),
     totalCount: countResult?.total ?? 0,
   };
@@ -446,7 +451,8 @@ export async function updateTicketStatus({
   if (!existing) throw new ZSAError("NOT_FOUND", "Ticket not found");
 
   const now = new Date();
-  const isResolved = status === SUPPORT_TICKET_STATUS.RESOLVED || status === SUPPORT_TICKET_STATUS.CLOSED;
+  const isResolved =
+    status === SUPPORT_TICKET_STATUS.RESOLVED || status === SUPPORT_TICKET_STATUS.CLOSED;
 
   const updateValues: Partial<typeof supportTicketTable.$inferInsert> = {};
   if (status) updateValues.status = status;
@@ -473,7 +479,7 @@ export async function updateTicketStatus({
     await db.insert(supportMessageTable).values({
       ticketId,
       userId: currentUserId,
-      content: `Category updated to ${category.replace(/_/g, ' ')}`,
+      content: `Category updated to ${category.replace(/_/g, " ")}`,
       isSystemMessage: true,
     });
   }
@@ -482,12 +488,12 @@ export async function updateTicketStatus({
     await db.insert(supportMessageTable).values({
       ticketId,
       userId: currentUserId,
-      content: `Status updated to ${status.replace(/_/g, ' ')}`,
+      content: `Status updated to ${status.replace(/_/g, " ")}`,
       isSystemMessage: true,
     });
   }
 
-  if (priorityChanged && priority === 'high') {
+  if (priorityChanged && priority === "high") {
     await db.insert(supportMessageTable).values({
       ticketId,
       userId: currentUserId,
@@ -526,8 +532,10 @@ export async function deleteTicket({ ticketId }: { ticketId: string }) {
     columns: { screenshotUrls: true, userId: true },
   });
   const attachments = [
-    ...(existing.screenshotUrls ?? []).map(fileKey => ({ fileKey, userId: existing.userId })),
-    ...messages.flatMap(message => (message.screenshotUrls ?? []).map(fileKey => ({ fileKey, userId: message.userId }))),
+    ...(existing.screenshotUrls ?? []).map((fileKey) => ({ fileKey, userId: existing.userId })),
+    ...messages.flatMap((message) =>
+      (message.screenshotUrls ?? []).map((fileKey) => ({ fileKey, userId: message.userId })),
+    ),
   ];
 
   await db.delete(supportTicketTable).where(eq(supportTicketTable.id, ticketId));
@@ -540,13 +548,16 @@ export async function deleteTicket({ ticketId }: { ticketId: string }) {
       const keys = new Set<string>();
       for (const { fileKey, userId } of attachments) {
         if (!fileKey.startsWith("support-screenshots/") || keys.has(fileKey)) continue;
-        if (!isSupportScreenshotOwnedBy({ fileKey, userId, object: await bucket.head(fileKey) })) continue;
+        if (!isSupportScreenshotOwnedBy({ fileKey, userId, object: await bucket.head(fileKey) }))
+          continue;
         const [otherTicket, otherMessage] = await Promise.all([
           db.query.supportTicketTable.findFirst({
-            where: sql`${supportTicketTable.screenshotUrls} @> ${JSON.stringify([fileKey])}::jsonb`, columns: { id: true },
+            where: sql`${supportTicketTable.screenshotUrls} @> ${JSON.stringify([fileKey])}::jsonb`,
+            columns: { id: true },
           }),
           db.query.supportMessageTable.findFirst({
-            where: sql`${supportMessageTable.screenshotUrls} @> ${JSON.stringify([fileKey])}::jsonb`, columns: { id: true },
+            where: sql`${supportMessageTable.screenshotUrls} @> ${JSON.stringify([fileKey])}::jsonb`,
+            columns: { id: true },
           }),
         ]);
         if (!otherTicket && !otherMessage) keys.add(fileKey);
@@ -558,26 +569,30 @@ export async function deleteTicket({ ticketId }: { ticketId: string }) {
   }
 }
 
-export const getAdminUnreadSupportTicketsCount = cache(async function getAdminUnreadSupportTicketsCount() {
-  const db = getDB();
+export const getAdminUnreadSupportTicketsCount = cache(
+  async function getAdminUnreadSupportTicketsCount() {
+    const db = getDB();
 
-  const [result] = await db
-    .select({ total: count() })
-    .from(supportTicketTable)
-    .where(
-      and(
-        isNotNull(supportTicketTable.lastUpdatedAt),
-        or(
-          isNull(supportTicketTable.adminLastViewedAt),
-          gt(supportTicketTable.lastUpdatedAt, supportTicketTable.adminLastViewedAt)
-        )
-      )
-    );
+    const [result] = await db
+      .select({ total: count() })
+      .from(supportTicketTable)
+      .where(
+        and(
+          isNotNull(supportTicketTable.lastUpdatedAt),
+          or(
+            isNull(supportTicketTable.adminLastViewedAt),
+            gt(supportTicketTable.lastUpdatedAt, supportTicketTable.adminLastViewedAt),
+          ),
+        ),
+      );
 
-  return result?.total ?? 0;
-});
+    return result?.total ?? 0;
+  },
+);
 
-export const getUnreadSupportTicketsCount = cache(async function getUnreadSupportTicketsCount(userId?: string) {
+export const getUnreadSupportTicketsCount = cache(async function getUnreadSupportTicketsCount(
+  userId?: string,
+) {
   let targetUserId = userId;
 
   if (!targetUserId) {
@@ -597,9 +612,9 @@ export const getUnreadSupportTicketsCount = cache(async function getUnreadSuppor
         isNotNull(supportTicketTable.lastUpdatedAt),
         or(
           isNull(supportTicketTable.lastViewedAt),
-          gt(supportTicketTable.lastUpdatedAt, supportTicketTable.lastViewedAt)
-        )
-      )
+          gt(supportTicketTable.lastUpdatedAt, supportTicketTable.lastViewedAt),
+        ),
+      ),
     );
 
   return result?.total ?? 0;
@@ -611,12 +626,12 @@ export async function markTicketAsViewed({ ticketId }: { ticketId: string }) {
 
   const db = getDB();
 
-  await db.update(supportTicketTable)
+  await db
+    .update(supportTicketTable)
     .set({ lastViewedAt: new Date() })
-    .where(and(
-      eq(supportTicketTable.id, ticketId),
-      eq(supportTicketTable.userId, session.user.id)
-    ));
+    .where(
+      and(eq(supportTicketTable.id, ticketId), eq(supportTicketTable.userId, session.user.id)),
+    );
 
   await invalidateUnreadCount(session.user.id);
 }
@@ -625,7 +640,8 @@ export async function markTicketAsViewedByAdmin({ ticketId }: { ticketId: string
   await requireAdmin();
   const db = getDB();
 
-  await db.update(supportTicketTable)
+  await db
+    .update(supportTicketTable)
     .set({ adminLastViewedAt: new Date() })
     .where(eq(supportTicketTable.id, ticketId));
 
@@ -647,7 +663,7 @@ export async function addSupportMessage({
   if (!session) throw new ZSAError("NOT_AUTHORIZED", "Not authenticated");
 
   const db = getDB();
-  const isAdmin = session.user.role === 'admin';
+  const isAdmin = session.user.role === "admin";
 
   // Security check: ensure user owns ticket OR is admin
   const ticket = await db.query.supportTicketTable.findFirst({
@@ -659,14 +675,22 @@ export async function addSupportMessage({
   if (!ticket) throw new ZSAError("NOT_FOUND", "Ticket not found");
 
   // Block replies on resolved or closed tickets
-  if (ticket.status === SUPPORT_TICKET_STATUS.RESOLVED || ticket.status === SUPPORT_TICKET_STATUS.CLOSED) {
+  if (
+    ticket.status === SUPPORT_TICKET_STATUS.RESOLVED ||
+    ticket.status === SUPPORT_TICKET_STATUS.CLOSED
+  ) {
     if (!isAdmin) {
-      throw new ZSAError("PRECONDITION_FAILED", "This ticket is resolved. Please open a new ticket if you need further help.");
+      throw new ZSAError(
+        "PRECONDITION_FAILED",
+        "This ticket is resolved. Please open a new ticket if you need further help.",
+      );
     }
   }
 
   const validatedScreenshots = await validateSupportScreenshots({
-    keys: screenshotUrls, userId: session.user.id, isAdmin,
+    keys: screenshotUrls,
+    userId: session.user.id,
+    isAdmin,
   });
 
   const [message] = await db
@@ -694,10 +718,7 @@ export async function addSupportMessage({
     updateValues.adminLastViewedAt = now;
   }
 
-  await db
-    .update(supportTicketTable)
-    .set(updateValues)
-    .where(eq(supportTicketTable.id, ticketId));
+  await db.update(supportTicketTable).set(updateValues).where(eq(supportTicketTable.id, ticketId));
 
   // Invalidate cached unread counts for affected parties
   if (isAdmin) {
@@ -716,16 +737,17 @@ export async function addSupportMessage({
     });
     if (user?.email) {
       const userEmail = user.email;
-      const userName = [user.firstName, user.lastName].filter(Boolean).join(' ') || user.email;
+      const userName = [user.firstName, user.lastName].filter(Boolean).join(" ") || user.email;
       await sendEmailBestEffort({
-        send: () => sendSupportTicketReplyNotification({
-          ticketId,
-          userEmail,
-          userName,
-          subject: ticket.subject,
-          status: ticket.status,
-          adminReply: content,
-        }),
+        send: () =>
+          sendSupportTicketReplyNotification({
+            ticketId,
+            userEmail,
+            userName,
+            subject: ticket.subject,
+            status: ticket.status,
+            adminReply: content,
+          }),
         logger,
         message: "Failed to send support ticket reply notification",
         context: {
@@ -737,16 +759,20 @@ export async function addSupportMessage({
     }
   } else if (!isAdmin) {
     // User replied — notify admin
-    const senderName = [session.user.firstName, session.user.lastName].filter(Boolean).join(' ') || session.user.email || "User";
+    const senderName =
+      [session.user.firstName, session.user.lastName].filter(Boolean).join(" ") ||
+      session.user.email ||
+      "User";
     await sendEmailBestEffort({
-      send: () => sendSupportTicketUserReplyNotification({
-        ticketId,
-        subject: ticket.subject,
-        category: ticket.category,
-        userName: senderName,
-        userEmail: session.user.email ?? "",
-        messageContent: content,
-      }),
+      send: () =>
+        sendSupportTicketUserReplyNotification({
+          ticketId,
+          subject: ticket.subject,
+          category: ticket.category,
+          userName: senderName,
+          userEmail: session.user.email ?? "",
+          messageContent: content,
+        }),
       logger,
       message: "Failed to send support ticket user reply notification",
       context: {

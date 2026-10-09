@@ -1,8 +1,6 @@
 import type { KVSession } from "@/infra/kv-session";
 
-export type SessionValidationResult =
-  | KVSession
-  | null;
+export type SessionValidationResult = KVSession | null;
 
 export interface ParsedUserAgent {
   ua: string;

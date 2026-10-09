@@ -103,7 +103,11 @@ export function buildDirectoryBody(publicJwk: ConfiguredPublicDirectoryJwk) {
   };
 }
 
-function buildSignatureInputValue({ keyId, created, expires }: {
+function buildSignatureInputValue({
+  keyId,
+  created,
+  expires,
+}: {
   keyId: string;
   created: number;
   expires: number;
@@ -111,7 +115,10 @@ function buildSignatureInputValue({ keyId, created, expires }: {
   return `dir=("@authority");created=${created};expires=${expires};keyid="${keyId}";alg="ed25519";tag="http-message-signatures-directory"`;
 }
 
-function buildSignatureBase({ authority, signatureInputValue }: {
+function buildSignatureBase({
+  authority,
+  signatureInputValue,
+}: {
   authority: string;
   signatureInputValue: string;
 }) {

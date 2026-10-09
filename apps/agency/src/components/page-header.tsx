@@ -36,9 +36,7 @@ export function PageHeader({ items }: PageHeaderProps) {
                     when multiple items share the same href (e.g. "Application" → "Checklist" both link to /dashboard/[appId]) */}
                 {items.map((item, index) => (
                   <Fragment key={`${item.href}-${index}`}>
-                    <BreadcrumbItem
-                      className={index < items.length - 1 ? "hidden md:block" : ""}
-                    >
+                    <BreadcrumbItem className={index < items.length - 1 ? "hidden md:block" : ""}>
                       <BreadcrumbLink asChild>
                         <Link href={item.href as Route}>{item.label}</Link>
                       </BreadcrumbLink>

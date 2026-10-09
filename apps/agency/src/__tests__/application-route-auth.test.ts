@@ -26,10 +26,7 @@ describe("authorizeApplicationRouteAccess", () => {
     const result = await authorizeApplicationRouteAccess("app_123", "access_application");
 
     expect(result).toEqual({ session });
-    expect(mockRequireApplicationPermission).toHaveBeenCalledWith(
-      "app_123",
-      "access_application",
-    );
+    expect(mockRequireApplicationPermission).toHaveBeenCalledWith("app_123", "access_application");
   });
 
   it("maps NOT_AUTHORIZED to a 401 response", async () => {
@@ -81,8 +78,8 @@ describe("authorizeApplicationRouteAccess", () => {
     const error = new Error("boom");
     mockRequireApplicationPermission.mockRejectedValue(error);
 
-    await expect(
-      authorizeApplicationRouteAccess("app_123", "access_application"),
-    ).rejects.toThrow("boom");
+    await expect(authorizeApplicationRouteAccess("app_123", "access_application")).rejects.toThrow(
+      "boom",
+    );
   });
 });

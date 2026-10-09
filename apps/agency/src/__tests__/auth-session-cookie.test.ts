@@ -32,10 +32,7 @@ vi.mock("@/infra/logger", () => ({
   },
 }));
 
-import {
-  setSessionTokenCookie,
-  refreshSessionCookieForCrossSiteRedirect,
-} from "@/utils/auth";
+import { setSessionTokenCookie, refreshSessionCookieForCrossSiteRedirect } from "@/utils/auth";
 
 describe("session cookie settings", () => {
   beforeEach(() => {

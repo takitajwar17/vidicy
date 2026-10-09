@@ -27,10 +27,10 @@ interface RateLimitConfig {
 
 export async function withRateLimit<T>(
   action: () => Promise<T>,
-  config: RateLimitConfig
+  config: RateLimitConfig,
 ): Promise<T> {
   const ip = await getIP();
-  
+
   // In development, use 10x higher limits to allow testing while still catching issues
   // This maintains dev/prod parity while allowing reasonable development velocity
   const adjustedLimit = isProd ? config.limit : config.limit * 10;
@@ -48,8 +48,8 @@ export async function withRateLimit<T>(
     throw new ZSAError(
       "TOO_MANY_REQUESTS",
       `Rate limit exceeded. Try again in ${Math.ceil(
-        (rateLimitResult.reset - Date.now() / 1000) / 60
-      )} minutes.`
+        (rateLimitResult.reset - Date.now() / 1000) / 60,
+      )} minutes.`,
     );
   }
 
