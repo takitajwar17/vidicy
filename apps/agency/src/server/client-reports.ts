@@ -5,9 +5,14 @@ import { and, desc, eq, isNotNull, isNull, sql } from "drizzle-orm";
 import { ZSAError } from "zsa";
 import { z } from "zod";
 import { getDB } from "@/db";
-import { clientReportTable, visaApplicationTable } from "@/db/schema";
+import {
+  checklistItemTable,
+  clientReportTable,
+  documentEvaluationTable,
+  visaApplicationTable,
+} from "@/db/schema";
 import { requireAgencyStaff } from "@/server/agency-team";
-import { requireCurrentAgencyReview } from "@/server/agency-review";
+import { newestEvaluationOrder, requireCurrentAgencyReview } from "@/server/agency-review";
 import { createClientReportEmailRequest, sendClientReportEmail } from "@/utils/email";
 
 const RETRY_DELAY_MS = 2 * 60_000;
@@ -35,7 +40,24 @@ export async function getClientReport({ reportId }: { reportId: string }) {
     orderBy: [desc(clientReportTable.createdAt), desc(clientReportTable.id)],
     columns: { id: true },
   });
+  const [items, reviews] = await Promise.all([
+    db.query.checklistItemTable.findMany({
+      where: eq(checklistItemTable.applicationId, application.id),
+      columns: { applicantId: true },
+    }),
+    db.query.documentEvaluationTable.findMany({
+      where: eq(documentEvaluationTable.applicationId, application.id),
+      orderBy: newestEvaluationOrder,
+      columns: { applicantId: true, reviewStatus: true },
+    }),
+  ]);
+  const reviewApplicantIds = new Set(items.map((item) => item.applicantId));
   const isStale =
+    !reviewApplicantIds.size ||
+    [...reviewApplicantIds].some(
+      (applicantId) =>
+        reviews.find((review) => review.applicantId === applicantId)?.reviewStatus !== "complete",
+    ) ||
     latest?.id !== report.id ||
     report.status === "draft" ||
     !["ready", "sent"].includes(application.clientReportStatus);

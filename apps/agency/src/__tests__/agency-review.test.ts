@@ -271,6 +271,7 @@ describe("agency review workflow with the real database driver", () => {
         applicationId,
         applicantId,
         overallScore: 95,
+        reviewStatus: "complete",
         riskLevel: "low",
         summary: "Reviewed",
         createdAt: new Date(lastEvaluationTime),
@@ -485,6 +486,7 @@ describe("agency review workflow with the real database driver", () => {
     expect(saved).toHaveLength(2);
     const result = saved.find((row) => row.id !== evaluation.id)!;
     expect(result.overallScore).toBe(98);
+    expect(result.reviewStatus).toBe("complete");
     expect(result.itemFeedback?.[itemId]).toMatchObject({
       status: "ok",
       hasContent: true,
@@ -495,7 +497,7 @@ describe("agency review workflow with the real database driver", () => {
     expect(mockGemini.mock.calls[0][0].userContent).toContain("Passport document text");
   });
 
-  it("saves document results when the orchestrator fails", async () => {
+  it("does not publish or change saved case state when the combined review fails", async () => {
     await fixture.db
       .update(uploadedDocumentTable)
       .set({ textContent: "Passport evidence", extractionStatus: "completed" });
@@ -511,17 +513,17 @@ describe("agency review workflow with the real database driver", () => {
       }),
     );
     mockGemini.mockRejectedValueOnce(new Error("Orchestrator unavailable"));
-    await evaluateDocumentsAction({ applicationId, applicantId });
-    const saved = (await fixture.db.query.documentEvaluationTable.findMany()).find(
-      (row) => row.id !== evaluation.id,
-    )!;
-    expect(saved.overallScore).toBe(98);
-    expect(saved.itemFeedback?.[itemId]).toMatchObject({ status: "ok", confidence: 95 });
-    expect(saved.docSnapshots?.[itemId]).toContain(documentId);
+    const before = await fixture.db.query.visaApplicationTable.findFirst();
+    await expect(evaluateDocumentsAction({ applicationId, applicantId })).rejects.toThrow(
+      "combined review did not complete",
+    );
+    expect(await fixture.db.query.documentEvaluationTable.findMany()).toEqual([evaluation]);
+    expect(await fixture.db.query.visaApplicationTable.findFirst()).toEqual(before);
+    expect(await fixture.db.query.reviewIssueTable.findMany()).toEqual([]);
     expect(mockGemini).toHaveBeenCalledTimes(2);
   });
 
-  it("preserves the primary score when the adversarial pass fails", async () => {
+  it("does not publish a primary score when the required second pass fails", async () => {
     await fixture.db
       .update(uploadedDocumentTable)
       .set({ textContent: "Passport evidence", extractionStatus: "completed" });
@@ -548,15 +550,12 @@ describe("agency review workflow with the real database driver", () => {
       }),
     );
     mockGemini.mockRejectedValueOnce(new Error("Adversarial pass unavailable"));
-    await evaluateDocumentsAction({ applicationId, applicantId });
-    const saved = (await fixture.db.query.documentEvaluationTable.findMany()).find(
-      (row) => row.id !== evaluation.id,
-    )!;
-    expect(saved).toMatchObject({
-      overallScore: 80,
-      scoreConfidence: null,
-      ensembleDivergence: null,
-    });
+    const before = await fixture.db.query.visaApplicationTable.findFirst();
+    await expect(evaluateDocumentsAction({ applicationId, applicantId })).rejects.toThrow(
+      "second review did not complete",
+    );
+    expect(await fixture.db.query.documentEvaluationTable.findMany()).toEqual([evaluation]);
+    expect(await fixture.db.query.visaApplicationTable.findFirst()).toEqual(before);
     expect(mockGemini).toHaveBeenCalledTimes(3);
     expect(mockGemini.mock.calls[2][0].userContent).toBe(mockGemini.mock.calls[1][0].userContent);
     expect(mockGemini.mock.calls[2][0].systemPrompt).toContain("skeptical");
@@ -1015,6 +1014,42 @@ describe("agency review workflow with the real database driver", () => {
   it("blocks missing review results", async () => {
     await fixture.db.delete(documentEvaluationTable);
     await expect(markAgencyCaseReady(context())).rejects.toThrow("current documents");
+  });
+
+  it("blocks incomplete saved reviews from display, reports, and readiness", async () => {
+    await fixture.db.update(documentEvaluationTable).set({ reviewStatus: "incomplete" });
+    expect((await getAgencyCaseDetail(applicationId)).latestEvaluation).toBeNull();
+    expect((await getAgencyCaseRows())[0].latestEvaluation).toBeNull();
+    await expect(markAgencyCaseReady(context())).rejects.toThrow("current documents");
+    await expect(generateClientReportAction({ applicationId })).rejects.toThrow();
+  });
+
+  it("migrates existing reviews without treating them as proven complete", async () => {
+    // Recreate the pre-migration column set in this private test database.
+    await fixture.pool.query('ALTER TABLE document_evaluation DROP COLUMN "reviewStatus"');
+    const before = (await fixture.pool.query("SELECT * FROM document_evaluation")).rows;
+    await fixture.pool.query(
+      readFileSync(
+        new URL("../db/postgres-migrations/0005_review_completion_status.sql", import.meta.url),
+        "utf8",
+      ),
+    );
+    const after = await fixture.db.query.documentEvaluationTable.findMany();
+    expect(after.map(({ reviewStatus: _reviewStatus, ...row }) => row)).toEqual(before);
+    expect(after.every((review) => review.reviewStatus === "incomplete")).toBe(true);
+    await expect(markAgencyCaseReady(context())).rejects.toThrow("current documents");
+  });
+
+  it("rejects incomplete publication before database writes", async () => {
+    const before = await fixture.db.query.visaApplicationTable.findFirst();
+    await expect(
+      publishAgencyReview({
+        ...context(),
+        evaluation: { ...evaluation, applicantId, reviewStatus: "incomplete" },
+      }),
+    ).rejects.toThrow("review is incomplete");
+    expect(await fixture.db.query.documentEvaluationTable.findMany()).toEqual([evaluation]);
+    expect(await fixture.db.query.visaApplicationTable.findFirst()).toEqual(before);
   });
 
   it("blocks a required document even when its AI issue was dismissed", async () => {

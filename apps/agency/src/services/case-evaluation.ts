@@ -313,7 +313,7 @@ function buildOrchestratorJsonSchema(items: Array<{ id: string }>) {
   };
 }
 
-// Shared interface — used both in the handler and buildPhase1Fallback
+// Structured result of an individual document review.
 export interface PerDocumentEvaluation {
   checklistItemId: string;
   documentName: string;
@@ -381,58 +381,6 @@ function getReadyThreshold(visaType: string): number {
   if (/business|b-?1/.test(t)) return 80;
 
   return 80; // safe default
-}
-
-/**
- * Builds a best-effort evaluation from Phase 1 per-document results.
- * Used when the orchestrator call fails so Phase 1 work is never discarded.
- * Required documents are weighted 2× optional ones in the overall score.
- */
-function buildPhase1Fallback(evals: PerDocumentEvaluation[]): EvaluationData {
-  const totalWeight = evals.reduce((w, e) => w + (e.isRequired ? 2 : 1), 0);
-  const weightedScore =
-    totalWeight === 0
-      ? 0
-      : Math.round(
-          evals.reduce((sum, e) => sum + e.score * (e.isRequired ? 2 : 1), 0) / totalWeight,
-        );
-  const riskLevel: "low" | "medium" | "high" =
-    weightedScore >= 80 ? "low" : weightedScore >= 65 ? "medium" : "high";
-
-  const missingRequired = evals.filter((e) => e.isRequired && !e.hasDocument);
-
-  const itemFeedback: EvaluationData["itemFeedback"] = {};
-  for (const e of evals) {
-    itemFeedback[e.checklistItemId] = {
-      status: e.status === "missing" ? "missing" : e.status === "ok" ? "ok" : "needs_review",
-      feedback: e.feedback,
-      score: e.score,
-      issues: e.issues,
-      strengths: e.strengths,
-      hasDocument: e.hasDocument,
-      hasContent: e.hasContent,
-      confidence: e.confidence,
-      confidenceReason: e.confidenceReason,
-    };
-  }
-
-  return {
-    overallScore: weightedScore,
-    riskLevel,
-    summary: `Application evaluated across ${evals.length} checklist item(s). ${
-      missingRequired.length > 0
-        ? `${missingRequired.length} required document(s) are missing.`
-        : "All required documents have been uploaded."
-    } Overall readiness score: ${weightedScore}/100.`,
-    redFlags: missingRequired.map((e) => `Missing required document: ${e.documentName}`),
-    strengths: evals
-      .filter((e) => e.status === "ok")
-      .map((e) => `${e.documentName} meets requirements`),
-    recommendations: missingRequired.map(
-      (e) => `Upload the missing required document: ${e.documentName}`,
-    ),
-    itemFeedback,
-  };
 }
 
 /**
@@ -1042,7 +990,6 @@ async function evaluateApplicationReadiness({
   visaType: string;
   evaluate: EvaluationProvider;
 }) {
-  let orchestratorFallback = false;
   let evaluationData: EvaluationData;
 
   try {
@@ -1057,22 +1004,14 @@ async function evaluateApplicationReadiness({
     const raw = JSON.parse(response);
     const result = orchestratorResponseSchema.safeParse(raw);
 
-    if (result.success) {
-      evaluationData = result.data;
-    } else {
-      // Response was valid JSON but wrong shape — degrade gracefully to Phase 1 aggregation
-      logger.warn(
-        "Orchestrator response failed schema validation, falling back to Phase 1 aggregation",
-        { issues: result.error.issues },
-      );
-      orchestratorFallback = true;
-      evaluationData = buildPhase1Fallback(perDocumentEvaluations);
-    }
+    if (!result.success) throw new Error("Combined review response failed schema validation");
+    evaluationData = result.data;
   } catch (error) {
-    // Network error, quota exceeded, JSON parse failure, etc. — Phase 1 results are preserved
-    logger.error("Orchestrator call failed, falling back to Phase 1 aggregation", { error });
-    orchestratorFallback = true;
-    evaluationData = buildPhase1Fallback(perDocumentEvaluations);
+    logger.error("Combined review failed; no new assessment will be published", { error });
+    throw new ZSAError(
+      "INTERNAL_SERVER_ERROR",
+      "The combined review did not complete. No new review was saved. Run the review again.",
+    );
   }
 
   // Backfill itemFeedback with per-document evaluation data for any items the orchestrator missed
@@ -1173,11 +1112,16 @@ async function evaluateApplicationReadiness({
           finalScore: evaluationData.overallScore,
         });
       } else {
-        logger.warn("Ensemble adversarial response failed schema validation — skipping ensemble");
+        throw new Error("Second review response failed schema validation");
       }
     } catch (ensembleError) {
-      // Non-fatal — primary score stands if ensemble fails
-      logger.warn("Ensemble pass failed — using primary score only", { error: ensembleError });
+      logger.error("Required second review failed; no new assessment will be published", {
+        error: ensembleError,
+      });
+      throw new ZSAError(
+        "INTERNAL_SERVER_ERROR",
+        "The second review did not complete. No new review was saved. Run the review again.",
+      );
     }
   }
 
@@ -1193,7 +1137,7 @@ async function evaluateApplicationReadiness({
     scoreConfidence,
     ensembleDivergence,
     diagnostics: {
-      orchestratorFallback,
+      orchestratorFallback: false,
       skepticalAttempted: isBorderline,
       skepticalSucceeded: ensembleDivergence !== null,
     },

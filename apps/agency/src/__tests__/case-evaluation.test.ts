@@ -201,15 +201,36 @@ describe("production case evaluation core", () => {
     expect(peak).toBe(2);
   });
 
-  it("reports a combined-review fallback instead of claiming a model result", async () => {
-    const evaluate = vi
-      .fn()
-      .mockResolvedValueOnce(JSON.stringify({ ...documentResult, score: 20 }))
-      .mockRejectedValueOnce(new Error("Provider unavailable"));
-    const result = await runCaseEvaluation({ ...fixture(), evaluate });
-    expect(result.evaluationData.overallScore).toBe(20);
-    expect(result.diagnostics.orchestratorFallback).toBe(true);
-  });
+  it.each(["provider", "json", "schema"])(
+    "rejects an incomplete combined review: %s",
+    async (failure) => {
+      const evaluate = vi
+        .fn()
+        .mockResolvedValueOnce(JSON.stringify({ ...documentResult, score: 98 }));
+      if (failure === "provider") evaluate.mockRejectedValueOnce(new Error("Provider unavailable"));
+      else evaluate.mockResolvedValueOnce(failure === "json" ? "not JSON" : "{}");
+      await expect(runCaseEvaluation({ ...fixture(), evaluate })).rejects.toThrow(
+        "combined review did not complete",
+      );
+      expect(evaluate).toHaveBeenCalledTimes(2);
+    },
+  );
+
+  it.each(["provider", "json", "schema"])(
+    "rejects an incomplete required second pass: %s",
+    async (failure) => {
+      const evaluate = vi
+        .fn()
+        .mockResolvedValueOnce(JSON.stringify(documentResult))
+        .mockResolvedValueOnce(overall(80));
+      if (failure === "provider") evaluate.mockRejectedValueOnce(new Error("Provider unavailable"));
+      else evaluate.mockResolvedValueOnce(failure === "json" ? "not JSON" : "{}");
+      await expect(runCaseEvaluation({ ...fixture(), evaluate })).rejects.toThrow(
+        "second review did not complete",
+      );
+      expect(evaluate).toHaveBeenCalledTimes(3);
+    },
+  );
 
   it("uses the same reference date for prompts and deterministic expiry checks", async () => {
     for (const asOfDate of ["2026-09-19", "2026-10-18"]) {

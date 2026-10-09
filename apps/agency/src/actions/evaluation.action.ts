@@ -431,6 +431,7 @@ Applicant name: ${sanitizeForPrompt(applicant.name, 200)} (${applicant.relations
         applicationId: application.id,
         applicantId: input.applicantId,
         overallScore: evaluationData.overallScore,
+        reviewStatus: "complete",
         riskLevel: evaluationData.riskLevel,
         summary: evaluationData.summary,
         redFlags: evaluationData.redFlags ?? [],

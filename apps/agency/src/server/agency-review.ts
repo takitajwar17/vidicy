@@ -45,7 +45,7 @@ export function isEvaluationCurrent({
   evaluation:
     | Pick<
         typeof documentEvaluationTable.$inferSelect,
-        "applicantId" | "docSnapshots" | "itemFeedback"
+        "applicantId" | "docSnapshots" | "itemFeedback" | "reviewStatus"
       >
     | null
     | undefined;
@@ -53,7 +53,12 @@ export function isEvaluationCurrent({
   // Documents must be ordered newest first, including the upload sequence above.
   documents: Pick<typeof uploadedDocumentTable.$inferSelect, "id" | "checklistItemId">[];
 }) {
-  if (!evaluation?.docSnapshots || !evaluation.itemFeedback) return false;
+  if (
+    evaluation?.reviewStatus !== "complete" ||
+    !evaluation.docSnapshots ||
+    !evaluation.itemFeedback
+  )
+    return false;
   const items = checklistItems.filter((item) => item.applicantId === evaluation.applicantId);
   if (!items.length || Object.keys(evaluation.docSnapshots).length !== items.length) return false;
   return items.every((item) => {
@@ -121,7 +126,7 @@ async function getAgencyReviewIssueChanges({
 }: ReviewContext & {
   evaluation: Pick<
     typeof documentEvaluationTable.$inferSelect,
-    "applicantId" | "docSnapshots" | "itemFeedback" | "redFlags"
+    "applicantId" | "docSnapshots" | "itemFeedback" | "redFlags" | "reviewStatus"
   >;
   userId: string;
 }) {
@@ -304,8 +309,15 @@ export async function publishAgencyReview({
     "id" | "createdAt" | "applicantId"
   > & { applicantId: string };
 }) {
+  if (evaluation.reviewStatus !== "complete") {
+    throw new ZSAError(
+      "PRECONDITION_FAILED",
+      "The review is incomplete. Run the review again before publishing it.",
+    );
+  }
   const review = {
     ...evaluation,
+    reviewStatus: evaluation.reviewStatus,
     docSnapshots: evaluation.docSnapshots ?? null,
     itemFeedback: evaluation.itemFeedback ?? null,
   };

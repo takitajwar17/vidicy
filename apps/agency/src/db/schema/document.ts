@@ -133,6 +133,11 @@ export const documentEvaluationTable = pgTable(
       .references(() => visaApplicationTable.id, { onDelete: "cascade" }),
     applicantId: text().references(() => applicantTable.id, { onDelete: "cascade" }),
     overallScore: integer().notNull(),
+    // Only completed model stages can produce a current review. Legacy rows
+    // remain unverified until staff run the review again.
+    reviewStatus: text({ enum: ["incomplete", "complete"] })
+      .notNull()
+      .default("incomplete"),
     riskLevel: text({ enum: riskLevelTuple }).notNull(),
     summary: text().notNull(),
     redFlags: jsonb().notNull().$type<string[]>(),

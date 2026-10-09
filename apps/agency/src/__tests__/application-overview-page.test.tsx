@@ -391,7 +391,7 @@ describe("agency application pages", () => {
     const markup = renderToStaticMarkup(
       await ApplicationDetailPage({ params: Promise.resolve({ appId: "vapp_123" }) }),
     );
-    expect(markup).toContain("out of date");
+    expect(markup).toContain("incomplete or no longer matches the documents");
     expect(markup).toContain("previous review");
     expect(markup).toContain("Pending");
   });

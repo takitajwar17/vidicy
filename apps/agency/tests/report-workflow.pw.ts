@@ -124,6 +124,7 @@ test.beforeAll(async () => {
     applicationId,
     applicantId: applicant.id,
     overallScore: 70,
+    reviewStatus: "complete",
     riskLevel: "medium",
     summary: "Check passport",
     redFlags: [],
@@ -304,6 +305,22 @@ test("generate, view, export, and deliver with real auth and a private provider 
     { name: "csrf-token", value: "isolated-browser-csrf-token", url: base },
   ]);
   await page.goto(`${base}/dashboard/${applicationId}`);
+  await pool.query(
+    'UPDATE document_evaluation SET "reviewStatus" = $1 WHERE "applicationId" = $2',
+    ["incomplete", applicationId],
+  );
+  await page.reload();
+  await expect(
+    page.getByRole("status").filter({ hasText: "previous review is incomplete" }),
+  ).toBeVisible();
+  await pool.query(
+    'UPDATE document_evaluation SET "reviewStatus" = $1 WHERE "applicationId" = $2',
+    ["complete", applicationId],
+  );
+  await page.reload();
+  await expect(
+    page.getByRole("status").filter({ hasText: "previous review is incomplete" }),
+  ).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Client report", exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Client report", exact: true }).click();
   await expect(page).toHaveURL(/\/dashboard\/reports\/crep_/);
@@ -311,6 +328,22 @@ test("generate, view, export, and deliver with real auth and a private provider 
     page.getByRole("heading", { name: "Client document report", exact: true }),
   ).toBeVisible();
   const reportId = new URL(page.url()).pathname.split("/").pop()!;
+  await pool.query(
+    'UPDATE document_evaluation SET "reviewStatus" = $1 WHERE "applicationId" = $2',
+    ["incomplete", applicationId],
+  );
+  await page.reload();
+  await expect(
+    page.getByRole("alert").filter({ hasText: "This report is out of date" }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: /Send report|Check \/ retry delivery/ }),
+  ).toHaveCount(0);
+  await pool.query(
+    'UPDATE document_evaluation SET "reviewStatus" = $1 WHERE "applicationId" = $2',
+    ["complete", applicationId],
+  );
+  await page.reload();
   await page.emulateMedia({ media: "print" });
   await expect(page.locator('[data-sidebar="sidebar"]')).not.toBeVisible();
   await expect(

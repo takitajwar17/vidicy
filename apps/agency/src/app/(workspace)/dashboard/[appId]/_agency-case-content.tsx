@@ -222,8 +222,8 @@ export async function AgencyCaseContent({ appId }: { appId: string }) {
                     role="status"
                     className="mb-4 rounded-lg border border-status-warning p-3 text-sm"
                   >
-                    The documents changed. The previous review and report are out of date. Run
-                    review again.
+                    The previous review is incomplete or no longer matches the documents. Run review
+                    again before you generate a report or mark the case ready.
                   </p>
                 ) : null}
                 {primaryApplicant ? (

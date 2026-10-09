@@ -1,0 +1,1 @@
+ALTER TABLE "document_evaluation" ADD COLUMN "reviewStatus" text DEFAULT 'incomplete' NOT NULL;

@@ -11,9 +11,20 @@ vi.mock("@/utils/email", async (original) => ({
   ...(await original<typeof import("@/utils/email")>()),
   sendClientReportEmail: mocks.send,
 }));
-vi.mock("@/server/agency-review", () => ({ requireCurrentAgencyReview: mocks.current }));
+vi.mock("@/server/agency-review", async (original) => ({
+  ...(await original<typeof import("@/server/agency-review")>()),
+  requireCurrentAgencyReview: mocks.current,
+}));
 import { getDBFromDatabase } from "@/db";
-import { agencyClientTable, clientReportTable, userTable, visaApplicationTable } from "@/db/schema";
+import {
+  agencyClientTable,
+  applicantTable,
+  checklistItemTable,
+  clientReportTable,
+  documentEvaluationTable,
+  userTable,
+  visaApplicationTable,
+} from "@/db/schema";
 import {
   deliverClientReport,
   getClientReport,
@@ -71,6 +82,28 @@ beforeEach(async () => {
     })
     .returning();
   applicationId = application.id;
+  const [applicant] = await db
+    .insert(applicantTable)
+    .values({ applicationId, name: "Applicant", relationship: "primary" })
+    .returning();
+  await db.insert(checklistItemTable).values({
+    applicationId,
+    applicantId: applicant.id,
+    documentName: "Passport",
+    description: "Valid passport",
+    isRequired: true,
+  });
+  await db.insert(documentEvaluationTable).values({
+    applicationId,
+    applicantId: applicant.id,
+    reviewStatus: "complete",
+    overallScore: 70,
+    riskLevel: "medium",
+    summary: "Completed model review",
+    redFlags: [],
+    strengths: [],
+    recommendations: [],
+  });
   const [report] = await db
     .insert(clientReportTable)
     .values({
@@ -83,6 +116,24 @@ beforeEach(async () => {
   reportId = report.id;
 });
 describe("client report delivery", () => {
+  it("does not let a legacy review block a complete review of the current checklist", async () => {
+    await db.insert(documentEvaluationTable).values({
+      applicationId,
+      overallScore: 40,
+      riskLevel: "high",
+      summary: "Legacy review",
+      redFlags: [],
+      strengths: [],
+      recommendations: [],
+    });
+    expect((await getClientReport({ reportId })).isStale).toBe(false);
+  });
+  it("shows reports from incomplete reviews as stale and blocks delivery", async () => {
+    await db.update(documentEvaluationTable).set({ reviewStatus: "incomplete" });
+    expect((await getClientReport({ reportId })).isStale).toBe(true);
+    await expect(deliverClientReport({ reportId })).rejects.toThrow("out of date");
+    expect(mocks.send).not.toHaveBeenCalled();
+  });
   it("sends the full report and records provider acceptance", async () => {
     await deliverClientReport({ reportId });
     expect(mocks.send).toHaveBeenCalledWith(
