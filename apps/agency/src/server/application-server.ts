@@ -7,17 +7,16 @@ import {
   applicationInvitationTable,
   applicationMembershipTable,
   agencyTeamMemberTable,
-  supportTicketTable,
-  supportMessageTable,
   uploadedDocumentTable,
   userTable,
   visaApplicationTable,
 } from "@/db/schema";
 import { ZSAError } from "zsa";
-import { and, eq, inArray, isNotNull, ne } from "drizzle-orm";
+import { and, eq, isNotNull, ne } from "drizzle-orm";
 import { updateAllSessionsOfUser, deleteAllSessionsOfUser } from "@/infra/kv-session";
 import { logger } from "@/infra/logger";
 import { requireApplicationPermission } from "@/utils/application-auth";
+import { deleteSupportDataForUser } from "@/server/support-attachments";
 
 export async function deleteApplication({ applicationId }: { applicationId: string }) {
   const session = await requireApplicationPermission(
@@ -231,41 +230,8 @@ export async function adminDeleteUser({ userId }: { userId: string }) {
     .where(eq(applicationInvitationTable.acceptedBy, userId));
   await db.delete(agencyTeamMemberTable).where(eq(agencyTeamMemberTable.userId, userId));
 
-  // 4. Clean up support data (screenshots from R2, then messages, then tickets)
-  const tickets = await db
-    .select({ id: supportTicketTable.id, screenshotUrls: supportTicketTable.screenshotUrls })
-    .from(supportTicketTable)
-    .where(eq(supportTicketTable.userId, userId));
-
-  const ticketIds = tickets.map((t) => t.id);
-  let allScreenshotKeys = tickets.flatMap((t) => t.screenshotUrls ?? []);
-
-  if (ticketIds.length > 0) {
-    const messages = await db
-      .select({ screenshotUrls: supportMessageTable.screenshotUrls })
-      .from(supportMessageTable)
-      .where(inArray(supportMessageTable.ticketId, ticketIds));
-    allScreenshotKeys = allScreenshotKeys.concat(messages.flatMap((m) => m.screenshotUrls ?? []));
-  }
-
-  if (allScreenshotKeys.length > 0) {
-    try {
-      const { getRuntimeContext } = await import("@/infra/runtime-context");
-      const { env } = await getRuntimeContext({ async: true });
-      if (env.R2) {
-        await Promise.all(allScreenshotKeys.map((key) => env.R2!.delete(key)));
-      }
-    } catch (error) {
-      logger.warn("R2 cleanup for support screenshots failed (admin delete)", { userId, error });
-    }
-  }
-
-  if (ticketIds.length > 0) {
-    for (const ticketId of ticketIds) {
-      await db.delete(supportMessageTable).where(eq(supportMessageTable.ticketId, ticketId));
-    }
-  }
-  await db.delete(supportTicketTable).where(eq(supportTicketTable.userId, userId));
+  // 4. Remove support rows and clean up only their unreferenced, owned uploads.
+  await deleteSupportDataForUser({ userId });
 
   // 5. Delete all KV sessions
   await deleteAllSessionsOfUser(userId);

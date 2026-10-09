@@ -9,19 +9,18 @@ import {
   SUPPORT_TICKET_STATUS,
   userTable,
 } from "@/db/schema";
-import { eq, desc, asc, and, inArray, count, or, gt, isNull, isNotNull, sql } from "drizzle-orm";
+import { eq, desc, asc, and, inArray, count, or, gt, isNull, isNotNull } from "drizzle-orm";
 import {
   sendSupportTicketAdminNotification,
   sendSupportTicketReplyNotification,
   sendSupportTicketUserReplyNotification,
 } from "@/utils/email";
-import { deleteFromR2, getR2Bucket } from "@/lib/r2";
 import { logger } from "@/infra/logger";
 import { ZSAError } from "zsa";
 import { SUPPORT_TICKETS_PER_PAGE } from "@/constants";
 import { invalidateUnreadCount, invalidateAdminUnreadCount } from "@/server/unread-counts";
 import {
-  isSupportScreenshotOwnedBy,
+  cleanupSupportAttachments,
   validateSupportScreenshots,
 } from "@/server/support-attachments";
 import { sendEmailBestEffort } from "@/lib/best-effort-email";
@@ -540,33 +539,7 @@ export async function deleteTicket({ ticketId }: { ticketId: string }) {
 
   await db.delete(supportTicketTable).where(eq(supportTicketTable.id, ticketId));
 
-  // Stored fields may predate ownership checks. Validate each key and skip
-  // uploads with existing references in another ticket or message.
-  if (attachments.length > 0) {
-    try {
-      const bucket = await getR2Bucket();
-      const keys = new Set<string>();
-      for (const { fileKey, userId } of attachments) {
-        if (!fileKey.startsWith("support-screenshots/") || keys.has(fileKey)) continue;
-        if (!isSupportScreenshotOwnedBy({ fileKey, userId, object: await bucket.head(fileKey) }))
-          continue;
-        const [otherTicket, otherMessage] = await Promise.all([
-          db.query.supportTicketTable.findFirst({
-            where: sql`${supportTicketTable.screenshotUrls} @> ${JSON.stringify([fileKey])}::jsonb`,
-            columns: { id: true },
-          }),
-          db.query.supportMessageTable.findFirst({
-            where: sql`${supportMessageTable.screenshotUrls} @> ${JSON.stringify([fileKey])}::jsonb`,
-            columns: { id: true },
-          }),
-        ]);
-        if (!otherTicket && !otherMessage) keys.add(fileKey);
-      }
-      await deleteFromR2(bucket, [...keys]);
-    } catch (cleanupError) {
-      logger.error("Support screenshot cleanup failed", { ticketId, error: cleanupError });
-    }
-  }
+  await cleanupSupportAttachments({ attachments });
 }
 
 export const getAdminUnreadSupportTicketsCount = cache(
