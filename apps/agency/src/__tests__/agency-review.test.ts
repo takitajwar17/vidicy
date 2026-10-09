@@ -617,7 +617,7 @@ describe("agency review workflow with the real database driver", () => {
       });
     });
     await expect(evaluateDocumentsAction({ applicationId, applicantId })).rejects.toThrow(
-      "Some documents could not be evaluated",
+      "could not evaluate",
     );
     expect(await fixture.db.query.documentEvaluationTable.findMany()).toHaveLength(1);
     expect(

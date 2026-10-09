@@ -44,6 +44,7 @@ vi.mock("@/infra/logger", () => ({
 
 import { isModelParameterCompatibilityError } from "@/lib/openai";
 import { createGeminiEvaluation } from "@/lib/gemini-evaluation";
+import { logger } from "@/infra/logger";
 
 const testSchema = {
   type: "object",
@@ -107,6 +108,7 @@ describe("Vertex AI evaluation", () => {
         responseJsonSchema: testSchema,
         maxOutputTokens: 8492,
         thinkingConfig: { thinkingLevel: ThinkingLevel.MEDIUM },
+        httpOptions: { timeout: 120_000 },
       }),
     });
     expect(generateContent.mock.calls[0][0].config).not.toHaveProperty("temperature");
@@ -131,6 +133,62 @@ describe("Vertex AI evaluation", () => {
     generateContent.mockRejectedValue(error);
     await expect(createGeminiEvaluation(input)).rejects.toBe(error);
     expect(generateContent).toHaveBeenCalledTimes(1);
+  });
+
+  it("records model usage and duration without prompt or document content", async () => {
+    generateContent.mockResolvedValue({
+      text: '{"ok":true}',
+      candidates: [{ finishReason: "STOP" }],
+      usageMetadata: {
+        promptTokenCount: 100,
+        candidatesTokenCount: 20,
+        thoughtsTokenCount: 5,
+        cachedContentTokenCount: 10,
+        totalTokenCount: 125,
+      },
+    });
+    await createGeminiEvaluation(input);
+    expect(logger.info).toHaveBeenCalledWith("AI evaluation call", {
+      model: "gemini-evaluation-test",
+      stage: "evaluation_test",
+      status: "succeeded",
+      durationMs: expect.any(Number),
+      inputTokens: 100,
+      outputTokens: 20,
+      thinkingTokens: 5,
+      cachedInputTokens: 10,
+      totalTokens: 125,
+    });
+  });
+
+  it("records failed calls without inventing usage or exposing the provider error", async () => {
+    generateContent.mockRejectedValue(new Error("private provider detail"));
+    await expect(createGeminiEvaluation(input)).rejects.toThrow("private provider detail");
+    expect(logger.info).toHaveBeenCalledWith("AI evaluation call", {
+      model: "gemini-evaluation-test",
+      stage: "evaluation_test",
+      status: "failed",
+      durationMs: expect.any(Number),
+      inputTokens: null,
+      outputTokens: null,
+      thinkingTokens: null,
+      cachedInputTokens: null,
+      totalTokens: null,
+    });
+  });
+
+  it("records a numeric provider failure status without its private message", async () => {
+    generateContent.mockRejectedValue(
+      Object.assign(new Error("private request detail"), { status: 429 }),
+    );
+    await expect(createGeminiEvaluation(input)).rejects.toThrow();
+    expect(logger.info).toHaveBeenCalledWith(
+      "AI evaluation call",
+      expect.objectContaining({ status: "failed", providerStatus: 429 }),
+    );
+    expect(JSON.stringify(vi.mocked(logger.info).mock.calls)).not.toContain(
+      "private request detail",
+    );
   });
 
   it.each([

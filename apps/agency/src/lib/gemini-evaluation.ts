@@ -1,8 +1,12 @@
 import "server-only";
 import { ThinkingLevel, type Part } from "@google/genai";
 import type OpenAI from "openai";
-import { AI_TIMEOUT_CHAT_MS } from "@/constants";
 import { GEMINI_DOCUMENT_EVALUATION_MODEL, getGeminiClient } from "@/lib/gemini";
+import { recordEvaluationCall } from "@/infra/evaluation-metrics";
+
+// Structured document review can outlast a short chat request. Keep a bounded
+// deadline for the model stage without changing interactive chat timeouts.
+const EVALUATION_TIMEOUT_MS = 120_000;
 
 interface GeminiEvaluationParams {
   systemPrompt: string;
@@ -37,35 +41,74 @@ export async function createGeminiEvaluation({
   schema,
   maxTokens,
 }: GeminiEvaluationParams): Promise<string> {
-  const response = await getGeminiClient().models.generateContent({
-    model: GEMINI_DOCUMENT_EVALUATION_MODEL,
-    contents: [{ role: "user", parts: buildEvaluationParts(userContent) }],
-    config: {
-      systemInstruction: systemPrompt,
-      responseMimeType: "application/json",
-      // Send JSON Schema directly: responseSchema's OpenAPI subset cannot
-      // preserve the existing required, nullable and additionalProperties rules.
-      responseJsonSchema: schema,
-      // Gemini counts thinking in its output budget. Reserve room for thinking
-      // in addition to the existing response budget used by the evaluation UI.
-      maxOutputTokens: Math.min(maxTokens + 8_192, 32_768),
-      thinkingConfig: { thinkingLevel: ThinkingLevel.MEDIUM },
-      abortSignal: AbortSignal.timeout(AI_TIMEOUT_CHAT_MS),
-      httpOptions: { timeout: AI_TIMEOUT_CHAT_MS },
-    },
-  });
+  const startedAt = performance.now();
+  let status: "succeeded" | "failed" = "failed";
+  let providerStatus: number | undefined;
+  let usage:
+    | {
+        promptTokenCount?: number;
+        candidatesTokenCount?: number;
+        thoughtsTokenCount?: number;
+        cachedContentTokenCount?: number;
+        totalTokenCount?: number;
+      }
+    | undefined;
+  try {
+    const response = await getGeminiClient().models.generateContent({
+      model: GEMINI_DOCUMENT_EVALUATION_MODEL,
+      contents: [{ role: "user", parts: buildEvaluationParts(userContent) }],
+      config: {
+        systemInstruction: systemPrompt,
+        responseMimeType: "application/json",
+        // Send JSON Schema directly: responseSchema's OpenAPI subset cannot
+        // preserve the existing required, nullable and additionalProperties rules.
+        responseJsonSchema: schema,
+        // Gemini counts thinking in its output budget. Reserve room for thinking
+        // in addition to the existing response budget used by the evaluation UI.
+        maxOutputTokens: Math.min(maxTokens + 8_192, 32_768),
+        thinkingConfig: { thinkingLevel: ThinkingLevel.MEDIUM },
+        abortSignal: AbortSignal.timeout(EVALUATION_TIMEOUT_MS),
+        httpOptions: { timeout: EVALUATION_TIMEOUT_MS },
+      },
+    });
 
-  const candidate = response.candidates?.[0];
-  if (candidate?.finishReason && candidate.finishReason !== "STOP") {
-    throw new Error(
-      `Vertex AI ${GEMINI_DOCUMENT_EVALUATION_MODEL} did not complete ${schemaName}: ${candidate.finishReason}`,
-    );
+    usage = response.usageMetadata;
+    const candidate = response.candidates?.[0];
+    if (candidate?.finishReason && candidate.finishReason !== "STOP") {
+      throw new Error(
+        `Vertex AI ${GEMINI_DOCUMENT_EVALUATION_MODEL} did not complete ${schemaName}: ${candidate.finishReason}`,
+      );
+    }
+    const text = response.text?.trim();
+    if (!text) {
+      throw new Error(`Vertex AI ${GEMINI_DOCUMENT_EVALUATION_MODEL} returned no ${schemaName}`);
+    }
+    // Existing callers retain their Zod validation and graceful phase aggregation.
+    JSON.parse(text);
+    status = "succeeded";
+    return text;
+  } catch (error) {
+    if (
+      error &&
+      typeof error === "object" &&
+      "status" in error &&
+      typeof error.status === "number" &&
+      Number.isInteger(error.status)
+    )
+      providerStatus = error.status;
+    throw error;
+  } finally {
+    recordEvaluationCall({
+      model: GEMINI_DOCUMENT_EVALUATION_MODEL,
+      stage: schemaName,
+      status,
+      ...(providerStatus === undefined ? {} : { providerStatus }),
+      durationMs: Math.max(0, Math.round(performance.now() - startedAt)),
+      inputTokens: usage?.promptTokenCount ?? null,
+      outputTokens: usage?.candidatesTokenCount ?? null,
+      thinkingTokens: usage?.thoughtsTokenCount ?? null,
+      cachedInputTokens: usage?.cachedContentTokenCount ?? null,
+      totalTokens: usage?.totalTokenCount ?? null,
+    });
   }
-  const text = response.text?.trim();
-  if (!text) {
-    throw new Error(`Vertex AI ${GEMINI_DOCUMENT_EVALUATION_MODEL} returned no ${schemaName}`);
-  }
-  // Existing callers retain their Zod validation and graceful phase aggregation.
-  JSON.parse(text);
-  return text;
 }
