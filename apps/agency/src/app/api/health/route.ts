@@ -1,5 +1,6 @@
 import "server-only";
 
+import { randomUUID } from "node:crypto";
 import { NextResponse } from "next/server";
 import { getRuntimeContext } from "@/infra/runtime-context";
 import { getDB } from "@/db";
@@ -39,7 +40,7 @@ export async function GET(): Promise<Response> {
     cloudStorage: { status: "down", latencyMs: 0 },
   };
 
-  // --- D1 check: execute a trivial query ---
+  // --- PostgreSQL check: execute a trivial query ---
   const d1Start = Date.now();
   try {
     const db = getDB();
@@ -61,12 +62,15 @@ export async function GET(): Promise<Response> {
 
     if (!kv) throw new Error("APP_KV binding not available");
 
-    const canaryValue = Date.now().toString();
-    await kv.put(HEALTH_CHECK_CANARY_KEY, canaryValue, { expirationTtl: 60 });
-    const readBack = await kv.get(HEALTH_CHECK_CANARY_KEY);
-    await kv.delete(HEALTH_CHECK_CANARY_KEY);
-
-    if (readBack !== canaryValue) throw new Error("KV read-back mismatch");
+    const canaryKey = `${HEALTH_CHECK_CANARY_KEY}:${randomUUID()}`;
+    const canaryValue = randomUUID();
+    try {
+      await kv.put(canaryKey, canaryValue, { expirationTtl: 60 });
+      const readBack = await kv.get(canaryKey);
+      if (readBack !== canaryValue) throw new Error("KV read-back mismatch");
+    } finally {
+      await kv.delete(canaryKey);
+    }
 
     components.memorystore = { status: "ok", latencyMs: Date.now() - kvStart };
   } catch (err) {
