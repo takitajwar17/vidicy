@@ -9,6 +9,7 @@ Each section connects a service to its role, code, operating contract, and limit
 ## Contents
 
 - [System boundaries](#system-boundaries)
+- [Review pipeline](#review-pipeline)
 - [Observed deployment profile](#observed-deployment-profile)
 - [Cloud Run](#cloud-run)
 - [Cloud SQL for PostgreSQL](#cloud-sql-for-postgresql)
@@ -28,28 +29,28 @@ Each section connects a service to its role, code, operating contract, and limit
 
 ## Terms used here
 
-| Term | Meaning |
-| --- | --- |
-| ADC | Application Default Credentials: how the cloud client libraries obtain their configured identity |
-| IAM | Identity and Access Management: policies that grant access to cloud resources |
-| OIDC | OpenID Connect: the signed identity-token format used for machine calls here |
-| VPC | Virtual Private Cloud: the network path for configured private resources |
-| TTL | Time to live: when a Redis value expires |
-| PITR | Point-in-time recovery: database recovery to a supported earlier time |
-| CRC32C | A checksum used to detect transfer corruption |
+| Term   | Meaning                                                                                          |
+| ------ | ------------------------------------------------------------------------------------------------ |
+| ADC    | Application Default Credentials: how the cloud client libraries obtain their configured identity |
+| IAM    | Identity and Access Management: policies that grant access to cloud resources                    |
+| OIDC   | OpenID Connect: the signed identity-token format used for machine calls here                     |
+| VPC    | Virtual Private Cloud: the network path for configured private resources                         |
+| TTL    | Time to live: when a Redis value expires                                                         |
+| PITR   | Point-in-time recovery: database recovery to a supported earlier time                            |
+| CRC32C | A checksum used to detect transfer corruption                                                    |
 
 ## System boundaries
 
 One Next.js service handles the web interface, server actions, document APIs, and internal processing routes. PostgreSQL and Cloud Storage hold authoritative case data and document bytes.
 
-| Information | Authoritative store | Derived or temporary representation |
-| --- | --- | --- |
-| Cases, applicants, checklist assignments, findings, and report state | PostgreSQL | Page models and cached counts |
-| Uploaded document bytes | Cloud Storage | Parsed text and rendered page images |
-| Extracted text and processing state | PostgreSQL | Embeddings and retrieved snippets |
-| Searchable document chunks | PostgreSQL text is the source; the search index is derived | Vertex vectors and Cloud Storage metadata objects |
-| Sessions, auth tokens, rate-limit counters, and caches | Redis for the active value | Cookies contain session references |
-| Work delivery | Cloud Tasks for queued work; PostgreSQL for document progress | Scheduler identifies work that needs recovery |
+| Information                                                          | Authoritative store                                           | Derived or temporary representation               |
+| -------------------------------------------------------------------- | ------------------------------------------------------------- | ------------------------------------------------- |
+| Cases, applicants, checklist assignments, findings, and report state | PostgreSQL                                                    | Page models and cached counts                     |
+| Uploaded document bytes                                              | Cloud Storage                                                 | Parsed text and rendered page images              |
+| Extracted text and processing state                                  | PostgreSQL                                                    | Embeddings and retrieved snippets                 |
+| Searchable document chunks                                           | PostgreSQL text is the source; the search index is derived    | Vertex vectors and Cloud Storage metadata objects |
+| Sessions, auth tokens, rate-limit counters, and caches               | Redis for the active value                                    | Cookies contain session references                |
+| Work delivery                                                        | Cloud Tasks for queued work; PostgreSQL for document progress | Scheduler identifies work that needs recovery     |
 
 A PostgreSQL transaction cannot commit a Cloud Storage write or a Cloud Tasks request. The upload path therefore has explicit partial-failure states.
 
@@ -83,46 +84,80 @@ The arrows summarize the successful path. Extraction and indexing update their o
 
 ### HTTP interfaces
 
-| Route | Caller contract | Result |
-| --- | --- | --- |
-| `POST /api/documents/upload/pdf` | App session and case permission; multipart `file`, `applicationId`, `checklistItemId`; optional `applicantId` must match the case/requirement | Accepted upload returns `documentId`, name, and size after enqueue acceptance |
-| `POST /api/documents/upload/image` | Same ownership contract; JPEG or PNG file | Same accepted-upload shape |
-| `GET /api/document-preview/[documentId]` | App session and case permission; optional `download=1` | Authorized byte stream or missing/denied response |
-| `POST /api/internal/document-extraction` | Verified machine OIDC token; JSON `{ documentId, version }` | 204 when this attempt is complete or obsolete; retryable processing failures use 503 |
-| `POST /api/internal/document-reconciliation` | Verified machine OIDC token; no document payload required | Recovery/cleanup summary; 503 on recorded work failures |
-| `GET /api/health` | Admin session | Component status and latency; can perform a Redis canary write |
+| Route                                        | Caller contract                                                                                                                               | Result                                                                               |
+| -------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------ |
+| `POST /api/documents/upload/pdf`             | App session and case permission; multipart `file`, `applicationId`, `checklistItemId`; optional `applicantId` must match the case/requirement | Accepted upload returns `documentId`, name, and size after enqueue acceptance        |
+| `POST /api/documents/upload/image`           | Same ownership contract; JPEG or PNG file                                                                                                     | Same accepted-upload shape                                                           |
+| `GET /api/document-preview/[documentId]`     | App session and case permission; optional `download=1`                                                                                        | Authorized byte stream or missing/denied response                                    |
+| `POST /api/internal/document-extraction`     | Verified machine OIDC token; JSON `{ documentId, version }`                                                                                   | 204 when this attempt is complete or obsolete; retryable processing failures use 503 |
+| `POST /api/internal/document-reconciliation` | Verified machine OIDC token; no document payload required                                                                                     | Recovery/cleanup summary; 503 on recorded work failures                              |
+| `GET /api/health`                            | Admin session                                                                                                                                 | Component status and latency; can perform a Redis canary write                       |
 
 The upload handler uses 400 for invalid input and 503 for explicit storage failure. An unexpected failure, including an enqueue failure after SQL commit, reaches its generic 500 response. Authentication and authorization helpers can reject a request before these operations. The task worker has a separate status contract described below.
 
 ### Design choices and consequences
 
-| Implemented choice | Technical effect | Consequence to account for |
-| --- | --- | --- |
-| Web and task routes share one Cloud Run service | Reuses application code, service configuration, and database access | Processing and interactive requests share instance capacity |
-| Queue work before returning upload success | Avoids acknowledging a job that was only scheduled in process memory | Queue failure can occur after the file and database row exist |
-| Use PostgreSQL as the document authority | Search results can be checked against current case and document state | Retrieval requires database access as well as a healthy vector endpoint |
-| Use named tasks, document locks, and stored results | Reduces duplicate processing during retries | External calls can still repeat across crash or acknowledgement boundaries |
-| Deploy by container digest | Selects an exact image artifact | It does not prove vulnerability policy, provenance verification, or schema compatibility |
+| Implemented choice                                  | Technical effect                                                      | Consequence to account for                                                               |
+| --------------------------------------------------- | --------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
+| Web and task routes share one Cloud Run service     | Reuses application code, service configuration, and database access   | Processing and interactive requests share instance capacity                              |
+| Queue work before returning upload success          | Avoids acknowledging a job that was only scheduled in process memory  | Queue failure can occur after the file and database row exist                            |
+| Use PostgreSQL as the document authority            | Search results can be checked against current case and document state | Retrieval requires database access as well as a healthy vector endpoint                  |
+| Use named tasks, document locks, and stored results | Reduces duplicate processing during retries                           | External calls can still repeat across crash or acknowledgement boundaries               |
+| Deploy by container digest                          | Selects an exact image artifact                                       | It does not prove vulnerability policy, provenance verification, or schema compatibility |
+
+## Review pipeline
+
+The review pipeline converts route requirements and uploaded evidence into findings that agency staff can act on. Its main entry points are [checklist.action.ts](src/actions/checklist.action.ts), [evaluation.action.ts](src/actions/evaluation.action.ts), [case-evaluation.ts](src/services/case-evaluation.ts), and [agency-review.ts](src/server/agency-review.ts). The action prepares evidence and publishes results. The shared core runs the production prompts, schemas, per-document checks, combined assessment, and skeptical pass. Quality and benchmark tools call this same core. Each stage has a separate purpose and an explicit failure path.
+
+| Stage                           | Inputs and computation                                                                                                                                                                                                                              | Output used by the application                                                                                                          |
+| ------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| Route research and checklist    | Perplexity is prompted for official requirements by visa type, destination, passport country, and embassy. OpenAI structures the research with applicant context. Cached research or model knowledge can be used when live research is unavailable. | Validated, deduplicated requirements with required/optional status; source mode and available citations are saved as checklist metadata |
+| Evidence preparation            | The shared extraction pipeline reuses stored text or extracts content from PDF and image uploads. Evaluation can load supported document images and PDF metadata.                                                                                   | Text, visual evidence, processing state, and metadata signals associated with the uploaded document                                     |
+| Relevant context retrieval      | For indexed documents, checklist names and descriptions are embedded and used to retrieve document-scoped chunks. Retrieved candidates are checked against PostgreSQL identity and case state.                                                      | Relevant text for the per-document prompt; unavailable retrieval falls back to the text prefix                                          |
+| Individual document assessment  | Parallel Gemini calls receive requirement details, application context, text, available images, and metadata signals. Missing files are represented directly by code.                                                                               | Status, score, issues, strengths, confidence, and structured fields such as holder name, expiry, and language                           |
+| Combined assessment             | Code compares extracted holder names and expiry dates. A Gemini call combines these checks with per-document results, missing requirements, and case context.                                                                                       | Overall score, risk level, summary, and recommendations, with feedback keyed to checklist items                                         |
+| Skeptical second pass           | For a primary score within 12 points of the visa-type readiness threshold, another Gemini call uses the same case summary with a skeptical system prompt.                                                                                           | Score divergence and a confidence label; scores are averaged when divergence reaches 8 points                                           |
+| Publication and reviewer action | A transaction checks the document snapshot and saves the evaluation, tracked findings, scores, and report state together. Reviewers can resolve or dismiss issues and add manual issues.                                                            | Findings remain part of the case correction workflow; changed evidence invalidates affected review and report state                     |
+
+This is staged orchestration using model calls and application rules. The skeptical pass uses the same configured Gemini model; it is not an independent model ensemble. Its confidence label measures agreement between prompts, not a calibrated probability of a correct review or visa approval.
+
+### Evidence selection and reuse
+
+The evaluator prefers a machine translation when one is available. Otherwise, it uses retrieved relevant chunks when available, then falls back to the first 8,000 characters of extracted text. It can also send uploaded images or rendered previews of up to three PDF pages to Gemini. These are bounded views of the evidence, not a guarantee that every page is visually reviewed. Translation is requested explicitly on later runs when a previous evaluation identified a non-English document; the first-run prompt asks the model to translate internally.
+
+Per-document feedback can be reused when a saved version key matches the document ID, configured evaluation model, and availability of text and images. This avoids some repeated per-document model calls. The combined assessment still runs. Stored extraction, completed indexing, and a seven-day route-research cache provide separate reuse paths. A prompt or review-date change alone does not change the current document version key; prompt versioning is a future evaluation and cache-control requirement.
+
+### Failure and decision boundaries
+
+The Gemini adapter requests structured output and the shared core applies its response schemas. Several per-document fields have fallback values, so valid structure is not proof of correct evidence interpretation. A per-document provider failure rejects the new review. If the combined assessment fails, code can aggregate successful document results; if the skeptical pass fails, the primary result remains available without an agreement label. The final risk label is derived from the final score after skeptical averaging so they remain consistent.
+
+Snapshot checks reject publication against corrected uploads. Conditional issue updates protect a reviewer decision made after synchronization read the issue. Server-side readiness checks require a current review, all required uploads, and no open issues. A generated score does not replace these checks or the reviewer's judgment. The [case workspace](<src/app/(workspace)/dashboard/[appId]/_agency-case-content.tsx>) brings preview, requirements, findings, issue controls, and report actions together.
+
+### Client report handoff
+
+The case toolbar creates a report from client-visible open issues after checking the current review. The report and case state are saved together with a case-version check. Staff can open the private report from the case or report list, download escaped HTML, or print/save a PDF. Historical reports are marked as out of date and cannot be sent as current corrections.
+
+[client-reports.ts](src/server/client-reports.ts) claims delivery in a short transaction, then calls the email provider outside it. The saved payload and idempotency key are reused after an ambiguous failure. Concurrent sends are rejected, and an accepted report is not sent again. Acceptance stores the provider message ID; a case changed during delivery retains its draft state while the accepted report remains history. Retries wait at least two minutes and stop before the provider's idempotency retention expires. Provider acceptance does not prove inbox delivery. Apply [the report delivery migration](src/db/postgres-migrations/0003_client_report_delivery.sql) before rollout.
 
 ## Observed deployment profile
 
 This profile describes observed service configuration. It is not a source-managed infrastructure definition or a live configuration report. Verify the settings before a capacity or availability decision.
 
-| Resource | Observed configuration | Meaning |
-| --- | --- | --- |
-| Cloud Run | `asia-southeast1`; second-generation runtime; 2 vCPUs; 2 GiB; port 8080 | One regional application service |
-| Cloud Run request limits | Concurrency 8; request timeout 1,800 seconds; revision maximum 3 instances | Configured request capacity, not a user-count or throughput benchmark |
-| Network | VPC access configured; egress `private-ranges-only` | Private destinations use the VPC route |
-| Public entry | Ingress `all`; platform invoker IAM check disabled | User routes rely on app authentication; internal routes require verified OIDC tokens |
-| Cloud SQL | PostgreSQL 16; `db-custom-1-3840`; zonal | Zonal configuration does not provide a regional HA standby |
-| SQL backup configuration | Automated backups enabled; retention configured for 7 backups | Verify PITR enablement and restore performance separately |
-| Redis | Redis 7.2; Basic tier; 1 GiB; direct peering; AUTH enabled | Redis has a single primary in this tier; transport encryption was disabled |
-| Cloud Storage | Regional Standard storage; uniform bucket access; public access prevention enforced | Document access is through application authorization and service credentials |
-| Storage recovery | Soft delete retention 604,800 seconds, or 7 days | Logical deletion can precede physical expiry |
-| Cloud Tasks | 2 dispatches/second; 3 concurrent dispatches; `maxAttempts=5`; backoff 10–300 seconds | Queue dispatch and retry settings are separate from application recovery claims |
-| Cloud Scheduler | Every 5 minutes, UTC; enabled; OIDC configured | Calls the reconciliation route |
-| Secret injection | Numbered Secret Manager versions referenced by environment variables | Rotation requires an explicit configuration/revision process |
-| Identities | Runtime and document-task caller use the same service account | These are separate roles in the flow, but not separate accounts in this profile |
+| Resource                 | Observed configuration                                                                | Meaning                                                                              |
+| ------------------------ | ------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------ |
+| Cloud Run                | `asia-southeast1`; second-generation runtime; 2 vCPUs; 2 GiB; port 8080               | One regional application service                                                     |
+| Cloud Run request limits | Concurrency 8; request timeout 1,800 seconds; revision maximum 3 instances            | Configured request capacity, not a user-count or throughput benchmark                |
+| Network                  | VPC access configured; egress `private-ranges-only`                                   | Private destinations use the VPC route                                               |
+| Public entry             | Ingress `all`; platform invoker IAM check disabled                                    | User routes rely on app authentication; internal routes require verified OIDC tokens |
+| Cloud SQL                | PostgreSQL 16; `db-custom-1-3840`; zonal                                              | Zonal configuration does not provide a regional HA standby                           |
+| SQL backup configuration | Automated backups enabled; retention configured for 7 backups                         | Verify PITR enablement and restore performance separately                            |
+| Redis                    | Redis 7.2; Basic tier; 1 GiB; direct peering; AUTH enabled                            | Redis has a single primary in this tier; transport encryption was disabled           |
+| Cloud Storage            | Regional Standard storage; uniform bucket access; public access prevention enforced   | Document access is through application authorization and service credentials         |
+| Storage recovery         | Soft delete retention 604,800 seconds, or 7 days                                      | Logical deletion can precede physical expiry                                         |
+| Cloud Tasks              | 2 dispatches/second; 3 concurrent dispatches; `maxAttempts=5`; backoff 10–300 seconds | Queue dispatch and retry settings are separate from application recovery claims      |
+| Cloud Scheduler          | Every 5 minutes, UTC; enabled; OIDC configured                                        | Calls the reconciliation route                                                       |
+| Secret injection         | Numbered Secret Manager versions referenced by environment variables                  | Rotation requires an explicit configuration/revision process                         |
+| Identities               | Runtime and document-task caller use the same service account                         | These are separate roles in the flow, but not separate accounts in this profile      |
 
 The repository's image-only deployment preserves these service settings. It does not recreate them. No availability percentage, latency target, recovery time, or supported agency count follows from this table.
 
@@ -236,17 +271,17 @@ Account cleanup also collects attachments from messages that the user wrote on o
 
 **Implemented:** [kv.ts](src/infra/google/kv.ts) adapts the required KV operations to a shared Redis connection. Runtime prefixes separate application data (`vidicy:app:`) from session/cache data (`vidicy:cache:`). These prefixes are key namespaces, not separate tenant authorization boundaries.
 
-| KV operation | Redis behavior |
-| --- | --- |
-| `get` | `GET`, with optional JSON decoding |
-| `take` | `GETDEL`: return and remove a value in one operation |
-| `increment` | Lua script with `INCR` and `EXPIRE` in one operation; renew the TTL |
-| `incrementWindow` | Lua script that increments a counter, sets its initial TTL, and returns the count and remaining TTL without extending an active window |
-| `put` with relative expiry | `SET ... EX` |
-| `put` with absolute expiry | `SET ... EXAT` |
-| Expiry already reached | Delete the key |
-| `delete` | `DEL` |
-| `list` | `SCAN` with prefix filtering and an opaque cursor |
+| KV operation               | Redis behavior                                                                                                                         |
+| -------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| `get`                      | `GET`, with optional JSON decoding                                                                                                     |
+| `take`                     | `GETDEL`: return and remove a value in one operation                                                                                   |
+| `increment`                | Lua script with `INCR` and `EXPIRE` in one operation; renew the TTL                                                                    |
+| `incrementWindow`          | Lua script that increments a counter, sets its initial TTL, and returns the count and remaining TTL without extending an active window |
+| `put` with relative expiry | `SET ... EX`                                                                                                                           |
+| `put` with absolute expiry | `SET ... EXAT`                                                                                                                         |
+| Expiry already reached     | Delete the key                                                                                                                         |
+| `delete`                   | `DEL`                                                                                                                                  |
+| `list`                     | `SCAN` with prefix filtering and an opaque cursor                                                                                      |
 
 The list cursor retains excess results because Redis `COUNT` is a hint. It is not a snapshot of keys during concurrent writes. Sessions use the cache namespace through `kv-session.ts`.
 
@@ -262,7 +297,7 @@ The observed Basic tier is a single primary. The [Redis tier explanation](https:
 
 ### Single-use password reset tokens
 
-The [reset action](src/app/(auth)/reset-password/reset-password.action.ts) uses `take()` before the password write. Only one concurrent request can receive the token value. The action then checks the stored token state and expiry, updates the password, and invalidates the user's sessions.
+The [reset action](<src/app/(auth)/reset-password/reset-password.action.ts>) uses `take()` before the password write. Only one concurrent request can receive the token value. The action then checks the stored token state and expiry, updates the password, and invalidates the user's sessions.
 
 Token consumption, the SQL password update, and Redis session deletion are separate operations. If a later password or session operation fails, the token remains consumed. The user must request a new reset link before another attempt.
 
@@ -290,14 +325,14 @@ The upload handler awaits queue creation before returning success. A queue error
 
 The [extraction route](src/app/api/internal/document-extraction/route.ts) verifies identity before reading its bounded 4,096-byte JSON body. It acquires the document's advisory lock, checks that the document still exists, then runs extraction and indexing.
 
-| Condition | Response | Delivery meaning |
-| --- | --- | --- |
-| Missing or invalid identity token | 401 | Caller has not established identity |
-| Valid token from the wrong verified account | 403 | Caller is not permitted |
-| Invalid payload | 400 | Payload is not usable |
-| Document has been deleted | 204 | Acknowledge obsolete work |
-| Extraction and indexing succeed | 204 | Acknowledge this attempt |
-| Lock is held, processing fails, or a dependency is unavailable | 503 | Another attempt is needed |
+| Condition                                                      | Response | Delivery meaning                    |
+| -------------------------------------------------------------- | -------- | ----------------------------------- |
+| Missing or invalid identity token                              | 401      | Caller has not established identity |
+| Valid token from the wrong verified account                    | 403      | Caller is not permitted             |
+| Invalid payload                                                | 400      | Payload is not usable               |
+| Document has been deleted                                      | 204      | Acknowledge obsolete work           |
+| Extraction and indexing succeed                                | 204      | Acknowledge this attempt            |
+| Lock is held, processing fails, or a dependency is unavailable | 503      | Another attempt is needed           |
 
 The pipeline reuses stored extraction or a completed index when its state permits. An empty or failed extraction result can update the document only if the database still has no nonblank text. A late failed attempt therefore cannot erase text saved by a successful attempt. After a failed extraction attempt, `ensureDocumentExtraction()` reloads the row and returns stored text when another attempt has saved it. See [document-pipeline.ts](src/services/document-pipeline.ts).
 
@@ -324,16 +359,16 @@ The same route processes bounded vector metadata cleanup. It returns 503 if enqu
 
 **Implemented:** [gemini.ts](src/lib/gemini.ts) creates a `GoogleGenAI` client with `vertexai: true`, a project, and a location. Location defaults to `global`. ADC is the normal identity source. The optional JSON credential override is used by this client only.
 
-| Path | Model constant | Input and output contract |
-| --- | --- | --- |
+| Path       | Model constant     | Input and output contract                                                          |
+| ---------- | ------------------ | ---------------------------------------------------------------------------------- |
 | Extraction | `gemini-3.8-flash` | Inline PDF or image bytes and an extraction prompt; low thinking level; plain text |
-| Evaluation | `gemini-4-argon` | Text and validated inline images; medium thinking level; JSON Schema output |
+| Evaluation | `gemini-4-argon`   | Text and validated inline images; medium thinking level; JSON Schema output        |
 
 The [model catalog](https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/google-models) and [release notes](https://ai.google.dev/gemini-api/docs/changelog) describe the model families. Project access, quota, supported location, and model lifecycle still need to be checked when changing a model ID. A public catalog entry does not verify a request from this deployment.
 
 ### Extraction and evaluation controls
 
-[pdf-parser.ts](src/services/pdf-parser.ts) first tries native PDF text. Gemini is used when that path cannot extract content. The image path also tries Gemini. Each Gemini request has a 40-second client deadline and checks for empty output and an incomplete finish reason.
+[pdf-parser.ts](src/services/pdf-parser.ts) first tries native PDF text. Gemini is used when that path cannot extract content. The image path also tries Gemini. Each Gemini extraction request has a 40-second client deadline and checks for empty output and an incomplete finish reason.
 
 [gemini-evaluation.ts](src/lib/gemini-evaluation.ts) requests `application/json` with `responseJsonSchema`. It reserves up to 8,192 extra output tokens for thinking, with a total cap of 32,768. It rejects unsupported remote image URLs, empty output, incomplete generation, and invalid JSON. The evaluation action then applies its Zod schemas and transforms.
 
@@ -347,7 +382,18 @@ Cloud Tasks runs document extraction and indexing. The [evaluation server action
 
 ### Quality evidence
 
-The repository has separate evaluation suites and datasets under `src/__tests__/eval`. Accuracy, recall, and review-time claims require measured results. A model change should have a versioned dataset, prompt/schema version, failure examples, and a recorded result before it is described as an improvement.
+The repository separates implementation tests from model-quality evaluation:
+
+| Evidence                                                             | What it checks                                                                                                                        | Boundary                                                                                                                                                                             |
+| -------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| [Agency workflow tests](src/__tests__/agency-review.test.ts)         | Real PostgreSQL publication and rollback, stale-document rejection, reviewer decisions, readiness rules, and model-call failure paths | Model responses are mocked; these tests establish workflow behavior rather than model accuracy                                                                                       |
+| [Gemini adapter tests](src/__tests__/evaluation-action.test.ts)      | Configured model, JSON schema, inline image transport, and provider error handling                                                    | Mocked provider requests do not establish inference quality                                                                                                                          |
+| [Review quality harness](src/__tests__/eval/evaluation-eval.test.ts) | Production Gemini per-document, combined, and skeptical stages; score ranges, risk consistency, and expected finding keywords         | Uses prepared evidence and synthetic developer expectations with a fixed reference date by default; extraction, retrieval services, and SQL publication are outside this measurement |
+| [Checklist harness](src/__tests__/eval/checklist-eval.test.ts)       | Checklist structure and required-document coverage                                                                                    | Uses GPT-4o and separate prompts; does not evaluate live route research end to end                                                                                                   |
+
+Accuracy, recall, and review-time claims require measured results from the intended users and evidence. Before claiming a model improvement, run a versioned dataset through the production model and prompt path, record failure examples, and compare against reviewer judgments. Useful measurements include missed material issues, unsupported findings, reviewer corrections, time per completed review, and model cost per case. The current tests and configured service limits do not establish these outcomes.
+
+`pnpm eval:review` explicitly enables live model calls. It fails a case if the combined review used a deterministic fallback or the attempted skeptical pass failed; those outcomes cannot count as successful model-quality results. `EVALUATION_CASES_FILE` can select a JSON dataset with `provenance` and `cases`; the [loader](src/__tests__/eval/datasets/load-evaluation-cases.ts) validates it and preserves supplied attribution. A reviewer-labelled claim requires supplied reviewer names and is not independently verified. Synthetic score bands are regression expectations, not expert ground truth. Supplied cases can set `input.asOfDate` in `YYYY-MM-DD` format. The core uses that date for prompts and expiry checks; the application uses the current UTC date. Saved results include the model, source and dataset hashes, provenance, and reference dates.
 
 ## Vertex AI Vector Search
 
@@ -384,12 +430,12 @@ After a point deletion is accepted, a manifest defers metadata cleanup for at le
 
 ### Four identity paths
 
-| Identity path | How identity is established | Purpose and scope |
-| --- | --- | --- |
-| Agency user | Email/password or Google OAuth, followed by an app session | Application permissions control access to a case and its documents |
-| GitHub deployment | GitHub OIDC token exchanged through Workload Identity Federation | Impersonates the deployment service account for build and release work |
-| Running container | Attached Cloud Run service account through ADC | Calls Storage, Tasks, and Vertex APIs and accesses configured secrets |
-| Task or Scheduler caller | Google-issued OIDC ID token | Must match the internal route's audience and verified account email |
+| Identity path            | How identity is established                                      | Purpose and scope                                                      |
+| ------------------------ | ---------------------------------------------------------------- | ---------------------------------------------------------------------- |
+| Agency user              | Email/password or Google OAuth, followed by an app session       | Application permissions control access to a case and its documents     |
+| GitHub deployment        | GitHub OIDC token exchanged through Workload Identity Federation | Impersonates the deployment service account for build and release work |
+| Running container        | Attached Cloud Run service account through ADC                   | Calls Storage, Tasks, and Vertex APIs and accesses configured secrets  |
+| Task or Scheduler caller | Google-issued OIDC ID token                                      | Must match the internal route's audience and verified account email    |
 
 An agency user's Google OAuth token is not the credential used to access the storage bucket or Vertex AI. The [service identity guide](https://docs.cloud.google.com/run/docs/securing/service-identity) explains deployment and runtime identities.
 
@@ -409,12 +455,12 @@ The issuer is `https://token.actions.githubusercontent.com`. The workflow also h
 
 The following table is a responsibility map, not a complete export of current IAM grants. Review resource scope when provisioning or changing an identity.
 
-| Identity | Capabilities it needs | Important boundary |
-| --- | --- | --- |
-| Deployment account | Submit builds, read the source-staging bucket, read image metadata, update the target Run service, and act as the configured build/runtime identities | Does not need unrestricted project ownership to perform these tasks |
-| Build account | Read staged source, write the image repository, and write build logs | Build inputs must not contain runtime credentials or private exports |
-| Runtime account | Read/write the document bucket, call the configured Vertex resources, enqueue document tasks, access selected secret versions, and connect to Cloud SQL | PostgreSQL login privileges and Redis AUTH are separate from service API IAM |
-| Task caller | Establish the OIDC identity permitted by the internal-route verifier | The enqueuer needs permission to use this identity; the task delivery service must be able to issue its token |
+| Identity           | Capabilities it needs                                                                                                                                   | Important boundary                                                                                            |
+| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| Deployment account | Submit builds, read the source-staging bucket, read image metadata, update the target Run service, and act as the configured build/runtime identities   | Does not need unrestricted project ownership to perform these tasks                                           |
+| Build account      | Read staged source, write the image repository, and write build logs                                                                                    | Build inputs must not contain runtime credentials or private exports                                          |
+| Runtime account    | Read/write the document bucket, call the configured Vertex resources, enqueue document tasks, access selected secret versions, and connect to Cloud SQL | PostgreSQL login privileges and Redis AUTH are separate from service API IAM                                  |
+| Task caller        | Establish the OIDC identity permitted by the internal-route verifier                                                                                    | The enqueuer needs permission to use this identity; the task delivery service must be able to issue its token |
 
 The runtime and task-caller roles share one account in the observed deployment. Separate accounts would be an architecture change, not a setting documented as already present here.
 
@@ -465,12 +511,9 @@ The [Cloud Build to Cloud Run guide](https://docs.cloud.google.com/build/docs/de
 
 Run `pnpm lint`, `pnpm format:check`, `pnpm typecheck`, and `pnpm test` from the repository root before release. CI installs PostgreSQL and Redis test tools and runs the same commands. The format check covers application source; generated migration metadata is excluded to preserve migration artifacts.
 
-The standard test suite includes unit tests, component event tests, route tests, and tests with real local PostgreSQL and Redis processes:
+The standard suite covers units, component events, routes, and real local database behavior. [PostgreSQL tests](src/__tests__/helpers/postgres.ts) need `pg_config` on `PATH`, with `initdb` and `pg_ctl` in its binary directory. [Redis integration tests](src/__tests__/google-kv.integration.test.ts) need `redis-server` and `redis-cli` on `PATH`. Both use temporary processes with private Unix sockets and TCP disabled; they do not select application databases or Redis. The tests cover rollback, concurrent writes, rate-limit windows, token consumption, and deletion guards. Use each run's output as release evidence.
 
-- [The PostgreSQL helper](src/__tests__/helpers/postgres.ts) needs `pg_config` on `PATH` and `initdb` and `pg_ctl` in its reported binary directory. It creates a temporary cluster with a private Unix socket and no TCP listener. Tests use explicit connection options and do not select an application database from environment variables. These tests cover case rollback, concurrent review updates, extraction results, and attachment references.
-- [The Redis integration tests](src/__tests__/google-kv.integration.test.ts) need `redis-server` and `redis-cli` on `PATH`. They start a temporary Redis process on a private Unix socket with TCP disabled. They check concurrent counters, window expiry, and single token consumption. They do not connect to application Redis.
-
-The suite also checks that failed deletion previews block confirmation, displayed users are available to CSV export, and server-action callbacks receive the expected data. The test counts change as coverage changes; use the output from the relevant run as release evidence.
+Build first, then run `pnpm test:e2e` for the [report browser test](tests/report-workflow.pw.ts). It starts a temporary production preview with private PostgreSQL and Redis, uses the real session and CSRF paths, and intercepts email transport. It checks report generation, download, rejected delivery, retry, provider acceptance, stale state, and non-staff/anonymous access. It sends no email and uses no application database. Install Playwright Chromium if it is not available. This test does not establish actual email-provider or inbox delivery.
 
 `pnpm test` excludes `src/__tests__/eval/**`. Passing the standard suite does not establish AI accuracy, production capacity, or a successful browser user journey. Run the separate model evaluation suites when assessing model quality, and record browser or live-service checks separately.
 
@@ -514,16 +557,16 @@ The [Cloud Run logging guide](https://docs.cloud.google.com/run/docs/logging) do
 
 Use [latency, traffic, errors, and saturation](https://sre.google/sre-book/monitoring-distributed-systems/) as core service signals. Apply them to actual agency journeys:
 
-| Journey or resource | Signal to collect | Diagnostic use |
-| --- | --- | --- |
-| Sign-in and case access | Success ratio and successful/failed request latency | Separate auth configuration failures from infrastructure failures |
-| Upload | Accepted requests, failures by stage, upload size, and latency | Detect storage, database, and enqueue failures |
-| Processing | Queue wait plus processing time; age of queued work | Detect a stalled or under-provisioned pipeline |
-| Model requests | Provider, model, status, latency, tokens, and retries | Distinguish quota errors from invalid input or provider failures |
-| SQL | Active connections, pool wait, transaction errors, storage, CPU | Detect connection pressure and database limits |
-| Redis | Memory, evictions, connections, command failures | Detect session loss and cache pressure |
-| Vector search | Upsert/query errors, valid returned neighbors, and rejected stale candidates | Detect index drift and retrieval degradation |
-| Recovery | Claim counts, exhausted documents, and cleanup backlog | Find work that needs operator action |
+| Journey or resource     | Signal to collect                                                            | Diagnostic use                                                    |
+| ----------------------- | ---------------------------------------------------------------------------- | ----------------------------------------------------------------- |
+| Sign-in and case access | Success ratio and successful/failed request latency                          | Separate auth configuration failures from infrastructure failures |
+| Upload                  | Accepted requests, failures by stage, upload size, and latency               | Detect storage, database, and enqueue failures                    |
+| Processing              | Queue wait plus processing time; age of queued work                          | Detect a stalled or under-provisioned pipeline                    |
+| Model requests          | Provider, model, status, latency, tokens, and retries                        | Distinguish quota errors from invalid input or provider failures  |
+| SQL                     | Active connections, pool wait, transaction errors, storage, CPU              | Detect connection pressure and database limits                    |
+| Redis                   | Memory, evictions, connections, command failures                             | Detect session loss and cache pressure                            |
+| Vector search           | Upsert/query errors, valid returned neighbors, and rejected stale candidates | Detect index drift and retrieval degradation                      |
+| Recovery                | Claim counts, exhausted documents, and cleanup backlog                       | Find work that needs operator action                              |
 
 These are proposed monitoring requirements. This repository does not define a complete Cloud Monitoring dashboard, alert policy, or distributed trace pipeline for them.
 
@@ -531,11 +574,11 @@ These are proposed monitoring requirements. This repository does not define a co
 
 A service-level indicator (SLI) measures a user-visible outcome. A service-level objective (SLO) sets its target and time window. The following are candidate definitions, not measured targets:
 
-| Candidate SLI | Definition to implement | Decision still required |
-| --- | --- | --- |
-| Interactive availability | Successful eligible agency requests / all eligible agency requests | Routes, error classification, measurement point, target, and review window |
-| Processing timeliness | Eligible accepted uploads that reach the required completed state within `T` / eligible accepted uploads | Meaning of partial/skipped results, `T`, target, and treatment of provider incidents |
-| Review validity | Displayed current reviews whose snapshots match the latest assigned documents | Sampling/measurement method and treatment of stale reports |
+| Candidate SLI            | Definition to implement                                                                                  | Decision still required                                                              |
+| ------------------------ | -------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------ |
+| Interactive availability | Successful eligible agency requests / all eligible agency requests                                       | Routes, error classification, measurement point, target, and review window           |
+| Processing timeliness    | Eligible accepted uploads that reach the required completed state within `T` / eligible accepted uploads | Meaning of partial/skipped results, `T`, target, and treatment of provider incidents |
+| Review validity          | Displayed current reviews whose snapshots match the latest assigned documents                            | Sampling/measurement method and treatment of stale reports                           |
 
 For each SLO, record its owner, source query, scope, exclusions, target, window, rationale, error-budget action, and review schedule. The [example SLO document](https://sre.google/workbook/slo-document/) shows this structure. Do not substitute queue enqueue counts for completed document outcomes. Evaluation datasets and service configuration alone do not establish accuracy, latency, uptime, or throughput results.
 
@@ -543,18 +586,18 @@ For each SLO, record its owner, source query, scope, exclusions, target, window,
 
 ### Failure map
 
-| Failure | Persisted state that can remain | Current recovery or next investigation |
-| --- | --- | --- |
-| Storage write fails | No document row from this upload | Fix storage access or availability; the client can retry |
-| SQL commit fails after storage succeeds | An unreferenced storage object | Investigate the failed write and object ownership; no general orphan collector is established |
-| Enqueue fails after SQL commit | A document row in queued state | Scheduler can reserve a recovery enqueue; inspect queue permissions and response errors |
-| A task is delivered twice concurrently | One document plus competing attempts | Advisory lock allows one active attempt; another receives 503 |
-| A process stops during model work | Old extraction/indexing state | Queue retry and later reconciliation can resume; an external call may repeat |
-| A document is deleted before its task starts | Obsolete task | Worker returns 204 |
-| Vector mutation succeeds before replicas catch up | Search results can lag | PostgreSQL existence/identity checks reject invalid candidates |
-| Model quota or provider failure persists | Failed work and growing task age | Review quotas and provider errors; inspect bounded recovery claims |
-| Redis is unavailable | Session/token operations can fail | Restore connectivity or the service; session data loss can require sign-in again |
-| A new image fails | New and previous revisions may both exist | Use a schema-compatible revision rollback |
+| Failure                                           | Persisted state that can remain           | Current recovery or next investigation                                                        |
+| ------------------------------------------------- | ----------------------------------------- | --------------------------------------------------------------------------------------------- |
+| Storage write fails                               | No document row from this upload          | Fix storage access or availability; the client can retry                                      |
+| SQL commit fails after storage succeeds           | An unreferenced storage object            | Investigate the failed write and object ownership; no general orphan collector is established |
+| Enqueue fails after SQL commit                    | A document row in queued state            | Scheduler can reserve a recovery enqueue; inspect queue permissions and response errors       |
+| A task is delivered twice concurrently            | One document plus competing attempts      | Advisory lock allows one active attempt; another receives 503                                 |
+| A process stops during model work                 | Old extraction/indexing state             | Queue retry and later reconciliation can resume; an external call may repeat                  |
+| A document is deleted before its task starts      | Obsolete task                             | Worker returns 204                                                                            |
+| Vector mutation succeeds before replicas catch up | Search results can lag                    | PostgreSQL existence/identity checks reject invalid candidates                                |
+| Model quota or provider failure persists          | Failed work and growing task age          | Review quotas and provider errors; inspect bounded recovery claims                            |
+| Redis is unavailable                              | Session/token operations can fail         | Restore connectivity or the service; session data loss can require sign-in again              |
+| A new image fails                                 | New and previous revisions may both exist | Use a schema-compatible revision rollback                                                     |
 
 ### Investigate a processing backlog
 
@@ -568,13 +611,13 @@ The task's ID is a hash, not the plain document ID. Use task payload metadata wi
 
 ### Backup and restore responsibilities
 
-| Data | Recovery requirement | Established evidence |
-| --- | --- | --- |
-| PostgreSQL | Defined backup retention, tested restore, and an explicit PITR decision | Automated backups and a retention count of 7 observed; restore drills and recovery objectives require separate evidence |
-| Storage objects | Restore the required bytes/generation and reconnect valid document references | Seven-day soft delete observed |
-| Redis | Restore available data or expire sessions and rebuild derived state as appropriate | Basic tier observed; recovery behavior depends on what was lost |
-| Vector index | Rebuild from authorized stored text/metadata and validate model dimensions and filters | Derived index adapter exists; an automated full rebuild/restore drill is not established |
-| Runtime configuration | Recover identities, secret references, network attachments, queue, and schedule settings | Existing service configuration; no complete declarative environment definition in the repository |
+| Data                  | Recovery requirement                                                                     | Established evidence                                                                                                    |
+| --------------------- | ---------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| PostgreSQL            | Defined backup retention, tested restore, and an explicit PITR decision                  | Automated backups and a retention count of 7 observed; restore drills and recovery objectives require separate evidence |
+| Storage objects       | Restore the required bytes/generation and reconnect valid document references            | Seven-day soft delete observed                                                                                          |
+| Redis                 | Restore available data or expire sessions and rebuild derived state as appropriate       | Basic tier observed; recovery behavior depends on what was lost                                                         |
+| Vector index          | Rebuild from authorized stored text/metadata and validate model dimensions and filters   | Derived index adapter exists; an automated full rebuild/restore drill is not established                                |
+| Runtime configuration | Recover identities, secret references, network attachments, queue, and schedule settings | Existing service configuration; no complete declarative environment definition in the repository                        |
 
 The service guides distinguish [Cloud SQL HA](https://docs.cloud.google.com/sql/docs/postgres/high-availability), [backups and PITR](https://docs.cloud.google.com/sql/docs/postgres/backup-recovery/pitr), and [storage soft delete](https://docs.cloud.google.com/storage/docs/soft-delete). Backups are not an HA standby. Soft delete is not a complete cross-service restore plan.
 
@@ -584,13 +627,13 @@ The service guides distinguish [Cloud SQL HA](https://docs.cloud.google.com/sql/
 
 The observed application, SQL, Redis, and document bucket are in Singapore (`asia-southeast1`). The Gemini client defaults to the **global** endpoint. The [model location guide](https://docs.cloud.google.com/vertex-ai/generative-ai/docs/learn/locations) distinguishes endpoint choice from data-residency guarantees. A regional application service does not establish that all AI processing remains in that region.
 
-| Destination | Data the current integration can send |
-| --- | --- |
-| Gemini through Vertex | PDF/image bytes for extraction; selected document text and inline images for evaluation |
-| OpenAI | Extracted chunk text for embeddings; checklist inputs; evaluation translation; chat context; fallback document extraction when enabled |
-| Perplexity | Checklist research inputs |
-| Resend | Recipient addresses and email content |
-| Sentry | Captured errors and attached application context |
+| Destination           | Data the current integration can send                                                                                                  |
+| --------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| Gemini through Vertex | PDF/image bytes for extraction; selected document text and inline images for evaluation                                                |
+| OpenAI                | Extracted chunk text for embeddings; checklist inputs; evaluation translation; chat context; fallback document extraction when enabled |
+| Perplexity            | Checklist research inputs                                                                                                              |
+| Resend                | Recipient addresses and email content                                                                                                  |
+| Sentry                | Captured errors and attached application context                                                                                       |
 
 The task and REST helpers avoid raw token and SDK-payload logging on their failure paths. The general application logger accepts metadata, and some older call sites pass error objects. Complete redaction, audit-event coverage, and downstream retention must be reviewed as separate controls. This document makes no compliance certification or zero-retention claim.
 
@@ -600,100 +643,115 @@ Case access checks, a deletion marker, vector removal, metadata cleanup, object 
 
 The important capacity boundaries are instance resources/concurrency, SQL pools, Redis memory, queue concurrency, model quotas, and the vector serving index. The observed queue allows 3 simultaneous dispatches across the queue. A configured 3-instance revision at concurrency 8 suggests 24 HTTP slots under ordinary conditions; it is not a benchmark of 24 users or 24 simultaneous extraction jobs.
 
-| Driver | What to observe or control |
-| --- | --- |
-| Cloud Run | CPU/memory use, request duration, minimum instances, concurrency, and maximum instances |
-| Cloud SQL | Instance size, connection budget, storage, backups, and HA choice |
-| Redis | Provisioned memory/tier and eviction behavior |
-| Vertex vector serving | Index size, deployed capacity, metadata fetches, mutations, and rebuilds |
-| Gemini and other model calls | Tokens, image/page count, retries, fallback calls, and completed-result reuse |
-| Cloud Storage | Stored source files, metadata versions, operations, soft-deleted bytes, and transfer |
-| Build and observability | Image storage, build time, source archives, log retention, and trace volume |
+The shared review core defaults to two concurrent per-document evaluations per case. Each model stage has a 120-second deadline. This is a per-case bound, not a distributed provider quota. Parallel cases or Cloud Run instances can still exceed available provider capacity and receive 429 errors.
+
+Extraction jobs can use queue dispatch limits and document locks, while interactive evaluation starts parallel per-document calls inside one request. Stored extraction, matching document feedback, completed indexes, and cached route research reduce repeat work. Wider use requires measuring the combined request and model-call load, applying suitable provider and application limits, and increasing SQL and worker capacity together. Model, prompt, and retrieval changes also need a shared regression dataset so cost reductions can be checked against review quality.
+
+| Driver                       | What to observe or control                                                              |
+| ---------------------------- | --------------------------------------------------------------------------------------- |
+| Cloud Run                    | CPU/memory use, request duration, minimum instances, concurrency, and maximum instances |
+| Cloud SQL                    | Instance size, connection budget, storage, backups, and HA choice                       |
+| Redis                        | Provisioned memory/tier and eviction behavior                                           |
+| Vertex vector serving        | Index size, deployed capacity, metadata fetches, mutations, and rebuilds                |
+| Gemini and other model calls | Tokens, image/page count, retries, fallback calls, and completed-result reuse           |
+| Cloud Storage                | Stored source files, metadata versions, operations, soft-deleted bytes, and transfer    |
+| Build and observability      | Image storage, build time, source archives, log retention, and trace volume             |
 
 The [cost optimization guidance](https://docs.cloud.google.com/architecture/framework/cost-optimization) connects these choices to workload demand. No cost-per-case estimate is established here. Model changes can affect quality, latency, and retry cost together; compare them on the same workload.
 
 **Recommended:** record a cost baseline, set a budget/notification policy, and review cost per completed case and per processed page. Ordinary [alerts-only budgets](https://docs.cloud.google.com/billing/docs/how-to/budgets) notify; they do not themselves cap usage. Confirm the specific budget product and any enforcement before calling it a spend limit.
 
+### Repeatable review measurements
+
+`pnpm benchmark:review` runs the production review core with prepared evidence and writes a JSON artifact under `output/verification/`. `BENCHMARK_CASES`, `BENCHMARK_REPEATS`, `BENCHMARK_CONCURRENCY`, and `BENCHMARK_DOCUMENT_CONCURRENCY` select bounded load. `EVALUATION_CASES_FILE` selects an optional dataset; `BENCHMARK_OUTPUT` selects an output path. The default is two cases, one case worker, one repetition, and the production document concurrency. Live model usage is billable.
+
+The artifact records the model, code and dataset hashes, supplied provenance, concurrency, stage failures, token usage, completed throughput, and nearest-rank p50/p95 latency for completed cases. It preserves failed cases and distinguishes deterministic fallback from model completion. It excludes raw document text and model responses. A small closed-loop run does not establish steady-state production capacity; upload, extraction, retrieval services, SQL publication, HTTP load, and email are outside this benchmark.
+
+Cost is optional. `MODEL_RATES_FILE` supplies a JSON object with `model`, `inputUsdPerMillion`, `cachedInputUsdPerMillion`, `outputUsdPerMillion`, and a `source`. The model must match the configured review model. Total minus input tokens includes reasoning output. An absent cache count receives no discount. Missing total/input usage or rates produce an unknown cost instead of zero. Estimates exclude infrastructure, billing adjustments, and unrelated providers; verify the rate card against the applicable billing terms.
+
 ## Configuration and code map
 
 ### Configuration contracts
 
-| Setting | Contract and consumer |
-| --- | --- |
-| `GOOGLE_CLOUD_PROJECT` | Project used by the Gemini client, storage client, and task queue path |
-| `GOOGLE_CLOUD_LOCATION` | Generative model location; defaults to `global` |
-| `GOOGLE_CLOUD_REGION` | Task region; defaults to `asia-southeast1`; does not relocate existing storage, SQL, or vector resources |
-| `DATABASE_URL` or `PGHOST`, `PGPORT`, `PGDATABASE`, `PGUSER`, `PGPASSWORD` | PostgreSQL connection; production can use the attached Cloud SQL socket |
-| `PGPOOL_MAX` | Main database pool limit; default 5 |
-| `REDIS_URL` | Redis connection URL; secret reference in the observed service |
-| `GCS_DOCUMENT_BUCKET` | Document and vector metadata bucket |
-| `VERTEX_VECTOR_INDEX` | `projects/PROJECT/locations/REGION/indexes/NUMBER` |
-| `VERTEX_VECTOR_INDEX_ENDPOINT` | Matching `projects/PROJECT/locations/REGION/indexEndpoints/NUMBER` |
-| `VERTEX_VECTOR_DEPLOYED_INDEX_ID` | Deployed index identifier used in neighbor queries |
-| `VERTEX_VECTOR_PUBLIC_ENDPOINT_DOMAIN` | Authenticated serving domain ending in `.vdb.vertexai.goog` |
-| `GOOGLE_CLOUD_SERVICE_ACCOUNT` | Permitted task/Scheduler OIDC account email |
-| `DOCUMENT_TASK_BASE_URL` | Canonical HTTPS `run.app` origin used as destination and audience |
-| `NEXT_PUBLIC_SITE_URL` | Canonical app origin, OAuth callback prefix, and public build configuration |
-| `GEMINI_DOCUMENT_EXTRACTION` | Set `false` or `0` to disable the Gemini extraction path |
-| `OPENAI_DOCUMENT_EXTRACTION_FALLBACK` | Set `false` or `0` to disable OpenAI extraction fallback |
-| `GOOGLE_APPLICATION_CREDENTIALS_JSON` | Optional Gemini-only credential override; ADC remains the shared cloud service adapter credential path |
-| `SENTRY_DSN`, `DB_SQL_LOG`, `LOG_LEVEL` | Error reporting and diagnostic controls |
+| Setting                                                                    | Contract and consumer                                                                                    |
+| -------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
+| `GOOGLE_CLOUD_PROJECT`                                                     | Project used by the Gemini client, storage client, and task queue path                                   |
+| `GOOGLE_CLOUD_LOCATION`                                                    | Generative model location; defaults to `global`                                                          |
+| `GOOGLE_CLOUD_REGION`                                                      | Task region; defaults to `asia-southeast1`; does not relocate existing storage, SQL, or vector resources |
+| `DATABASE_URL` or `PGHOST`, `PGPORT`, `PGDATABASE`, `PGUSER`, `PGPASSWORD` | PostgreSQL connection; production can use the attached Cloud SQL socket                                  |
+| `PGPOOL_MAX`                                                               | Main database pool limit; default 5                                                                      |
+| `REDIS_URL`                                                                | Redis connection URL; secret reference in the observed service                                           |
+| `GCS_DOCUMENT_BUCKET`                                                      | Document and vector metadata bucket                                                                      |
+| `VERTEX_VECTOR_INDEX`                                                      | `projects/PROJECT/locations/REGION/indexes/NUMBER`                                                       |
+| `VERTEX_VECTOR_INDEX_ENDPOINT`                                             | Matching `projects/PROJECT/locations/REGION/indexEndpoints/NUMBER`                                       |
+| `VERTEX_VECTOR_DEPLOYED_INDEX_ID`                                          | Deployed index identifier used in neighbor queries                                                       |
+| `VERTEX_VECTOR_PUBLIC_ENDPOINT_DOMAIN`                                     | Authenticated serving domain ending in `.vdb.vertexai.goog`                                              |
+| `GOOGLE_CLOUD_SERVICE_ACCOUNT`                                             | Permitted task/Scheduler OIDC account email                                                              |
+| `DOCUMENT_TASK_BASE_URL`                                                   | Canonical HTTPS `run.app` origin used as destination and audience                                        |
+| `NEXT_PUBLIC_SITE_URL`                                                     | Canonical app origin, OAuth callback prefix, and public build configuration                              |
+| `GEMINI_DOCUMENT_EXTRACTION`                                               | Set `false` or `0` to disable the Gemini extraction path                                                 |
+| `OPENAI_DOCUMENT_EXTRACTION_FALLBACK`                                      | Set `false` or `0` to disable OpenAI extraction fallback                                                 |
+| `GOOGLE_APPLICATION_CREDENTIALS_JSON`                                      | Optional Gemini-only credential override; ADC remains the shared cloud service adapter credential path   |
+| `SENTRY_DSN`, `DB_SQL_LOG`, `LOG_LEVEL`                                    | Error reporting and diagnostic controls                                                                  |
 
 A queue, vector index, bucket, SQL instance, secret reference, and model entitlement must exist; an environment variable does not create any of them.
 
 ### Source entry points
 
-| Concern | Source |
-| --- | --- |
-| Runtime service access | [runtime-context.ts](src/infra/runtime-context.ts) |
-| ADC and bounded REST retries | [google/auth.ts](src/infra/google/auth.ts) |
-| PostgreSQL and transactional batches | [db/index.ts](src/db/index.ts) |
-| Object storage | [google/storage.ts](src/infra/google/storage.ts) |
-| Redis namespace adapter | [google/kv.ts](src/infra/google/kv.ts) |
-| Task creation and lock pool | [google/document-tasks.ts](src/infra/google/document-tasks.ts) |
-| OIDC verifier | [google/internal-auth.ts](src/infra/google/internal-auth.ts) |
-| Task worker | [document-extraction route](src/app/api/internal/document-extraction/route.ts) |
-| Recovery and cleanup | [document-reconciliation route](src/app/api/internal/document-reconciliation/route.ts) |
-| Vector adapter and cleanup | [google/vector-search.ts](src/infra/google/vector-search.ts) |
-| PDF extraction | [pdf-parser.ts](src/services/pdf-parser.ts) |
-| Model selection and evaluation | [gemini.ts](src/lib/gemini.ts), [gemini-evaluation.ts](src/lib/gemini-evaluation.ts) |
-| Document state and embedding pipeline | [document-pipeline.ts](src/services/document-pipeline.ts) |
-| Review snapshot validity and issue synchronization | [agency-review.ts](src/server/agency-review.ts) |
-| Container and release | [Dockerfile](Dockerfile), [cloudbuild.yaml](cloudbuild.yaml), [workflow](../../.github/workflows/deploy.yml) |
+| Concern                                            | Source                                                                                                       |
+| -------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
+| Runtime service access                             | [runtime-context.ts](src/infra/runtime-context.ts)                                                           |
+| ADC and bounded REST retries                       | [google/auth.ts](src/infra/google/auth.ts)                                                                   |
+| PostgreSQL and transactional batches               | [db/index.ts](src/db/index.ts)                                                                               |
+| Object storage                                     | [google/storage.ts](src/infra/google/storage.ts)                                                             |
+| Redis namespace adapter                            | [google/kv.ts](src/infra/google/kv.ts)                                                                       |
+| Task creation and lock pool                        | [google/document-tasks.ts](src/infra/google/document-tasks.ts)                                               |
+| OIDC verifier                                      | [google/internal-auth.ts](src/infra/google/internal-auth.ts)                                                 |
+| Task worker                                        | [document-extraction route](src/app/api/internal/document-extraction/route.ts)                               |
+| Recovery and cleanup                               | [document-reconciliation route](src/app/api/internal/document-reconciliation/route.ts)                       |
+| Vector adapter and cleanup                         | [google/vector-search.ts](src/infra/google/vector-search.ts)                                                 |
+| PDF extraction                                     | [pdf-parser.ts](src/services/pdf-parser.ts)                                                                  |
+| Model selection and evaluation                     | [gemini.ts](src/lib/gemini.ts), [gemini-evaluation.ts](src/lib/gemini-evaluation.ts)                         |
+| Document state and embedding pipeline              | [document-pipeline.ts](src/services/document-pipeline.ts)                                                    |
+| Review snapshot validity and issue synchronization | [agency-review.ts](src/server/agency-review.ts)                                                              |
+| Container and release                              | [Dockerfile](Dockerfile), [cloudbuild.yaml](cloudbuild.yaml), [workflow](../../.github/workflows/deploy.yml) |
 
 ### Commands from this directory
 
-| Command | Effect |
-| --- | --- |
-| `pnpm dev` | Start Next.js on port 3002 |
-| `pnpm build` | Build the application |
-| `pnpm start` | Serve the production build; use `PORT` to select a port |
-| `pnpm lint` | Run ESLint |
-| `pnpm format:check` | Check source formatting with Prettier |
-| `pnpm typecheck` | Generate Next.js route types and check TypeScript |
-| `pnpm test` | Run the standard Vitest suite |
-| `pnpm eval` | Run separate model evaluation suites |
-| `pnpm db:generate <name>` | Generate a named PostgreSQL migration |
-| `pnpm db:migrate` | Apply PostgreSQL migrations to the configured target |
-| `pnpm email:dev` | Start the email preview server on port 3003 |
-| `pnpm deploy` | Build and deploy to the configured cloud project |
-| `pnpm deploy:google:build` | Build and publish the image without updating the service |
+| Command                    | Effect                                                                       |
+| -------------------------- | ---------------------------------------------------------------------------- |
+| `pnpm dev`                 | Start Next.js on port 3002                                                   |
+| `pnpm build`               | Build the application                                                        |
+| `pnpm start`               | Serve the production build; use `PORT` to select a port                      |
+| `pnpm lint`                | Run ESLint                                                                   |
+| `pnpm format:check`        | Check source formatting with Prettier                                        |
+| `pnpm typecheck`           | Generate Next.js route types and check TypeScript                            |
+| `pnpm test`                | Run the standard Vitest suite                                                |
+| `pnpm test:e2e`            | Run report browser tests against an isolated production preview; build first |
+| `pnpm eval:review`         | Run live quality checks through the production Gemini review core            |
+| `pnpm benchmark:review`    | Run bounded live review measurements and save JSON evidence                  |
+| `pnpm eval`                | Run separate model evaluation suites                                         |
+| `pnpm db:generate <name>`  | Generate a named PostgreSQL migration                                        |
+| `pnpm db:migrate`          | Apply PostgreSQL migrations to the configured target                         |
+| `pnpm email:dev`           | Start the email preview server on port 3003                                  |
+| `pnpm deploy`              | Build and deploy to the configured cloud project                             |
+| `pnpm deploy:google:build` | Build and publish the image without updating the service                     |
 
 ## Current limits and follow-up work
 
-| Area | Current boundary | Evidence or next decision needed |
-| --- | --- | --- |
-| Infrastructure reproduction | Release scripts update an existing service | A complete versioned provisioning definition is not present |
-| Regional availability | Zonal SQL and Basic Redis were observed | Make an explicit HA decision based on required user outcomes |
-| Transport and secrets | Secret injection uses versioned references; observed Redis transport encryption is disabled | Review transport requirements and rotate through an explicit release procedure |
-| Rate limiting | Counters are atomic; per-user action limits allow requests after Redis errors | Decide whether action limits must reject requests during Redis outages |
-| Cross-service writes | No distributed transaction or transactional outbox | Account for object orphans, enqueue failures, and duplicate external effects |
-| Processing recovery | Three bounded recovery claims plus queue retries | Define an operator-owned response after exhaustion |
-| Observability | Logs, Sentry, and health diagnostics exist | SLOs, complete trace correlation, and checked-in alert/dashboard definitions are not established |
-| Disaster recovery | Backup and soft-delete configuration observed | Verify PITR, define recovery objectives, and record restore drills |
-| Release enforcement | Lint, format, type, and standard test gates precede a digest-based release | Canary analysis, vulnerability blocking, and attestation verification are not explicit release gates |
-| AI quality and location | Schema checks and configured models exist; generative endpoint defaults global | Record evaluated quality and review processing-location requirements |
-| Reports and reviewer controls | Report list/actions exist; the case toolbar is not mounted | Report export/delivery and toolbar reachability remain incomplete |
+| Area                          | Current boundary                                                                            | Evidence or next decision needed                                                                     |
+| ----------------------------- | ------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| Infrastructure reproduction   | Release scripts update an existing service                                                  | A complete versioned provisioning definition is not present                                          |
+| Regional availability         | Zonal SQL and Basic Redis were observed                                                     | Make an explicit HA decision based on required user outcomes                                         |
+| Transport and secrets         | Secret injection uses versioned references; observed Redis transport encryption is disabled | Review transport requirements and rotate through an explicit release procedure                       |
+| Rate limiting                 | Counters are atomic; per-user action limits allow requests after Redis errors               | Decide whether action limits must reject requests during Redis outages                               |
+| Cross-service writes          | No distributed transaction or transactional outbox                                          | Account for object orphans, enqueue failures, and duplicate external effects                         |
+| Processing recovery           | Three bounded recovery claims plus queue retries                                            | Define an operator-owned response after exhaustion                                                   |
+| Observability                 | Logs, Sentry, and health diagnostics exist                                                  | SLOs, complete trace correlation, and checked-in alert/dashboard definitions are not established     |
+| Disaster recovery             | Backup and soft-delete configuration observed                                               | Verify PITR, define recovery objectives, and record restore drills                                   |
+| Release enforcement           | Lint, format, type, and standard test gates precede a digest-based release                  | Canary analysis, vulnerability blocking, and attestation verification are not explicit release gates |
+| AI quality and location       | Schema checks and configured models exist; generative endpoint defaults global              | Record evaluated quality and review processing-location requirements                                 |
+| Reports and reviewer controls | Case toolbar, private report view/export, and provider-confirmed email handoff exist        | Apply the delivery migration; inbox delivery requires separate provider evidence                     |
 
 ## Documentation maintenance
 
