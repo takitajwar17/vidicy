@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
+import { NuqsAdapter } from "nuqs/adapters/next/app";
 
 import { SidebarProvider, SidebarInset } from "@/components/ui/sidebar";
 import { SiteSidebar } from "@/components/site-sidebar";
@@ -38,10 +39,12 @@ export default async function WorkspaceLayout({
   return (
     <CsrfProvider token={csrfToken}>
       <AuthenticatedAppProviders session={session}>
-        <SidebarProvider>
-          <SiteSidebar />
-          <SidebarInset>{children}</SidebarInset>
-        </SidebarProvider>
+        <NuqsAdapter>
+          <SidebarProvider>
+            <SiteSidebar />
+            <SidebarInset className="min-w-0">{children}</SidebarInset>
+          </SidebarProvider>
+        </NuqsAdapter>
       </AuthenticatedAppProviders>
     </CsrfProvider>
   );

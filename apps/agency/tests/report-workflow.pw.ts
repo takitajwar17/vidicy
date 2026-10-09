@@ -5,6 +5,7 @@ import {
   appendFileSync,
   existsSync,
   mkdtempSync,
+  mkdirSync,
   readFileSync,
   readdirSync,
   writeFileSync,
@@ -16,6 +17,7 @@ import { createRequire } from "node:module";
 import { once } from "node:events";
 import { createClient } from "redis";
 import { drizzle } from "drizzle-orm/node-postgres";
+import { eq } from "drizzle-orm";
 import * as schema from "../src/db/schema";
 import { startTestPostgres } from "../src/__tests__/helpers/postgres";
 
@@ -283,6 +285,14 @@ globalThis.fetch = async (input, init) => {
     .toBe(200);
 });
 
+test.afterEach(async ({}, info) => {
+  if (info.status !== info.expectedStatus && serverLog && existsSync(serverLog))
+    await info.attach("isolated-server-log", {
+      body: readFileSync(serverLog),
+      contentType: "text/plain",
+    });
+});
+
 test.afterAll(async () => {
   if (server && server.exitCode === null) {
     server.kill("SIGTERM");
@@ -418,4 +428,266 @@ test("generate, view, export, and deliver with real auth and a private provider 
   expect((await context.request.get(`${base}/api/client-reports/${reportId}`)).status()).toBe(403);
   await context.clearCookies();
   expect((await context.request.get(`${base}/api/client-reports/${reportId}`)).status()).toBe(403);
+});
+
+test("review workspace links findings to evidence and keeps actions usable at small widths", async ({
+  page,
+  context,
+}) => {
+  test.setTimeout(90_000);
+  const errors: string[] = [];
+  page.setDefaultTimeout(15_000);
+  page.on("pageerror", (error) => errors.push(error.message));
+  const db = drizzle(pool, { schema });
+  const passport = await db.query.uploadedDocumentTable.findFirst({
+    where: eq(schema.uploadedDocumentTable.applicationId, applicationId),
+  });
+  if (!passport?.applicantId) throw new Error("Missing isolated applicant");
+  await db
+    .delete(schema.reviewIssueTable)
+    .where(eq(schema.reviewIssueTable.applicationId, applicationId));
+  await db
+    .update(schema.applicantTable)
+    .set({ name: "Alex Morgan" })
+    .where(eq(schema.applicantTable.id, passport.applicantId));
+  await db
+    .update(schema.visaApplicationTable)
+    .set({
+      destinationCountry: "Germany",
+      visaType: "Student visa",
+      caseNumber: "DEMO-1002",
+      agencyStatus: "in_review",
+    })
+    .where(eq(schema.visaApplicationTable.id, applicationId));
+  const [flight] = await db
+    .insert(schema.checklistItemTable)
+    .values({
+      applicationId,
+      applicantId: passport.applicantId,
+      documentName: "Travel itinerary",
+      description: "Travel to Germany",
+      isRequired: true,
+      status: "uploaded",
+    })
+    .returning();
+  const [missing] = await db
+    .insert(schema.checklistItemTable)
+    .values({
+      applicationId,
+      applicantId: passport.applicantId,
+      documentName: "Health insurance",
+      description: "Upload proof of cover",
+      isRequired: true,
+      status: "missing",
+    })
+    .returning();
+  const [itinerary] = await db
+    .insert(schema.uploadedDocumentTable)
+    .values({
+      applicationId,
+      applicantId: passport.applicantId,
+      checklistItemId: flight.id,
+      fileName: "itinerary.pdf",
+      fileKey: "private-test-only/itinerary",
+      mimeType: "application/pdf",
+      fileSize: 1000,
+      pageCount: 2,
+      extractionStatus: "completed",
+      textContent: "Synthetic itinerary: Dhaka to London",
+    })
+    .returning();
+  const items = await db.query.checklistItemTable.findMany({
+    where: eq(schema.checklistItemTable.applicationId, applicationId),
+  });
+  const testDocuments = [passport, itinerary];
+  await db
+    .update(schema.documentEvaluationTable)
+    .set({
+      overallScore: 8,
+      riskLevel: "high",
+      reviewStatus: "complete",
+      docSnapshots: Object.fromEntries(
+        items.map((item) => [
+          item.id,
+          testDocuments.find((document) => document.checklistItemId === item.id)?.id
+            ? `${testDocuments.find((document) => document.checklistItemId === item.id)!.id}:test:1:0`
+            : "missing",
+        ]),
+      ),
+      itemFeedback: Object.fromEntries(
+        items.map((item) => [
+          item.id,
+          { status: "needs_review", feedback: "Check this synthetic evidence." },
+        ]),
+      ),
+    })
+    .where(eq(schema.documentEvaluationTable.applicationId, applicationId));
+  const [destination] = await db
+    .insert(schema.reviewIssueTable)
+    .values({
+      applicationId,
+      applicantId: passport.applicantId,
+      checklistItemId: flight.id,
+      documentId: itinerary.id,
+      title: "Destination does not match",
+      description: "The itinerary ends in London. The application is for Germany.",
+      recommendation: "Provide a travel itinerary to Germany.",
+      severity: "high",
+      source: "ai",
+    })
+    .returning();
+  const [missingIssue] = await db
+    .insert(schema.reviewIssueTable)
+    .values({
+      applicationId,
+      checklistItemId: missing.id,
+      title: "Health insurance missing",
+      description: "Required health insurance has not been uploaded.",
+      recommendation: "Upload proof of cover.",
+      severity: "high",
+      source: "ai",
+    })
+    .returning();
+  const [nameIssue] = await db
+    .insert(schema.reviewIssueTable)
+    .values({
+      applicationId,
+      documentId: passport.id,
+      checklistItemId: passport.checklistItemId,
+      title: "Passport name needs review",
+      description: "Confirm the passport name matches the application.",
+      severity: "medium",
+      source: "reviewer",
+    })
+    .returning();
+  await db.insert(schema.reviewIssueTable).values([
+    ...[
+      "Financial proof needs review",
+      "Admission letter missing",
+      "Passport scan incomplete",
+      "Accommodation evidence missing",
+      "Visa form needs review",
+    ].map((title) => ({
+      applicationId,
+      title,
+      description: "Check this required evidence before you complete the review.",
+      recommendation: "Ask the client for the correct document.",
+      severity: "high",
+      source: "ai",
+    })),
+    ...[
+      "Funding dates need review",
+      "Flight booking not confirmed",
+      "Course duration unclear",
+      "Translation missing",
+    ].map((title) => ({
+      applicationId,
+      title,
+      description: "Confirm these details against the current evidence.",
+      severity: "medium",
+      source: "ai",
+    })),
+  ]);
+  await context.addCookies([
+    { name: "session", value: staffCookie, url: base },
+    { name: "csrf-token", value: "isolated-browser-csrf-token", url: base },
+  ]);
+  await page.setViewportSize({ width: 1586, height: 992 });
+  await page.setContent(
+    `<style>body{font:14px Arial;padding:35px;color:#182832}h1{font-size:24px}.page{break-after:page}table{border-collapse:collapse;width:100%}td,th{padding:15px;border-bottom:1px solid #ddd;text-align:left}</style><div class="page"><h1>TRAVEL ITINERARY</h1><p>Synthetic test document</p><p>Passenger: Alex Morgan</p><table><tr><th>From</th><th>To</th><th>Date</th></tr><tr><td>Dhaka</td><td>London</td><td>10 September</td></tr></table></div><div><h1>Booking details</h1><p>Page two of the isolated preview fixture.</p></div>`,
+  );
+  const pdf = await page.pdf({ format: "A4" });
+  await page.route("**/api/document-preview/**", (route) =>
+    route.fulfill({ status: 200, contentType: "application/pdf", body: pdf }),
+  );
+  await page.goto(`${base}/dashboard/applications`);
+  const sidebar = page.locator('[data-sidebar="sidebar"]');
+  await expect(sidebar).toBeVisible();
+  const sharedSidebar = await sidebar.evaluate((element) => {
+    const style = getComputedStyle(element);
+    return { background: style.backgroundColor, color: style.color, width: style.width };
+  });
+  await page.goto(`${base}/dashboard/${applicationId}?issue=${destination.id}`);
+  await expect(sidebar).toBeVisible();
+  expect(
+    await sidebar.evaluate((element) => {
+      const style = getComputedStyle(element);
+      return { background: style.backgroundColor, color: style.color, width: style.width };
+    }),
+  ).toEqual(sharedSidebar);
+  const table = page.getByRole("table", { name: "Review issues" });
+  await expect(page.getByRole("heading", { name: "Alex Morgan", exact: true })).toBeVisible();
+  await expect(table.getByRole("row")).toHaveCount(13);
+  await expect(page.getByRole("button", { name: "Finalize review", exact: true })).toBeDisabled();
+  await expect(
+    page.getByRole("region", { name: "Supporting evidence" }).getByRole("combobox"),
+  ).toHaveValue(itinerary.id);
+  await expect(page.getByText("Page 1 of 2", { exact: true })).toBeVisible();
+  await expect(page.locator("canvas")).toHaveCount(1);
+  const output = resolve("output/verification");
+  mkdirSync(output, { recursive: true });
+  await page.screenshot({ path: join(output, "case-workspace-desktop.png"), fullPage: true });
+  await page.getByRole("button", { name: "Next page", exact: true }).click();
+  await expect(page.getByText("Page 2 of 2", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Zoom in", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Fit to width", exact: true })).toHaveText("125%");
+  await page.getByRole("button", { name: "Rotate page", exact: true }).click();
+  await page.getByRole("button", { name: "Fit to width", exact: true }).click();
+  await page.getByRole("button", { name: /^High / }).click();
+  await expect(table.getByRole("row")).toHaveCount(8);
+  await page.getByRole("textbox", { name: "Search issues" }).fill("health");
+  await expect(table.getByRole("row")).toHaveCount(2);
+  await expect(page.getByText("This finding has no linked file.", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: /^All / }).click();
+  await page.getByRole("textbox", { name: "Search issues" }).fill("");
+  const nameButton = page.getByRole("button", {
+    name: "Review issue: Passport name needs review",
+    exact: true,
+  });
+  await nameButton.focus();
+  await nameButton.press("Enter");
+  await expect(page.getByRole("combobox", { name: "Select evidence document" })).toHaveValue(
+    passport.id,
+  );
+  await expect(page).toHaveURL(new RegExp(`issue=${nameIssue.id}`));
+  await page.reload();
+  await expect(page.getByRole("region", { name: "Selected issue" })).toContainText(
+    "Passport name needs review",
+  );
+  await page.getByRole("button", { name: "Dismiss issue", exact: true }).click();
+  await expect(table.getByRole("row")).toHaveCount(12);
+  await page.getByRole("combobox", { name: "Filter issue status" }).selectOption("dismissed");
+  await expect(table).toContainText("Passport name needs review");
+  await expect(page.getByRole("button", { name: "Dismiss issue", exact: true })).toBeDisabled();
+  await page.getByRole("tab", { name: "Checklist", exact: true }).click();
+  await expect(page.getByText("Required files uploaded", { exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Upload", exact: true })).toBeVisible();
+  await page.getByRole("tab", { name: "Notes", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Add issue", exact: true })).toBeVisible();
+  await page.getByRole("tab", { name: "Activity", exact: true }).click();
+  await expect(page.getByText("Case created", { exact: true })).toBeVisible();
+  await page.getByRole("tab", { name: "Review", exact: true }).click();
+  await page.getByRole("combobox", { name: "Filter issue status" }).selectOption("open");
+  await page
+    .getByRole("button", { name: "Review issue: Health insurance missing", exact: true })
+    .click();
+  await expect(page).toHaveURL(new RegExp(`issue=${missingIssue.id}`));
+  for (const width of [1024, 390]) {
+    await page.setViewportSize({ width, height: 900 });
+    await expect(page.getByRole("heading", { name: "Needs attention", exact: true })).toBeVisible();
+    expect(
+      await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
+    ).toBe(true);
+    if (width < 900) {
+      const detail = await page.getByRole("region", { name: "Selected issue" }).boundingBox();
+      const evidence = await page
+        .getByRole("region", { name: "Supporting evidence" })
+        .boundingBox();
+      expect(detail).not.toBeNull();
+      expect(evidence).not.toBeNull();
+      expect(evidence!.y).toBeGreaterThanOrEqual(detail!.y + detail!.height);
+    }
+    await page.screenshot({ path: join(output, `case-workspace-${width}.png`), fullPage: true });
+  }
+  expect(errors).toEqual([]);
 });

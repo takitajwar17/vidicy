@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import type { FormEvent } from "react";
+import type { FormEvent, ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { useServerAction } from "zsa-react";
 import { toast } from "sonner";
@@ -11,6 +11,8 @@ import {
   FileTextIcon,
   Loader2Icon,
   PlusIcon,
+  MoreHorizontalIcon,
+  LockKeyholeIcon,
 } from "lucide-react";
 
 import {
@@ -23,6 +25,13 @@ import {
   updateReviewIssueStatusAction,
 } from "@/actions/agency-case.action";
 import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import styles from "./agency-case-workspace.module.css";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -54,24 +63,16 @@ interface StaffOption {
 
 export function AgencyCaseToolbar({
   applicationId,
-  status,
-  assignedReviewerId,
-  staff,
   hasEvaluation,
+  blockedReason,
+  children,
 }: {
   applicationId: string;
-  status: string;
-  assignedReviewerId: string | null;
-  staff: StaffOption[];
   hasEvaluation: boolean;
+  blockedReason: string | null;
+  children?: ReactNode;
 }) {
   const router = useRouter();
-  const [statusValue, setStatusValue] = useState(normalizeAgencyCaseStatus(status));
-  const [reviewerValue, setReviewerValue] = useState(assignedReviewerId ?? "unassigned");
-  const { execute: updateStatus, isPending: updatingStatus } = useServerAction(
-    updateAgencyCaseStatusAction,
-  );
-  const { execute: assignCase, isPending: assigning } = useServerAction(assignAgencyCaseAction);
   const { execute: syncIssues, isPending: syncing } = useServerAction(
     syncReviewIssuesFromEvaluationAction,
   );
@@ -79,45 +80,6 @@ export function AgencyCaseToolbar({
     generateClientReportAction,
   );
   const { execute: finalize, isPending: finalizing } = useServerAction(finalizeReviewAction);
-
-  useEffect(() => {
-    setStatusValue(normalizeAgencyCaseStatus(status));
-  }, [status]);
-
-  useEffect(() => {
-    setReviewerValue(assignedReviewerId ?? "unassigned");
-  }, [assignedReviewerId]);
-
-  async function handleStatusChange(nextStatus: string) {
-    const normalizedStatus = normalizeAgencyCaseStatus(nextStatus);
-    setStatusValue(normalizedStatus);
-    const [, error] = await updateStatus({
-      applicationId,
-      status: normalizedStatus,
-    });
-    if (error) {
-      toast.error(error.message || "Could not update case status.");
-      setStatusValue(normalizeAgencyCaseStatus(status));
-      return;
-    }
-    toast.success("Case status updated.");
-    router.refresh();
-  }
-
-  async function handleReviewerChange(nextReviewerId: string) {
-    setReviewerValue(nextReviewerId);
-    const [, error] = await assignCase({
-      applicationId,
-      reviewerId: nextReviewerId === "unassigned" ? "" : nextReviewerId,
-    });
-    if (error) {
-      toast.error("Could not assign reviewer.");
-      setReviewerValue(assignedReviewerId ?? "unassigned");
-      return;
-    }
-    toast.success(nextReviewerId === "unassigned" ? "Reviewer unassigned." : "Reviewer assigned.");
-    router.refresh();
-  }
 
   async function handleSyncIssues() {
     const [result, error] = await syncIssues({ applicationId });
@@ -145,7 +107,7 @@ export function AgencyCaseToolbar({
   async function handleFinalize() {
     const [, error] = await finalize({ applicationId });
     if (error) {
-      toast.error("Could not finalize review.");
+      toast.error(error.message || "Could not finalize review.");
       return;
     }
     toast.success("Case marked ready to submit.");
@@ -153,62 +115,99 @@ export function AgencyCaseToolbar({
   }
 
   return (
-    <div className="flex flex-wrap items-center gap-2">
-      <Select value={statusValue} onValueChange={handleStatusChange} disabled={updatingStatus}>
-        <SelectTrigger className="h-11 w-[190px] rounded-2xl bg-card">
-          <SelectValue />
-        </SelectTrigger>
-        <SelectContent>
-          {AGENCY_CASE_STATUS_OPTIONS.map((caseStatus) => (
-            <SelectItem key={caseStatus} value={caseStatus}>
-              {CASE_STATUS_META[caseStatus].label}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
-      <Select value={reviewerValue} onValueChange={handleReviewerChange} disabled={assigning}>
-        <SelectTrigger className="h-11 w-[210px] rounded-2xl bg-card">
-          <SelectValue placeholder="Assign reviewer" />
-        </SelectTrigger>
-        <SelectContent>
-          <SelectItem value="unassigned">Unassigned</SelectItem>
-          {staff.map((member) => (
-            <SelectItem key={member.userId} value={member.userId}>
-              {member.label}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
+    <div className={styles.footerActions}>
       <Button
         type="button"
-        variant="outline"
-        onClick={handleSyncIssues}
-        disabled={!hasEvaluation || syncing}
+        size="sm"
+        className={styles.secondaryButton}
+        onClick={handleGenerateReport}
+        disabled={!hasEvaluation || reporting}
       >
-        {syncing ? (
-          <Loader2Icon className="h-4 w-4 animate-spin" />
-        ) : (
-          <BrainCircuitIcon className="h-4 w-4" />
-        )}
-        Sync review flags
+        {reporting ? <Loader2Icon className="animate-spin" /> : <FileTextIcon />}Client report
       </Button>
-      <Button type="button" variant="outline" onClick={handleGenerateReport} disabled={reporting}>
-        {reporting ? (
-          <Loader2Icon className="h-4 w-4 animate-spin" />
-        ) : (
-          <FileTextIcon className="h-4 w-4" />
-        )}
-        Client report
-      </Button>
-      <Button type="button" onClick={handleFinalize} disabled={finalizing}>
-        {finalizing ? (
-          <Loader2Icon className="h-4 w-4 animate-spin" />
-        ) : (
-          <CheckCircle2Icon className="h-4 w-4" />
-        )}
-        Finalize review
-      </Button>
+      {children}
+      <div className={styles.finalize}>
+        <Button
+          type="button"
+          size="sm"
+          onClick={handleFinalize}
+          disabled={Boolean(blockedReason) || finalizing}
+          aria-describedby={blockedReason ? "finalize-blocked-reason" : undefined}
+        >
+          {finalizing ? (
+            <Loader2Icon className="animate-spin" />
+          ) : blockedReason ? (
+            <LockKeyholeIcon />
+          ) : (
+            <CheckCircle2Icon />
+          )}
+          Finalize review
+        </Button>
+        {blockedReason ? <small id="finalize-blocked-reason">{blockedReason}</small> : null}
+      </div>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button type="button" variant="ghost" size="icon" aria-label="Review options">
+            <MoreHorizontalIcon />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end">
+          <DropdownMenuItem onSelect={handleSyncIssues} disabled={!hasEvaluation || syncing}>
+            <BrainCircuitIcon className="mr-2 size-4" />
+            Sync review flags
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
     </div>
+  );
+}
+
+export function AgencyCaseAssignmentSelect({
+  applicationId,
+  assignedReviewerId,
+  staff,
+}: {
+  applicationId: string;
+  assignedReviewerId: string | null;
+  staff: StaffOption[];
+}) {
+  const router = useRouter();
+  const [value, setValue] = useState(assignedReviewerId ?? "unassigned");
+  const { execute, isPending } = useServerAction(assignAgencyCaseAction);
+  useEffect(() => {
+    setValue(assignedReviewerId ?? "unassigned");
+  }, [assignedReviewerId]);
+  async function handleChange(nextId: string) {
+    setValue(nextId);
+    const [, error] = await execute({
+      applicationId,
+      reviewerId: nextId === "unassigned" ? "" : nextId,
+    });
+    if (error) {
+      setValue(assignedReviewerId ?? "unassigned");
+      toast.error("Could not assign reviewer.");
+      return;
+    }
+    toast.success("Reviewer assignment updated.");
+    router.refresh();
+  }
+  return (
+    <Select value={value} onValueChange={handleChange} disabled={isPending}>
+      <SelectTrigger
+        aria-label="Assigned reviewer"
+        className="h-7 w-auto max-w-[210px] gap-2 border-0 bg-transparent px-0 text-xs shadow-none"
+      >
+        <SelectValue placeholder="Assign reviewer" />
+      </SelectTrigger>
+      <SelectContent>
+        <SelectItem value="unassigned">Unassigned</SelectItem>
+        {staff.map((member) => (
+          <SelectItem key={member.userId} value={member.userId}>
+            {member.label}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
   );
 }
 
@@ -244,7 +243,10 @@ export function AgencyCaseStatusSelect({
 
   return (
     <Select value={statusValue} onValueChange={handleStatusChange} disabled={isPending}>
-      <SelectTrigger className="h-8 w-[150px] rounded-full border-primary/25 bg-primary/8 px-3 text-xs font-bold text-primary shadow-none">
+      <SelectTrigger
+        aria-label="Case status"
+        className="h-7 w-[130px] rounded-full border-primary/25 bg-primary/8 px-3 text-xs font-bold text-primary shadow-none"
+      >
         <SelectValue />
       </SelectTrigger>
       <SelectContent>
@@ -258,7 +260,15 @@ export function AgencyCaseStatusSelect({
   );
 }
 
-export function ReviewIssueStatusSelect({ issueId, status }: { issueId: string; status: string }) {
+export function ReviewIssueStatusSelect({
+  issueId,
+  status,
+  showDismiss = false,
+}: {
+  issueId: string;
+  status: string;
+  showDismiss?: boolean;
+}) {
   const router = useRouter();
   const [value, setValue] = useState(normalizeReviewIssueStatus(status));
   const { execute, isPending } = useServerAction(updateReviewIssueStatusAction);
@@ -285,18 +295,34 @@ export function ReviewIssueStatusSelect({ issueId, status }: { issueId: string; 
   }
 
   return (
-    <Select value={value} onValueChange={handleChange} disabled={isPending}>
-      <SelectTrigger className="h-9 rounded-xl bg-card text-xs">
-        <SelectValue />
-      </SelectTrigger>
-      <SelectContent>
-        {REVIEW_ISSUE_STATUS_OPTIONS.map((issueStatus) => (
-          <SelectItem key={issueStatus} value={issueStatus}>
-            {ISSUE_STATUS_META[issueStatus].label}
-          </SelectItem>
-        ))}
-      </SelectContent>
-    </Select>
+    <div className="flex items-center gap-2">
+      <Select value={value} onValueChange={handleChange} disabled={isPending}>
+        <SelectTrigger
+          aria-label="Issue status"
+          className="h-8 min-w-36 rounded-md bg-card text-xs"
+        >
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          {REVIEW_ISSUE_STATUS_OPTIONS.map((issueStatus) => (
+            <SelectItem key={issueStatus} value={issueStatus}>
+              {ISSUE_STATUS_META[issueStatus].label}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+      {showDismiss ? (
+        <Button
+          type="button"
+          size="sm"
+          className={styles.secondaryButton}
+          disabled={isPending || value === "dismissed"}
+          onClick={() => handleChange("dismissed")}
+        >
+          Dismiss issue
+        </Button>
+      ) : null}
+    </div>
   );
 }
 

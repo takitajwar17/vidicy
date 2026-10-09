@@ -1,37 +1,16 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import {
-  AlertCircleIcon,
-  CheckCircle2Icon,
-  ChevronRightIcon,
-  CircleAlertIcon,
-  DownloadIcon,
-  FileIcon,
-  FileTextIcon,
-  Loader2Icon,
-  MoreVerticalIcon,
-  ShieldCheckIcon,
-} from "lucide-react";
-
+import { useEffect, useState } from "react";
+import { AlertCircleIcon, DownloadIcon, FileTextIcon, Loader2Icon } from "lucide-react";
 import { DocumentUpload } from "@/components/visa/document-upload";
-import { Badge } from "@/components/ui/badge";
+import { PdfCanvasPreview } from "@/components/visa/pdf-canvas-preview";
 import { Button } from "@/components/ui/button";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { Progress } from "@/components/ui/progress";
-import { PdfCanvasPreview, PdfDocumentThumbnail } from "@/components/visa/pdf-canvas-preview";
-import { cn } from "@/lib/utils";
+import { formatBytes } from "@/components/agency/agency-ui";
+import styles from "./agency-case-workspace.module.css";
 
-const UPLOADED_CHECKLIST_STATUSES = new Set(["uploaded", "approved"]);
-
-interface AgencyCaseDocument {
+export interface AgencyCaseDocument {
   id: string;
+  applicantId: string | null;
   checklistItemId: string | null;
   fileName: string;
   fileSize: number;
@@ -40,447 +19,161 @@ interface AgencyCaseDocument {
   extractionStatus: string;
 }
 
-interface AgencyCaseChecklistItem {
-  id: string;
-  documentName: string;
-  status: string;
-}
-
 interface AgencyCaseDocumentDeskProps {
   applicationId: string;
-  applicantId: string | null;
+  document: AgencyCaseDocument | null;
   documents: AgencyCaseDocument[];
-  checklistItems: AgencyCaseChecklistItem[];
-  totalStorage: number;
-}
-
-function formatBytes(bytes: number | null | undefined) {
-  if (!bytes) return "0 B";
-  const units = ["B", "KB", "MB", "GB"] as const;
-  let value = bytes;
-  let unitIndex = 0;
-  while (value >= 1024 && unitIndex < units.length - 1) {
-    value /= 1024;
-    unitIndex += 1;
-  }
-  return `${value >= 10 || unitIndex === 0 ? Math.round(value) : value.toFixed(1)} ${units[unitIndex]}`;
-}
-
-function getDocumentCategory({
-  fileName,
-  checklistName,
-}: {
-  fileName: string;
-  checklistName?: string | null;
-}) {
-  const value = `${fileName} ${checklistName ?? ""}`.toLowerCase();
-  if (/(passport|national id|identity|photo)/.test(value)) return "Identity Documents";
-  if (/(bank|salary|fund|financial|statement)/.test(value)) return "Financial Documents";
-  if (/(form|application|itinerary|flight|hotel|accommodation|appointment)/.test(value)) {
-    return "Application Documents";
-  }
-  return "Supporting Documents";
-}
-
-function getDocumentMeta(mimeType: string) {
-  if (mimeType.startsWith("image/")) return "Image file";
-  if (mimeType === "application/pdf") return "PDF file";
-  return "Document";
-}
-
-function isPdfDocument(document: AgencyCaseDocument | null) {
-  return document?.mimeType === "application/pdf";
-}
-
-function getInitialDocumentId(documents: AgencyCaseDocument[]) {
-  const passportDocument = documents.find(
-    (document) => /passport/i.test(document.fileName) && document.mimeType.startsWith("image/"),
-  );
-  if (passportDocument) return passportDocument.id;
-
-  const imageDocument = documents.find((document) => document.mimeType.startsWith("image/"));
-  if (imageDocument) return imageDocument.id;
-
-  return documents[0]?.id ?? null;
+  onSelectDocument: (id: string) => void;
+  noSource: boolean;
 }
 
 export function AgencyCaseDocumentDesk({
   applicationId,
-  applicantId,
+  document,
   documents,
-  checklistItems,
-  totalStorage,
+  onSelectDocument,
+  noSource,
 }: AgencyCaseDocumentDeskProps) {
-  const [uploadChecklistItemId, setUploadChecklistItemId] = useState("");
-  const uploadItem = checklistItems.find((item) => item.id === uploadChecklistItemId);
-  const [activeDocumentId, setActiveDocumentId] = useState<string | null>(() =>
-    getInitialDocumentId(documents),
-  );
-  const [pdfPreviewUrl, setPdfPreviewUrl] = useState<string | null>(null);
-  const [pdfPreviewLoading, setPdfPreviewLoading] = useState(false);
-  const [pdfPreviewError, setPdfPreviewError] = useState<string | null>(null);
-  const checklistById = useMemo(
-    () => new Map(checklistItems.map((item) => [item.id, item])),
-    [checklistItems],
-  );
+  const [preview, setPreview] = useState<{ id: string; url: string } | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const documentId = document?.id;
+  const isPdf = document?.mimeType === "application/pdf";
 
   useEffect(() => {
-    if (activeDocumentId && documents.some((document) => document.id === activeDocumentId)) return;
-    setActiveDocumentId(getInitialDocumentId(documents));
-  }, [activeDocumentId, documents]);
-
-  const selectedDocument = activeDocumentId
-    ? documents.find((document) => document.id === activeDocumentId)
-    : undefined;
-  const activeDocument = selectedDocument || documents[0] || null;
-  const activeIndex = activeDocument
-    ? documents.findIndex((document) => document.id === activeDocument.id)
-    : -1;
-  const previewDocuments = activeDocument
-    ? [activeDocument, ...documents.filter((document) => document.id !== activeDocument.id)].slice(
-        0,
-        8,
-      )
-    : documents.slice(0, 8);
-
-  useEffect(() => {
-    if (!isPdfDocument(activeDocument)) {
-      setPdfPreviewLoading(false);
-      setPdfPreviewError(null);
-      setPdfPreviewUrl((previousUrl) => {
-        if (previousUrl) URL.revokeObjectURL(previousUrl);
-        return null;
-      });
-      return;
-    }
-
-    const abortController = new AbortController();
+    setPreview(null);
+    setError(null);
+    if (!documentId || !isPdf) return;
+    const controller = new AbortController();
     let objectUrl: string | null = null;
-
-    setPdfPreviewLoading(true);
-    setPdfPreviewError(null);
-    setPdfPreviewUrl((previousUrl) => {
-      if (previousUrl) URL.revokeObjectURL(previousUrl);
-      return null;
-    });
-
-    fetch(`/api/document-preview/${activeDocument.id}`, { signal: abortController.signal })
+    fetch(`/api/document-preview/${documentId}`, { signal: controller.signal })
       .then(async (response) => {
-        if (!response.ok) {
-          throw new Error(`Preview failed with status ${response.status}`);
-        }
-
-        return response.blob();
-      })
-      .then((blob) => {
+        if (!response.ok) throw new Error("Could not load this document. Try selecting it again.");
+        const blob = await response.blob();
+        if (controller.signal.aborted) return;
         objectUrl = URL.createObjectURL(blob);
-        setPdfPreviewUrl(objectUrl);
+        setPreview({ id: documentId, url: objectUrl });
       })
-      .catch((error: unknown) => {
-        if (abortController.signal.aborted) return;
-        setPdfPreviewError(
-          error instanceof Error ? error.message : "Could not load the PDF preview.",
-        );
-      })
-      .finally(() => {
-        if (!abortController.signal.aborted) {
-          setPdfPreviewLoading(false);
-        }
+      .catch(() => {
+        if (!controller.signal.aborted) setError("The document preview could not be loaded.");
       });
-
     return () => {
-      abortController.abort();
-      if (objectUrl) {
-        URL.revokeObjectURL(objectUrl);
-      }
+      controller.abort();
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
     };
-  }, [activeDocument]);
-
-  const groupedDocuments = useMemo(() => {
-    return documents.reduce<Record<string, AgencyCaseDocument[]>>((groups, document) => {
-      const checklistItem = document.checklistItemId
-        ? checklistById.get(document.checklistItemId)
-        : null;
-      const category = getDocumentCategory({
-        fileName: document.fileName,
-        checklistName: checklistItem?.documentName,
-      });
-      if (!groups[category]) {
-        groups[category] = [];
-      }
-      groups[category].push(document);
-      return groups;
-    }, {});
-  }, [checklistById, documents]);
-
-  function selectPreviousDocument() {
-    if (documents.length === 0) return;
-    const nextIndex = activeIndex <= 0 ? documents.length - 1 : activeIndex - 1;
-    setActiveDocumentId(documents[nextIndex]?.id ?? null);
-  }
-
-  function selectNextDocument() {
-    if (documents.length === 0) return;
-    const nextIndex = activeIndex < 0 || activeIndex >= documents.length - 1 ? 0 : activeIndex + 1;
-    setActiveDocumentId(documents[nextIndex]?.id ?? null);
-  }
+  }, [documentId, isPdf]);
 
   return (
-    <>
-      <aside className="flex min-h-[620px] flex-col overflow-hidden rounded-xl border border-border/80 bg-card shadow-[var(--shadow-dashboard)] xl:min-h-0">
-        <div className="flex items-center justify-between gap-3 border-b border-border/70 px-4 py-4">
-          <div>
-            <h2 className="text-base font-bold">Documents ({documents.length})</h2>
-            <p className="text-xs text-muted-foreground">{formatBytes(totalStorage)} uploaded</p>
-          </div>
-        </div>
-        {applicantId && checklistItems.length > 0 ? (
-          <div className="flex flex-col gap-2 border-b border-border/70 p-3">
-            <label htmlFor="upload-document-type" className="text-xs font-semibold">
-              Document type
-            </label>
-            <Select value={uploadChecklistItemId} onValueChange={setUploadChecklistItemId}>
-              <SelectTrigger id="upload-document-type" className="w-full">
-                <SelectValue placeholder="Select a document type" />
-              </SelectTrigger>
-              <SelectContent>
-                {checklistItems.map((item) => (
-                  <SelectItem key={item.id} value={item.id}>
-                    {item.documentName}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            {uploadItem ? (
-              <DocumentUpload
-                key={uploadItem.id}
-                applicationId={applicationId}
-                applicantId={applicantId}
-                checklistItemId={uploadItem.id}
-                label="Upload file"
-              />
-            ) : (
-              <Button disabled size="sm">
-                Select a document type first
-              </Button>
-            )}
-            <p className="text-xs text-muted-foreground">
-              A new file replaces the previous file for this document type in the next review.
-            </p>
-          </div>
-        ) : null}
-
-        <div className="min-h-0 flex-1 overflow-y-auto px-3 py-3">
-          {[
-            "Identity Documents",
-            "Financial Documents",
-            "Application Documents",
-            "Supporting Documents",
-          ].map((group) => {
-            const groupDocuments = groupedDocuments[group] ?? [];
-            if (groupDocuments.length === 0) return null;
-
-            return (
-              <div key={group} className="mb-5 last:mb-0">
-                <div className="mb-2 flex items-center justify-between px-1 text-xs font-bold text-foreground">
-                  <span>{group}</span>
-                  <span className="text-muted-foreground">{groupDocuments.length}</span>
-                </div>
-                <div className="space-y-1.5">
-                  {groupDocuments.map((document) => {
-                    const checklistItem = document.checklistItemId
-                      ? checklistById.get(document.checklistItemId)
-                      : null;
-                    const isActive = document.id === activeDocument?.id;
-
-                    return (
-                      <button
-                        key={document.id}
-                        type="button"
-                        onClick={() => setActiveDocumentId(document.id)}
-                        className={cn(
-                          "group flex w-full items-center gap-3 rounded-lg border px-3 py-2.5 text-left transition-colors",
-                          isActive
-                            ? "border-primary/30 bg-primary/8 text-primary"
-                            : "border-transparent bg-muted/25 hover:border-border hover:bg-muted/45",
-                        )}
-                      >
-                        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-background ring-1 ring-border/70">
-                          <FileTextIcon className="h-4 w-4 text-muted-foreground" />
-                        </span>
-                        <span className="min-w-0 flex-1">
-                          <span className="block truncate text-sm font-bold">
-                            {document.fileName}
-                          </span>
-                          <span className="block truncate text-xs text-muted-foreground">
-                            {document.pageCount ?? 1} page{document.pageCount === 1 ? "" : "s"} ·{" "}
-                            {getDocumentMeta(document.mimeType)}
-                          </span>
-                        </span>
-                        {checklistItem && UPLOADED_CHECKLIST_STATUSES.has(checklistItem.status) ? (
-                          <CheckCircle2Icon className="h-4 w-4 shrink-0 text-status-success" />
-                        ) : (
-                          <CircleAlertIcon className="h-4 w-4 shrink-0 text-status-warning" />
-                        )}
-                        <MoreVerticalIcon className="h-4 w-4 shrink-0 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100" />
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            );
-          })}
-        </div>
-
-        <div className="border-t border-border/70 px-4 py-3">
-          <div className="mb-2 flex items-center justify-between text-xs text-muted-foreground">
-            <span>Storage Used</span>
-            <span>{formatBytes(totalStorage)} / 5 GB</span>
-          </div>
-          <Progress
-            value={Math.min((totalStorage / (5 * 1024 * 1024 * 1024)) * 100, 100)}
-            className="h-1.5"
-          />
-        </div>
-      </aside>
-
-      <section className="flex min-h-[620px] flex-col overflow-hidden rounded-xl border border-border/80 bg-card shadow-[var(--shadow-dashboard)] xl:min-h-0">
-        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border/70 px-4 py-3">
-          <div className="min-w-0">
-            <h2 className="truncate text-base font-bold">
-              {activeDocument?.fileName ?? "No document selected"}
-            </h2>
-            <p className="text-xs text-muted-foreground">
-              {activeDocument
-                ? `${getDocumentMeta(activeDocument.mimeType)} · ${formatBytes(activeDocument.fileSize)}`
-                : "Upload a document to preview it here."}
-            </p>
-          </div>
-          <div className="flex items-center gap-2">
-            <Badge
-              variant="outline"
-              className="rounded-full border-status-success/25 bg-status-success/10 text-status-success"
-            >
-              <ShieldCheckIcon className="mr-1 h-3.5 w-3.5" />
-              {activeDocument?.extractionStatus === "completed" ? "Readable" : "Queued"}
-            </Badge>
-            {activeDocument ? (
-              <Button asChild variant="outline" size="icon" className="h-9 w-9 rounded-xl">
+    <section className={styles.evidence} aria-label="Supporting evidence">
+      <div className={styles.evidenceHeading}>
+        <h2>Evidence</h2>
+        <select
+          aria-label="Select evidence document"
+          value={document?.id ?? ""}
+          onChange={(event) => onSelectDocument(event.target.value)}
+        >
+          <option value="" disabled>
+            {noSource ? "No linked file" : "Select a document"}
+          </option>
+          {documents.map((file) => (
+            <option key={file.id} value={file.id}>
+              {file.fileName}
+            </option>
+          ))}
+        </select>
+      </div>
+      <div className={styles.viewer}>
+        {document ? (
+          <div className={styles.viewerToolbar}>
+            <span className="min-w-0 truncate" title={document.fileName}>
+              {document.fileName} · {formatBytes(document.fileSize)}
+            </span>
+            <div className="flex items-center gap-2">
+              <Button asChild size="sm" className={styles.secondaryButton}>
                 <a
-                  href={`/api/document-preview/${activeDocument.id}?download=1`}
-                  download={activeDocument.fileName}
+                  href={`/api/document-preview/${document.id}?download=1`}
+                  download={document.fileName}
+                  aria-label={`Download ${document.fileName}`}
                 >
-                  <DownloadIcon className="h-4 w-4" />
+                  <DownloadIcon />
+                  Download
                 </a>
               </Button>
-            ) : null}
-          </div>
-        </div>
-
-        <div
-          className={cn(
-            "flex min-h-0 flex-1 items-center justify-center bg-muted/20",
-            isPdfDocument(activeDocument) ? "p-0" : "p-4",
-          )}
-        >
-          {activeDocument ? (
-            activeDocument.mimeType.startsWith("image/") ? (
-              // eslint-disable-next-line @next/next/no-img-element -- Authenticated document previews are served from an API route and should not be optimized/cached.
-              <img
-                src={`/api/document-preview/${activeDocument.id}`}
-                alt={activeDocument.fileName}
-                className="max-h-full max-w-full rounded-lg border border-border/70 bg-background object-contain shadow-sm"
-              />
-            ) : isPdfDocument(activeDocument) ? (
-              <>
-                {pdfPreviewLoading ? (
-                  <div className="flex flex-col items-center justify-center gap-3 text-sm font-semibold text-muted-foreground">
-                    <Loader2Icon className="h-8 w-8 animate-spin" />
-                    Loading PDF preview
-                  </div>
-                ) : null}
-                {pdfPreviewError ? (
-                  <div className="flex max-w-sm flex-col items-center justify-center gap-3 text-center text-muted-foreground">
-                    <AlertCircleIcon className="h-9 w-9 text-destructive" />
-                    <div>
-                      <p className="text-sm font-semibold text-foreground">Preview unavailable</p>
-                      <p className="mt-1 text-xs">{pdfPreviewError}</p>
-                    </div>
-                  </div>
-                ) : null}
-                {pdfPreviewUrl ? (
-                  <PdfCanvasPreview blobUrl={pdfPreviewUrl} errorClassName="max-w-sm" />
-                ) : null}
-              </>
-            ) : (
-              <iframe
-                title={activeDocument.fileName}
-                src={`/api/document-preview/${activeDocument.id}`}
-                className="h-full min-h-[520px] w-full rounded-lg border border-border/70 bg-background"
-              />
-            )
-          ) : (
-            <div className="flex flex-col items-center justify-center gap-3 text-center text-muted-foreground">
-              <FileIcon className="h-10 w-10" />
-              <p className="text-sm font-semibold">No documents uploaded yet.</p>
-            </div>
-          )}
-        </div>
-
-        {previewDocuments.length > 0 ? (
-          <div className="flex items-center gap-2 border-t border-border/70 bg-card px-4 py-3">
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              className="h-9 w-9 shrink-0 rounded-xl"
-              onClick={selectPreviousDocument}
-            >
-              <ChevronRightIcon className="h-4 w-4 rotate-180" />
-            </Button>
-            <div className="flex min-w-0 flex-1 gap-2 overflow-x-auto">
-              {previewDocuments.map((document, index) => (
-                <button
+              {document.checklistItemId && document.applicantId ? (
+                <DocumentUpload
                   key={document.id}
-                  type="button"
-                  onClick={() => setActiveDocumentId(document.id)}
-                  className={cn(
-                    "flex h-24 w-20 shrink-0 flex-col items-center justify-center gap-1 rounded-lg border bg-background p-1 text-xs font-bold transition-colors",
-                    document.id === activeDocument?.id
-                      ? "border-primary text-primary"
-                      : "border-border/80 text-muted-foreground hover:border-primary/40",
-                  )}
-                >
-                  {document.mimeType.startsWith("image/") ? (
-                    // eslint-disable-next-line @next/next/no-img-element -- Authenticated document thumbnails are served from an API route and should not be optimized/cached.
-                    <img
-                      src={`/api/document-preview/${document.id}`}
-                      alt=""
-                      className="h-14 w-full rounded object-cover"
-                    />
-                  ) : isPdfDocument(document) ? (
-                    <PdfDocumentThumbnail documentId={document.id} fileName={document.fileName} />
-                  ) : (
-                    <span className="flex h-14 w-full items-center justify-center rounded bg-muted/40">
-                      <FileTextIcon className="h-5 w-5" />
-                    </span>
-                  )}
-                  <span>{index + 1}</span>
-                </button>
-              ))}
+                  applicationId={applicationId}
+                  applicantId={document.applicantId}
+                  checklistItemId={document.checklistItemId}
+                  label="Replace file"
+                />
+              ) : null}
             </div>
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              className="h-9 w-9 shrink-0 rounded-xl"
-              onClick={selectNextDocument}
-            >
-              <ChevronRightIcon className="h-4 w-4" />
-            </Button>
           </div>
         ) : null}
-      </section>
-    </>
+        <div className={styles.viewerCanvas}>
+          {!document ? (
+            <div className={styles.previewState}>
+              <FileTextIcon />
+              <p>{noSource ? "This finding has no linked file." : "No documents uploaded yet."}</p>
+              <p>Select a file above, or use the checklist to upload the required evidence.</p>
+            </div>
+          ) : document.mimeType.startsWith("image/") ? (
+            // eslint-disable-next-line @next/next/no-img-element -- Private previews must use the authenticated API without image caching.
+            <img
+              src={`/api/document-preview/${document.id}`}
+              alt={document.fileName}
+              className="mx-auto max-w-full bg-white"
+            />
+          ) : isPdf ? (
+            error ? (
+              <div className={styles.previewState} role="alert">
+                <AlertCircleIcon />
+                <p>{error}</p>
+                <a href={`/api/document-preview/${document.id}?download=1`} className="underline">
+                  Download the file
+                </a>
+              </div>
+            ) : preview?.id === document.id ? (
+              <PdfCanvasPreview key={preview.url} blobUrl={preview.url} controls minPageWidth={1} />
+            ) : (
+              <div className={styles.previewState} role="status">
+                <Loader2Icon className="animate-spin" />
+                <p>Loading PDF preview</p>
+              </div>
+            )
+          ) : (
+            <div className={styles.previewState}>
+              <FileTextIcon />
+              <p>Preview is not available for this file type.</p>
+              <a href={`/api/document-preview/${document.id}?download=1`} className="underline">
+                Download the file
+              </a>
+            </div>
+          )}
+        </div>
+      </div>
+      <details className={styles.documents}>
+        <summary>Documents ({documents.length})</summary>
+        <div className={styles.documentList}>
+          {documents.map((file) => (
+            <button
+              key={file.id}
+              type="button"
+              aria-pressed={document?.id === file.id}
+              onClick={() => onSelectDocument(file.id)}
+            >
+              <span className="min-w-0 truncate">{file.fileName}</span>
+              <small>
+                {file.extractionStatus === "completed"
+                  ? "Text extracted"
+                  : file.extractionStatus === "failed"
+                    ? "Extraction failed"
+                    : "Extraction pending"}
+              </small>
+            </button>
+          ))}
+        </div>
+      </details>
+    </section>
   );
 }

@@ -1,7 +1,15 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { AlertCircleIcon, FileTextIcon } from "lucide-react";
+import {
+  AlertCircleIcon,
+  ChevronLeftIcon,
+  ChevronRightIcon,
+  FileTextIcon,
+  MinusIcon,
+  PlusIcon,
+  RotateCwIcon,
+} from "lucide-react";
 
 import { configurePdfJsWorker } from "@/lib/pdfjs-worker";
 import { cn } from "@/lib/utils";
@@ -12,6 +20,7 @@ interface PdfCanvasPreviewProps {
   errorClassName?: string;
   errorMessage?: string;
   minPageWidth?: number;
+  controls?: boolean;
 }
 
 export function PdfCanvasPreview({
@@ -20,9 +29,23 @@ export function PdfCanvasPreview({
   errorClassName,
   errorMessage = "Could not render the PDF preview.",
   minPageWidth = 320,
+  controls = false,
 }: PdfCanvasPreviewProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [renderError, setRenderError] = useState<string | null>(null);
+  const [pageNumber, setPageNumber] = useState(1);
+  const [pageCount, setPageCount] = useState(0);
+  const [zoom, setZoom] = useState(1);
+  const [rotation, setRotation] = useState(0);
+  const [width, setWidth] = useState(0);
+
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+    const observer = new ResizeObserver(([entry]) => setWidth(Math.floor(entry.contentRect.width)));
+    observer.observe(container);
+    return () => observer.disconnect();
+  }, []);
 
   useEffect(() => {
     const container = containerRef.current;
@@ -45,15 +68,20 @@ export function PdfCanvasPreview({
 
         const pdf = await loadingTask.promise;
         if (cancelled) return;
+        setPageCount(pdf.numPages);
 
-        for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber += 1) {
+        const firstPage = controls ? Math.min(pageNumber, pdf.numPages) : 1;
+        const lastPage = controls ? firstPage : pdf.numPages;
+        for (let currentPage = firstPage; currentPage <= lastPage; currentPage += 1) {
           if (cancelled) return;
 
-          const page = await pdf.getPage(pageNumber);
+          const page = await pdf.getPage(currentPage);
+          if (cancelled) return;
           const containerWidth = Math.max(container.clientWidth, minPageWidth);
-          const baseViewport = page.getViewport({ scale: 1 });
-          const scale = containerWidth / baseViewport.width;
-          const viewport = page.getViewport({ scale });
+          const pageRotation = (page.rotate + rotation) % 360;
+          const baseViewport = page.getViewport({ scale: 1, rotation: pageRotation });
+          const scale = (containerWidth / baseViewport.width) * zoom;
+          const viewport = page.getViewport({ scale, rotation: pageRotation });
           const outputScale = Math.min(window.devicePixelRatio || 1, 3);
           const canvas = document.createElement("canvas");
 
@@ -61,11 +89,11 @@ export function PdfCanvasPreview({
           canvas.height = Math.floor(viewport.height * outputScale);
           canvas.style.width = `${Math.floor(viewport.width)}px`;
           canvas.style.height = `${Math.floor(viewport.height)}px`;
-          canvas.style.maxWidth = "100%";
+          canvas.style.maxWidth = zoom > 1 ? "none" : "100%";
           canvas.style.display = "block";
           canvas.style.backgroundColor = "white";
 
-          if (pageNumber > 1) {
+          if (currentPage > firstPage) {
             const spacer = document.createElement("div");
             spacer.style.height = "16px";
             container.appendChild(spacer);
@@ -88,7 +116,7 @@ export function PdfCanvasPreview({
       container.replaceChildren();
       destroyLoadingTask?.();
     };
-  }, [blobUrl, errorMessage, minPageWidth]);
+  }, [blobUrl, errorMessage, minPageWidth, controls, pageNumber, zoom, rotation, width]);
 
   if (renderError) {
     return (
@@ -107,7 +135,74 @@ export function PdfCanvasPreview({
     );
   }
 
-  return <div ref={containerRef} className={cn("h-full w-full overflow-y-auto", className)} />;
+  return (
+    <div className={cn("flex h-full min-h-0 w-full flex-col", className)}>
+      {controls ? (
+        <div
+          className="mb-3 flex flex-wrap items-center justify-center gap-2 text-xs"
+          aria-label="PDF controls"
+        >
+          <button
+            type="button"
+            aria-label="Previous page"
+            disabled={pageNumber <= 1}
+            onClick={() => setPageNumber((value) => value - 1)}
+            className="rounded p-1.5 hover:bg-white disabled:opacity-30"
+          >
+            <ChevronLeftIcon className="size-4" />
+          </button>
+          <span>
+            Page {pageNumber} of {pageCount || "…"}
+          </span>
+          <button
+            type="button"
+            aria-label="Next page"
+            disabled={pageNumber >= pageCount}
+            onClick={() => setPageNumber((value) => value + 1)}
+            className="rounded p-1.5 hover:bg-white disabled:opacity-30"
+          >
+            <ChevronRightIcon className="size-4" />
+          </button>
+          <span className="mx-1 h-4 border-l border-border" />
+          <button
+            type="button"
+            aria-label="Zoom out"
+            disabled={zoom <= 0.5}
+            onClick={() => setZoom((value) => Math.max(0.5, value - 0.25))}
+            className="rounded p-1.5 hover:bg-white disabled:opacity-30"
+          >
+            <MinusIcon className="size-4" />
+          </button>
+          <button
+            type="button"
+            aria-label="Fit to width"
+            onClick={() => setZoom(1)}
+            className="min-w-12 rounded px-1 py-1.5 hover:bg-white"
+          >
+            {Math.round(zoom * 100)}%
+          </button>
+          <button
+            type="button"
+            aria-label="Zoom in"
+            disabled={zoom >= 2}
+            onClick={() => setZoom((value) => Math.min(2, value + 0.25))}
+            className="rounded p-1.5 hover:bg-white disabled:opacity-30"
+          >
+            <PlusIcon className="size-4" />
+          </button>
+          <button
+            type="button"
+            aria-label="Rotate page"
+            onClick={() => setRotation((value) => (value + 90) % 360)}
+            className="rounded p-1.5 hover:bg-white"
+          >
+            <RotateCwIcon className="size-4" />
+          </button>
+        </div>
+      ) : null}
+      <div ref={containerRef} className="min-h-0 w-full flex-1 overflow-auto" />
+    </div>
+  );
 }
 
 interface PdfDocumentThumbnailProps {

@@ -16,6 +16,7 @@ interface EvaluationTriggerProps {
   /** When true, renders as a re-run (refresh icon + "Re-run" label). */
   rerun?: boolean;
   checklistHref?: string;
+  className?: string;
 }
 
 export function EvaluationTrigger({
@@ -24,6 +25,7 @@ export function EvaluationTrigger({
   hasDocuments,
   rerun = false,
   checklistHref,
+  className,
 }: EvaluationTriggerProps) {
   const [loading, setLoading] = useState(false);
   const router = useRouter();
@@ -64,7 +66,7 @@ export function EvaluationTrigger({
       disabled={loading || !hasDocuments}
       variant={rerun ? "outline" : "default"}
       size={rerun ? "sm" : "default"}
-      className="gap-2"
+      className={className ?? "gap-2"}
     >
       {loading ? (
         <>

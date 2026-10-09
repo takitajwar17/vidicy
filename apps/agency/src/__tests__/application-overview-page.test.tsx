@@ -1,5 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { renderToStaticMarkup } from "react-dom/server";
+import { renderToStaticMarkup as renderMarkup } from "react-dom/server";
+import type { ReactNode } from "react";
+import { NuqsTestingAdapter } from "nuqs/adapters/testing";
+
+function renderToStaticMarkup(node: ReactNode) {
+  return renderMarkup(<NuqsTestingAdapter>{node}</NuqsTestingAdapter>);
+}
 
 const {
   mockRequireApplicationPagePermission,
@@ -32,9 +38,14 @@ vi.mock("@/components/page-header", () => ({
   PageHeader: () => null,
 }));
 
+vi.mock("@/components/ui/sidebar", () => ({
+  SidebarTrigger: () => <button>Toggle sidebar</button>,
+}));
+
 vi.mock("@/components/agency/agency-case-actions", () => ({
   AgencyCaseToolbar: () => <div>Agency toolbar</div>,
   AgencyCaseStatusSelect: () => <div>Case status select</div>,
+  AgencyCaseAssignmentSelect: () => <div>Reviewer assignment</div>,
   ReviewIssueStatusSelect: () => <div>Issue status select</div>,
   AddReviewIssueForm: () => <div>Add issue form</div>,
 }));
@@ -334,11 +345,11 @@ describe("agency application pages", () => {
 
     const markup = renderToStaticMarkup(page);
 
-    expect(markup).toContain("Case #VA-2026-ABC123");
+    expect(markup).toContain("Case VA-2026-ABC123");
     expect(markup).toContain("Review");
-    expect(markup).toContain("Case readiness score");
-    expect(markup).toContain("Client fix list");
-    expect(markup).toContain("Review issues");
+    expect(markup).toContain("Readiness score");
+    expect(markup).toContain("Needs attention");
+    expect(markup).toContain('aria-label="Review issues"');
     expect(markup).toContain("Bank statement needs review");
     expect(markup).not.toContain("Atlas");
     expect(markup).not.toContain("Checkout");
@@ -377,7 +388,7 @@ describe("agency application pages", () => {
     expect(markup).toContain("Bank statement needs review");
     expect(markup).toContain("Issue status select");
     expect(markup).not.toContain("Untracked flag must not be shown");
-    expect(markup).toContain("Select a document type first");
+    expect(markup).toContain("Supporting evidence");
   });
 
   it("hides the score and marks findings from an old review", async () => {
