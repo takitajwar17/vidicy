@@ -2,11 +2,9 @@
 
 This reference is for engineers who maintain, deploy, or review the agency application. It assumes knowledge of HTTP, Node.js, SQL, and cloud service accounts. Use the [main README](../../README.md) for the product workflow and runtime configuration.
 
-**Review date:** 19 October 2026. Source baseline: `cecf7d8b`. Service observations below came from read-only service configuration queries on that date. They are not desired-state infrastructure definitions or performance measurements.
-
 ## How to read this reference
 
-Each section connects a service to its role, code, operating contract, and limits. **Implemented** describes source behavior. **Observed** describes dated service settings. **Recommended** identifies an operating practice that this review did not establish as implemented. The design notes explain current technical consequences; they do not invent a historical decision process.
+Each section connects a service to its role, code, operating contract, and limits. **Implemented** describes source behavior. **Observed** describes service configuration that must be verified before an operating decision. **Recommended** identifies an operating practice to assess or implement. The design notes explain technical consequences.
 
 ## Contents
 
@@ -108,7 +106,7 @@ The upload handler uses 400 for invalid input and 503 for explicit storage failu
 
 ## Observed deployment profile
 
-These settings were inspected on **19 October 2026**. Recheck them before a capacity or availability decision.
+This profile describes observed service configuration. It is not a source-managed infrastructure definition or a live configuration report. Verify the settings before a capacity or availability decision.
 
 | Resource | Observed configuration | Meaning |
 | --- | --- | --- |
@@ -116,8 +114,8 @@ These settings were inspected on **19 October 2026**. Recheck them before a capa
 | Cloud Run request limits | Concurrency 8; request timeout 1,800 seconds; revision maximum 3 instances | Configured request capacity, not a user-count or throughput benchmark |
 | Network | VPC access configured; egress `private-ranges-only` | Private destinations use the VPC route |
 | Public entry | Ingress `all`; platform invoker IAM check disabled | User routes rely on app authentication; internal routes require verified OIDC tokens |
-| Cloud SQL | PostgreSQL 16; `db-custom-1-3840`; zonal | A regional HA standby was not configured in this observation |
-| SQL backup configuration | Automated backups enabled; retention configured for 7 backups | PITR enablement and restore performance were not established by this review |
+| Cloud SQL | PostgreSQL 16; `db-custom-1-3840`; zonal | Zonal configuration does not provide a regional HA standby |
+| SQL backup configuration | Automated backups enabled; retention configured for 7 backups | Verify PITR enablement and restore performance separately |
 | Redis | Redis 7.2; Basic tier; 1 GiB; direct peering; AUTH enabled | Redis has a single primary in this tier; transport encryption was disabled |
 | Cloud Storage | Regional Standard storage; uniform bucket access; public access prevention enforced | Document access is through application authorization and service credentials |
 | Storage recovery | Soft delete retention 604,800 seconds, or 7 days | Logical deletion can precede physical expiry |
@@ -153,7 +151,7 @@ gcloud sql instances list \
   --format='table(name,region,databaseVersion,settings.tier,settings.availabilityType)'
 ```
 
-Full service configuration can contain literal environment values. Use selected fields or a redacted configuration export for shared operational records. A cloud configuration read verifies the settings returned at that time; it does not verify the affected user journey.
+Full service configuration can contain literal environment values. Use selected fields or a redacted configuration export for shared operational records. A cloud configuration read verifies the returned settings; it does not verify the affected user journey.
 
 ## Cloud Run
 
@@ -171,7 +169,7 @@ Cloud Run request timeout, Cloud Tasks dispatch deadline, and per-model timeout 
 
 Concurrency is the number of requests an instance can serve at once. It is not the number of active users. PDF rendering, buffered uploads, SQL connections, and model requests compete for the same resources.
 
-Private Redis connectivity needs the configured VPC route. The [Direct VPC egress guide](https://docs.cloud.google.com/run/docs/configuring/vpc-direct-vpc) explains the network, subnet, and egress controls. This inspection established VPC access, but did not treat every network attachment as source-managed configuration. External OpenAI, Perplexity, Resend, and Turnstile calls also need outbound connectivity.
+Private Redis connectivity needs the configured VPC route. The [Direct VPC egress guide](https://docs.cloud.google.com/run/docs/configuring/vpc-direct-vpc) explains the network, subnet, and egress controls. Verify network attachments in the service configuration; the image release does not provision them. External OpenAI, Perplexity, Resend, and Turnstile calls also need outbound connectivity.
 
 ## Cloud SQL for PostgreSQL
 
@@ -181,9 +179,13 @@ The production schema is [db/schema](src/db/schema/index.ts). Drizzle uses the P
 
 ### Transactions and locks
 
-`db.batch()` checks out one connection, runs `BEGIN`, executes the supplied Drizzle queries, and commits or rolls back the group. `AsyncLocalStorage` routes those queries to the checked-out connection. Nested batches are rejected.
+`db.withTransaction()` checks out one connection, runs `BEGIN`, executes the supplied callback, and commits or rolls back the group. `db.batch()` uses the same transaction helper for a list of Drizzle queries. `AsyncLocalStorage` routes queries from both paths, including queries in called helpers, to the checked-out connection. Nested transactions are rejected. Keep network and AI calls outside these transactions.
 
-The upload transaction creates the document row, updates its checklist item, and invalidates review state together. Review synchronization also checks document snapshots before accepting findings. See [agency-review.ts](src/server/agency-review.ts).
+The [case creation action](src/actions/agency-case.action.ts) resolves or creates the client, inserts the case, and inserts its primary applicant in one transaction. If a required write fails, client changes and both inserts roll back. This transaction does not include storage, queue creation, or model calls.
+
+The upload transaction creates the document row, updates its checklist item, and invalidates review state together. Review synchronization also checks document snapshots before accepting findings.
+
+For existing review issues, [agency-review.ts](src/server/agency-review.ts) conditions updates and automatic resolution on the saved `updateCounter`, status, and `resolvedAt` values. An update is skipped if one of these values changed since the read. This protects a newer reviewer decision from that stale synchronization attempt. Changed evidence can still reopen an issue through the normal review rules.
 
 The extraction route uses a **separate pool of 3 connections** for session-level PostgreSQL advisory locks. A lock identifies one document. Model inference does not hold a SQL transaction open. The connection remains checked out until the attempt ends. If lock release fails, the connection is discarded.
 
@@ -224,6 +226,12 @@ Each upload must name a checklist item in the same case. The server checks appli
 
 Object creation, SQL commit, and queue creation are separate operations. A failure after object creation but before SQL insertion can leave an unreferenced object. The document reconciler searches database rows; it is not an object-orphan collector. See the [upload handler](src/app/api/_utils/document-upload.ts) and [preview route](src/app/api/document-preview/[documentId]/route.ts).
 
+### Support screenshot deletion
+
+[support-attachments.ts](src/server/support-attachments.ts) provides shared cleanup for ticket and account deletion. Cleanup runs after the associated support rows have been removed. Before deleting an object, it checks the user's screenshot prefix or the admin screenshot prefix, verifies that the object's `uploadedBy` metadata matches the stored author, and checks for remaining ticket or message references. A stored key alone is not proof of ownership.
+
+Account cleanup also collects attachments from messages that the user wrote on other users' tickets. Objects with remaining references, including shared admin screenshots, are retained. Cleanup errors produce a warning and can leave unreferenced objects. The reference check and object deletion are separate operations; they do not form an atomic transaction with concurrent attachment changes.
+
 ## Memorystore for Redis
 
 **Implemented:** [kv.ts](src/infra/google/kv.ts) adapts the required KV operations to a shared Redis connection. Runtime prefixes separate application data (`vidicy:app:`) from session/cache data (`vidicy:cache:`). These prefixes are key namespaces, not separate tenant authorization boundaries.
@@ -231,6 +239,9 @@ Object creation, SQL commit, and queue creation are separate operations. A failu
 | KV operation | Redis behavior |
 | --- | --- |
 | `get` | `GET`, with optional JSON decoding |
+| `take` | `GETDEL`: return and remove a value in one operation |
+| `increment` | Lua script with `INCR` and `EXPIRE` in one operation; renew the TTL |
+| `incrementWindow` | Lua script that increments a counter, sets its initial TTL, and returns the count and remaining TTL without extending an active window |
 | `put` with relative expiry | `SET ... EX` |
 | `put` with absolute expiry | `SET ... EXAT` |
 | Expiry already reached | Delete the key |
@@ -243,7 +254,17 @@ Connection setup has a 10-second timeout, bounded reconnect backoff, and an offl
 
 The observed Basic tier is a single primary. The [Redis tier explanation](https://docs.cloud.google.com/memorystore/docs/redis/faq) and [HA guide](https://docs.cloud.google.com/memorystore/docs/redis/high-availability-for-memorystore-for-redis) distinguish availability from durability; even replicated Redis can lose acknowledged writes during failover.
 
-**Current limit:** [rate-limit.ts](src/infra/rate-limit.ts) uses non-atomic read/check/write counters in Redis. A hard concurrent-request limit would need an atomic implementation.
+### Rate-limit windows and failures
+
+[rate-limit.ts](src/infra/rate-limit.ts) uses `increment()` with a key for the configured clock-aligned window. The returned count determines whether the request is allowed. The key expires at the window boundary. Concurrent requests use the same atomic counter. Redis errors propagate to the caller; [with-rate-limit.ts](src/infra/with-rate-limit.ts) does not continue to the protected action after a counter error.
+
+[action-rate-limit.ts](src/infra/action-rate-limit.ts) uses `incrementWindow()` for a per-user, per-action window. Its one-hour window starts with the first request. Later requests do not extend the window, and crossing a clock-hour boundary does not reset it. The versioned `rl:v2:` keys avoid the older JSON counter format. An exceeded limit raises `TOO_MANY_REQUESTS`. A Redis error is logged and the action is allowed to continue. Atomic counters therefore do not provide a hard action limit during a Redis outage.
+
+### Single-use password reset tokens
+
+The [reset action](src/app/(auth)/reset-password/reset-password.action.ts) uses `take()` before the password write. Only one concurrent request can receive the token value. The action then checks the stored token state and expiry, updates the password, and invalidates the user's sessions.
+
+Token consumption, the SQL password update, and Redis session deletion are separate operations. If a later password or session operation fails, the token remains consumed. The user must request a new reset link before another attempt.
 
 ## Cloud Tasks and Cloud Scheduler
 
@@ -278,7 +299,9 @@ The [extraction route](src/app/api/internal/document-extraction/route.ts) verifi
 | Extraction and indexing succeed | 204 | Acknowledge this attempt |
 | Lock is held, processing fails, or a dependency is unavailable | 503 | Another attempt is needed |
 
-The pipeline reuses stored extraction or a completed index when its state permits. A crash after an external model or index call but before recording its result can still cause repeated calls. No exactly-once model-execution guarantee is made.
+The pipeline reuses stored extraction or a completed index when its state permits. An empty or failed extraction result can update the document only if the database still has no nonblank text. A late failed attempt therefore cannot erase text saved by a successful attempt. After a failed extraction attempt, `ensureDocumentExtraction()` reloads the row and returns stored text when another attempt has saved it. See [document-pipeline.ts](src/services/document-pipeline.ts).
+
+A crash after an external model or index call but before recording its result can still cause repeated calls. These safeguards protect stored results; they do not provide exactly-once model execution.
 
 HTTP target tokens, task service accounts, and retry behavior are described in the [HTTP task guide](https://docs.cloud.google.com/tasks/docs/creating-http-target-tasks) and [queue configuration guide](https://docs.cloud.google.com/tasks/docs/configuring-queues). Retry delivery, SDK request retries, and application recovery are three separate mechanisms.
 
@@ -324,7 +347,7 @@ Cloud Tasks runs document extraction and indexing. The [evaluation server action
 
 ### Quality evidence
 
-The repository has separate evaluation suites and datasets under `src/__tests__/eval`. This documentation update did not run them or establish accuracy, recall, or review-time results. A model change should have a versioned dataset, prompt/schema version, failure examples, and a recorded result before it is described as an improvement.
+The repository has separate evaluation suites and datasets under `src/__tests__/eval`. Accuracy, recall, and review-time claims require measured results. A model change should have a versioned dataset, prompt/schema version, failure examples, and a recorded result before it is described as an improvement.
 
 ## Vertex AI Vector Search
 
@@ -405,7 +428,7 @@ The public Cloud Run ingress and disabled platform invoker check make the applic
 
 ### Secret Manager and build-time values
 
-The observed service injects database, Redis, AI-provider, OAuth, email, Turnstile, and Sentry settings through Secret Manager references. The inspected references use numbered versions. Secret values were not included in this document or printed during configuration review.
+The observed service injects database, Redis, AI-provider, OAuth, email, Turnstile, and Sentry settings through numbered Secret Manager version references. Keep secret values out of documentation and configuration review output.
 
 [Secret Manager integration for Cloud Run](https://docs.cloud.google.com/run/docs/configuring/services/secrets) resolves environment-backed secrets at instance startup; numbered versions make the selected value explicit. A rotation procedure must update the reference, deploy a revision, and verify affected flows. Updating only the image does not select a new secret version automatically.
 
@@ -419,7 +442,8 @@ The shared REST adapter uses ADC with the `cloud-platform` scope. IAM grants sti
 
 ```mermaid
 flowchart LR
-    Git[GitHub main] --> OIDC[GitHub OIDC]
+    Git[GitHub main] --> Checks[Lint / format / types / tests]
+    Checks --> OIDC[GitHub OIDC]
     OIDC --> WIF[Workload Identity Federation]
     WIF --> Deploy[Deployment account]
     Deploy --> Build[Cloud Build / build account]
@@ -429,13 +453,26 @@ flowchart LR
     Secrets[Secret Manager references] --> Run
 ```
 
-The [workflow](../../.github/workflows/deploy.yml) is the release entry point. It serializes agency production jobs with `cancel-in-progress: false`. The [Cloud Build configuration](cloudbuild.yaml) uses a dedicated build account, a 1,800-second build timeout, `CLOUD_LOGGING_ONLY`, and an `images` output for Artifact Registry. CI supplies `_IMAGE_TAG` from the commit SHA.
+The [workflow](../../.github/workflows/deploy.yml) is the release entry point. Before Google Cloud authentication or the container build, it requires `pnpm lint`, `pnpm format:check`, `pnpm typecheck`, and `pnpm test` to pass. It serializes agency production jobs with `cancel-in-progress: false`. The [Cloud Build configuration](cloudbuild.yaml) uses a dedicated build account, a 1,800-second build timeout, `CLOUD_LOGGING_ONLY`, and an `images` output for Artifact Registry. CI supplies `_IMAGE_TAG` from the commit SHA, resolves the published image digest, and updates Cloud Run with that digest.
 
 The [deployment script](scripts/google-deploy.mjs) offers the same image build/update path for an operator. It validates the image tag and returned digest. `--build-only` publishes an image without updating Cloud Run.
 
-The deploy step changes the image reference. It does not provision the database, bucket, queue, schedule, network, IAM policy, or runtime secrets. It also does not run database migrations, Vitest, ESLint, a load test, or a browser acceptance flow. The container build runs the Next.js build and its configured TypeScript check.
+The deploy step changes the image reference. It does not provision the database, bucket, queue, schedule, network, IAM policy, or runtime secrets. The workflow does not run database migrations, a load test, or a browser acceptance flow. The manual deployment script does not run the CI code checks or Vitest; run those checks before using it. Both paths run the Next.js build and its configured TypeScript check during the container build.
 
 The [Cloud Build to Cloud Run guide](https://docs.cloud.google.com/build/docs/deploying-builds/deploy-cloud-run) and [Artifact Registry integration](https://docs.cloud.google.com/artifact-registry/docs/integrate-cloud-run) describe the service boundaries used here.
+
+### Code checks and isolated tests
+
+Run `pnpm lint`, `pnpm format:check`, `pnpm typecheck`, and `pnpm test` from the repository root before release. CI installs PostgreSQL and Redis test tools and runs the same commands. The format check covers application source; generated migration metadata is excluded to preserve migration artifacts.
+
+The standard test suite includes unit tests, component event tests, route tests, and tests with real local PostgreSQL and Redis processes:
+
+- [The PostgreSQL helper](src/__tests__/helpers/postgres.ts) needs `pg_config` on `PATH` and `initdb` and `pg_ctl` in its reported binary directory. It creates a temporary cluster with a private Unix socket and no TCP listener. Tests use explicit connection options and do not select an application database from environment variables. These tests cover case rollback, concurrent review updates, extraction results, and attachment references.
+- [The Redis integration tests](src/__tests__/google-kv.integration.test.ts) need `redis-server` and `redis-cli` on `PATH`. They start a temporary Redis process on a private Unix socket with TCP disabled. They check concurrent counters, window expiry, and single token consumption. They do not connect to application Redis.
+
+The suite also checks that failed deletion previews block confirmation, displayed users are available to CSV export, and server-action callbacks receive the expected data. The test counts change as coverage changes; use the output from the relevant run as release evidence.
+
+`pnpm test` excludes `src/__tests__/eval/**`. Passing the standard suite does not establish AI accuracy, production capacity, or a successful browser user journey. Run the separate model evaluation suites when assessing model quality, and record browser or live-service checks separately.
 
 ### Source and supply-chain boundaries
 
@@ -466,7 +503,7 @@ See [revision rollback and traffic migration](https://docs.cloud.google.com/run/
 - Cloud Build sends build logs to Cloud Logging.
 - The production logger emits JSON through stdout/stderr. Most ordinary entries use `level`; alert entries also include `severity` and `alertCategory`.
 - Sentry initializes for Node.js when `SENTRY_DSN` is set. Its configured trace sample rate is 0.05.
-- The admin-only `/api/health` route queries PostgreSQL, writes/reads/deletes a Redis canary, and lists a storage object page.
+- The admin-only `/api/health` route queries PostgreSQL, writes/reads/deletes a Redis canary, and lists a storage object page. Each request uses a unique canary key and value. Deletion runs in `finally`; the key also has a 60-second TTL if cleanup fails. Concurrent checks do not share a key.
 - Document rows hold extraction/indexing status and recovery counters.
 
 The health route is an active dependency diagnostic. It returns 200 for healthy or degraded status and 503 only when all three checked components are down. It is not an unauthenticated startup probe, an end-to-end user check, or an availability SLI by itself.
@@ -500,7 +537,7 @@ A service-level indicator (SLI) measures a user-visible outcome. A service-level
 | Processing timeliness | Eligible accepted uploads that reach the required completed state within `T` / eligible accepted uploads | Meaning of partial/skipped results, `T`, target, and treatment of provider incidents |
 | Review validity | Displayed current reviews whose snapshots match the latest assigned documents | Sampling/measurement method and treatment of stale reports |
 
-For each SLO, record its owner, source query, scope, exclusions, target, window, rationale, error-budget action, and review date. The [example SLO document](https://sre.google/workbook/slo-document/) shows this structure. Do not substitute queue enqueue counts for completed document outcomes. The source includes evaluation datasets, but this documentation work establishes no accuracy, latency, uptime, or throughput result.
+For each SLO, record its owner, source query, scope, exclusions, target, window, rationale, error-budget action, and review schedule. The [example SLO document](https://sre.google/workbook/slo-document/) shows this structure. Do not substitute queue enqueue counts for completed document outcomes. Evaluation datasets and service configuration alone do not establish accuracy, latency, uptime, or throughput results.
 
 ## Recovery procedures
 
@@ -533,7 +570,7 @@ The task's ID is a hash, not the plain document ID. Use task payload metadata wi
 
 | Data | Recovery requirement | Established evidence |
 | --- | --- | --- |
-| PostgreSQL | Defined backup retention, tested restore, and an explicit PITR decision | Automated backups and a retention count of 7 observed; no restore drill or measured recovery objective in this review |
+| PostgreSQL | Defined backup retention, tested restore, and an explicit PITR decision | Automated backups and a retention count of 7 observed; restore drills and recovery objectives require separate evidence |
 | Storage objects | Restore the required bytes/generation and reconnect valid document references | Seven-day soft delete observed |
 | Redis | Restore available data or expire sessions and rebuild derived state as appropriate | Basic tier observed; recovery behavior depends on what was lost |
 | Vector index | Rebuild from authorized stored text/metadata and validate model dimensions and filters | Derived index adapter exists; an automated full rebuild/restore drill is not established |
@@ -632,6 +669,8 @@ A queue, vector index, bucket, SQL instance, secret reference, and model entitle
 | `pnpm build` | Build the application |
 | `pnpm start` | Serve the production build; use `PORT` to select a port |
 | `pnpm lint` | Run ESLint |
+| `pnpm format:check` | Check source formatting with Prettier |
+| `pnpm typecheck` | Generate Next.js route types and check TypeScript |
 | `pnpm test` | Run the standard Vitest suite |
 | `pnpm eval` | Run separate model evaluation suites |
 | `pnpm db:generate <name>` | Generate a named PostgreSQL migration |
@@ -647,17 +686,15 @@ A queue, vector index, bucket, SQL instance, secret reference, and model entitle
 | Infrastructure reproduction | Release scripts update an existing service | A complete versioned provisioning definition is not present |
 | Regional availability | Zonal SQL and Basic Redis were observed | Make an explicit HA decision based on required user outcomes |
 | Transport and secrets | Secret injection uses versioned references; observed Redis transport encryption is disabled | Review transport requirements and rotate through an explicit release procedure |
-| Rate limiting | Redis-backed read/check/write remains non-atomic | Define and implement any required hard concurrency guarantee |
+| Rate limiting | Counters are atomic; per-user action limits allow requests after Redis errors | Decide whether action limits must reject requests during Redis outages |
 | Cross-service writes | No distributed transaction or transactional outbox | Account for object orphans, enqueue failures, and duplicate external effects |
 | Processing recovery | Three bounded recovery claims plus queue retries | Define an operator-owned response after exhaustion |
 | Observability | Logs, Sentry, and health diagnostics exist | SLOs, complete trace correlation, and checked-in alert/dashboard definitions are not established |
 | Disaster recovery | Backup and soft-delete configuration observed | Verify PITR, define recovery objectives, and record restore drills |
-| Release enforcement | Image digest selected | No explicit test, canary-analysis, vulnerability, or attestation gate in the release workflow |
+| Release enforcement | Lint, format, type, and standard test gates precede a digest-based release | Canary analysis, vulnerability blocking, and attestation verification are not explicit release gates |
 | AI quality and location | Schema checks and configured models exist; generative endpoint defaults global | Record evaluated quality and review processing-location requirements |
 | Reports and reviewer controls | Report list/actions exist; the case toolbar is not mounted | Report export/delivery and toolbar reachability remain incomplete |
 
-These are documentation findings and operating decisions. This update does not provision resources, change policies, run tests, deploy code, or claim that the recommended controls are installed.
-
 ## Documentation maintenance
 
-Review this reference when a cloud service adapter, schema, model ID, internal endpoint, deployment identity, or service setting changes. Update the source baseline and the observation date separately. Retain the distinction between code defaults, deployed settings, measured outcomes, and recommended work. Keep secret values and source documents out of documentation examples.
+Review this reference when a cloud service adapter, schema, model ID, internal endpoint, deployment identity, or service setting changes. Verify source behavior and service configuration separately. Retain the distinction between code defaults, deployed settings, measured outcomes, and recommended work. Keep secret values and source documents out of documentation examples.

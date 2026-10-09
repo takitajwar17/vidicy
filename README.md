@@ -6,7 +6,7 @@ Vidicy helps agency staff manage visa cases, collect documents, review AI findin
 
 The application is in `apps/agency`. It runs on Node.js and Cloud Run.
 
-This README is the entry point for developers and technical reviewers. The [technical reference](apps/agency/README.md) covers service contracts, identities, failure handling, recovery, and dated deployment observations.
+This README is the entry point for developers and technical reviewers. The [technical reference](apps/agency/README.md) covers service contracts, identities, failure handling, recovery, and deployment configuration.
 
 ## Contents
 
@@ -30,6 +30,12 @@ This README is the entry point for developers and technical reviewers. The [tech
 6. Replace or correct documents when needed. Document changes invalidate affected evaluations and reports.
 
 The dashboard has views for applications, clients, documents, issues, reports, and staff. It also includes support tickets, announcements, account settings, and an admin area.
+
+### Data protection during concurrent work
+
+Case creation uses one PostgreSQL transaction for client changes, the case, and its primary applicant. A failed write rolls back that group. Review synchronization uses conditional updates to protect newer reviewer decisions. A failed extraction attempt cannot erase text saved by a successful attempt.
+
+Redis counters use atomic operations for rate limits. Password reset tokens are consumed in one operation, so concurrent requests cannot reuse the same token. The [technical reference](apps/agency/README.md#memorystore-for-redis) explains the window rules and Redis failure behavior.
 
 ### Implementation limits
 
@@ -100,14 +106,14 @@ These steps are separate service operations. File storage, SQL commit, and queue
 | Cloud Run | Hosts the standalone Next.js server and processing routes | Web requests and document tasks share instance resources |
 | Cloud SQL | Stores related case data and supports atomic SQL batches and advisory locks | Pool sizes and revision count determine connection pressure |
 | Cloud Storage | Stores source files and larger vector metadata | Object generations identify bytes; storage writes do not join SQL transactions |
-| Memorystore | Supplies TTL-based sessions, tokens, counters, and caches | Connection loss can affect user access; the current rate-limit sequence is not atomic |
+| Memorystore | Supplies TTL-based sessions, single-use reset tokens, atomic counters, and caches | Connection loss can affect user access; per-user action limits allow requests when Redis fails |
 | Cloud Tasks | Delivers work outside the original upload request | Delivery can repeat; handlers need locks, stable IDs, and reusable state |
 | Cloud Scheduler | Starts periodic recovery and metadata cleanup | Recovery is bounded and can require operator action |
 | Vertex AI models | Extract document content and produce structured review output | Provider access, schema checks, model quality, and request deadlines are separate concerns |
 | Vertex AI Vector Search | Retrieves filtered document context | Serving updates are asynchronous; database identity checks protect retrieval |
 | Secret Manager and IAM | Supply runtime credentials and restrict machine access | User OAuth, runtime ADC, deployment federation, and task OIDC are different identity paths |
 
-See the [service-by-service reference](apps/agency/README.md#cloud-run) for the implementation details and source links. The [observed deployment profile](apps/agency/README.md#observed-deployment-profile) records actual settings from 19 October 2026. Those settings can change independently of this repository.
+See the [service-by-service reference](apps/agency/README.md#cloud-run) for the implementation details and source links. The [observed deployment profile](apps/agency/README.md#observed-deployment-profile) separates service settings from source configuration. Verify service settings before an operating decision; they can change independently of this repository.
 
 ## AI configuration
 
@@ -170,6 +176,8 @@ Run these from the repository root:
 | `pnpm dev` | Start the agency development server on port 3002 |
 | `pnpm build` | Build the workspace application |
 | `pnpm lint` | Run the application ESLint command |
+| `pnpm format:check` | Check source formatting with Prettier |
+| `pnpm typecheck` | Generate Next.js route types and check TypeScript |
 | `pnpm test` | Run the standard Vitest suite; exclude model evaluation suites |
 | `pnpm db:generate:agency <name>` | Generate a named PostgreSQL migration |
 | `pnpm db:migrate:dev:agency` | Apply PostgreSQL migrations to the configured target |
@@ -182,14 +190,20 @@ Run these from the repository root:
 
 `preview` serves an existing production Next.js build.
 
+The standard tests include temporary PostgreSQL and Redis instances. Install their local tools before running the suite. See [code checks and isolated tests](apps/agency/README.md#code-checks-and-isolated-tests) for requirements and test scope.
+
 ## Deployment
 
 The [deployment workflow](.github/workflows/deploy.yml) runs on pushes to `main` and on manual dispatch. It:
 
-1. Authenticates with Workload Identity Federation.
-2. Builds the application container with [Cloud Build](apps/agency/cloudbuild.yaml).
-3. Pushes the image to Artifact Registry.
-4. Updates the Cloud Run service using the immutable image digest.
+1. Installs dependencies and the PostgreSQL and Redis test tools.
+2. Requires lint, formatting, TypeScript, and standard tests to pass.
+3. Authenticates with Workload Identity Federation.
+4. Builds the application container with [Cloud Build](apps/agency/cloudbuild.yaml).
+5. Pushes the image to Artifact Registry.
+6. Updates the Cloud Run service using the immutable image digest.
+
+The manual `pnpm deploy:agency` command builds and deploys directly. It does not run the CI checks; run them before using that command.
 
 The checked-in workflow and manual deployment script target project `eco-azimuth-441108-s4`, region `asia-southeast1`, and service `vidicy-agency`. The workflow also restricts deployment to the configured GitHub repository ID. Review these settings before using a different repository or project.
 
@@ -206,12 +220,13 @@ The [technical reference](apps/agency/README.md) covers architecture, design cho
 | Question | Reference |
 | --- | --- |
 | What happens between upload and completed indexing? | [System boundaries and sequence](apps/agency/README.md#system-boundaries) |
-| What is deployed, and what is only configured in source? | [Dated deployment observations](apps/agency/README.md#observed-deployment-profile) |
+| What is deployed, and what is only configured in source? | [Observed deployment profile](apps/agency/README.md#observed-deployment-profile) |
 | How do SQL transactions, Redis TTLs, and object generations work here? | [SQL](apps/agency/README.md#cloud-sql-for-postgresql), [Redis](apps/agency/README.md#memorystore-for-redis), [Storage](apps/agency/README.md#cloud-storage) |
 | How are duplicate jobs and failed uploads handled? | [Task delivery and reconciliation](apps/agency/README.md#cloud-tasks-and-cloud-scheduler) |
 | How are AI output and retrieved document context checked? | [Gemini](apps/agency/README.md#gemini-on-vertex-ai), [Vector Search](apps/agency/README.md#vertex-ai-vector-search) |
 | Which identity can access which service? | [Identity, IAM, and secrets](apps/agency/README.md#identity-iam-and-secrets) |
 | How is a container built, released, or rolled back? | [Release contract](apps/agency/README.md#build-release-and-rollback) |
+| What do the code and database tests verify? | [Code checks and isolated tests](apps/agency/README.md#code-checks-and-isolated-tests) |
 | What should operators measure or investigate? | [Monitoring and SLOs](apps/agency/README.md#monitoring-and-service-objectives), [recovery](apps/agency/README.md#recovery-procedures) |
 | Where does document data go, and how long can it remain? | [Location and retention](apps/agency/README.md#data-location-and-retention) |
 | What limits processing capacity and cost? | [Capacity and cost controls](apps/agency/README.md#capacity-and-cost-controls) |
