@@ -64,6 +64,29 @@ function overall(score: number) {
 }
 
 describe("production case evaluation core", () => {
+  it.each([
+    { names: ["PRIYA SHARMA", "Ms. Priya Sharma"], hasMismatch: false },
+    { names: ["PRIYA SHARMA", " Dr. Priya Sharma "], hasMismatch: false },
+    { names: ["Priya Sharma", "Ananya Sharma"], hasMismatch: true },
+    { names: ["নাফিস ইসলাম", "সাদিক ইসলাম"], hasMismatch: true },
+    { names: ["李明", "王芳"], hasMismatch: true },
+    { names: [" José Alvarez ", "ALVAREZ JOSÉ"], hasMismatch: false },
+  ])("checks document holder identities: $names", async ({ names, hasMismatch }) => {
+    const evaluate = vi.fn();
+    for (const holderName of names) {
+      evaluate.mockResolvedValueOnce(
+        JSON.stringify({
+          ...documentResult,
+          extractedFields: { ...documentResult.extractedFields, holderName },
+        }),
+      );
+    }
+    evaluate.mockResolvedValueOnce(overall(40));
+    await runCaseEvaluation({ ...fixture(2), evaluate });
+    const combinedPrompt = evaluate.mock.calls[2][0].userContent;
+    expect(combinedPrompt.includes("Name mismatch:")).toBe(hasMismatch);
+  });
+
   it("uses production schemas, individual review, combined review and the skeptical pass", async () => {
     const evaluate = vi
       .fn()
@@ -83,6 +106,10 @@ describe("production case evaluation core", () => {
       "5-DIMENSION AGENCY READINESS SCORING FRAMEWORK",
     );
     expect(evaluate.mock.calls[2][0].systemPrompt).toContain("highly skeptical");
+    expect(evaluate.mock.calls[2][0].userContent).toBe(evaluate.mock.calls[1][0].userContent);
+    expect(evaluate.mock.calls[2][0].systemPrompt).not.toMatch(
+      /assume the worst|deliberate omissions/i,
+    );
     expect(result.evaluationData.overallScore).toBe(70);
     expect(result.evaluationData.riskLevel).toBe("medium");
     expect(result.scoreConfidence).toBe("low");

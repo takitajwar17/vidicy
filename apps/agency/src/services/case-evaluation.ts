@@ -816,6 +816,19 @@ Return JSON with this exact structure:
   return { perDocumentEvaluations, docSnapshots };
 }
 
+function normalizeHolderName(name: string): string {
+  return name
+    .normalize("NFKC")
+    .trim()
+    .toLowerCase()
+    .replace(/^(?:(?:mr|mrs|ms|miss|dr|prof)\.?\s+)+/u, "")
+    .replace(/[^\p{L}\p{M}\s]/gu, "")
+    .trim()
+    .split(/\s+/u)
+    .sort()
+    .join(" ");
+}
+
 function buildOrchestratorPrompts({
   checklistItems,
   perDocumentEvaluations,
@@ -841,17 +854,10 @@ function buildOrchestratorPrompts({
     (e) => e.hasDocument && e.extractedFields.holderName,
   );
   if (namedEvals.length >= 2) {
-    const normalize = (name: string) =>
-      name
-        .toLowerCase()
-        .replace(/[^a-z\s]/g, "")
-        .split(/\s+/)
-        .sort()
-        .join(" ");
     const ref = namedEvals[0];
-    const refNorm = normalize(ref.extractedFields.holderName!);
+    const refNorm = normalizeHolderName(ref.extractedFields.holderName!);
     for (const e of namedEvals.slice(1)) {
-      if (normalize(e.extractedFields.holderName!) !== refNorm) {
+      if (normalizeHolderName(e.extractedFields.holderName!) !== refNorm) {
         consistencyIssues.push(
           `Name mismatch: "${ref.documentName}" shows "${ref.extractedFields.holderName}" but "${e.documentName}" shows "${e.extractedFields.holderName}"`,
         );
@@ -1109,8 +1115,8 @@ async function evaluateApplicationReadiness({
   // ---------------------------------------------------------------------------
   // ENSEMBLE SCORING — adversarial second pass for borderline scores
   // Only triggered when the primary score is within ±12 of the visa-type threshold.
-  // A devil's advocate prompt reframes the same data pessimistically. Comparing the
-  // two scores reveals how stable the evaluation is:
+  // A skeptical prompt checks the same evidence and rubric for unsupported claims.
+  // Comparing the two scores reveals how stable the evaluation is:
   //   divergence < 8  → "high"     — both passes agree, keep primary score
   //   divergence < 18 → "moderate" — minor disagreement, use average
   //   divergence ≥ 18 → "low"      — significant disagreement, use average + warn
@@ -1127,7 +1133,7 @@ async function evaluateApplicationReadiness({
 
   if (isBorderline) {
     try {
-      const adversarialSystemPrompt = `You are a highly skeptical agency review lead whose job is to stress-test this application before final submission. Using the same agency readiness framework, assume the worst interpretation of every ambiguous document, treat missing documents as deliberate omissions, and be strict about marginal evidence. Return ONLY valid JSON.`;
+      const adversarialSystemPrompt = `You are a highly skeptical agency review lead whose job is to stress-test this application before final submission. Independently check the supplied evidence using exactly the same agency readiness rubric and point weights. Identify unsupported claims, missing required evidence and concrete contradictions. Do not infer fraud, bad intent, or an adverse immigration record from absent evidence. Distinguish an unverified claim from a proven contradiction. Do not invent missing checklist requirements or deduct points solely because you cannot inspect an original document or verify its issuer externally. Award rubric points supported by the supplied evidence, identify uncertainty explicitly, and sum the sub-scores without an extra pessimism penalty. Return ONLY valid JSON.`;
 
       const adversarialResponse = await evaluate({
         systemPrompt: adversarialSystemPrompt,
