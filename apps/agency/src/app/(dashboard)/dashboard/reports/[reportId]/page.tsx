@@ -30,7 +30,8 @@ export default async function ClientReportPage({
     throw error;
   });
   const { report, application, isStale } = data;
-  const recipient = report.deliveryPayload?.to ?? application.clientEmail;
+  const recipient =
+    report.deliveryRequest?.to[0] ?? report.deliveryPayload?.to ?? application.clientEmail;
   return (
     <main id="client-report" className="mx-auto w-full max-w-4xl space-y-6 p-6 print:p-0">
       <style>{`@media print {
@@ -67,9 +68,9 @@ export default async function ClientReportPage({
       ) : null}
       {report.status === "sending" ? (
         <p role="status">
-          Delivery is pending or its outcome is unknown. Wait two minutes before retrying. The retry
-          uses the same recipient and report. After 23 hours, check the provider before preparing
-          another report.
+          {report.deliveryRequest
+            ? "Delivery is pending or its outcome is unknown. Wait two minutes before retrying. The retry uses the same sender, recipient, and report. After 23 hours, check the provider before preparing another report."
+            : "The original sender details were not saved for this pending report. Check the email provider before preparing another report."}
         </p>
       ) : null}
       <p className="whitespace-pre-wrap">{report.summary}</p>
@@ -93,7 +94,11 @@ export default async function ClientReportPage({
         <ClientReportControls
           reportId={report.id}
           recipient={recipient}
-          canSend={!isStale && report.status !== "sent"}
+          canSend={
+            !isStale &&
+            report.status !== "sent" &&
+            (report.status !== "sending" || !!report.deliveryRequest)
+          }
           isPendingDelivery={report.status === "sending"}
         />
       </CsrfProvider>

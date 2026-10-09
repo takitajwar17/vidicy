@@ -7,7 +7,7 @@ import { getDB } from "@/db";
 import { clientReportTable, visaApplicationTable } from "@/db/schema";
 import { requireAgencyStaff } from "@/server/agency-team";
 import { requireCurrentAgencyReview } from "@/server/agency-review";
-import { sendClientReportEmail } from "@/utils/email";
+import { createClientReportEmailRequest, sendClientReportEmail } from "@/utils/email";
 
 const RETRY_DELAY_MS = 2 * 60_000;
 // Resend retains idempotency keys for 24 hours. Stop earlier to avoid an
@@ -51,11 +51,17 @@ export async function deliverClientReport({ reportId }: { reportId: string }) {
     applicationId: application.id,
     userId: session.userId,
   });
-  const recipient = report.deliveryPayload?.to ?? application.clientEmail?.trim();
+  const recipient =
+    report.deliveryRequest?.to[0] ?? report.deliveryPayload?.to ?? application.clientEmail?.trim();
   if (!recipient || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(recipient))
     throw new ZSAError("PRECONDITION_FAILED", "Add a valid client email address first.");
   const now = new Date();
   if (report.status === "sending") {
+    if (!report.deliveryRequest)
+      throw new ZSAError(
+        "PRECONDITION_FAILED",
+        "The original sender details were not saved. Check the email provider before preparing another report.",
+      );
     const age = now.getTime() - (report.deliveryStartedAt?.getTime() ?? 0);
     const lastAttemptAge = now.getTime() - report.updatedAt.getTime();
     if (age >= RETRY_WINDOW_MS)
@@ -88,6 +94,7 @@ export async function deliverClientReport({ reportId }: { reportId: string }) {
       "This report supports document preparation. It does not guarantee a visa decision.",
     ].join("\n"),
   };
+  const request = report.deliveryRequest ?? createClientReportEmailRequest(payload);
   const db = getDB();
   const claimed = await db.withTransaction(async () => {
     // Serialize this short claim with case updates. No provider call runs in
@@ -113,7 +120,7 @@ export async function deliverClientReport({ reportId }: { reportId: string }) {
       .set({
         status: "sending",
         deliveryKey: report.deliveryKey ?? `client-report/${randomUUID()}`,
-        deliveryPayload: payload,
+        deliveryRequest: request,
         deliveryStartedAt: report.deliveryStartedAt ?? now,
       })
       .where(
@@ -131,7 +138,7 @@ export async function deliverClientReport({ reportId }: { reportId: string }) {
   // Keep the claim on errors: a timeout can mean the provider accepted the
   // message. A retry uses the exact stored payload and idempotency key.
   const accepted = await sendClientReportEmail({
-    payload: claimed.report.deliveryPayload!,
+    request: claimed.report.deliveryRequest!,
     idempotencyKey: claimed.report.deliveryKey!,
   });
   if (!accepted?.id) throw new Error("The email provider did not confirm acceptance.");

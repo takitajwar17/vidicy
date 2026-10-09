@@ -1,0 +1,1 @@
+ALTER TABLE "client_report" ADD COLUMN "deliveryRequest" jsonb;

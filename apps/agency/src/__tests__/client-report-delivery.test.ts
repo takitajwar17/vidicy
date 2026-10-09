@@ -7,7 +7,10 @@ vi.mock("@/db", async (original) => ({
   getDB: mocks.db,
 }));
 vi.mock("@/server/agency-team", () => ({ requireAgencyStaff: mocks.staff }));
-vi.mock("@/utils/email", () => ({ sendClientReportEmail: mocks.send }));
+vi.mock("@/utils/email", async (original) => ({
+  ...(await original<typeof import("@/utils/email")>()),
+  sendClientReportEmail: mocks.send,
+}));
 vi.mock("@/server/agency-review", () => ({ requireCurrentAgencyReview: mocks.current }));
 import { getDBFromDatabase } from "@/db";
 import { agencyClientTable, clientReportTable, userTable, visaApplicationTable } from "@/db/schema";
@@ -37,6 +40,9 @@ afterAll(async () => {
   vi.unstubAllEnvs();
 });
 beforeEach(async () => {
+  vi.stubEnv("EMAIL_FROM", "reports@example.test");
+  vi.stubEnv("EMAIL_FROM_NAME", "Test Agency");
+  vi.stubEnv("EMAIL_REPLY_TO", "reply@example.test");
   await pool.query('TRUNCATE "user" CASCADE');
   mocks.db.mockReturnValue(db);
   mocks.current.mockResolvedValue({});
@@ -77,8 +83,8 @@ describe("client report delivery", () => {
     await deliverClientReport({ reportId });
     expect(mocks.send).toHaveBeenCalledWith(
       expect.objectContaining({
-        payload: expect.objectContaining({
-          to: "client@example.com",
+        request: expect.objectContaining({
+          to: ["client@example.com"],
           text: expect.stringContaining("Upload all pages"),
         }),
         idempotencyKey: expect.any(String),
@@ -124,6 +130,8 @@ describe("client report delivery", () => {
       "other@example.com",
       applicationId,
     ]);
+    vi.stubEnv("EMAIL_FROM", "new@example.test");
+    vi.stubEnv("EMAIL_REPLY_TO", "new-reply@example.test");
     await deliverClientReport({ reportId });
     expect(mocks.send.mock.calls[1][0]).toEqual(first);
   });
@@ -176,6 +184,49 @@ describe("client report delivery", () => {
       await retry;
     }
   });
+  it("stores the complete provider request before the provider call", async () => {
+    mocks.send.mockImplementationOnce(async ({ request }) => {
+      const row = (
+        await pool.query('SELECT status, "deliveryRequest" FROM client_report WHERE id = $1', [
+          reportId,
+        ])
+      ).rows[0];
+      expect(row.status).toBe("sending");
+      expect(row.deliveryRequest).toEqual(request);
+      return { id: "provider_1" };
+    });
+    await deliverClientReport({ reportId });
+    const row = (
+      await pool.query(
+        "SELECT to_jsonb(client_report) AS report FROM client_report WHERE id = $1",
+        [reportId],
+      )
+    ).rows[0].report;
+    expect(row.deliveryRequest).toMatchObject({
+      from: "Test Agency <reports@example.test>",
+      to: ["client@example.com"],
+      reply_to: "reply@example.test",
+      subject: expect.any(String),
+      text: expect.stringContaining("Upload all pages"),
+      tags: [{ name: "type", value: "client-report" }],
+    });
+    expect(mocks.send.mock.calls[0][0].request).toEqual(row.deliveryRequest);
+  });
+
+  it("blocks legacy pending requests whose original sender was not saved", async () => {
+    await pool.query(
+      `UPDATE client_report SET status = 'sending', "deliveryKey" = 'legacy/key',
+      "deliveryPayload" = $1, "deliveryStartedAt" = NOW() - INTERVAL '3 minutes',
+      "updatedAt" = NOW() - INTERVAL '3 minutes' WHERE id = $2`,
+      [
+        JSON.stringify({ to: "client@example.com", subject: "Old report", text: "Old content" }),
+        reportId,
+      ],
+    );
+    await expect(deliverClientReport({ reportId })).rejects.toThrow("original sender");
+    expect(mocks.send).not.toHaveBeenCalled();
+  });
+
   it("blocks stale reports and users without staff access", async () => {
     await pool.query('UPDATE "visa_application" SET "clientReportStatus" = $1 WHERE id = $2', [
       "draft",

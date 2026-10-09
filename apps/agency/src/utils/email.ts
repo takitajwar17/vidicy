@@ -13,6 +13,7 @@ import {
 import { agencyTeamAccessText } from "@/react-email/agency-team-access";
 import isProd from "./is-prod";
 import { logger } from "@/infra/logger";
+import type { ClientReportDeliveryRequest } from "@/db/schema";
 
 interface SendEmailOptions {
   to: string[];
@@ -397,15 +398,30 @@ export interface ClientReportEmailPayload {
   text: string;
 }
 
+export function createClientReportEmailRequest(
+  payload: ClientReportEmailPayload,
+): ClientReportDeliveryRequest {
+  if (!process.env.EMAIL_FROM)
+    throw new Error("Configure the sender before sending client reports.");
+  return {
+    from: `${process.env.EMAIL_FROM_NAME ?? SITE_NAME} <${process.env.EMAIL_FROM}>`,
+    to: [payload.to],
+    subject: payload.subject,
+    text: payload.text,
+    ...(process.env.EMAIL_REPLY_TO ? { reply_to: process.env.EMAIL_REPLY_TO } : {}),
+    tags: [{ name: "type", value: "client-report" }],
+  };
+}
+
 export async function sendClientReportEmail({
-  payload,
+  request,
   idempotencyKey,
 }: {
-  payload: ClientReportEmailPayload;
+  request: ClientReportDeliveryRequest;
   idempotencyKey: string;
 }): Promise<{ id: string }> {
   if (!isProd) throw new Error("Client report delivery is disabled outside production.");
-  if (!process.env.RESEND_API_KEY || !process.env.EMAIL_FROM) {
+  if (!process.env.RESEND_API_KEY) {
     throw new Error("Configure the email provider before sending client reports.");
   }
   const response = await fetch("https://api.resend.com/emails", {
@@ -416,14 +432,7 @@ export async function sendClientReportEmail({
       "Content-Type": "application/json",
       "Idempotency-Key": idempotencyKey,
     },
-    body: JSON.stringify({
-      from: `${process.env.EMAIL_FROM_NAME ?? SITE_NAME} <${process.env.EMAIL_FROM}>`,
-      to: [payload.to],
-      subject: payload.subject,
-      text: payload.text,
-      ...(process.env.EMAIL_REPLY_TO ? { reply_to: process.env.EMAIL_REPLY_TO } : {}),
-      tags: [{ name: "type", value: "client-report" }],
-    }),
+    body: JSON.stringify(request),
   });
   if (!response.ok) throw new Error(`The email provider rejected delivery (${response.status}).`);
   const result: unknown = await response.json();

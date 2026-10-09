@@ -29,6 +29,13 @@
       "when": 1792404648920,
       "tag": "0003_client_report_delivery",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1792407743979,
+      "tag": "0004_client_report_request_snapshot",
+      "breakpoints": true
     }
   ]
 }

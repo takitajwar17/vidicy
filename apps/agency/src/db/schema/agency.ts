@@ -172,6 +172,16 @@ export const reviewIssueTable = pgTable(
   ],
 );
 
+/** The complete provider body captured before the first email attempt. */
+export interface ClientReportDeliveryRequest {
+  from: string;
+  to: string[];
+  subject: string;
+  text: string;
+  reply_to?: string;
+  tags: { name: string; value: string }[];
+}
+
 export const clientReportTable = pgTable(
   "client_report",
   {
@@ -192,6 +202,7 @@ export const clientReportTable = pgTable(
     sentAt: timestamp({ withTimezone: true, mode: "date", precision: 3 }),
     deliveryKey: text(),
     deliveryPayload: jsonb().$type<{ to: string; subject: string; text: string }>(),
+    deliveryRequest: jsonb().$type<ClientReportDeliveryRequest>(),
     deliveryStartedAt: timestamp({ withTimezone: true, mode: "date", precision: 3 }),
     providerMessageId: text(),
   },
