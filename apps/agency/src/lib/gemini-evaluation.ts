@@ -33,14 +33,38 @@ function buildEvaluationParts(content: GeminiEvaluationParams["userContent"]): P
   });
 }
 
-/** Runs every evaluation phase on Vertex AI; provider errors are not rerouted. */
-export async function createGeminiEvaluation({
+/** Two bounded retries for transient rejections, within the original stage deadline. */
+export async function createGeminiEvaluation(params: GeminiEvaluationParams): Promise<string> {
+  const deadline = performance.now() + EVALUATION_TIMEOUT_MS;
+  for (let attempt = 0; ; attempt++) {
+    try {
+      return await runEvaluationAttempt({
+        ...params,
+        timeoutMs: Math.max(1, Math.ceil(deadline - performance.now())),
+      });
+    } catch (error) {
+      const status = error && typeof error === "object" && "status" in error ? error.status : null;
+      const delayMs = 2_000 * 2 ** attempt + Math.floor(Math.random() * 1_000);
+      if (
+        attempt >= 2 ||
+        (status !== 429 && status !== 503) ||
+        deadline - performance.now() < delayMs + 1_000
+      )
+        throw error;
+      await new Promise((resolve) => setTimeout(resolve, delayMs));
+    }
+  }
+}
+
+/** Record each attempt separately, without provider payloads or document content. */
+async function runEvaluationAttempt({
   systemPrompt,
   userContent,
   schemaName,
   schema,
   maxTokens,
-}: GeminiEvaluationParams): Promise<string> {
+  timeoutMs,
+}: GeminiEvaluationParams & { timeoutMs: number }): Promise<string> {
   const startedAt = performance.now();
   let status: "succeeded" | "failed" = "failed";
   let providerStatus: number | undefined;
@@ -67,8 +91,10 @@ export async function createGeminiEvaluation({
         // in addition to the existing response budget used by the evaluation UI.
         maxOutputTokens: Math.min(maxTokens + 8_192, 32_768),
         thinkingConfig: { thinkingLevel: ThinkingLevel.MEDIUM },
-        abortSignal: AbortSignal.timeout(EVALUATION_TIMEOUT_MS),
-        httpOptions: { timeout: EVALUATION_TIMEOUT_MS },
+        abortSignal: AbortSignal.timeout(timeoutMs),
+        // Keep retry ownership here so each failed attempt is measured and all
+        // attempts share the same deadline.
+        httpOptions: { timeout: timeoutMs, retryOptions: { attempts: 1 } },
       },
     });
 
@@ -83,7 +109,7 @@ export async function createGeminiEvaluation({
     if (!text) {
       throw new Error(`Vertex AI ${GEMINI_DOCUMENT_EVALUATION_MODEL} returned no ${schemaName}`);
     }
-    // Existing callers retain their Zod validation and graceful phase aggregation.
+    // Callers apply stage-specific schemas before publishing a complete review.
     JSON.parse(text);
     status = "succeeded";
     return text;

@@ -108,10 +108,114 @@ describe("Vertex AI evaluation", () => {
         responseJsonSchema: testSchema,
         maxOutputTokens: 8492,
         thinkingConfig: { thinkingLevel: ThinkingLevel.MEDIUM },
-        httpOptions: { timeout: 120_000 },
+        httpOptions: { timeout: expect.any(Number), retryOptions: { attempts: 1 } },
       }),
     });
     expect(generateContent.mock.calls[0][0].config).not.toHaveProperty("temperature");
+    expect(generateContent.mock.calls[0][0].config.httpOptions.timeout).toBeGreaterThan(119_000);
+    expect(generateContent.mock.calls[0][0].config.httpOptions.timeout).toBeLessThanOrEqual(
+      120_000,
+    );
+  });
+
+  it.each([429, 503])(
+    "retries a transient provider status once and records both attempts: %s",
+    async (status) => {
+      vi.useFakeTimers();
+      try {
+        generateContent.mockRejectedValueOnce(
+          Object.assign(new Error("private detail"), { status }),
+        );
+        const pending = createGeminiEvaluation(input);
+        await vi.runAllTimersAsync();
+        await expect(pending).resolves.toBe('{"ok":true}');
+        expect(generateContent).toHaveBeenCalledTimes(2);
+        const calls = vi
+          .mocked(logger.info)
+          .mock.calls.filter(([message]) => message === "AI evaluation call");
+        expect(calls).toHaveLength(2);
+        expect(calls[0][1]).toMatchObject({ status: "failed", providerStatus: status });
+        expect(calls[1][1]).toMatchObject({ status: "succeeded" });
+        expect(generateContent.mock.calls[1][0].config.httpOptions.timeout).toBeLessThan(120_000);
+        expect(JSON.stringify(calls)).not.toContain("private detail");
+      } finally {
+        vi.useRealTimers();
+      }
+    },
+  );
+
+  it("stops after two retries when the provider remains unavailable", async () => {
+    vi.useFakeTimers();
+    try {
+      generateContent.mockRejectedValue(Object.assign(new Error("Unavailable"), { status: 503 }));
+      const outcome = createGeminiEvaluation(input).then(
+        () => null,
+        (error: unknown) => error,
+      );
+      await vi.runAllTimersAsync();
+      expect(await outcome).toMatchObject({ status: 503 });
+      expect(generateContent).toHaveBeenCalledTimes(3);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("spaces transient retries with exponential backoff and shares the original deadline", async () => {
+    vi.useFakeTimers();
+    const random = vi.spyOn(Math, "random").mockReturnValue(0);
+    try {
+      generateContent
+        .mockRejectedValueOnce(Object.assign(new Error("Busy"), { status: 429 }))
+        .mockRejectedValueOnce(Object.assign(new Error("Busy"), { status: 503 }));
+      const pending = createGeminiEvaluation(input);
+      await vi.advanceTimersByTimeAsync(1_999);
+      expect(generateContent).toHaveBeenCalledTimes(1);
+      await vi.advanceTimersByTimeAsync(1);
+      expect(generateContent).toHaveBeenCalledTimes(2);
+      await vi.advanceTimersByTimeAsync(3_999);
+      expect(generateContent).toHaveBeenCalledTimes(2);
+      await vi.advanceTimersByTimeAsync(1);
+      await expect(pending).resolves.toBe('{"ok":true}');
+      expect(generateContent).toHaveBeenCalledTimes(3);
+      const timeouts = generateContent.mock.calls.map(
+        ([request]) => request.config.httpOptions.timeout,
+      );
+      expect(timeouts).toEqual([120_000, 118_000, 114_000]);
+      expect(
+        vi.mocked(logger.info).mock.calls.filter(([message]) => message === "AI evaluation call"),
+      ).toHaveLength(3);
+    } finally {
+      random.mockRestore();
+      vi.useRealTimers();
+    }
+  });
+
+  it.each([400, 401, 403, 504])(
+    "does not retry a permanent error or a timed-out attempt: %s",
+    async (status) => {
+      generateContent.mockRejectedValue(Object.assign(new Error("Failed"), { status }));
+      await expect(createGeminiEvaluation(input)).rejects.toMatchObject({ status });
+      expect(generateContent).toHaveBeenCalledTimes(1);
+    },
+  );
+
+  it("does not start a retry after the shared stage deadline is nearly exhausted", async () => {
+    vi.useFakeTimers();
+    try {
+      generateContent.mockImplementationOnce(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 119_500));
+        throw Object.assign(new Error("Unavailable"), { status: 503 });
+      });
+      const outcome = createGeminiEvaluation(input).then(
+        () => null,
+        (error: unknown) => error,
+      );
+      await vi.runAllTimersAsync();
+      expect(await outcome).toMatchObject({ status: 503 });
+      expect(generateContent).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("sends inline document images along with text", async () => {
@@ -178,17 +282,27 @@ describe("Vertex AI evaluation", () => {
   });
 
   it("records a numeric provider failure status without its private message", async () => {
-    generateContent.mockRejectedValue(
-      Object.assign(new Error("private request detail"), { status: 429 }),
-    );
-    await expect(createGeminiEvaluation(input)).rejects.toThrow();
-    expect(logger.info).toHaveBeenCalledWith(
-      "AI evaluation call",
-      expect.objectContaining({ status: "failed", providerStatus: 429 }),
-    );
-    expect(JSON.stringify(vi.mocked(logger.info).mock.calls)).not.toContain(
-      "private request detail",
-    );
+    vi.useFakeTimers();
+    try {
+      generateContent.mockRejectedValue(
+        Object.assign(new Error("private request detail"), { status: 429 }),
+      );
+      const outcome = createGeminiEvaluation(input).then(
+        () => null,
+        (error: unknown) => error,
+      );
+      await vi.runAllTimersAsync();
+      expect(await outcome).toMatchObject({ status: 429 });
+      expect(logger.info).toHaveBeenCalledWith(
+        "AI evaluation call",
+        expect.objectContaining({ status: "failed", providerStatus: 429 }),
+      );
+      expect(JSON.stringify(vi.mocked(logger.info).mock.calls)).not.toContain(
+        "private request detail",
+      );
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it.each([

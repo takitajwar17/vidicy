@@ -180,7 +180,7 @@ Document uploads queue extraction work in `vidicy-document-extraction`. `DOCUMEN
 
 ### Schema changes
 
-Generate named PostgreSQL migrations with `pnpm db:generate:agency <name>`. Review the generated SQL and metadata, then apply the schema change to the intended database before deploying code that requires it. Database schema changes are separate from the image release.
+Generate named PostgreSQL migrations with `pnpm db:generate:agency <name>`. Review the generated SQL and metadata, then apply the schema change to the intended database before deploying code that requires it. Database schema changes are separate from the image release. Apply `0005_review_completion_status` before this release. Existing reviews default to incomplete and require a new review before report delivery or readiness approval; their saved data remains available.
 
 ## Commands
 
