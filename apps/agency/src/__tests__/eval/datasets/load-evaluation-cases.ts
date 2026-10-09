@@ -102,7 +102,7 @@ export async function loadEvaluationCases({ path }: { path?: string }): Promise<
     return datasetSchema.parse({
       provenance: {
         kind: "synthetic",
-        version: "synthetic-review-v4",
+        version: "synthetic-review-v5",
         description:
           "Synthetic documents and developer-authored expected findings; not an expert-labelled accuracy study.",
       },

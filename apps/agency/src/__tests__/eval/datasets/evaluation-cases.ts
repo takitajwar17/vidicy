@@ -321,8 +321,8 @@ const limitedEvidenceCases: EvalTestCase<EvaluationInput, EvaluationExpected>[] 
       expectedRiskLevel: "high",
       expectedRedFlags: [
         ["mismatch", "inconsisten", "discrepan", "contradict", "conflict"],
-        "employer",
-        ["salary", "wage", "compensation", "pay"],
+        ["employer", "ABC Tech Solutions", "XYZ Design Studio"],
+        ["salary", "wage", "compensation", "pay", "85,000", "85000", "45,000", "45000"],
       ],
       expectedRecommendations: ["employment", "offer"],
     },

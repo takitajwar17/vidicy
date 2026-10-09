@@ -199,6 +199,25 @@ describe("evaluation reference labels", () => {
       }),
     ).toMatchObject({ passed: false });
   });
+  it("recognizes concrete employer and pay contradictions in the mixed case", async () => {
+    const dataset = await loadEvaluationCases({});
+    const testCase = dataset.cases.find((item) => item.id === "mixed-quality-docs")!;
+    const output = {
+      ...reviewOutput,
+      redFlags: [
+        "Severe cross-document contradiction: The LMIA lists ABC Tech Solutions Inc. for a Software Developer role in Toronto at CAD 85,000/year, whereas the Employment Offer Letter is from XYZ Design Studio for a Junior Web Designer role in Vancouver at CAD 45,000/year.",
+      ],
+    };
+    expect(await redFlagCoverage().score({ output, expected: testCase.expected })).toMatchObject({
+      passed: true,
+    });
+    expect(
+      await redFlagCoverage().score({
+        output: { ...output, redFlags: ["There is a contradiction"] },
+        expected: testCase.expected,
+      }),
+    ).toMatchObject({ passed: false });
+  });
   it("checks every supplied status and recommendation label", async () => {
     const output = { ...reviewOutput, recommendations: ["Provide evidence of funds"] };
     expect(
