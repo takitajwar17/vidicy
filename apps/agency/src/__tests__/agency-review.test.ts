@@ -11,6 +11,7 @@ const {
   mockGemini,
   mockStorageHead,
   mockStorageDelete,
+  mockExtractTextFromPdf,
 } = vi.hoisted(() => ({
   mockGetDB: vi.fn(),
   mockPermission: vi.fn(),
@@ -19,6 +20,7 @@ const {
   mockGemini: vi.fn(),
   mockStorageHead: vi.fn(),
   mockStorageDelete: vi.fn(),
+  mockExtractTextFromPdf: vi.fn(),
 }));
 vi.mock("zsa", () => ({
   ZSAError: class extends Error {
@@ -57,6 +59,18 @@ vi.mock("@/server/unread-counts", () => ({
 vi.mock("@/lib/r2", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/r2")>()),
   getR2Bucket: async () => ({ head: mockStorageHead, delete: mockStorageDelete }),
+  getFromR2: async () => ({ arrayBuffer: async () => new Uint8Array([1, 2]).buffer }),
+}));
+vi.mock("@/services/pdf-parser", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/services/pdf-parser")>()),
+  extractTextFromPdf: mockExtractTextFromPdf,
+  getPdfPageCount: async () => 1,
+  extractPdfMetadata: async () => ({ pageCount: 1 }),
+  renderPdfPagesForExtraction: async () => ({
+    success: false,
+    pages: [],
+    error: "No readable pages",
+  }),
 }));
 vi.mock("@/utils/application-auth", () => ({ requireApplicationPermission: mockPermission }));
 vi.mock("@/infra/action-rate-limit", () => ({ checkActionRateLimit: vi.fn() }));
@@ -80,6 +94,7 @@ vi.mock("@/infra/logger", () => ({
 
 import {
   addReviewIssueAction,
+  createAgencyCaseAction,
   finalizeReviewAction,
   generateClientReportAction,
   updateAgencyCaseStatusAction,
@@ -91,6 +106,7 @@ import { generateChecklistAction } from "@/actions/checklist.action";
 import { getDBFromDatabase } from "@/db";
 import {
   agencyTeamMemberTable,
+  agencyClientTable,
   applicantTable,
   checklistItemTable,
   clientReportTable,
@@ -114,6 +130,7 @@ import {
 import { getAgencyCaseDetail, getAgencyCaseRows, getAgencyReports } from "@/server/agency-data";
 
 import { deleteTicket } from "@/server/support";
+import { ensureDocumentExtraction } from "@/services/document-pipeline";
 
 let postgres: ReturnType<typeof startTestPostgres>;
 let adminPool: ReturnType<ReturnType<typeof startTestPostgres>["createPool"]>;
@@ -172,9 +189,11 @@ describe("agency review workflow with the real database driver", () => {
   let itemId: string;
   let documentId: string;
   let evaluation: typeof documentEvaluationTable.$inferSelect;
+  let lastEvaluationTime = 0;
 
   beforeEach(async () => {
     vi.stubEnv("DB_SQL_LOG", "false");
+    lastEvaluationTime = 0;
     fixture = await createDatabase();
     const { db } = fixture;
     mockGetDB.mockReturnValue(db);
@@ -243,6 +262,8 @@ describe("agency review workflow with the real database driver", () => {
   async function saveEvaluation(
     overrides: Partial<typeof documentEvaluationTable.$inferInsert> = {},
   ) {
+    // Fixtures represent successive reviews, even when inserts share a millisecond.
+    lastEvaluationTime = Math.max(Date.now(), lastEvaluationTime + 1);
     const [saved] = await fixture.db
       .insert(documentEvaluationTable)
       .values({
@@ -251,6 +272,7 @@ describe("agency review workflow with the real database driver", () => {
         overallScore: 95,
         riskLevel: "low",
         summary: "Reviewed",
+        createdAt: new Date(lastEvaluationTime),
         redFlags: [],
         strengths: [],
         recommendations: [],
@@ -300,6 +322,93 @@ describe("agency review workflow with the real database driver", () => {
       choices: [{ message: { content: JSON.stringify({ items }) } }],
     });
   }
+
+  it("keeps successful extraction when a concurrent attempt fails later", async () => {
+    let finishSuccess!: (value: { success: boolean; text: string }) => void;
+    let finishFailure!: (value: { success: boolean; text: string; error: string }) => void;
+    let startedBoth!: () => void;
+    const bothStarted = new Promise<void>((resolve) => {
+      startedBoth = resolve;
+    });
+    let started = 0;
+    mockExtractTextFromPdf.mockReset();
+    mockExtractTextFromPdf.mockImplementationOnce(() => {
+      if (++started === 2) startedBoth();
+      return new Promise((resolve) => {
+        finishSuccess = resolve;
+      });
+    });
+    mockExtractTextFromPdf.mockImplementationOnce(() => {
+      if (++started === 2) startedBoth();
+      return new Promise((resolve) => {
+        finishFailure = resolve;
+      });
+    });
+    const successful = ensureDocumentExtraction({ documentId });
+    const failed = ensureDocumentExtraction({ documentId });
+    await bothStarted;
+    finishSuccess({ success: true, text: "Valid passport evidence" });
+    await successful;
+    finishFailure({ success: false, text: "", error: "Provider failed" });
+    const lateResult = await failed;
+    expect(await fixture.db.query.uploadedDocumentTable.findFirst()).toMatchObject({
+      textContent: "Valid passport evidence",
+      extractionStatus: "completed",
+      extractionMethod: "pdf_native",
+    });
+    expect(lateResult).toMatchObject({
+      success: true,
+      textContent: "Valid passport evidence",
+      reusedStoredExtraction: true,
+    });
+  });
+
+  const newCaseInput = {
+    clientName: "New Client",
+    clientEmail: "client@example.com",
+    applicantName: "New Applicant",
+    homeCountry: "Bangladesh",
+    currentCountry: "Bangladesh",
+    destinationCountry: "Japan",
+    visaType: "Tourist",
+    embassy: "Dhaka",
+    priority: "normal" as const,
+  };
+
+  it.each([false, true])(
+    "rolls back case creation and client changes on applicant failure (existing client: %s)",
+    async (existingClient) => {
+      if (existingClient) {
+        await fixture.db
+          .insert(agencyClientTable)
+          .values({ name: "Original Client", email: newCaseInput.clientEmail });
+      }
+      fixture.setBeforeQuery((query) => {
+        if (query.startsWith('insert into "applicant"')) throw new Error("Applicant write failed");
+      });
+      await expect(createAgencyCaseAction(newCaseInput)).rejects.toThrow();
+      const clients = await fixture.db.query.agencyClientTable.findMany();
+      expect(clients.map((client) => client.name)).toEqual(
+        existingClient ? ["Original Client"] : [],
+      );
+      expect(await fixture.db.query.visaApplicationTable.findMany()).toHaveLength(1);
+      expect(await fixture.db.query.applicantTable.findMany()).toHaveLength(1);
+    },
+  );
+
+  it("creates a case and its primary applicant together", async () => {
+    await createAgencyCaseAction(newCaseInput);
+    const client = await fixture.db.query.agencyClientTable.findFirst();
+    const application = (await fixture.db.query.visaApplicationTable.findMany()).find(
+      (row) => row.clientId === client?.id,
+    );
+    expect(application).toBeDefined();
+    expect(
+      (await fixture.db.query.applicantTable.findMany()).find(
+        (row) => row.applicationId === application?.id,
+      ),
+    ).toMatchObject({ name: newCaseInput.applicantName });
+  });
 
   it("deletes only owned screenshots with no remaining ticket or message reference", async () => {
     const ticketKey = `support-screenshots/${userId}/shared-ticket.png`;
@@ -902,6 +1011,36 @@ describe("agency review workflow with the real database driver", () => {
     await markAgencyCaseReady(context());
     expect((await fixture.db.query.reviewIssueTable.findFirst())?.status).toBe("dismissed");
   });
+
+  it.each([
+    { cleared: false, nullableCounter: false },
+    { cleared: true, nullableCounter: false },
+    { cleared: false, nullableCounter: true },
+    { cleared: true, nullableCounter: true },
+  ])(
+    "preserves a concurrent reviewer decision ($cleared, nullable counter: $nullableCounter)",
+    async ({ cleared, nullableCounter }) => {
+      evaluation = await saveEvaluation({ redFlags: ["Check name spelling"] });
+      await sync();
+      if (nullableCounter) await fixture.db.update(reviewIssueTable).set({ updateCounter: null });
+      const original = (await fixture.db.query.reviewIssueTable.findFirst())!;
+      if (cleared) evaluation = await saveEvaluation();
+      const resolvedAt = new Date("2026-10-19T12:00:00Z");
+      fixture.setBeforeQuery(async (query) => {
+        if (!query.startsWith('update "review_issue"')) return;
+        fixture.setBeforeQuery();
+        await fixture.pool.query(
+          'UPDATE review_issue SET status = $1, "resolvedAt" = $2, "updateCounter" = "updateCounter" + 1 WHERE id = $3',
+          ["dismissed", resolvedAt, original.id],
+        );
+      });
+      await sync();
+      expect(await fixture.db.query.reviewIssueTable.findFirst()).toMatchObject({
+        status: "dismissed",
+        resolvedAt,
+      });
+    },
+  );
 
   it("preserves a reviewer-confirmed resolution for unchanged evidence", async () => {
     evaluation = await saveEvaluation({ redFlags: ["Check name spelling"] });

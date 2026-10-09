@@ -191,56 +191,60 @@ export const createAgencyCaseAction = createServerAction()
       }
     }
 
-    const clientId = await resolveOrCreateClient({
-      name: input.clientName,
-      email: input.clientEmail || null,
-      phone: input.clientPhone || null,
-      country: input.homeCountry,
+    const { application, applicant } = await db.withTransaction(async () => {
+      const clientId = await resolveOrCreateClient({
+        name: input.clientName,
+        email: input.clientEmail || null,
+        phone: input.clientPhone || null,
+        country: input.homeCountry,
+      });
+
+      const [application] = await db
+        .insert(visaApplicationTable)
+        .values({
+          userId: session.userId,
+          homeCountry: input.homeCountry,
+          currentCountry: input.currentCountry,
+          destinationCountry: input.destinationCountry,
+          visaType: input.visaType,
+          embassy: input.embassy,
+          name: `${input.applicantName} — ${input.destinationCountry} ${input.visaType}`,
+          status: VISA_APPLICATION_STATUS.IN_PROGRESS,
+          caseNumber: getCaseNumber(),
+          clientId,
+          clientName: input.clientName,
+          clientEmail: input.clientEmail?.toLowerCase() || null,
+          clientPhone: input.clientPhone || null,
+          agencyStatus: AGENCY_CASE_STATUS.INTAKE,
+          priority: input.priority,
+          assignedReviewerId,
+          submittedAt: parseDateInput(input.submittedAt),
+          dueAt: parseDateInput(input.dueAt),
+          clientReportStatus: CLIENT_REPORT_STATUS.NOT_STARTED,
+        })
+        .returning();
+
+      const [applicant] = await db
+        .insert(applicantTable)
+        .values({
+          applicationId: application.id,
+          name: input.applicantName,
+          relationship: APPLICANT_RELATIONSHIP.PRIMARY,
+          role: APPLICANT_ROLE.OWNER,
+          email: input.applicantEmail?.toLowerCase() || input.clientEmail?.toLowerCase() || null,
+          nationality: input.homeCountry,
+          approvedBefore,
+          approvedVisaType: approvedBefore ? normalizeOptionalText(input.approvedVisaType) : null,
+          approvedYear: approvedBefore ? normalizeOptionalText(input.approvedYear) : null,
+          rejectedBefore,
+          rejectedVisaType: rejectedBefore ? normalizeOptionalText(input.rejectedVisaType) : null,
+          rejectedYear: rejectedBefore ? normalizeOptionalText(input.rejectedYear) : null,
+          rejectedReason: rejectedBefore ? normalizeOptionalText(input.rejectedReason) : null,
+        })
+        .returning();
+
+      return { application, applicant };
     });
-
-    const [application] = await db
-      .insert(visaApplicationTable)
-      .values({
-        userId: session.userId,
-        homeCountry: input.homeCountry,
-        currentCountry: input.currentCountry,
-        destinationCountry: input.destinationCountry,
-        visaType: input.visaType,
-        embassy: input.embassy,
-        name: `${input.applicantName} — ${input.destinationCountry} ${input.visaType}`,
-        status: VISA_APPLICATION_STATUS.IN_PROGRESS,
-        caseNumber: getCaseNumber(),
-        clientId,
-        clientName: input.clientName,
-        clientEmail: input.clientEmail?.toLowerCase() || null,
-        clientPhone: input.clientPhone || null,
-        agencyStatus: AGENCY_CASE_STATUS.INTAKE,
-        priority: input.priority,
-        assignedReviewerId,
-        submittedAt: parseDateInput(input.submittedAt),
-        dueAt: parseDateInput(input.dueAt),
-        clientReportStatus: CLIENT_REPORT_STATUS.NOT_STARTED,
-      })
-      .returning();
-
-    const [applicant] = await db
-      .insert(applicantTable)
-      .values({
-        applicationId: application.id,
-        name: input.applicantName,
-        relationship: APPLICANT_RELATIONSHIP.PRIMARY,
-        role: APPLICANT_ROLE.OWNER,
-        email: input.applicantEmail?.toLowerCase() || input.clientEmail?.toLowerCase() || null,
-        nationality: input.homeCountry,
-        approvedBefore,
-        approvedVisaType: approvedBefore ? normalizeOptionalText(input.approvedVisaType) : null,
-        approvedYear: approvedBefore ? normalizeOptionalText(input.approvedYear) : null,
-        rejectedBefore,
-        rejectedVisaType: rejectedBefore ? normalizeOptionalText(input.rejectedVisaType) : null,
-        rejectedYear: rejectedBefore ? normalizeOptionalText(input.rejectedYear) : null,
-        rejectedReason: rejectedBefore ? normalizeOptionalText(input.rejectedReason) : null,
-      })
-      .returning();
 
     revalidatePath("/dashboard");
     revalidatePath("/dashboard/applications");

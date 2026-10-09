@@ -236,7 +236,15 @@ async function getAgencyReviewIssueChanges({
             status: changed ? REVIEW_ISSUE_STATUS.OPEN : existing.status,
             resolvedAt: changed ? null : existing.resolvedAt,
           })
-          .where(eq(reviewIssueTable.id, existing.id)),
+          .where(
+            and(
+              eq(reviewIssueTable.id, existing.id),
+              // Keep decisions made after this synchronization read the issue.
+              sql`${reviewIssueTable.updateCounter} IS NOT DISTINCT FROM ${existing.updateCounter}`,
+              eq(reviewIssueTable.status, existing.status),
+              sql`${reviewIssueTable.resolvedAt} IS NOT DISTINCT FROM ${existing.resolvedAt}`,
+            ),
+          ),
       );
     } else {
       changes.push(
@@ -262,7 +270,14 @@ async function getAgencyReviewIssueChanges({
         db
           .update(reviewIssueTable)
           .set({ status: REVIEW_ISSUE_STATUS.RESOLVED, resolvedAt: null })
-          .where(eq(reviewIssueTable.id, issue.id)),
+          .where(
+            and(
+              eq(reviewIssueTable.id, issue.id),
+              sql`${reviewIssueTable.updateCounter} IS NOT DISTINCT FROM ${issue.updateCounter}`,
+              eq(reviewIssueTable.status, issue.status),
+              sql`${reviewIssueTable.resolvedAt} IS NOT DISTINCT FROM ${issue.resolvedAt}`,
+            ),
+          ),
       );
     }
   }

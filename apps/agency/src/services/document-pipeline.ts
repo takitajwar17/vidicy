@@ -1,6 +1,6 @@
 import "server-only";
 
-import { eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { getRuntimeContext } from "@/infra/runtime-context";
 
 import { AI_TIMEOUT_EMBEDDING_MS } from "@/constants";
@@ -273,7 +273,16 @@ async function persistExtractionResult({
       extractionPayload,
       textContent: textContent ? truncateStoredText(textContent) : null,
     })
-    .where(eq(uploadedDocumentTable.id, documentId));
+    .where(
+      and(
+        eq(uploadedDocumentTable.id, documentId),
+        // Another extraction can succeed while this attempt is still running.
+        // Empty or failed results must not replace its stored evidence.
+        textContent
+          ? undefined
+          : sql`nullif(btrim(${uploadedDocumentTable.textContent}), '') IS NULL`,
+      ),
+    );
 }
 
 async function reconcileStoredExtraction(document: DocumentPipelineRecord): Promise<void> {
@@ -756,9 +765,14 @@ export async function ensureDocumentExtraction({
     };
   }
 
-  return document.mimeType.startsWith("image/")
+  const result = await (document.mimeType.startsWith("image/")
     ? extractImageDocument({ documentId })
-    : extractPdfDocument({ documentId });
+    : extractPdfDocument({ documentId }));
+  if (!result.success) {
+    const current = await loadDocument(documentId);
+    if (current.textContent?.trim()) return buildStoredExtractionResult(current);
+  }
+  return result;
 }
 
 export async function indexExtractedDocument({
