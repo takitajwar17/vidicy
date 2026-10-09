@@ -10,7 +10,12 @@ import { GEMINI_DOCUMENT_EVALUATION_MODEL } from "@/lib/gemini";
 import { loadEvaluationCases } from "./datasets/load-evaluation-cases";
 import { prepareEvaluationInput } from "./datasets/prepare-evaluation-input";
 import { estimateModelCost, runBenchmark, summarizeBenchmark } from "./framework/benchmark";
-import { itemStatusAgreement, recommendationCoverage } from "./framework/metrics";
+import {
+  itemStatusAgreement,
+  recommendationCoverage,
+  compareReferenceScores,
+  redFlagCoverage,
+} from "./framework/metrics";
 
 function integerOption({ name, fallback, max }: { name: string; fallback: number; max: number }) {
   const value = Number(process.env[name] ?? fallback);
@@ -100,17 +105,21 @@ describe.skipIf(process.env.RUN_REVIEW_BENCHMARK !== "true")("Production review 
               ? await Promise.all([
                   itemStatusAgreement().score({ output: output.evaluationData, expected }),
                   recommendationCoverage().score({ output: output.evaluationData, expected }),
+                  redFlagCoverage().score({ output: output.evaluationData, expected }),
                 ])
               : null,
             scoreInReferenceRange:
               !!output &&
               output.evaluationData.overallScore >= expected.scoreRange.min &&
               output.evaluationData.overallScore <= expected.scoreRange.max,
-            riskMatchesReference:
-              !!output && output.evaluationData.riskLevel === expected.expectedRiskLevel,
+            riskMatchesReference: expected.expectedRiskLevel
+              ? !!output && output.evaluationData.riskLevel === expected.expectedRiskLevel
+              : null,
             referenceFlags: (expected.expectedRedFlags ?? []).map((flag) => ({
               flag,
-              matched: text.includes(flag.toLowerCase()),
+              matched: (Array.isArray(flag) ? flag : [flag]).some((term) =>
+                text.includes(term.toLowerCase()),
+              ),
             })),
             // Keep outputs and document text out of the artifact, especially for supplied cases.
             calls: measurement.calls,
@@ -123,6 +132,19 @@ describe.skipIf(process.env.RUN_REVIEW_BENCHMARK !== "true")("Production review 
         status: run.value?.modelCompleted ? ("succeeded" as const) : ("failed" as const),
       }));
       const summary = summarizeBenchmark({ ...measured, runs });
+      // Compare each repetition separately. Do not mix scores across repeated cases.
+      const scoreComparisons = Array.from({ length: repeats }, (_, repeat) => {
+        const group = runs.slice(repeat * selected.length, (repeat + 1) * selected.length);
+        const scores = Object.fromEntries(
+          group
+            .filter((run) => run.status === "succeeded" && run.value?.score !== null)
+            .map((run) => [run.value!.caseId, run.value!.score!]),
+        );
+        return {
+          repeat: repeat + 1,
+          comparisons: compareReferenceScores({ cases: selected, scores }),
+        };
+      });
       const costs = runs.map((run) => run.value?.estimatedModelCostUsd ?? null);
       const callCosts = runs.flatMap((run) =>
         (run.value?.calls ?? []).map((call) => estimateModelCost({ calls: [call], rates })),
@@ -156,6 +178,7 @@ describe.skipIf(process.env.RUN_REVIEW_BENCHMARK !== "true")("Production review 
         documentConcurrency,
         repeats,
         summary,
+        scoreComparisons,
         cost: {
           totalModelCostUsd,
           estimatedKnownModelCostUsd: rates

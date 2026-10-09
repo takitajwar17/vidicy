@@ -15,6 +15,8 @@ import { readFile } from "node:fs/promises";
 import { createHash } from "node:crypto";
 import { GEMINI_DOCUMENT_EVALUATION_MODEL } from "@/lib/gemini";
 import { runCaseEvaluation } from "@/services/case-evaluation";
+import { withEvaluationMetrics } from "@/infra/evaluation-metrics";
+import type { EvaluationCallMetric } from "@/infra/evaluation-metrics";
 import { prepareEvaluationInput } from "./datasets/prepare-evaluation-input";
 import { runEvalSuite } from "./framework/runner";
 import { printResults, saveResults, loadBaseline } from "./framework/reporter";
@@ -25,19 +27,22 @@ import {
   schemaCompleteness,
   itemStatusAgreement,
   recommendationCoverage,
+  compareReferenceScores,
+  redFlagCoverage,
 } from "./framework/metrics";
 import { isLlmJudgeEnabled, llmJudgeMetric } from "./framework/llm-judge";
 import type { EvaluationInput, EvaluationExpected } from "./datasets/evaluation-cases";
 import { loadEvaluationCases } from "./datasets/load-evaluation-cases";
 import type { OrchestratorEvalOutput, EvalTestCase } from "./framework/types";
 
+const QUALITY_DOCUMENT_CONCURRENCY = 1;
+
 /** Uses the production per-document, combined and skeptical stages without prompt copies. */
-async function produceEvaluation(
-  testCase: EvalTestCase<unknown, EvaluationExpected>,
-): Promise<OrchestratorEvalOutput> {
-  const result = await runCaseEvaluation(
-    prepareEvaluationInput({ input: testCase.input as EvaluationInput }),
-  );
+async function produceEvaluation(testCase: EvalTestCase<unknown, EvaluationExpected>) {
+  const result = await runCaseEvaluation({
+    ...prepareEvaluationInput({ input: testCase.input as EvaluationInput }),
+    maxConcurrency: QUALITY_DOCUMENT_CONCURRENCY,
+  });
   if (result.diagnostics.orchestratorFallback) {
     throw new Error(
       "Combined review used a deterministic fallback; this is not a successful model evaluation",
@@ -46,7 +51,7 @@ async function produceEvaluation(
   if (result.diagnostics.skepticalAttempted && !result.diagnostics.skepticalSucceeded) {
     throw new Error("The production skeptical pass failed");
   }
-  return result.evaluationData;
+  return result;
 }
 
 // ---------------------------------------------------------------------------
@@ -60,11 +65,16 @@ describe.skipIf(process.env.RUN_MODEL_EVALS !== "true")(
       const dataset = await loadEvaluationCases({ path: process.env.EVALUATION_CASES_FILE });
       const reviewEvidence = {
         model: GEMINI_DOCUMENT_EVALUATION_MODEL,
+        documentConcurrency: QUALITY_DOCUMENT_CONCURRENCY,
         scope: "Production prepared-evidence review; extraction and retrieval services excluded",
         provenance: dataset.provenance,
         datasetSha256: createHash("sha256").update(JSON.stringify(dataset)).digest("hex"),
         metricSourceSha256: createHash("sha256")
           .update(await readFile("src/__tests__/eval/framework/metrics.ts"))
+          .digest("hex"),
+        harnessSourceSha256: createHash("sha256")
+          .update(await readFile("src/__tests__/eval/evaluation-eval.test.ts"))
+          .update(await readFile("src/__tests__/eval/framework/runner.ts"))
           .digest("hex"),
         sourceSha256: createHash("sha256")
           .update(await readFile("src/services/case-evaluation.ts"))
@@ -78,6 +88,10 @@ describe.skipIf(process.env.RUN_MODEL_EVALS !== "true")(
       };
       const suiteName = `production-gemini-${dataset.provenance.kind}-${dataset.provenance.version.replace(/[^a-zA-Z0-9_-]/g, "_")}`;
       const baseline = loadBaseline(suiteName);
+      const reviewScores: Record<string, number> = {};
+      // Only built-in synthetic cases may retain model text for failure analysis.
+      const syntheticOutputs: Record<string, Awaited<ReturnType<typeof produceEvaluation>>> = {};
+      const reviewAttempts: Record<string, EvaluationCallMetric[][]> = {};
       console.log(
         JSON.stringify({
           scope: "Production prepared-evidence review; extraction and retrieval services excluded",
@@ -91,7 +105,41 @@ describe.skipIf(process.env.RUN_MODEL_EVALS !== "true")(
       >({
         suiteName,
         cases: dataset.cases,
-        producer: produceEvaluation,
+        maxRetries: 1,
+        stopOnProducerError: true,
+        producer: async (testCase) => {
+          const measured = await withEvaluationMetrics({
+            run: async () => {
+              try {
+                return { review: await produceEvaluation(testCase) };
+              } catch (error) {
+                return { error };
+              }
+            },
+          });
+          (reviewAttempts[testCase.id] ??= []).push(measured.calls);
+          if (!measured.result.review) {
+            // The core returns a safe action error, without the provider status.
+            // Use recorded status metadata for the runner's bounded 429 retry.
+            if (measured.calls.some((call) => call.providerStatus === 429)) {
+              throw new Error("Vertex AI rate limit (429); review attempt failed");
+            }
+            throw measured.result.error;
+          }
+          const review = measured.result.review;
+          reviewScores[testCase.id] = review.evaluationData.overallScore;
+          if (!process.env.EVALUATION_CASES_FILE) {
+            syntheticOutputs[testCase.id] = review;
+            console.log(
+              JSON.stringify({
+                caseId: testCase.id,
+                overallScore: review.evaluationData.overallScore,
+                riskLevel: review.evaluationData.riskLevel,
+              }),
+            );
+          }
+          return review.evaluationData;
+        },
         baseline,
         metrics: [
           // Schema completeness
@@ -166,39 +214,7 @@ describe.skipIf(process.env.RUN_MODEL_EVALS !== "true")(
               };
             },
           },
-          // Red flags contain at least half of the expected keywords
-          {
-            name: "redFlagDetection",
-            threshold: 0.5,
-            score({ output, expected }) {
-              const expectedFlags = expected?.expectedRedFlags ?? [];
-              if (expectedFlags.length === 0) {
-                return {
-                  name: "redFlagDetection",
-                  score: 1,
-                  passed: true,
-                  detail: "No expected red flags",
-                };
-              }
-              const allFlags =
-                (output.redFlags || []).join(" ").toLowerCase() +
-                " " +
-                (output.summary || "").toLowerCase() +
-                " " +
-                (output.recommendations || []).join(" ").toLowerCase();
-              const found = expectedFlags.filter((kw) => allFlags.includes(kw.toLowerCase()));
-              const ratio = found.length / expectedFlags.length;
-              return {
-                name: "redFlagDetection",
-                score: ratio,
-                passed: ratio >= 0.5,
-                detail:
-                  ratio < 1
-                    ? `Missing red flag keywords: ${expectedFlags.filter((kw) => !allFlags.includes(kw.toLowerCase())).join(", ")}`
-                    : undefined,
-              };
-            },
-          },
+          redFlagCoverage(),
           // LLM-as-judge (optional, reported separately from reference-label checks).
           ...(isLlmJudgeEnabled()
             ? [
@@ -224,30 +240,36 @@ describe.skipIf(process.env.RUN_MODEL_EVALS !== "true")(
         ],
       });
 
-      printResults(result, regressions);
-      const recordedResult = { ...result, reviewEvidence };
+      const scoreComparisons = compareReferenceScores({
+        cases: dataset.cases,
+        scores: reviewScores,
+      });
+      const recordedResult = {
+        ...result,
+        overallPassed: result.overallPassed && scoreComparisons.every((check) => check.passed),
+        reviewEvidence,
+        reviewScores,
+        scoreComparisons,
+        syntheticOutputs,
+        reviewAttempts,
+      };
       saveResults(recordedResult);
+      printResults(recordedResult, regressions);
+      console.log("Reference score comparisons:", JSON.stringify(scoreComparisons));
 
-      // A supplied item or recommendation label is a required case assertion.
-      // Do not let aggregate averages hide a mismatch on a labelled case.
+      for (const comparison of scoreComparisons) {
+        expect(comparison.passed, comparison.detail).toBe(true);
+      }
+
+      // Every reference check is required. Averages must not hide a failed case.
+      // Optional LLM judging remains separate from these reference assertions.
       for (const testCase of result.caseResults) {
-        for (const score of testCase.scores.filter((score) =>
-          ["itemStatusAgreement", "recommendationCoverage"].includes(score.name),
-        )) {
+        for (const score of testCase.scores.filter((score) => !score.name.startsWith("llmJudge"))) {
           expect(
             score.passed,
             `${testCase.caseId}: ${score.name}: ${score.detail ?? "label mismatch"}`,
           ).toBe(true);
         }
-      }
-
-      // Assert aggregate pass rates meet minimum thresholds
-      for (const agg of result.aggregates) {
-        if (agg.name.startsWith("llmJudge")) continue;
-        expect(
-          agg.passRate,
-          `Aggregate ${agg.name}: pass rate ${(agg.passRate * 100).toFixed(0)}% below 70%`,
-        ).toBeGreaterThanOrEqual(0.7);
       }
 
       expect(regressions).toHaveLength(0);

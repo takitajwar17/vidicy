@@ -1,11 +1,17 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { loadEvaluationCases } from "./eval/datasets/load-evaluation-cases";
 import { prepareEvaluationInput } from "./eval/datasets/prepare-evaluation-input";
-import { itemStatusAgreement, recommendationCoverage } from "./eval/framework/metrics";
+import {
+  itemStatusAgreement,
+  recommendationCoverage,
+  compareReferenceScores,
+  redFlagCoverage,
+} from "./eval/framework/metrics";
 import type { OrchestratorEvalOutput } from "./eval/framework/types";
+import { runEvalSuite } from "./eval/framework/runner";
 
 let temporaryDirectory: string | undefined;
 afterEach(async () => {
@@ -26,6 +32,9 @@ describe("evaluation datasets", () => {
     expect(prepared.evidence.docByChecklistItem.size).toBe(
       selected.input.documents.filter((item) => item.textContent !== null).length,
     );
+    for (const document of prepared.evidence.docByChecklistItem.values()) {
+      expect(document.fileName).toMatch(/\.pdf$/);
+    }
   });
 
   it("validates a supplied labelled dataset and keeps its attribution", async () => {
@@ -41,7 +50,7 @@ describe("evaluation datasets", () => {
           version: "test-v1",
           reviewers: ["Test Reviewer"],
         },
-        cases: dataset.cases.slice(0, 1),
+        cases: dataset.cases.filter((testCase) => testCase.id === "complete-reference"),
       }),
     );
     const loaded = await loadEvaluationCases({ path });
@@ -50,6 +59,45 @@ describe("evaluation datasets", () => {
       reviewers: ["Test Reviewer"],
     });
     expect(loaded.cases).toHaveLength(1);
+  });
+
+  it.each([
+    { scoreRange: { min: 75, max: 100 }, expectedRiskLevel: "low" },
+    { scoreRange: { min: 40, max: 72 }, expectedRiskLevel: "medium" },
+    { scoreRange: { min: 30, max: 78 }, expectedRiskLevel: "high" },
+  ])(
+    "rejects score ranges that conflict with the supplied risk level: $expectedRiskLevel",
+    async (expected) => {
+      const dataset = await loadEvaluationCases({});
+      temporaryDirectory = await mkdtemp(join(tmpdir(), "vidicy-dataset-"));
+      const path = join(temporaryDirectory, "conflicting-labels.json");
+      await writeFile(
+        path,
+        JSON.stringify({ ...dataset, cases: [{ ...dataset.cases[0], expected }] }),
+      );
+      await expect(loadEvaluationCases({ path })).rejects.toThrow("score range conflicts");
+    },
+  );
+
+  it("includes a complete reference case and single-change evidence variants", async () => {
+    const dataset = await loadEvaluationCases({});
+    const base = dataset.cases.find((item) => item.id === "complete-reference")!;
+    expect(base).toBeDefined();
+    for (const id of [
+      "reference-missing-bank",
+      "reference-expired-passport",
+      "reference-name-mismatch",
+    ]) {
+      const variant = dataset.cases.find((item) => item.id === id)!;
+      expect(variant).toBeDefined();
+      expect(variant.input.documents).toHaveLength(base.input.documents.length);
+      const changed = variant.input.documents.filter(
+        (document, index) =>
+          JSON.stringify(document) !== JSON.stringify(base.input.documents[index]),
+      );
+      expect(changed).toHaveLength(1);
+      expect(variant.expected.lowerScoreThanCaseId).toBe(base.id);
+    }
   });
 
   it("rejects duplicate checklist identifiers before provider work", async () => {
@@ -61,6 +109,21 @@ describe("evaluation datasets", () => {
     await writeFile(path, JSON.stringify({ ...dataset, cases: [testCase] }));
     await expect(loadEvaluationCases({ path })).rejects.toThrow("unique");
   });
+
+  it.each(["unknown-reference", "complete-reference"])(
+    "rejects an invalid score comparison: %s",
+    async (referenceCaseId) => {
+      const dataset = await loadEvaluationCases({});
+      const testCase = structuredClone(
+        dataset.cases.find((item) => item.id === "complete-reference")!,
+      );
+      testCase.expected.lowerScoreThanCaseId = referenceCaseId;
+      temporaryDirectory = await mkdtemp(join(tmpdir(), "vidicy-dataset-"));
+      const path = join(temporaryDirectory, "cases.json");
+      await writeFile(path, JSON.stringify({ ...dataset, cases: [testCase] }));
+      await expect(loadEvaluationCases({ path })).rejects.toThrow("reference another case");
+    },
+  );
 });
 
 const reviewOutput: OrchestratorEvalOutput = {
@@ -101,6 +164,41 @@ describe("evaluation reference labels", () => {
     expect(score.detail).toContain("fund");
     expect(score.detail).toContain("evidence");
   });
+  it("accepts explicit word alternatives without dropping a required finding", async () => {
+    const expected = {
+      expectedRedFlags: [["mismatch", "contradiction"], "employer"],
+      expectedRecommendations: [["financial evidence", "bank statement"], "balance"],
+    };
+    const output = {
+      ...reviewOutput,
+      redFlags: ["Employer contradiction between the two documents"],
+      recommendations: ["Request bank statements showing sufficient balance"],
+    };
+    expect(await redFlagCoverage().score({ output, expected })).toMatchObject({ passed: true });
+    expect(await recommendationCoverage().score({ output, expected })).toMatchObject({
+      passed: true,
+    });
+    expect(
+      await redFlagCoverage().score({
+        output: { ...output, redFlags: ["Employer recorded"] },
+        expected,
+      }),
+    ).toMatchObject({ passed: false });
+    expect(
+      await recommendationCoverage().score({
+        output: { ...output, recommendations: ["Check the balance"] },
+        expected,
+      }),
+    ).toMatchObject({ passed: false });
+  });
+  it("does not accept a required flag found only in the summary", async () => {
+    expect(
+      await redFlagCoverage().score({
+        output: reviewOutput,
+        expected: { expectedRedFlags: ["fund"] },
+      }),
+    ).toMatchObject({ passed: false });
+  });
   it("checks every supplied status and recommendation label", async () => {
     const output = { ...reviewOutput, recommendations: ["Provide evidence of funds"] };
     expect(
@@ -132,5 +230,89 @@ describe("evaluation reference labels", () => {
       passed: true,
       detail: "No recommendation labels supplied",
     });
+  });
+});
+
+describe("controlled review score comparisons", () => {
+  const cases = [{ id: "variant", expected: { lowerScoreThanCaseId: "reference" } }];
+  it("rejects a defect scoring at or above its reference", () => {
+    for (const score of [90, 95])
+      expect(
+        compareReferenceScores({ cases, scores: { reference: 90, variant: score } })[0],
+      ).toMatchObject({ caseId: "variant", passed: false });
+  });
+  it("checks actual scores and retains both values", () => {
+    expect(
+      compareReferenceScores({ cases, scores: { reference: 90, variant: 65 } })[0],
+    ).toMatchObject({ score: 65, referenceScore: 90, passed: true });
+  });
+  it("does not treat an unmeasured reference or failed variant as a pass", () => {
+    expect(compareReferenceScores({ cases, scores: { variant: 65 } })[0].passed).toBe(false);
+    expect(compareReferenceScores({ cases, scores: { reference: 90 } })[0].passed).toBe(false);
+  });
+});
+
+describe("evaluation provider failures", () => {
+  it("marks remaining cases unmeasured after a terminal provider error", async () => {
+    const producer = vi.fn().mockRejectedValue(new Error("Provider unavailable"));
+    const { result } = await runEvalSuite({
+      suiteName: "provider-unavailable",
+      cases: [
+        { id: "failed", description: "Failed case", input: {} },
+        { id: "unmeasured", description: "Unmeasured case", input: {} },
+      ],
+      producer,
+      metrics: [itemStatusAgreement()],
+      maxRetries: 0,
+      stopOnProducerError: true,
+    });
+    expect(producer).toHaveBeenCalledTimes(1);
+    expect(result.caseResults[1].scores[0].detail).toContain("Not measured");
+    expect(result.caseResults[1].passed).toBe(false);
+    expect(result.aggregates[0].passRate).toBe(0);
+  });
+
+  it("keeps rate-limited cases in the pass-rate denominator", async () => {
+    const { result } = await runEvalSuite({
+      suiteName: "provider-failures",
+      cases: [
+        { id: "limited", description: "Rate-limited case", input: {} },
+        { id: "completed", description: "Completed case", input: {} },
+      ],
+      producer: async (testCase) => {
+        if (testCase.id === "limited") throw new Error("Provider rate limit 429");
+        return reviewOutput;
+      },
+      metrics: [itemStatusAgreement()],
+      maxRetries: 0,
+      delayBetweenCasesMs: 0,
+    });
+    expect(result.caseResults).toHaveLength(2);
+    expect(result.aggregates[0].passRate).toBe(0.5);
+    expect(result.overallPassed).toBe(false);
+  });
+
+  it.each([true, false])("bounds rate-limit retries (recovery: %s)", async (recovers) => {
+    vi.useFakeTimers();
+    try {
+      const producer = vi.fn().mockRejectedValueOnce(new Error("Provider rate limit 429"));
+      if (recovers) producer.mockResolvedValue(reviewOutput);
+      else producer.mockRejectedValue(new Error("Provider rate limit 429"));
+      const pending = runEvalSuite({
+        suiteName: "provider-retry",
+        cases: [{ id: "case", description: "Retry case", input: {} }],
+        producer,
+        metrics: [itemStatusAgreement()],
+        maxRetries: 1,
+        delayBetweenCasesMs: 0,
+      });
+      await vi.runAllTimersAsync();
+      const { result } = await pending;
+      expect(producer).toHaveBeenCalledTimes(2);
+      expect(result.overallPassed).toBe(recovers);
+      expect(result.aggregates[0].passRate).toBe(recovers ? 1 : 0);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

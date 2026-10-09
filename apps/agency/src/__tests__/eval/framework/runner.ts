@@ -54,6 +54,8 @@ export interface RunOptions<TOutput, TExpected> {
   delayBetweenCasesMs?: number;
   /** Max retries on rate limit (429) errors (default: 3) */
   maxRetries?: number;
+  /** Mark remaining cases unmeasured after an unrecovered producer failure. */
+  stopOnProducerError?: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -94,6 +96,7 @@ export async function runEvalSuite<TOutput, TExpected>(
     regressionThreshold = 0.05,
     delayBetweenCasesMs = 2000,
     maxRetries = 3,
+    stopOnProducerError = false,
   } = options;
 
   const caseResults: CaseResult[] = [];
@@ -142,6 +145,22 @@ export async function runEvalSuite<TOutput, TExpected>(
         passed: false,
         latencyMs: Date.now() - start,
       });
+      if (stopOnProducerError) {
+        for (const pendingCase of cases.slice(i + 1)) {
+          caseResults.push({
+            caseId: pendingCase.id,
+            description: pendingCase.description,
+            scores: evalMetrics.map((metric) => ({
+              name: metric.name,
+              score: 0,
+              passed: false,
+              detail: "Not measured after an unrecovered producer failure",
+            })),
+            passed: false,
+          });
+        }
+        break;
+      }
       continue;
     }
 
@@ -198,19 +217,13 @@ function aggregateMetrics(
   caseResults: CaseResult[],
   evalMetrics: EvalMetric<unknown, unknown>[],
 ): MetricAggregate[] {
-  // Exclude cases that failed entirely due to rate limiting (all scores are producer errors)
-  const validCases = caseResults.filter(
-    (c) =>
-      !c.scores.every((s) => s.detail?.includes("Producer error") && s.detail?.includes("429")),
-  );
-
   return evalMetrics.map((metric) => {
-    const scores = validCases
+    const scores = caseResults
       .flatMap((c) => c.scores)
       .filter((s) => s.name === metric.name)
       .map((s) => s.score);
 
-    const passed = validCases
+    const passed = caseResults
       .flatMap((c) => c.scores)
       .filter((s) => s.name === metric.name)
       .filter((s) => s.passed).length;

@@ -18,7 +18,7 @@ export function prepareEvaluationInput({ input }: { input: EvaluationInput }): C
     const documentId = `recorded-${document.checklistItemId}`;
     evidence.docByChecklistItem.set(document.checklistItemId, {
       id: documentId,
-      fileName: `${document.checklistItemId}.txt`,
+      fileName: `${document.checklistItemId}.pdf`,
     });
     evidence.textByDocId.set(documentId, document.textContent);
     if (document.relevantChunks)

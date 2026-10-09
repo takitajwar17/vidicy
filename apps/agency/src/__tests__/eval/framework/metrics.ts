@@ -8,7 +8,67 @@ import type { EvalMetric, ChecklistItemOutput, OrchestratorEvalOutput } from "./
 
 interface ReviewReferenceLabels {
   expectedItemStatuses?: Record<string, string>;
-  expectedRecommendations?: string[];
+  expectedRecommendations?: (string | string[])[];
+  expectedRedFlags?: (string | string[])[];
+}
+
+function missingFindingLabels({ labels, text }: { labels: (string | string[])[]; text: string }) {
+  const normalized = text.toLowerCase();
+  return labels
+    .filter(
+      (label) =>
+        !(Array.isArray(label) ? label : [label]).some((term) =>
+          normalized.includes(term.toLowerCase()),
+        ),
+    )
+    .map((label) => (Array.isArray(label) ? label.join(" | ") : label));
+}
+
+/** Every finding must appear in red flags; synonyms are explicit dataset labels. */
+export function redFlagCoverage(): EvalMetric<OrchestratorEvalOutput, ReviewReferenceLabels> {
+  return {
+    name: "redFlagDetection",
+    threshold: 1,
+    score({ output, expected }) {
+      const labels = expected?.expectedRedFlags ?? [];
+      const missing = missingFindingLabels({ labels, text: output.redFlags.join(" ") });
+      return {
+        name: "redFlagDetection",
+        score: labels.length ? (labels.length - missing.length) / labels.length : 1,
+        passed: missing.length === 0,
+        detail: missing.length ? `Missing red flag labels: ${missing.join(", ")}` : undefined,
+      };
+    },
+  };
+}
+
+/** Missing measurements remain failures; a provider error must not look like improvement. */
+export function compareReferenceScores({
+  cases,
+  scores,
+}: {
+  cases: { id: string; expected?: { lowerScoreThanCaseId?: string } }[];
+  scores: Record<string, number>;
+}) {
+  return cases.flatMap((testCase) => {
+    const referenceCaseId = testCase.expected?.lowerScoreThanCaseId;
+    if (!referenceCaseId) return [];
+    const score = scores[testCase.id] ?? null;
+    const referenceScore = scores[referenceCaseId] ?? null;
+    return [
+      {
+        caseId: testCase.id,
+        referenceCaseId,
+        score,
+        referenceScore,
+        passed: score !== null && referenceScore !== null && score < referenceScore,
+        detail:
+          score === null || referenceScore === null
+            ? "Case or reference was not completed or not measured"
+            : `Expected ${testCase.id} (${score}) below ${referenceCaseId} (${referenceScore})`,
+      },
+    ];
+  });
 }
 
 /** Every supplied status is a required assertion, including missing feedback. */
@@ -62,8 +122,7 @@ export function recommendationCoverage(): EvalMetric<
           passed: true,
           detail: "No recommendation labels supplied",
         };
-      const recommendations = output.recommendations.join(" ").toLowerCase();
-      const missing = labels.filter((label) => !recommendations.includes(label.toLowerCase()));
+      const missing = missingFindingLabels({ labels, text: output.recommendations.join(" ") });
       return {
         name: "recommendationCoverage",
         score: (labels.length - missing.length) / labels.length,

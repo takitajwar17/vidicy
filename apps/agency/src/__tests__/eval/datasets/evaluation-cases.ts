@@ -43,12 +43,14 @@ export interface DocumentItem {
 export interface EvaluationExpected {
   /** Expected overall score range */
   scoreRange: { min: number; max: number };
-  /** Expected risk level */
-  expectedRiskLevel: "low" | "medium" | "high";
-  /** Keywords that should appear in red flags (if any) */
-  expectedRedFlags?: string[];
-  /** Keywords that should appear in recommendations */
-  expectedRecommendations?: string[];
+  /** Optional risk label; omit when only relative score and document findings are specified. */
+  expectedRiskLevel?: "low" | "medium" | "high";
+  /** Controlled variants must score below this reference case. */
+  lowerScoreThanCaseId?: string;
+  /** Each label is required; an array gives accepted alternatives for one finding. */
+  expectedRedFlags?: (string | string[])[];
+  /** Each label is required; an array gives accepted alternatives for one action. */
+  expectedRecommendations?: (string | string[])[];
   /** Expected item feedback statuses */
   expectedItemStatuses?: Record<string, "ok" | "missing" | "needs_review">;
 }
@@ -57,10 +59,11 @@ export interface EvaluationExpected {
 // Test cases
 // ---------------------------------------------------------------------------
 
-export const evaluationCases: EvalTestCase<EvaluationInput, EvaluationExpected>[] = [
+const limitedEvidenceCases: EvalTestCase<EvaluationInput, EvaluationExpected>[] = [
   {
-    id: "strong-complete-application",
-    description: "Complete tourist visa application with all strong documents — expect high score",
+    id: "uploads-complete-limited-evidence",
+    description:
+      "All listed uploads are present, but family, asset, prior-travel and trip evidence are absent",
     input: {
       asOfDate: "2026-09-30",
       visaType: "Tourist / Visitor (B1/B2)",
@@ -105,16 +108,16 @@ export const evaluationCases: EvalTestCase<EvaluationInput, EvaluationExpected>[
       ],
     },
     expected: {
-      scoreRange: { min: 75, max: 100 },
-      expectedRiskLevel: "low",
+      scoreRange: { min: 0, max: 100 },
+      lowerScoreThanCaseId: "complete-reference",
       expectedRecommendations: [],
-      expectedItemStatuses: {
-        "item-passport": "ok",
-        "item-ds160": "ok",
-        "item-bank": "ok",
-      },
+      expectedItemStatuses: { "item-photo": "needs_review" },
     },
-    metadata: { scenario: "ideal" },
+    metadata: {
+      scenario: "limited-evidence",
+      labelRationale:
+        "The production rubric awards points for family (8), assets (7), prior travel (12), and documented purpose/duration (14). These dimensions are not fully established by these five abbreviated uploads. Require a lower score than the complete reference rather than inventing an absolute band. A text description cannot establish photo compliance; the other partial extracts have no expert-labelled valid status.",
+    },
   },
   {
     id: "missing-required-docs",
@@ -155,13 +158,17 @@ export const evaluationCases: EvalTestCase<EvaluationInput, EvaluationExpected>[
     expected: {
       scoreRange: { min: 0, max: 45 },
       expectedRiskLevel: "high",
-      expectedRedFlags: ["passport", "bank", "missing"],
+      expectedRedFlags: ["passport", "bank", ["missing", "absent", "not uploaded", "not provided"]],
       expectedItemStatuses: {
         "item-passport": "missing",
         "item-bank": "missing",
       },
     },
-    metadata: { scenario: "missing-docs" },
+    metadata: {
+      scenario: "missing-docs",
+      labelRationale:
+        "Required identity and financial evidence are absent; no lower score bound is justified.",
+    },
   },
   {
     id: "expired-passport",
@@ -196,15 +203,19 @@ export const evaluationCases: EvalTestCase<EvaluationInput, EvaluationExpected>[
       ],
     },
     expected: {
-      scoreRange: { min: 20, max: 60 },
+      scoreRange: { min: 0, max: 64 },
       expectedRiskLevel: "high",
-      expectedRedFlags: ["expired", "passport"],
+      expectedRedFlags: [["expir", "no longer valid"], "passport"],
     },
-    metadata: { scenario: "expired-doc" },
+    metadata: {
+      scenario: "expired-doc",
+      labelRationale:
+        "Expired identity evidence requires correction. Missing financial, employment and prior-travel evidence prevents a high readiness score; no positive score floor is justified.",
+    },
   },
   {
     id: "weak-financials",
-    description: "Application with weak financial evidence — expect medium risk",
+    description: "Student case with a material funding shortfall and limited supporting evidence",
     input: {
       asOfDate: "2026-09-30",
       visaType: "Student (Tier 4 / Student Route)",
@@ -242,12 +253,29 @@ export const evaluationCases: EvalTestCase<EvaluationInput, EvaluationExpected>[
       ],
     },
     expected: {
-      scoreRange: { min: 40, max: 72 },
-      expectedRiskLevel: "medium",
-      expectedRedFlags: ["fund", "insufficien", "balance"],
-      expectedRecommendations: ["fund", "evidence"],
+      scoreRange: { min: 0, max: 64 },
+      expectedRiskLevel: "high",
+      expectedRedFlags: [
+        ["insufficien", "shortfall", "deficit", "inadequate"],
+        ["fund", "bank", "financial", "balance"],
+      ],
+      expectedRecommendations: [
+        [
+          "bank statement",
+          "financial evidence",
+          "financial document",
+          "proof of funds",
+          "sponsor",
+          "loan",
+        ],
+        ["balance", "fund", "tuition", "fee"],
+      ],
     },
-    metadata: { scenario: "weak-financials" },
+    metadata: {
+      scenario: "weak-financials",
+      labelRationale:
+        "Available GBP 3,200 does not cover the stated GBP 28,000 course fee; other rubric evidence is limited. This is a high-priority document-preparation concern, not a visa outcome prediction.",
+    },
   },
   {
     id: "mixed-quality-docs",
@@ -289,11 +317,196 @@ export const evaluationCases: EvalTestCase<EvaluationInput, EvaluationExpected>[
       ],
     },
     expected: {
-      scoreRange: { min: 30, max: 78 },
+      scoreRange: { min: 0, max: 64 },
       expectedRiskLevel: "high",
-      expectedRedFlags: ["mismatch", "inconsisten", "discrepan"],
+      expectedRedFlags: [
+        ["mismatch", "inconsisten", "discrepan", "contradict", "conflict"],
+        "employer",
+        ["salary", "wage", "compensation", "pay"],
+      ],
       expectedRecommendations: ["employment", "offer"],
     },
-    metadata: { scenario: "mixed-quality" },
+    metadata: {
+      scenario: "mixed-quality",
+      labelRationale:
+        "Employer, role, location and salary conflict across core work evidence. Missing supporting rubric evidence provides no defensible positive score floor.",
+    },
   },
+];
+
+// This reference supplies evidence for every dimension in the current application
+// rubric. It is a test of internal document readiness, not an immigration decision.
+const completeReferenceInput: EvaluationInput = {
+  asOfDate: "2026-09-30",
+  applicantName: "PRIYA SHARMA",
+  relationship: "primary",
+  visaType: "Tourist / Visitor (B1/B2)",
+  homeCountry: "India",
+  currentCountry: "India",
+  destinationCountry: "United States",
+  embassy: "New Delhi",
+  documents: [
+    {
+      checklistItemId: "reference-passport",
+      documentName: "Passport and prior travel record",
+      isRequired: true,
+      description: "Confirm identity, passport validity and the supplied entry/exit record.",
+      textContent:
+        "PASSPORT AND TRAVEL RECORD\nHolder: PRIYA SHARMA\nPassport M1234567; issued 10 JAN 2023; expires 09 JAN 2033; issued by Republic of India, New Delhi.\nPrior passport and stamped travel pages: UK entry 10 JUN 2019, exit 20 JUN 2019 before authorized end 10 JUL 2019; Germany entry 05 MAY 2022, exit 15 MAY 2022 before authorized end 04 JUN 2022.\nSigned immigration declaration: no visa refusals, overstays, deportations or immigration violations.",
+    },
+    {
+      checklistItemId: "reference-bank",
+      documentName: "Bank Statement",
+      isRequired: true,
+      description:
+        "Confirm six months of savings, income and coverage of the supplied travel budget.",
+      textContent:
+        "STATE BANK OF INDIA — SIGNED SIX-MONTH ACCOUNT STATEMENT\nAccount holder: PRIYA SHARMA; account ending 1234; issued 29 SEP 2026.\nMar 2026 closing INR 850000; Apr 910000; May 970000; Jun 1040000; Jul 1120000; Aug 2026 1230000.\nEvery month: salary credit INR 180000 from Tata Consultancy Services Ltd. Ordinary household expenses are paid monthly. No loans, third-party transfers or unusual deposits. Unencumbered savings INR 1230000.\nThe attached 02–17 OCT 2026 travel budget is INR 350000 including return transport, lodging, meals and contingency; all costs are self-funded.",
+    },
+    {
+      checklistItemId: "reference-employment",
+      documentName: "Employment and approved leave letter",
+      isRequired: true,
+      description: "Check employer, salary, leave approval and the return-to-work date.",
+      textContent:
+        "TATA CONSULTANCY SERVICES LIMITED — EMPLOYMENT CERTIFICATE\nEmployee: PRIYA SHARMA; senior software engineer since MAR 2018. Permanent employment; annual salary INR 2160000 (monthly INR 180000), consistent with payslips and bank credits.\nPaid leave approved 02–17 OCT 2026 for United States tourism. Employee must resume the permanent India-based role on 18 OCT 2026.\nSigned and stamped by Anjali Rao, HR Director, 28 SEP 2026; verification reference HR-PS-125. Issuer verification: employer HR department through the official company staff directory at https://www.tcs.com/.",
+    },
+    {
+      checklistItemId: "reference-family",
+      documentName: "Family residence evidence",
+      isRequired: false,
+      description:
+        "Check the applicant's relationship evidence and which family members remain in India.",
+      textContent:
+        "FAMILY EVIDENCE — PRINCIPAL APPLICANT PRIYA SHARMA\nCertified marriage and child birth records identify Priya Sharma, spouse Arun Sharma, and their dependent child. Municipal residence certificate dated 27 SEP 2026 confirms the family lives together in New Delhi.\nSigned household declaration: Arun and the child remain in India during Priya's solo tourism trip, 02–17 OCT 2026. Priya returns to their shared home on 17 OCT 2026.",
+    },
+    {
+      checklistItemId: "reference-property",
+      documentName: "Registered property title",
+      isRequired: false,
+      description: "Check ownership and location against the applicant's identity.",
+      textContent:
+        "REGISTERED PROPERTY TITLE — NEW DELHI LAND REGISTRY\nOwner: PRIYA SHARMA; identity passport M1234567. Residential home in New Delhi, India, owned since 2020; certified registry extract dated 27 SEP 2026. This is the applicant's continuing home with spouse and child. Signed registry seal and registration reference ND-2020-PS-100.",
+    },
+    {
+      checklistItemId: "reference-itinerary",
+      documentName: "Confirmed return travel, hotel and itinerary",
+      isRequired: true,
+      description: "Check that purpose, travel dates, duration, bookings and budget agree.",
+      textContent:
+        "CONFIRMED TOURISM BOOKINGS — PASSENGER/GUEST PRIYA SHARMA\nRound trip New Delhi–New York: departure 02 OCT 2026; return arrival New Delhi 17 OCT 2026. Paid confirmed return ticket reference RT-PS-2610.\nConfirmed Manhattan hotel stay 02–16 OCT 2026, guest Priya Sharma, booking HOTEL-PS-2610. Tourism itinerary: New York museums, city landmarks and a guided day trip; no employment or study. Total travel budget INR 350000, paid from personal savings. Approved leave ends 17 OCT; work resumes 18 OCT 2026.",
+    },
+    {
+      checklistItemId: "reference-application",
+      documentName: "Application confirmation and signed purpose declaration",
+      isRequired: true,
+      description:
+        "Check consistent identity and purpose; no missing answer, unsigned field or conflicting declaration.",
+      textContent:
+        "DS-160 CONFIRMATION AND SIGNED DECLARATION\nApplicant: PRIYA SHARMA; passport M1234567; application AA009F4X2L; submitted 25 SEP 2026 to US Embassy New Delhi.\nPurpose: solo tourism in New York, 02–17 OCT 2026; no work or study. Permanent job with Tata Consultancy Services Ltd; monthly salary INR 180000. Budget INR 350000 from INR 1230000 savings. Spouse and dependent child remain at the family-owned New Delhi home.\nPrior UK and Schengen trips ended within authorized stays. No refusals, overstays or violations. All form answers complete; confirmation barcode present; signed by Priya Sharma on 25 SEP 2026.",
+    },
+  ],
+};
+
+function referenceVariant({
+  id,
+  description,
+  itemId,
+  textContent,
+  expected,
+}: {
+  id: string;
+  description: string;
+  itemId: string;
+  textContent: string | null;
+  expected: Omit<EvaluationExpected, "scoreRange" | "lowerScoreThanCaseId">;
+}): EvalTestCase<EvaluationInput, EvaluationExpected> {
+  return {
+    id,
+    description,
+    input: {
+      ...completeReferenceInput,
+      documents: completeReferenceInput.documents.map((document) =>
+        document.checklistItemId === itemId ? { ...document, textContent } : { ...document },
+      ),
+    },
+    expected: {
+      scoreRange: { min: 0, max: 100 },
+      lowerScoreThanCaseId: "complete-reference",
+      ...expected,
+    },
+    metadata: {
+      scenario: "controlled-variant",
+      baseCaseId: "complete-reference",
+      changedItemId: itemId,
+      labelRationale:
+        "Only one document changes. Require the specified finding and a lower score than the complete reference; do not invent an absolute score for a defect the rubric does not assign a fixed penalty.",
+    },
+  };
+}
+
+export const evaluationCases: EvalTestCase<EvaluationInput, EvaluationExpected>[] = [
+  ...limitedEvidenceCases,
+  {
+    id: "complete-reference",
+    description:
+      "Complete evidence for all five dimensions of the current internal readiness rubric",
+    input: completeReferenceInput,
+    expected: {
+      scoreRange: { min: 80, max: 100 },
+      expectedRiskLevel: "low",
+      expectedItemStatuses: {
+        "reference-passport": "ok",
+        "reference-bank": "ok",
+        "reference-employment": "ok",
+      },
+    },
+    metadata: {
+      scenario: "complete-reference",
+      labelRationale:
+        "Evidence addresses employment and leave, family, assets, financial history and budget, a consistent tourism itinerary, prior compliant travel and complete identity records. At least 80 is the production rubric's low-risk readiness band; this is a developer-authored expectation, not an expert label.",
+    },
+  },
+  referenceVariant({
+    id: "reference-missing-bank",
+    description: "Complete reference with only the required bank statement removed",
+    itemId: "reference-bank",
+    textContent: null,
+    expected: {
+      expectedItemStatuses: { "reference-bank": "missing" },
+      expectedRedFlags: ["bank", ["missing", "absent", "not uploaded", "not provided"]],
+      expectedRecommendations: ["bank"],
+    },
+  }),
+  referenceVariant({
+    id: "reference-expired-passport",
+    description: "Complete reference with only the passport expiry changed to a past date",
+    itemId: "reference-passport",
+    textContent: completeReferenceInput.documents[0].textContent!.replace(
+      "09 JAN 2033",
+      "09 JAN 2024",
+    ),
+    expected: {
+      expectedItemStatuses: { "reference-passport": "needs_review" },
+      expectedRedFlags: [["expir", "no longer valid"], "passport"],
+      expectedRecommendations: ["passport"],
+    },
+  }),
+  referenceVariant({
+    id: "reference-name-mismatch",
+    description: "Complete reference with only the employment letter naming a different employee",
+    itemId: "reference-employment",
+    textContent: completeReferenceInput.documents[2].textContent!.replaceAll(
+      "PRIYA SHARMA",
+      "ANANYA SHARMA",
+    ),
+    expected: {
+      expectedItemStatuses: { "reference-employment": "needs_review" },
+      expectedRedFlags: [
+        ["name", "identity"],
+        ["mismatch", "inconsisten", "discrepan", "contradict", "differ"],
+      ],
+      expectedRecommendations: ["name"],
+    },
+  }),
 ];
