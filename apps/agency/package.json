@@ -38,7 +38,10 @@
     "list:kv": "wrangler kv key list --namespace-id=$(node scripts/get-kv-id.mjs) --remote | jq '[.[].name]' > kv.log",
     "delete:kv": "wrangler kv bulk delete kv.log --namespace-id=$(node scripts/get-kv-id.mjs) --remote",
     "db:migrate": "node scripts/google-migrate-d1.mjs --apply-schema",
-    "d1:migrate:legacy": "wrangler d1 migrations apply $(node scripts/get-db-name.mjs) --remote"
+    "d1:migrate:legacy": "wrangler d1 migrations apply $(node scripts/get-db-name.mjs) --remote",
+    "eval:review": "RUN_MODEL_EVALS=true vitest run src/__tests__/eval/evaluation-eval.test.ts",
+    "benchmark:review": "RUN_REVIEW_BENCHMARK=true vitest run src/__tests__/eval/review-benchmark.test.ts",
+    "test:e2e": "playwright test"
   },
   "dependencies": {
     "@google-cloud/cloud-sql-connector": "^1.12.1",

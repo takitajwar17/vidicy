@@ -107,7 +107,8 @@ export default async function ReportsPage({
                   <TableHead>Status</TableHead>
                   <TableHead>Items</TableHead>
                   <TableHead>Created</TableHead>
-                  <TableHead className="pr-5">Summary</TableHead>
+                  <TableHead>Summary</TableHead>
+                  <TableHead className="pr-5">Report</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -144,6 +145,14 @@ export default async function ReportsPage({
                       <p className="truncate text-xs text-muted-foreground" title={report.summary}>
                         {report.summary}
                       </p>
+                    </TableCell>
+                    <TableCell className="pr-5">
+                      <Link
+                        className="font-semibold text-primary underline"
+                        href={`/dashboard/reports/${report.id}` as Route}
+                      >
+                        Open report
+                      </Link>
                     </TableCell>
                   </TableRow>
                 ))}

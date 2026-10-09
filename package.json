@@ -21,7 +21,10 @@
     "db:generate:agency": "pnpm --filter @vidicy/agency run db:generate",
     "db:migrate:dev:agency": "pnpm --filter @vidicy/agency run db:migrate:dev",
     "dev": "pnpm --filter @vidicy/agency run dev",
-    "format:check": "pnpm -r run format:check"
+    "format:check": "pnpm -r run format:check",
+    "eval:review": "pnpm --filter @vidicy/agency run eval:review",
+    "benchmark:review": "pnpm --filter @vidicy/agency run benchmark:review",
+    "test:e2e": "pnpm --filter @vidicy/agency run test:e2e"
   },
   "volta": {
     "node": "22.18.0"

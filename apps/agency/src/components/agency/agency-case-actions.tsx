@@ -132,12 +132,13 @@ export function AgencyCaseToolbar({
   }
 
   async function handleGenerateReport() {
-    const [, error] = await generateReport({ applicationId });
+    const [report, error] = await generateReport({ applicationId });
     if (error) {
-      toast.error("Could not generate client report.");
+      toast.error(error.message ?? "Could not generate client report.");
       return;
     }
     toast.success("Client report is ready.");
+    if (report?.id) router.push(`/dashboard/reports/${report.id}`);
     router.refresh();
   }
 

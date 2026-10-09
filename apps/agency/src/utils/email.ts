@@ -390,3 +390,50 @@ export async function sendAnnouncementNotificationEmail({
     tags: [{ name: "type", value: "announcement-notification" }],
   });
 }
+
+export interface ClientReportEmailPayload {
+  to: string;
+  subject: string;
+  text: string;
+}
+
+export async function sendClientReportEmail({
+  payload,
+  idempotencyKey,
+}: {
+  payload: ClientReportEmailPayload;
+  idempotencyKey: string;
+}): Promise<{ id: string }> {
+  if (!isProd) throw new Error("Client report delivery is disabled outside production.");
+  if (!process.env.RESEND_API_KEY || !process.env.EMAIL_FROM) {
+    throw new Error("Configure the email provider before sending client reports.");
+  }
+  const response = await fetch("https://api.resend.com/emails", {
+    method: "POST",
+    signal: AbortSignal.timeout(30_000),
+    headers: {
+      Authorization: `Bearer ${process.env.RESEND_API_KEY}`,
+      "Content-Type": "application/json",
+      "Idempotency-Key": idempotencyKey,
+    },
+    body: JSON.stringify({
+      from: `${process.env.EMAIL_FROM_NAME ?? SITE_NAME} <${process.env.EMAIL_FROM}>`,
+      to: [payload.to],
+      subject: payload.subject,
+      text: payload.text,
+      ...(process.env.EMAIL_REPLY_TO ? { reply_to: process.env.EMAIL_REPLY_TO } : {}),
+      tags: [{ name: "type", value: "client-report" }],
+    }),
+  });
+  if (!response.ok) throw new Error(`The email provider rejected delivery (${response.status}).`);
+  const result: unknown = await response.json();
+  if (
+    !result ||
+    typeof result !== "object" ||
+    !("id" in result) ||
+    typeof result.id !== "string" ||
+    !result.id
+  )
+    throw new Error("The email provider did not confirm acceptance.");
+  return { id: result.id };
+}

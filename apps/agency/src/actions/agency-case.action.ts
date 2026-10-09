@@ -34,6 +34,8 @@ import { sendEmailBestEffort } from "@/lib/best-effort-email";
 import { isOpenReviewIssueStatus, normalizeReviewIssueStatus } from "@/lib/agency-workflow";
 import { logger } from "@/infra/logger";
 import { sendAgencyTeamAccessEmail } from "@/utils/email";
+import { deliverClientReport } from "@/server/client-reports";
+import { validateCsrfToken } from "@/infra/csrf";
 import {
   invalidateAgencyReports,
   getAgencyReportInvalidationQueries,
@@ -473,12 +475,13 @@ export const generateClientReportAction = createServerAction()
     const { session } = await requireAgencyStaff();
     const db = getDB();
 
-    const original = await requireAgencyCase({ db, applicationId: input.applicationId });
+    await requireAgencyCase({ db, applicationId: input.applicationId });
     await requireCurrentAgencyReview({
       db,
       applicationId: input.applicationId,
       userId: session.userId,
     });
+    const original = await requireAgencyCase({ db, applicationId: input.applicationId });
 
     const [application, issues] = await Promise.all([
       db.query.visaApplicationTable.findFirst({
@@ -515,51 +518,68 @@ export const generateClientReportAction = createServerAction()
         ? `${application.clientName ?? "Client"} has ${actionItems.length} item${actionItems.length === 1 ? "" : "s"} to fix before the review desk can mark the case ready.`
         : "No client issues remain. Check the required documents and review before you mark the case ready.";
 
-    const [report] = await db
-      .insert(clientReportTable)
-      .values({
-        applicationId: input.applicationId,
-        status: CLIENT_REPORT_DELIVERY_STATUS.READY,
-        summary,
-        actionItems,
-        createdById: session.userId,
-      })
-      .returning();
-
-    const updated = await db
-      .update(visaApplicationTable)
-      .set({
-        clientReportStatus: CLIENT_REPORT_STATUS.READY,
-        ...(actionItems.length > 0
-          ? {
-              agencyStatus: AGENCY_CASE_STATUS.NEEDS_CLIENT,
-              status: VISA_APPLICATION_STATUS.IN_PROGRESS,
-              reviewCompletedAt: null,
-            }
-          : {}),
-      })
-      .where(
-        and(
-          eq(visaApplicationTable.id, input.applicationId),
-          sql`${visaApplicationTable.updateCounter} IS NOT DISTINCT FROM ${original.updateCounter}`,
-        ),
-      )
-      .returning({ id: visaApplicationTable.id });
-    if (!updated.length) {
+    const report = await db.withTransaction(async () => {
+      const updated = await db
+        .update(visaApplicationTable)
+        .set({
+          clientReportStatus: CLIENT_REPORT_STATUS.READY,
+          ...(actionItems.length > 0
+            ? {
+                agencyStatus: AGENCY_CASE_STATUS.NEEDS_CLIENT,
+                status: VISA_APPLICATION_STATUS.IN_PROGRESS,
+                reviewCompletedAt: null,
+              }
+            : {}),
+        })
+        .where(
+          and(
+            eq(visaApplicationTable.id, input.applicationId),
+            sql`${visaApplicationTable.updateCounter} IS NOT DISTINCT FROM ${original.updateCounter}`,
+          ),
+        )
+        .returning({ id: visaApplicationTable.id });
+      if (!updated.length)
+        throw new ZSAError(
+          "PRECONDITION_FAILED",
+          "The case changed. Run review again before you prepare the report.",
+        );
       await db
         .update(clientReportTable)
         .set({ status: CLIENT_REPORT_DELIVERY_STATUS.DRAFT })
-        .where(eq(clientReportTable.id, report.id));
-      throw new ZSAError(
-        "PRECONDITION_FAILED",
-        "The case changed. Run review again before you prepare the report.",
-      );
-    }
+        .where(
+          and(
+            eq(clientReportTable.applicationId, input.applicationId),
+            eq(clientReportTable.status, CLIENT_REPORT_DELIVERY_STATUS.READY),
+          ),
+        );
+      const [created] = await db
+        .insert(clientReportTable)
+        .values({
+          applicationId: input.applicationId,
+          status: CLIENT_REPORT_DELIVERY_STATUS.READY,
+          summary,
+          actionItems,
+          createdById: session.userId,
+        })
+        .returning();
+      return created;
+    });
 
     revalidatePath(`/dashboard/${input.applicationId}`);
     revalidatePath("/dashboard");
     revalidatePath("/dashboard/reports");
     return report;
+  });
+
+export const sendClientReportAction = createServerAction()
+  .input(z.object({ reportId: z.string().min(1), csrfToken: z.string().min(1) }))
+  .handler(async ({ input }) => {
+    if (!(await validateCsrfToken(input.csrfToken)))
+      throw new ZSAError("FORBIDDEN", "Invalid security token. Refresh the page.");
+    const result = await deliverClientReport({ reportId: input.reportId });
+    revalidatePath("/dashboard/reports");
+    revalidatePath(`/dashboard/reports/${input.reportId}`);
+    return result;
   });
 
 export const finalizeReviewAction = createServerAction()

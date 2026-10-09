@@ -1,4 +1,6 @@
 import { Suspense } from "react";
+import Link from "next/link";
+import type { Route } from "next";
 import { notFound } from "next/navigation";
 import {
   AlertTriangleIcon,
@@ -13,7 +15,7 @@ import {
 
 import {
   AddReviewIssueForm,
-  AgencyCaseStatusSelect,
+  AgencyCaseToolbar,
   ReviewIssueStatusSelect,
 } from "@/components/agency/agency-case-actions";
 import {
@@ -123,7 +125,6 @@ export async function AgencyCaseContent({ appId }: { appId: string }) {
               <h1 className="text-2xl font-bold tracking-tight text-foreground md:text-3xl">
                 Case #{caseNumber}
               </h1>
-              <AgencyCaseStatusSelect applicationId={app.id} status={app.agencyStatus} />
             </div>
             <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-muted-foreground">
               {app.clientName ? (
@@ -156,6 +157,22 @@ export async function AgencyCaseContent({ appId }: { appId: string }) {
               ) : null}
             </div>
           </div>
+          <AgencyCaseToolbar
+            applicationId={app.id}
+            status={app.agencyStatus}
+            assignedReviewerId={app.assignedReviewerId}
+            hasEvaluation={hasEvaluation}
+            staff={data.staff.flatMap((member) =>
+              member.userId
+                ? [
+                    {
+                      userId: member.userId,
+                      label: getPersonName(member.user) ?? member.email ?? "Agency staff",
+                    },
+                  ]
+                : [],
+            )}
+          />
         </section>
 
         <section className="grid min-h-0 flex-1 gap-4 xl:grid-cols-[340px_minmax(0,1fr)_430px]">
@@ -341,6 +358,14 @@ export async function AgencyCaseContent({ appId }: { appId: string }) {
                       ]?.label ?? "Not Started"}
                     </Badge>
                   </div>
+                  {data.latestReport ? (
+                    <Link
+                      href={`/dashboard/reports/${data.latestReport.id}` as Route}
+                      className="text-sm font-semibold text-primary underline"
+                    >
+                      Open client report
+                    </Link>
+                  ) : null}
                 </div>
               </TabsContent>
 

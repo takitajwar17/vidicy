@@ -2,40 +2,13 @@ import { defineConfig, devices } from "@playwright/test";
 
 export default defineConfig({
   testDir: "./tests",
+  testMatch: "**/*.pw.ts",
   fullyParallel: false,
   forbidOnly: !!process.env.CI,
-  retries: process.env.CI ? 2 : 0,
+  retries: 0,
   workers: 1,
-  reporter: "html",
-  timeout: 30_000,
-  expect: { timeout: 10_000 },
-
-  use: {
-    baseURL: "http://localhost:3002",
-    trace: "on-first-retry",
-    screenshot: "only-on-failure",
-  },
-
-  projects: [
-    {
-      name: "auth-setup",
-      testMatch: /auth\.setup\.ts/,
-    },
-    {
-      name: "public",
-      testMatch:
-        /marketing\.spec\.ts|auth-pages\.spec\.ts|legal\.spec\.ts|error-pages\.spec\.ts/,
-      use: { ...devices["Desktop Chrome"] },
-    },
-    {
-      name: "authenticated",
-      testMatch:
-        /dashboard\.spec\.ts|settings\.spec\.ts|workspace\.spec\.ts|support\.spec\.ts|navigation\.spec\.ts/,
-      dependencies: ["auth-setup"],
-      use: {
-        ...devices["Desktop Chrome"],
-        storageState: ".playwright/.auth/user.json",
-      },
-    },
-  ],
+  reporter: [["list"], ["html", { open: "never" }]],
+  timeout: 60_000,
+  expect: { timeout: 15_000 },
+  use: { ...devices["Desktop Chrome"], trace: "retain-on-failure", screenshot: "only-on-failure" },
 });

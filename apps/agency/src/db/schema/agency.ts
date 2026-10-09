@@ -72,6 +72,7 @@ export const CLIENT_REPORT_DELIVERY_STATUS = {
   DRAFT: "draft",
   READY: "ready",
   SENT: "sent",
+  SENDING: "sending",
 } as const;
 
 export const clientReportDeliveryStatusTuple = Object.values(CLIENT_REPORT_DELIVERY_STATUS) as [
@@ -189,6 +190,10 @@ export const clientReportTable = pgTable(
     actionItems: jsonb().notNull().$type<ClientReportActionItem[]>(),
     createdById: text().references(() => userTable.id, { onDelete: "set null" }),
     sentAt: timestamp({ withTimezone: true, mode: "date", precision: 3 }),
+    deliveryKey: text(),
+    deliveryPayload: jsonb().$type<{ to: string; subject: string; text: string }>(),
+    deliveryStartedAt: timestamp({ withTimezone: true, mode: "date", precision: 3 }),
+    providerMessageId: text(),
   },
   (table) => [
     index("client_report_app_id_idx").on(table.applicationId),

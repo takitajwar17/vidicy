@@ -115,7 +115,8 @@ export const CLIENT_REPORT_STATUS_META = {
 export const CLIENT_REPORT_DELIVERY_STATUS_META = {
   [CLIENT_REPORT_DELIVERY_STATUS.DRAFT]: { label: "Draft" },
   [CLIENT_REPORT_DELIVERY_STATUS.READY]: { label: "Ready" },
-  [CLIENT_REPORT_DELIVERY_STATUS.SENT]: { label: "Sent" },
+  [CLIENT_REPORT_DELIVERY_STATUS.SENT]: { label: "Accepted by email provider" },
+  [CLIENT_REPORT_DELIVERY_STATUS.SENDING]: { label: "Delivery pending" },
 } as const;
 
 export function normalizeReviewIssueStatus(status: string | null | undefined) {
