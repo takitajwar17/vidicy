@@ -27,9 +27,7 @@ describe("main marketing homepage route", () => {
     expect(markup).toContain("dashboard.png");
     expect(markup).toContain("30 sec");
     expect(markup).toContain("Turn manual review into a repeatable workflow");
-    expect(markup).toContain(
-      "/videos/vidicy-hero.mp4",
-    );
+    expect(markup).toContain("/videos/vidicy-hero.mp4");
     expect(markup).toContain('href="/sign-in"');
     expect(markup).toContain('href="/sign-up"');
     expect(markup).toContain("Log in");

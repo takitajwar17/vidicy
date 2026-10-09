@@ -7,8 +7,7 @@ import Footer from "@/components/sections/footer";
 import { marketingTopBarLinks } from "@/lib/config";
 import { constructMetadata } from "@/lib/utils";
 
-const heroVideoUrl =
-  "/videos/vidicy-hero.mp4";
+const heroVideoUrl = "/videos/vidicy-hero.mp4";
 
 const workflowHighlights = [
   {
