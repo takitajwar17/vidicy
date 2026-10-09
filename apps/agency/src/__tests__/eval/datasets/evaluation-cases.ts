@@ -1,8 +1,9 @@
 /**
- * Golden test cases for document evaluation scoring.
+ * Synthetic regression cases for document evaluation scoring.
  *
  * Each case provides mock document text content and expected evaluation
  * quality constraints (score ranges, risk levels, expected flags).
+ * These expectations are developer-authored, not expert labels or an accuracy study.
  */
 
 import type { EvalTestCase } from "../framework/types";
@@ -12,9 +13,15 @@ import type { EvalTestCase } from "../framework/types";
 // ---------------------------------------------------------------------------
 
 export interface EvaluationInput {
+  /** Fixed review date keeps historical synthetic documents reproducible. */
+  asOfDate?: string;
   visaType: string;
   homeCountry: string;
   destinationCountry: string;
+  currentCountry?: string;
+  embassy?: string;
+  applicantName?: string;
+  relationship?: string;
   /** Checklist items with associated document content */
   documents: DocumentItem[];
 }
@@ -25,6 +32,12 @@ export interface DocumentItem {
   isRequired: boolean;
   /** Simulated extracted text from the PDF */
   textContent: string | null;
+  description?: string;
+  commonMistakes?: string;
+  /** Recorded retrieval evidence; this does not run the search service. */
+  relevantChunks?: string;
+  /** Inline images allow the same multimodal model path as production. */
+  visionImages?: string[];
 }
 
 export interface EvaluationExpected {
@@ -49,6 +62,7 @@ export const evaluationCases: EvalTestCase<EvaluationInput, EvaluationExpected>[
     id: "strong-complete-application",
     description: "Complete tourist visa application with all strong documents — expect high score",
     input: {
+      asOfDate: "2026-09-30",
       visaType: "Tourist / Visitor (B1/B2)",
       homeCountry: "India",
       destinationCountry: "United States",
@@ -106,6 +120,7 @@ export const evaluationCases: EvalTestCase<EvaluationInput, EvaluationExpected>[
     id: "missing-required-docs",
     description: "Application missing required passport and bank statement — expect low score",
     input: {
+      asOfDate: "2026-09-30",
       visaType: "Tourist / Visitor (B1/B2)",
       homeCountry: "Nigeria",
       destinationCountry: "United States",
@@ -152,6 +167,7 @@ export const evaluationCases: EvalTestCase<EvaluationInput, EvaluationExpected>[
     id: "expired-passport",
     description: "Application with expired passport — expect red flag and medium/high risk",
     input: {
+      asOfDate: "2026-09-30",
       visaType: "Tourist / Visitor (Schengen)",
       homeCountry: "Egypt",
       destinationCountry: "Germany",
@@ -190,6 +206,7 @@ export const evaluationCases: EvalTestCase<EvaluationInput, EvaluationExpected>[
     id: "weak-financials",
     description: "Application with weak financial evidence — expect medium risk",
     input: {
+      asOfDate: "2026-09-30",
       visaType: "Student (Tier 4 / Student Route)",
       homeCountry: "Bangladesh",
       destinationCountry: "United Kingdom",
@@ -236,6 +253,7 @@ export const evaluationCases: EvalTestCase<EvaluationInput, EvaluationExpected>[
     id: "mixed-quality-docs",
     description: "Application with mix of good and problematic documents — expect nuanced scoring",
     input: {
+      asOfDate: "2026-09-30",
       visaType: "Work Permit",
       homeCountry: "Philippines",
       destinationCountry: "Canada",
