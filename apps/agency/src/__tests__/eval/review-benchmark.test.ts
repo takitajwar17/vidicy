@@ -10,6 +10,7 @@ import { GEMINI_DOCUMENT_EVALUATION_MODEL } from "@/lib/gemini";
 import { loadEvaluationCases } from "./datasets/load-evaluation-cases";
 import { prepareEvaluationInput } from "./datasets/prepare-evaluation-input";
 import { estimateModelCost, runBenchmark, summarizeBenchmark } from "./framework/benchmark";
+import { itemStatusAgreement, recommendationCoverage } from "./framework/metrics";
 
 function integerOption({ name, fallback, max }: { name: string; fallback: number; max: number }) {
   const value = Number(process.env[name] ?? fallback);
@@ -50,6 +51,9 @@ describe.skipIf(process.env.RUN_REVIEW_BENCHMARK !== "true")("Production review 
         .update(await readFile("src/services/case-evaluation.ts"))
         .update(await readFile("src/lib/gemini-evaluation.ts"))
         .update(await readFile("src/__tests__/eval/datasets/prepare-evaluation-input.ts"))
+        .digest("hex");
+      const metricSourceSha256 = createHash("sha256")
+        .update(await readFile("src/__tests__/eval/framework/metrics.ts"))
         .digest("hex");
       const measured = await runBenchmark({
         items,
@@ -92,6 +96,12 @@ describe.skipIf(process.env.RUN_REVIEW_BENCHMARK !== "true")("Production review 
             diagnostics: output?.diagnostics ?? null,
             score: output?.evaluationData.overallScore ?? null,
             riskLevel: output?.evaluationData.riskLevel ?? null,
+            referenceLabelChecks: output
+              ? await Promise.all([
+                  itemStatusAgreement().score({ output: output.evaluationData, expected }),
+                  recommendationCoverage().score({ output: output.evaluationData, expected }),
+                ])
+              : null,
             scoreInReferenceRange:
               !!output &&
               output.evaluationData.overallScore >= expected.scoreRange.min &&
@@ -128,6 +138,7 @@ describe.skipIf(process.env.RUN_REVIEW_BENCHMARK !== "true")("Production review 
           "Closed-loop concurrent case workers; completed latency uses nearest-rank percentiles. No warm-up or steady-state capacity claim.",
         model: GEMINI_DOCUMENT_EVALUATION_MODEL,
         sourceSha256,
+        metricSourceSha256,
         commit: execFileSync("git", ["rev-parse", "HEAD"], { encoding: "utf8" }).trim(),
         workingTreeDirty: !!execFileSync("git", ["status", "--porcelain"], {
           encoding: "utf8",

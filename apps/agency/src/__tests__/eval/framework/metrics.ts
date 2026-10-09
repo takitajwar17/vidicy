@@ -6,6 +6,74 @@
 
 import type { EvalMetric, ChecklistItemOutput, OrchestratorEvalOutput } from "./types";
 
+interface ReviewReferenceLabels {
+  expectedItemStatuses?: Record<string, string>;
+  expectedRecommendations?: string[];
+}
+
+/** Every supplied status is a required assertion, including missing feedback. */
+export function itemStatusAgreement(): EvalMetric<OrchestratorEvalOutput, ReviewReferenceLabels> {
+  return {
+    name: "itemStatusAgreement",
+    threshold: 1,
+    score({ output, expected }) {
+      const labels = Object.entries(expected?.expectedItemStatuses ?? {});
+      if (!labels.length)
+        return {
+          name: "itemStatusAgreement",
+          score: 1,
+          passed: true,
+          detail: "No item-status labels supplied",
+        };
+      const mismatches = labels.filter(
+        ([id, status]) => output.itemFeedback[id]?.status !== status,
+      );
+      return {
+        name: "itemStatusAgreement",
+        score: (labels.length - mismatches.length) / labels.length,
+        passed: mismatches.length === 0,
+        detail: mismatches.length
+          ? mismatches
+              .map(
+                ([id, status]) =>
+                  `${id}: expected ${status}, got ${output.itemFeedback[id]?.status ?? "missing feedback"}`,
+              )
+              .join("; ")
+          : undefined,
+      };
+    },
+  };
+}
+
+/** Check labels against recommendations alone, not unrelated summary text. */
+export function recommendationCoverage(): EvalMetric<
+  OrchestratorEvalOutput,
+  ReviewReferenceLabels
+> {
+  return {
+    name: "recommendationCoverage",
+    threshold: 1,
+    score({ output, expected }) {
+      const labels = expected?.expectedRecommendations ?? [];
+      if (!labels.length)
+        return {
+          name: "recommendationCoverage",
+          score: 1,
+          passed: true,
+          detail: "No recommendation labels supplied",
+        };
+      const recommendations = output.recommendations.join(" ").toLowerCase();
+      const missing = labels.filter((label) => !recommendations.includes(label.toLowerCase()));
+      return {
+        name: "recommendationCoverage",
+        score: (labels.length - missing.length) / labels.length,
+        passed: missing.length === 0,
+        detail: missing.length ? `Missing recommendation labels: ${missing.join(", ")}` : undefined,
+      };
+    },
+  };
+}
+
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------

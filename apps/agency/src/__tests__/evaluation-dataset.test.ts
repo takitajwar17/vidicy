@@ -4,6 +4,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { loadEvaluationCases } from "./eval/datasets/load-evaluation-cases";
 import { prepareEvaluationInput } from "./eval/datasets/prepare-evaluation-input";
+import { itemStatusAgreement, recommendationCoverage } from "./eval/framework/metrics";
+import type { OrchestratorEvalOutput } from "./eval/framework/types";
 
 let temporaryDirectory: string | undefined;
 afterEach(async () => {
@@ -58,5 +60,77 @@ describe("evaluation datasets", () => {
     const path = join(temporaryDirectory, "cases.json");
     await writeFile(path, JSON.stringify({ ...dataset, cases: [testCase] }));
     await expect(loadEvaluationCases({ path })).rejects.toThrow("unique");
+  });
+});
+
+const reviewOutput: OrchestratorEvalOutput = {
+  overallScore: 90,
+  riskLevel: "low",
+  summary: "Provide evidence of funds",
+  redFlags: [],
+  strengths: [],
+  recommendations: ["Book an interview"],
+  itemFeedback: { passport: { status: "ok", feedback: "Readable document" } },
+};
+
+describe("evaluation reference labels", () => {
+  it("rejects a wrong document status even when the overall review is strong", async () => {
+    const score = await itemStatusAgreement().score({
+      output: reviewOutput,
+      expected: { expectedItemStatuses: { passport: "needs_review" } },
+    });
+    expect(score).toMatchObject({ score: 0, passed: false });
+    expect(score.detail).toContain("passport");
+    expect(score.detail).toContain("needs_review");
+    expect(score.detail).toContain("ok");
+  });
+  it("reports missing item feedback as a label mismatch", async () => {
+    const score = await itemStatusAgreement().score({
+      output: reviewOutput,
+      expected: { expectedItemStatuses: { bank: "missing" } },
+    });
+    expect(score.passed).toBe(false);
+    expect(score.detail).toContain("bank");
+  });
+  it("requires recommendation labels in recommendations, not the summary", async () => {
+    const score = await recommendationCoverage().score({
+      output: reviewOutput,
+      expected: { expectedRecommendations: ["fund", "evidence"] },
+    });
+    expect(score).toMatchObject({ score: 0, passed: false });
+    expect(score.detail).toContain("fund");
+    expect(score.detail).toContain("evidence");
+  });
+  it("checks every supplied status and recommendation label", async () => {
+    const output = { ...reviewOutput, recommendations: ["Provide evidence of funds"] };
+    expect(
+      await itemStatusAgreement().score({
+        output,
+        expected: { expectedItemStatuses: { passport: "ok" } },
+      }),
+    ).toMatchObject({ score: 1, passed: true });
+    expect(
+      await recommendationCoverage().score({
+        output,
+        expected: { expectedRecommendations: ["FUND", "EVIDENCE"] },
+      }),
+    ).toMatchObject({ score: 1, passed: true });
+  });
+  it("does not accept a partial document-status match", async () => {
+    const score = await itemStatusAgreement().score({
+      output: reviewOutput,
+      expected: { expectedItemStatuses: { passport: "ok", bank: "missing" } },
+    });
+    expect(score).toMatchObject({ score: 0.5, passed: false });
+  });
+  it("makes cases without supplied labels explicit", async () => {
+    expect(await itemStatusAgreement().score({ output: reviewOutput })).toMatchObject({
+      passed: true,
+      detail: "No item-status labels supplied",
+    });
+    expect(await recommendationCoverage().score({ output: reviewOutput })).toMatchObject({
+      passed: true,
+      detail: "No recommendation labels supplied",
+    });
   });
 });

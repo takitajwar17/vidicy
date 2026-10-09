@@ -23,6 +23,8 @@ import {
   riskLevelConsistency,
   hasRecommendations,
   schemaCompleteness,
+  itemStatusAgreement,
+  recommendationCoverage,
 } from "./framework/metrics";
 import { isLlmJudgeEnabled, llmJudgeMetric } from "./framework/llm-judge";
 import type { EvaluationInput, EvaluationExpected } from "./datasets/evaluation-cases";
@@ -61,6 +63,9 @@ describe.skipIf(process.env.RUN_MODEL_EVALS !== "true")(
         scope: "Production prepared-evidence review; extraction and retrieval services excluded",
         provenance: dataset.provenance,
         datasetSha256: createHash("sha256").update(JSON.stringify(dataset)).digest("hex"),
+        metricSourceSha256: createHash("sha256")
+          .update(await readFile("src/__tests__/eval/framework/metrics.ts"))
+          .digest("hex"),
         sourceSha256: createHash("sha256")
           .update(await readFile("src/services/case-evaluation.ts"))
           .update(await readFile("src/lib/gemini-evaluation.ts"))
@@ -135,6 +140,8 @@ describe.skipIf(process.env.RUN_MODEL_EVALS !== "true")(
           riskLevelConsistency(),
           // Has recommendations
           hasRecommendations(1),
+          itemStatusAgreement(),
+          recommendationCoverage(),
           // Expected risk level matches
           {
             name: "expectedRiskLevel",
@@ -220,6 +227,19 @@ describe.skipIf(process.env.RUN_MODEL_EVALS !== "true")(
       printResults(result, regressions);
       const recordedResult = { ...result, reviewEvidence };
       saveResults(recordedResult);
+
+      // A supplied item or recommendation label is a required case assertion.
+      // Do not let aggregate averages hide a mismatch on a labelled case.
+      for (const testCase of result.caseResults) {
+        for (const score of testCase.scores.filter((score) =>
+          ["itemStatusAgreement", "recommendationCoverage"].includes(score.name),
+        )) {
+          expect(
+            score.passed,
+            `${testCase.caseId}: ${score.name}: ${score.detail ?? "label mismatch"}`,
+          ).toBe(true);
+        }
+      }
 
       // Assert aggregate pass rates meet minimum thresholds
       for (const agg of result.aggregates) {
