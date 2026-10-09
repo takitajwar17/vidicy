@@ -118,6 +118,27 @@ describe("Vertex AI evaluation", () => {
     );
   });
 
+  it("uses explicit benchmark model and reasoning settings without changing production defaults", async () => {
+    await createGeminiEvaluation({
+      ...input,
+      model: "gemini-3.8-flash",
+      thinkingLevel: ThinkingLevel.LOW,
+    });
+    expect(generateContent.mock.calls[0][0]).toMatchObject({
+      model: "gemini-3.8-flash",
+      config: { thinkingConfig: { thinkingLevel: ThinkingLevel.LOW } },
+    });
+    expect(logger.info).toHaveBeenCalledWith(
+      "AI evaluation call",
+      expect.objectContaining({ model: "gemini-3.8-flash" }),
+    );
+    await createGeminiEvaluation(input);
+    expect(generateContent.mock.calls[1][0]).toMatchObject({
+      model: "gemini-evaluation-test",
+      config: { thinkingConfig: { thinkingLevel: ThinkingLevel.MEDIUM } },
+    });
+  });
+
   it.each([429, 503])(
     "retries a transient provider status once and records both attempts: %s",
     async (status) => {

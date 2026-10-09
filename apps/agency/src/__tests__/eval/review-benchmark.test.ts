@@ -4,9 +4,11 @@ import { dirname, resolve } from "node:path";
 import { createHash, randomUUID } from "node:crypto";
 import { execFileSync } from "node:child_process";
 import { z } from "zod";
+import { ThinkingLevel } from "@google/genai";
 import { DEFAULT_EVALUATION_CONCURRENCY, runCaseEvaluation } from "@/services/case-evaluation";
 import { withEvaluationMetrics } from "@/infra/evaluation-metrics";
 import { GEMINI_DOCUMENT_EVALUATION_MODEL } from "@/lib/gemini";
+import { createGeminiEvaluation } from "@/lib/gemini-evaluation";
 import { loadEvaluationCases } from "./datasets/load-evaluation-cases";
 import { prepareEvaluationInput } from "./datasets/prepare-evaluation-input";
 import { estimateModelCost, runBenchmark, summarizeBenchmark } from "./framework/benchmark";
@@ -30,6 +32,16 @@ describe.skipIf(process.env.RUN_REVIEW_BENCHMARK !== "true")("Production review 
     { timeout: 1_800_000 },
     async () => {
       const dataset = await loadEvaluationCases({ path: process.env.EVALUATION_CASES_FILE });
+      const model = z
+        .string()
+        .regex(/^gemini-[a-z0-9.-]+$/)
+        .parse(process.env.BENCHMARK_MODEL ?? GEMINI_DOCUMENT_EVALUATION_MODEL);
+      const thinkingLevel = z
+        .enum([ThinkingLevel.MINIMAL, ThinkingLevel.LOW, ThinkingLevel.MEDIUM, ThinkingLevel.HIGH])
+        .parse(process.env.BENCHMARK_THINKING_LEVEL ?? ThinkingLevel.MEDIUM);
+      const saveSyntheticOutputs = process.env.BENCHMARK_SAVE_SYNTHETIC_OUTPUTS === "true";
+      if (saveSyntheticOutputs && dataset.provenance.kind !== "synthetic")
+        throw new Error("Raw benchmark outputs may be saved only for synthetic cases");
       const limit = integerOption({ name: "BENCHMARK_CASES", fallback: 2, max: 100 });
       const repeats = integerOption({ name: "BENCHMARK_REPEATS", fallback: 1, max: 10 });
       const concurrency = integerOption({ name: "BENCHMARK_CONCURRENCY", fallback: 1, max: 8 });
@@ -44,7 +56,7 @@ describe.skipIf(process.env.RUN_REVIEW_BENCHMARK !== "true")("Production review 
       const rates = process.env.MODEL_RATES_FILE
         ? z
             .object({
-              model: z.literal(GEMINI_DOCUMENT_EVALUATION_MODEL),
+              model: z.literal(model),
               inputUsdPerMillion: z.number().nonnegative(),
               cachedInputUsdPerMillion: z.number().nonnegative(),
               outputUsdPerMillion: z.number().nonnegative(),
@@ -60,6 +72,9 @@ describe.skipIf(process.env.RUN_REVIEW_BENCHMARK !== "true")("Production review 
       const metricSourceSha256 = createHash("sha256")
         .update(await readFile("src/__tests__/eval/framework/metrics.ts"))
         .digest("hex");
+      const harnessSourceSha256 = createHash("sha256")
+        .update(await readFile("src/__tests__/eval/review-benchmark.test.ts"))
+        .digest("hex");
       const measured = await runBenchmark({
         items,
         concurrency,
@@ -71,6 +86,8 @@ describe.skipIf(process.env.RUN_REVIEW_BENCHMARK !== "true")("Production review 
                   result: await runCaseEvaluation({
                     ...prepareEvaluationInput({ input: testCase.input }),
                     maxConcurrency: documentConcurrency,
+                    evaluate: (params) =>
+                      createGeminiEvaluation({ ...params, model, thinkingLevel }),
                   }),
                 };
               } catch {
@@ -121,7 +138,8 @@ describe.skipIf(process.env.RUN_REVIEW_BENCHMARK !== "true")("Production review 
                 text.includes(term.toLowerCase()),
               ),
             })),
-            // Keep outputs and document text out of the artifact, especially for supplied cases.
+            // Supplied cases never retain raw model output in this benchmark.
+            ...(saveSyntheticOutputs ? { syntheticOutput: output?.evaluationData ?? null } : {}),
             calls: measurement.calls,
             estimatedModelCostUsd: estimateModelCost({ calls: measurement.calls, rates }),
           };
@@ -158,9 +176,12 @@ describe.skipIf(process.env.RUN_REVIEW_BENCHMARK !== "true")("Production review 
           "Production prepared-evidence Gemini review core; excludes upload, extraction, retrieval services, SQL publication, HTTP capacity, and email.",
         method:
           "Closed-loop concurrent case workers; completed latency uses nearest-rank percentiles. No warm-up or steady-state capacity claim.",
-        model: GEMINI_DOCUMENT_EVALUATION_MODEL,
+        model,
+        thinkingLevel,
         sourceSha256,
         metricSourceSha256,
+        harnessSourceSha256,
+        syntheticOutputsSaved: saveSyntheticOutputs,
         commit: execFileSync("git", ["rev-parse", "HEAD"], { encoding: "utf8" }).trim(),
         workingTreeDirty: !!execFileSync("git", ["status", "--porcelain"], {
           encoding: "utf8",

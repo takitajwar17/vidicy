@@ -14,6 +14,9 @@ interface GeminiEvaluationParams {
   schemaName: string;
   schema: Record<string, unknown>;
   maxTokens: number;
+  /** Controlled comparisons can override these. Application callers use the defaults. */
+  model?: string;
+  thinkingLevel?: ThinkingLevel;
 }
 
 function buildEvaluationParts(content: GeminiEvaluationParams["userContent"]): Part[] {
@@ -64,6 +67,8 @@ async function runEvaluationAttempt({
   schema,
   maxTokens,
   timeoutMs,
+  model = GEMINI_DOCUMENT_EVALUATION_MODEL,
+  thinkingLevel = ThinkingLevel.MEDIUM,
 }: GeminiEvaluationParams & { timeoutMs: number }): Promise<string> {
   const startedAt = performance.now();
   let status: "succeeded" | "failed" = "failed";
@@ -79,7 +84,7 @@ async function runEvaluationAttempt({
     | undefined;
   try {
     const response = await getGeminiClient().models.generateContent({
-      model: GEMINI_DOCUMENT_EVALUATION_MODEL,
+      model,
       contents: [{ role: "user", parts: buildEvaluationParts(userContent) }],
       config: {
         systemInstruction: systemPrompt,
@@ -90,7 +95,7 @@ async function runEvaluationAttempt({
         // Gemini counts thinking in its output budget. Reserve room for thinking
         // in addition to the existing response budget used by the evaluation UI.
         maxOutputTokens: Math.min(maxTokens + 8_192, 32_768),
-        thinkingConfig: { thinkingLevel: ThinkingLevel.MEDIUM },
+        thinkingConfig: { thinkingLevel },
         abortSignal: AbortSignal.timeout(timeoutMs),
         // Keep retry ownership here so each failed attempt is measured and all
         // attempts share the same deadline.
@@ -102,12 +107,12 @@ async function runEvaluationAttempt({
     const candidate = response.candidates?.[0];
     if (candidate?.finishReason && candidate.finishReason !== "STOP") {
       throw new Error(
-        `Vertex AI ${GEMINI_DOCUMENT_EVALUATION_MODEL} did not complete ${schemaName}: ${candidate.finishReason}`,
+        `Vertex AI ${model} did not complete ${schemaName}: ${candidate.finishReason}`,
       );
     }
     const text = response.text?.trim();
     if (!text) {
-      throw new Error(`Vertex AI ${GEMINI_DOCUMENT_EVALUATION_MODEL} returned no ${schemaName}`);
+      throw new Error(`Vertex AI ${model} returned no ${schemaName}`);
     }
     // Callers apply stage-specific schemas before publishing a complete review.
     JSON.parse(text);
@@ -125,7 +130,7 @@ async function runEvaluationAttempt({
     throw error;
   } finally {
     recordEvaluationCall({
-      model: GEMINI_DOCUMENT_EVALUATION_MODEL,
+      model,
       stage: schemaName,
       status,
       ...(providerStatus === undefined ? {} : { providerStatus }),
