@@ -484,6 +484,7 @@ export function TicketDetail({ ticket, onBack }: TicketDetailProps) {
                       className="relative block aspect-square rounded-md overflow-hidden border border-border/50 bg-muted/20 hover:opacity-90 transition-all"
                     >
                       <Image
+                        unoptimized
                         src={`/api/support-screenshot?key=${encodeURIComponent(key)}`}
                         alt={`Screenshot ${i + 1}`}
                         fill
@@ -536,6 +537,7 @@ export function TicketDetail({ ticket, onBack }: TicketDetailProps) {
                           className="relative block aspect-square rounded-md overflow-hidden border border-border/50 bg-muted/20 hover:opacity-90 transition-all"
                         >
                           <Image
+                            unoptimized
                             src={`/api/support-screenshot?key=${encodeURIComponent(key)}`}
                             alt={`Attachment ${i + 1}`}
                             fill
@@ -587,6 +589,7 @@ export function TicketDetail({ ticket, onBack }: TicketDetailProps) {
                           className="relative block aspect-square rounded-md overflow-hidden border border-border/50 bg-muted/20 hover:opacity-90 transition-all"
                         >
                           <Image
+                            unoptimized
                             src={`/api/support-screenshot?key=${encodeURIComponent(key)}`}
                             alt={`Attachment ${i + 1}`}
                             fill

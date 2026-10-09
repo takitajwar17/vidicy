@@ -73,6 +73,7 @@ export function UsersTable({
     defaultValue: initialEmailFilter,
   });
   const hasUsedInitialData = useRef(false);
+  const deletePreviewRequest = useRef(0);
 
   // Delete confirmation dialog state
   const [deleteDialog, setDeleteDialog] = useState<{
@@ -81,7 +82,15 @@ export function UsersTable({
     clearSelection: (() => void) | null;
     preview: { usersToDelete: number; appsToTransfer: number; appsToDelete: number } | null;
     loading: boolean;
-  }>({ open: false, userIds: [], clearSelection: null, preview: null, loading: false });
+    previewError: boolean;
+  }>({
+    open: false,
+    userIds: [],
+    clearSelection: null,
+    preview: null,
+    loading: false,
+    previewError: false,
+  });
 
   const {
     execute: fetchUsers,
@@ -178,8 +187,7 @@ export function UsersTable({
   };
 
   const handleExport = (selectedIds: string[]) => {
-    if (!data) return;
-    const usersToExport = data.users.filter((u) => selectedIds.includes(u.id));
+    const usersToExport = tableData.users.filter((u) => selectedIds.includes(u.id));
     exportToCSV(usersToExport, `users-export-${new Date().toISOString().split("T")[0]}`);
     toast.success(`Exported ${usersToExport.length} users to CSV`);
   };
@@ -260,21 +268,31 @@ export function UsersTable({
           className="h-8 text-xs gap-1.5"
           disabled={isPending}
           onClick={async () => {
+            const requestId = ++deletePreviewRequest.current;
             setDeleteDialog({
               open: true,
               userIds: selectedIds,
               clearSelection,
               preview: null,
               loading: true,
+              previewError: false,
             });
-            const [result] = await previewDelete({ userIds: selectedIds, csrfToken });
-            if (result) {
-              setDeleteDialog((prev) => ({ ...prev, preview: result, loading: false }));
-            } else {
+            try {
+              const [result, error] = await previewDelete({ userIds: selectedIds, csrfToken });
+              if (requestId !== deletePreviewRequest.current) return;
               setDeleteDialog((prev) => ({
                 ...prev,
+                preview: error ? null : result,
                 loading: false,
-                preview: { usersToDelete: selectedIds.length, appsToTransfer: 0, appsToDelete: 0 },
+                previewError: Boolean(error || !result),
+              }));
+            } catch {
+              if (requestId !== deletePreviewRequest.current) return;
+              setDeleteDialog((prev) => ({
+                ...prev,
+                preview: null,
+                loading: false,
+                previewError: true,
               }));
             }
           }}
@@ -287,6 +305,12 @@ export function UsersTable({
   };
 
   const tableData = data ?? initialData;
+
+  function closeDeleteDialog() {
+    if (isDeleting) return;
+    deletePreviewRequest.current++;
+    setDeleteDialog((prev) => ({ ...prev, open: false }));
+  }
 
   return (
     <div className="w-full min-w-0 flex flex-col overflow-hidden">
@@ -345,7 +369,7 @@ export function UsersTable({
       <Dialog
         open={deleteDialog.open}
         onOpenChange={(open) => {
-          if (!open && !isDeleting) setDeleteDialog((prev) => ({ ...prev, open: false }));
+          if (!open) closeDeleteDialog();
         }}
       >
         <DialogContent>
@@ -365,6 +389,10 @@ export function UsersTable({
               <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
               <span className="ml-2 text-sm text-muted-foreground">Calculating impact…</span>
             </div>
+          ) : deleteDialog.previewError ? (
+            <p role="alert" className="py-2 text-sm text-destructive">
+              Could not load the deletion impact. Close this dialog and try again.
+            </p>
           ) : (
             deleteDialog.preview && (
               <div className="space-y-3 py-2">
@@ -405,21 +433,29 @@ export function UsersTable({
           )}
 
           <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => setDeleteDialog((prev) => ({ ...prev, open: false }))}
-              disabled={isDeleting}
-            >
+            <Button variant="outline" onClick={closeDeleteDialog} disabled={isDeleting}>
               Cancel
             </Button>
             <Button
               variant="destructive"
               onClick={() => {
+                if (
+                  isDeleting ||
+                  deleteDialog.loading ||
+                  !deleteDialog.preview ||
+                  deleteDialog.previewError
+                )
+                  return;
                 bulkDelete({ userIds: deleteDialog.userIds, csrfToken }).then(() => {
                   deleteDialog.clearSelection?.();
                 });
               }}
-              disabled={isDeleting || deleteDialog.loading}
+              disabled={
+                isDeleting ||
+                deleteDialog.loading ||
+                !deleteDialog.preview ||
+                deleteDialog.previewError
+              }
             >
               {isDeleting ? (
                 <>

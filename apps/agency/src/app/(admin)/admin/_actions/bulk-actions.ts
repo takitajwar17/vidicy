@@ -4,7 +4,7 @@ import { createServerAction } from "zsa";
 import { getDB } from "@/db";
 import { requireAdmin } from "@/utils/auth";
 import { z } from "zod";
-import { inArray, and, ne, eq } from "drizzle-orm";
+import { inArray, and, ne, notInArray, isNotNull, eq, count } from "drizzle-orm";
 import {
   AGENCY_STAFF_STATUS,
   ROLES_ENUM,
@@ -161,37 +161,30 @@ export const previewDeleteUsersAction = createServerAction()
     if (!session) throw new Error("Unauthorized");
     const db = getDB();
 
-    const filteredUserIds = input.userIds.filter((id) => id !== session.userId);
+    const filteredUserIds = [...new Set(input.userIds)].filter((id) => id !== session.userId);
     if (filteredUserIds.length === 0) {
       return { usersToDelete: 0, appsToTransfer: 0, appsToDelete: 0 };
     }
 
-    let appsToTransfer = 0;
-    let appsToDelete = 0;
-
-    for (const userId of filteredUserIds) {
-      const [ownedApps, replacementStaff] = await Promise.all([
-        db
-          .select({ id: visaApplicationTable.id })
-          .from(visaApplicationTable)
-          .where(eq(visaApplicationTable.userId, userId)),
-        db
-          .select({ userId: agencyTeamMemberTable.userId })
-          .from(agencyTeamMemberTable)
-          .where(
-            and(
-              ne(agencyTeamMemberTable.userId, userId),
-              eq(agencyTeamMemberTable.status, AGENCY_STAFF_STATUS.ACTIVE),
-            ),
+    const [[ownedCases], replacementStaff] = await Promise.all([
+      db
+        .select({ total: count() })
+        .from(visaApplicationTable)
+        .where(inArray(visaApplicationTable.userId, filteredUserIds)),
+      db
+        .select({ userId: agencyTeamMemberTable.userId })
+        .from(agencyTeamMemberTable)
+        .where(
+          and(
+            isNotNull(agencyTeamMemberTable.userId),
+            notInArray(agencyTeamMemberTable.userId, filteredUserIds),
+            eq(agencyTeamMemberTable.status, AGENCY_STAFF_STATUS.ACTIVE),
           ),
-      ]);
-
-      if (replacementStaff.length > 0) {
-        appsToTransfer += ownedApps.length;
-      } else {
-        appsToDelete += ownedApps.length;
-      }
-    }
+        )
+        .limit(1),
+    ]);
+    const appsToTransfer = replacementStaff.length > 0 ? ownedCases.total : 0;
+    const appsToDelete = replacementStaff.length > 0 ? 0 : ownedCases.total;
 
     return { usersToDelete: filteredUserIds.length, appsToTransfer, appsToDelete };
   });

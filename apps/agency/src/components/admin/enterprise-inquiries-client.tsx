@@ -69,9 +69,9 @@ function InquiryDetail({
   const [adminNote, setAdminNote] = useState(inquiry.adminNote ?? "");
 
   const { execute, isPending } = useServerAction(updateEnterpriseInquiryStatusAction, {
-    onSuccess: (result) => {
+    onSuccess: ({ data }) => {
       toast.success("Saved.");
-      onUpdate(result as unknown as EnterpriseInquiry);
+      onUpdate(data);
     },
     onError: ({ err }) => toast.error(err.message ?? "Failed to save."),
   });
