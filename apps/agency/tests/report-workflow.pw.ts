@@ -30,6 +30,7 @@ let directory: string;
 let socket: string;
 let base: string;
 let staffCookie: string;
+let adminCookie: string;
 let outsiderCookie: string;
 let applicationId: string;
 let mailLog: string;
@@ -188,6 +189,17 @@ test.beforeAll(async () => {
     );
     return `${user.id}:${token}`;
   }
+  const [admin] = await db
+    .insert(schema.userTable)
+    .values({
+      email: "admin@example.test",
+      firstName: "Admin",
+      lastName: "Reviewer",
+      role: "admin",
+      emailVerified: new Date(),
+    })
+    .returning();
+  adminCookie = await session(admin);
   staffCookie = await session(staff);
   outsiderCookie = await session(outsider);
   const port = await freePort();
@@ -607,7 +619,27 @@ test("review workspace links findings to evidence and keeps actions usable at sm
     const style = getComputedStyle(element);
     return { background: style.backgroundColor, color: style.color, width: style.width };
   });
+  const topBar = page.locator('header:has(nav[aria-label="breadcrumb"])');
+  const sharedTopBar = await topBar.evaluate((element) => {
+    const style = getComputedStyle(element);
+    return { height: style.height, background: style.backgroundColor, border: style.borderBottom };
+  });
   await page.goto(`${base}/dashboard/${applicationId}?issue=${destination.id}`);
+  await expect(topBar).toBeVisible();
+  expect(
+    await topBar.evaluate((element) => {
+      const style = getComputedStyle(element);
+      return {
+        height: style.height,
+        background: style.backgroundColor,
+        border: style.borderBottom,
+      };
+    }),
+  ).toEqual(sharedTopBar);
+  await expect(topBar.getByRole("link", { name: "Applications", exact: true })).toHaveAttribute(
+    "href",
+    "/dashboard/applications",
+  );
   await expect(sidebar).toBeVisible();
   expect(
     await sidebar.evaluate((element) => {
@@ -689,5 +721,287 @@ test("review workspace links findings to evidence and keeps actions usable at sm
     }
     await page.screenshot({ path: join(output, `case-workspace-${width}.png`), fullPage: true });
   }
+  expect(errors).toEqual([]);
+});
+
+test("shared styles work across pages, forms, menus, and themes", async ({ page, context }) => {
+  test.setTimeout(120_000);
+  const errors: string[] = [];
+  page.on("pageerror", (error) => errors.push(`${page.url()}: ${error.message}`));
+  await context.addCookies([
+    { name: "session", value: staffCookie, url: base },
+    { name: "csrf-token", value: "isolated-browser-csrf-token", url: base },
+  ]);
+  const output = resolve("output/verification/app-style");
+  mkdirSync(output, { recursive: true });
+  const routes = [
+    ["/dashboard", "Dashboard"],
+    ["/dashboard/applications", "Applications"],
+    ["/dashboard/clients", "Clients"],
+    ["/dashboard/documents", "Documents"],
+    ["/dashboard/issues", "Issues"],
+    ["/dashboard/team", "Team"],
+    ["/dashboard/reports", "Reports"],
+    ["/dashboard/announcements", "Announcements"],
+    ["/dashboard/applications/new", "New client file"],
+    ["/settings", "Profile"],
+    ["/settings/security", "Security"],
+    ["/settings/sessions", "Sessions"],
+  ] as const;
+  for (const width of [1440, 390]) {
+    await page.setViewportSize({ width, height: 960 });
+    for (const [path, heading] of routes) {
+      const response = await page.goto(base + path);
+      expect(response?.status(), path).toBe(200);
+      await expect(page.getByRole("heading", { name: heading, exact: true }).first()).toBeVisible();
+      expect(
+        await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
+        `${path} at ${width}px`,
+      ).toBe(true);
+      await page.screenshot({
+        path: join(output, `${path.replaceAll("/", "-")}-${width}.png`),
+        animations: "disabled",
+      });
+    }
+    await page.goto(base + "/dashboard/team");
+    if (width < 768) {
+      await page.getByRole("button", { name: "Toggle Sidebar", exact: true }).click();
+      await expect(page.locator('[data-sidebar="sidebar"][data-mobile="true"]')).toBeVisible();
+      await page.keyboard.press("Escape");
+      await expect(page.locator('[data-sidebar="sidebar"][data-mobile="true"]')).not.toBeVisible();
+    }
+    await page.getByRole("button", { name: "Add staff", exact: true }).click();
+    const dialog = page.getByRole("dialog");
+    await expect(dialog).toBeVisible();
+    await dialog.getByRole("combobox").click();
+    await expect(page.getByRole("listbox")).toBeVisible();
+    await page.keyboard.press("Escape");
+    await dialog.getByRole("button", { name: "Close", exact: true }).click();
+    await expect(dialog).not.toBeVisible();
+  }
+  await page.setViewportSize({ width: 1440, height: 960 });
+  await page.evaluate(() => localStorage.setItem("theme", "dark"));
+  for (const [path, name] of [
+    ["/dashboard", "dashboard"],
+    [`/dashboard/${applicationId}`, "review"],
+    ["/settings", "settings"],
+  ]) {
+    await page.goto(base + path);
+    await expect(page.locator("html")).toHaveClass(/dark/);
+    await page.screenshot({ path: join(output, `${name}-dark.png`), animations: "disabled" });
+  }
+  await context.clearCookies();
+  await page.evaluate(() => localStorage.setItem("theme", "light"));
+  for (const width of [1440, 390]) {
+    await page.setViewportSize({ width, height: 960 });
+    for (const path of ["/sign-in", "/sign-up", "/forgot-password", "/"]) {
+      const response = await page.goto(base + path);
+      expect(response?.status(), path).toBe(200);
+      if (path === "/forgot-password") {
+        await expect(
+          page.getByRole("heading", { name: "Forgot password", exact: true }),
+        ).toBeVisible();
+      } else {
+        await expect(page.getByRole("heading", { level: 1 }).first()).toBeVisible();
+      }
+      expect(
+        await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
+        `${path} at ${width}px`,
+      ).toBe(true);
+      if (path === "/") {
+        await expect(page.locator("h1 span").last()).toHaveCSS("opacity", "1");
+      }
+      await page.screenshot({
+        animations: "disabled",
+        path: join(output, `${path === "/" ? "home" : path.slice(1)}-${width}.png`),
+      });
+    }
+  }
+  expect(errors).toEqual([]);
+});
+
+test("UI fixes cover admin, recovery, accessible controls, and narrow layouts", async ({
+  page,
+  context,
+}) => {
+  test.setTimeout(180_000);
+  const errors: string[] = [];
+  page.on("pageerror", (error) => errors.push(`${page.url()}: ${error.message}`));
+  const db = drizzle(pool, { schema });
+  const staffId = staffCookie.split(":")[0];
+  await db.insert(schema.enterpriseInquiryTable).values({
+    name: "Test Inquiry",
+    email: "inquiry@example.test",
+    company: "Test Agency",
+    message: "Please show the full inquiry on a phone.",
+  });
+  const [ticket] = await db
+    .insert(schema.supportTicketTable)
+    .values({
+      userId: staffId,
+      subject: "UI test conversation",
+      description: "Review this test conversation.",
+      category: "bug",
+      priority: "high",
+    })
+    .returning();
+  const output = resolve("output/verification/ui-fixes");
+  mkdirSync(output, { recursive: true });
+  await context.addCookies([
+    { name: "session", value: staffCookie, url: base },
+    { name: "csrf-token", value: "isolated-browser-csrf-token", url: base },
+  ]);
+  await page.goto(base + "/dashboard/applications/new");
+  for (const name of [
+    "Client name",
+    "Client email",
+    "Applicant name",
+    "Received date",
+    "Internal due date",
+  ])
+    await expect(page.getByLabel(name, { exact: true })).toBeVisible();
+  for (const name of [
+    "Passport country",
+    "Applying from",
+    "Destination",
+    "Visa type",
+    "Priority",
+    "Reviewer",
+  ])
+    await expect(page.getByRole("combobox", { name, exact: true })).toHaveCount(1);
+  await page.getByRole("switch", { name: "Previously approved", exact: true }).click();
+  await expect(
+    page.getByRole("textbox", { name: "Previously approved visa type", exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("combobox", { name: "Previously approved year", exact: true }),
+  ).toBeVisible();
+  await page.goto(base + `/dashboard/${applicationId}`);
+  await expect(page.locator('[data-sidebar="menu-button"][data-active="true"]')).toHaveCount(1);
+  await expect(page.locator('a[aria-current="page"][href="/dashboard/applications"]')).toHaveCount(
+    1,
+  );
+  await page.setViewportSize({ width: 390, height: 900 });
+  await page.goto(base + "/settings");
+  for (const name of ["Profile", "Security", "Sessions"]) {
+    const box = await page.getByRole("tab", { name, exact: true }).boundingBox();
+    expect(box).not.toBeNull();
+    expect(box!.x).toBeGreaterThanOrEqual(0);
+    expect(box!.x + box!.width).toBeLessThanOrEqual(390);
+  }
+  await page.goto(base + `/dashboard/support/${ticket.id}`);
+  await expect(page.getByRole("heading", { level: 1, name: ticket.subject })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Attach images" })).toBeVisible();
+  const reply = page.getByRole("textbox", { name: "Reply message" });
+  await reply.fill("First line\nSecond line\nThird line");
+  expect((await reply.boundingBox())!.height).toBeGreaterThanOrEqual(80);
+  await expect(page.getByRole("button", { name: "Send reply" })).toBeEnabled();
+  await page.screenshot({
+    path: join(output, "support-phone.png"),
+    fullPage: true,
+    animations: "disabled",
+  });
+  await context.addCookies([{ name: "session", value: adminCookie, url: base }]);
+  for (const width of [1440, 390]) {
+    await page.setViewportSize({ width, height: 960 });
+    for (const path of [
+      "/admin",
+      "/admin/enterprise",
+      "/admin/users",
+      `/admin/users/${staffId}`,
+      `/admin/users/${staffId}/applications/${applicationId}`,
+      "/admin/support",
+      "/admin/status",
+    ]) {
+      expect((await page.goto(base + path))?.status(), path).toBe(200);
+      await expect(page.getByRole("heading", { level: 1 }).first()).toHaveCount(1);
+      expect(
+        await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth),
+        path,
+      ).toBe(true);
+      if (path === "/admin/enterprise") {
+        const save = page.getByRole("button", { name: "Save changes" });
+        await save.scrollIntoViewIfNeeded();
+        const box = await save.boundingBox();
+        expect(box!.x).toBeGreaterThanOrEqual(0);
+        expect(box!.x + box!.width).toBeLessThanOrEqual(width);
+        await expect(page.getByRole("textbox", { name: "Internal note" })).toBeVisible();
+        await page.screenshot({
+          path: join(output, `enterprise-${width}.png`),
+          fullPage: true,
+          animations: "disabled",
+        });
+      }
+    }
+  }
+  await page.goto(base + "/admin/support");
+  await page.getByText(ticket.subject, { exact: true }).click();
+  await expect(page.getByRole("button", { name: "Delete conversation" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Conversation options" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Send reply" })).toBeDisabled();
+  await context.clearCookies();
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  for (const path of ["/reset-password", "/reset-password?token=expired-ui-token"]) {
+    expect((await page.goto(base + path))?.status()).toBe(200);
+    await expect(page.getByRole("heading", { name: "Request a new reset link" })).toBeVisible();
+    await expect(page.getByRole("link", { name: "Request a new link" })).toHaveAttribute(
+      "href",
+      "/forgot-password",
+    );
+  }
+  // Hold the action request to verify visible, disabled pending states without sending email or changing a password.
+  await redis.set("vidicy:cache:password-reset:ui-test-token", "{}", { EX: 600 });
+  for (const path of ["/forgot-password", "/reset-password?token=ui-test-token"]) {
+    await page.goto(base + path);
+    await page.route("**/*", async (route) => {
+      if (route.request().method() === "POST" && route.request().headers()["next-action"]) return;
+      await route.continue();
+    });
+    if (path === "/forgot-password")
+      await page.getByRole("textbox", { name: "Email", exact: true }).fill("reviewer@example.test");
+    else {
+      await page.getByLabel("New Password", { exact: true }).fill("test-password-123");
+      await page.getByLabel("Confirm Password", { exact: true }).fill("test-password-123");
+    }
+    await page
+      .getByRole("button", {
+        name: path === "/forgot-password" ? "Send reset instructions" : "Reset password",
+        exact: true,
+      })
+      .click();
+    const pending = page.getByRole("button", {
+      name: path === "/forgot-password" ? "Sending instructions…" : "Resetting password…",
+      exact: true,
+    });
+    await expect(pending).toBeDisabled();
+    await expect(pending).toHaveAttribute("aria-busy", "true");
+    await page.unrouteAll({ behavior: "ignoreErrors" });
+  }
+  for (let count = 0; count < 3; count++) {
+    await page.goto(base + "/sign-in");
+    await expect(page.getByLabel("Password", { exact: true })).toBeVisible();
+    await expect(page.locator("svg[aria-hidden=true] path").first()).toHaveCSS("opacity", "0.4");
+  }
+  await page.goto(base + "/");
+  await page.evaluate(() => localStorage.setItem("theme", "dark"));
+  await page.reload();
+  await expect(page.locator("html")).toHaveClass(/dark/);
+  await expect(page.locator("video")).toHaveCount(0);
+  await expect(page.locator("main > section").first()).toHaveCSS(
+    "background-image",
+    /rgb\(251, 252, 250\)/,
+  );
+  const secondary = page.locator(".public-button-secondary").first();
+  await expect(secondary).toBeVisible();
+  const colours = await secondary.evaluate((element) => ({
+    background: getComputedStyle(element).backgroundColor,
+    foreground: getComputedStyle(element).color,
+  }));
+  expect(colours.background).toBe("rgb(251, 252, 250)");
+  expect(colours.foreground).toBe("rgb(23, 40, 44)");
+  await page.screenshot({
+    path: join(output, "home-dark-reduced-motion.png"),
+    animations: "disabled",
+  });
   expect(errors).toEqual([]);
 });
