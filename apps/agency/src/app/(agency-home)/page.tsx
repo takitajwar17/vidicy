@@ -5,6 +5,7 @@ import type { Route } from "next";
 
 import Logo from "@/components/logo";
 import Footer from "@/components/sections/footer";
+import { MobileNavigation } from "@/components/sections/mobile-navigation";
 import { marketingTopBarLinks } from "@/lib/config";
 import { constructMetadata } from "@/lib/utils";
 
@@ -115,6 +116,7 @@ export default function Home() {
             </div>
 
             <div className="flex items-center gap-2 sm:gap-3">
+              <MobileNavigation />
               <Link
                 className="public-auth-link px-1 text-sm font-semibold transition-colors sm:px-2"
                 href="/sign-in"

@@ -27,11 +27,29 @@ import { useCsrfToken } from "@/components/csrf-provider";
 
 const SETTINGS_CARD_CLASS = "rounded-md border-border";
 
+// zsa-react requires a result tuple even when the request itself fails.
+function saveUserProfile(
+  input: Parameters<typeof updateUserProfileAction>[0],
+): ReturnType<typeof updateUserProfileAction> {
+  return updateUserProfileAction(input).catch(
+    () =>
+      [
+        null,
+        {
+          code: "ERROR",
+          name: "NetworkError",
+          message: "Could not save your profile. Try again.",
+          data: "Could not save your profile. Try again.",
+        },
+      ] satisfies Awaited<ReturnType<typeof updateUserProfileAction>>,
+  ) as ReturnType<typeof updateUserProfileAction>;
+}
+
 export function SettingsForm() {
   const router = useRouter();
   const csrfToken = useCsrfToken();
 
-  const { execute: updateUserProfile } = useServerAction(updateUserProfileAction, {
+  const { execute: updateUserProfile, isPending } = useServerAction(saveUserProfile, {
     onError: (error) => {
       toast.dismiss();
       toast.error(error.err?.message);
@@ -102,7 +120,7 @@ export function SettingsForm() {
   }
 
   async function onSubmit(values: z.infer<typeof userSettingsSchema>) {
-    updateUserProfile({ ...values, csrfToken });
+    await updateUserProfile({ ...values, csrfToken });
   }
 
   return (
@@ -153,7 +171,9 @@ export function SettingsForm() {
             </FormItem>
 
             <div className="flex justify-end">
-              <Button type="submit">Save changes</Button>
+              <Button type="submit" disabled={isPending} aria-busy={isPending}>
+                {isPending ? "Saving…" : "Save changes"}
+              </Button>
             </div>
           </form>
         </Form>

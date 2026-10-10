@@ -135,7 +135,7 @@ const SignInPage = ({ email, redirectPath, isGoogleSSOEnabled }: SignInClientPro
                   <button
                     type="button"
                     onClick={() => setShowPassword((v) => !v)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                    className="absolute right-1 top-1/2 flex size-9 -translate-y-1/2 items-center justify-center rounded-[5px] text-muted-foreground hover:text-foreground transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
                     aria-label={showPassword ? "Hide password" : "Show password"}
                   >
                     {showPassword ? (

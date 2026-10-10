@@ -7,6 +7,7 @@ import Link from "next/link";
 import type { Route } from "next";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
+import { MobileNavigation } from "./mobile-navigation";
 
 interface IsActiveTopBarLinkParams {
   href: string;
@@ -120,6 +121,7 @@ export default function Header() {
           </nav>
 
           <div className="flex items-center gap-2 sm:gap-3">
+            <MobileNavigation />
             <Link
               className="public-auth-link px-1 text-sm font-semibold transition-colors sm:px-2"
               href="/sign-in"
