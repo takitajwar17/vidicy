@@ -39,7 +39,7 @@ export function FloatingPaths({ position, className }: { position: number; class
             stroke="currentColor"
             strokeWidth={path.width}
             strokeOpacity={0.1 + path.id * 0.03}
-            initial={false}
+            initial={{ pathLength: 0.3, opacity: 0.6 }}
             animate={
               reduceMotion
                 ? { pathLength: 1, opacity: 0.4 }

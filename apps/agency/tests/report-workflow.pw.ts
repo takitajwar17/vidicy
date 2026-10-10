@@ -1351,6 +1351,34 @@ test("UI fixes cover admin, recovery, accessible controls, and narrow layouts", 
   expect(errors).toEqual([]);
 });
 
+test("sign-in background moves and respects reduced motion", async ({ page }) => {
+  const errors: string[] = [];
+  page.on("pageerror", (error) => errors.push(error.message));
+  await page.setViewportSize({ width: 1440, height: 960 });
+  await page.emulateMedia({ reducedMotion: "no-preference" });
+  await page.goto(base + "/sign-in");
+  const path = page.locator('svg:has(title:text-is("Background Paths")) path').first();
+  await expect(path).toBeVisible();
+  const opacity = () => path.evaluate((element) => getComputedStyle(element).opacity);
+  const initial = await opacity();
+  await expect.poll(opacity).not.toBe(initial);
+
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await expect.poll(opacity).toBe("0.4");
+  const stillFrame = await path.getAttribute("stroke-dashoffset");
+  await page.waitForTimeout(300);
+  expect(await opacity()).toBe("0.4");
+  expect(await path.getAttribute("stroke-dashoffset")).toBe(stillFrame);
+  await page.reload();
+  await expect.poll(opacity).toBe("0.4");
+
+  await page.emulateMedia({ reducedMotion: "no-preference" });
+  await expect.poll(opacity).not.toBe("0.4");
+  await page.setViewportSize({ width: 390, height: 900 });
+  await expect(path).toBeHidden();
+  expect(errors).toEqual([]);
+});
+
 test.describe("UI audit regression", () => {
   test.use({ timezoneId: "Asia/Dhaka" });
   test("UI audit fixes preserve drafts, links, focus, and recovery", async ({ page, context }) => {
