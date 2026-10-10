@@ -21,8 +21,6 @@ import {
   ChevronsLeftIcon,
   ChevronsRightIcon,
 } from "lucide-react";
-import type { Route } from "next";
-import { useRouter } from "next/navigation";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -41,7 +39,6 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { cn } from "@/lib/utils";
 
 interface DataTableProps<TData, TValue> {
   columns: ColumnDef<TData, TValue>[];
@@ -55,7 +52,6 @@ interface DataTableProps<TData, TValue> {
   itemNameSingular?: string;
   itemNamePlural?: string;
   pageSizeOptions?: number[];
-  getRowHref?: (row: TData) => string;
   bulkActions?: (selectedIds: string[], clearSelection: () => void) => React.ReactNode;
 }
 
@@ -71,10 +67,8 @@ export function DataTable<TData extends { id: number | string }, TValue>({
   itemNameSingular = "item",
   itemNamePlural = "items",
   pageSizeOptions = [10, 20, 30, 40, 50],
-  getRowHref,
   bulkActions,
 }: DataTableProps<TData, TValue>) {
-  const router = useRouter();
   const [rowSelection, setRowSelection] = React.useState({});
   const [columnVisibility, setColumnVisibility] = React.useState<VisibilityState>({});
   const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([]);
@@ -124,7 +118,7 @@ export function DataTable<TData extends { id: number | string }, TValue>({
   return (
     <div className="space-y-4">
       {hasSelection && bulkActions ? (
-        <div className="flex animate-in flex-col gap-2 rounded-xl border border-border/70 bg-muted/45 p-3 shadow-2xs duration-200 slide-in-from-top-2 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex animate-in flex-col gap-2 rounded-md border border-border bg-muted/45 p-3 duration-200 slide-in-from-top-2 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex shrink-0 items-center gap-2">
             <Badge variant="secondary" className="h-5 rounded-[4px] px-2 py-0.5 text-xs">
               {selectedIds.length} selected
@@ -144,7 +138,7 @@ export function DataTable<TData extends { id: number | string }, TValue>({
         </div>
       ) : null}
 
-      <div className="overflow-x-auto rounded-xl border border-border/70 bg-card/90 shadow-xs">
+      <div className="overflow-x-auto rounded-md border border-border bg-card">
         <Table className="min-w-full">
           <TableHeader className="sticky top-0 z-10 bg-muted/65 backdrop-blur">
             {table.getHeaderGroups().map((headerGroup) => (
@@ -165,14 +159,7 @@ export function DataTable<TData extends { id: number | string }, TValue>({
                 <TableRow
                   key={row.id}
                   data-state={row.getIsSelected() && "selected"}
-                  className={cn(
-                    "transition-[background-color,color] hover:bg-accent/45",
-                    getRowHref && "cursor-pointer",
-                  )}
-                  onClick={() => {
-                    const href = getRowHref?.(row.original);
-                    if (href) router.push(href as Route);
-                  }}
+                  className="transition-[background-color,color] hover:bg-accent/45"
                 >
                   {row.getVisibleCells().map((cell) => (
                     <TableCell

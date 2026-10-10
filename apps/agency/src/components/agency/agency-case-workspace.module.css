@@ -85,8 +85,10 @@
   background: transparent;
   color: var(--primary);
   border-color: var(--primary);
-  box-shadow: none;
-  --tw-ring-shadow: 0 0 #0000;
+}
+.tab:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: -4px;
 }
 .body {
   display: grid;

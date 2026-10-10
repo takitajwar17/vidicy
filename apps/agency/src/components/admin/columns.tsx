@@ -1,5 +1,7 @@
 "use client";
 
+import Link from "next/link";
+import type { Route } from "next";
 import { ColumnDef } from "@tanstack/react-table";
 import { MoreHorizontal } from "lucide-react";
 import { formatDistanceToNow, format } from "date-fns";
@@ -50,6 +52,14 @@ export const columns: ColumnDef<User>[] = [
   {
     accessorKey: "email",
     header: "Email",
+    cell: ({ row }) => (
+      <Link
+        className="font-semibold text-primary hover:underline"
+        href={`/admin/users/${row.original.id}` as Route}
+      >
+        {row.original.email || "Open user"}
+      </Link>
+    ),
   },
   {
     accessorKey: "name",

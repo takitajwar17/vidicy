@@ -192,10 +192,6 @@ export function UsersTable({
     toast.success(`Exported ${usersToExport.length} users to CSV`);
   };
 
-  const getRowHref = (user: User) => {
-    return `/admin/users/${user.id}`;
-  };
-
   const renderBulkActions = (selectedIds: string[], clearSelection: () => void) => {
     const isPending = isDeleting || isUpdatingRole || isVerifying;
 
@@ -358,7 +354,6 @@ export function UsersTable({
                 itemNameSingular="user"
                 itemNamePlural="users"
                 pageSizeOptions={PAGE_SIZE_OPTIONS}
-                getRowHref={getRowHref}
                 bulkActions={renderBulkActions}
               />
             </div>

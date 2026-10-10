@@ -143,6 +143,12 @@ const SidebarProvider = React.forwardRef<
             ref={ref}
             {...props}
           >
+            <a
+              href="#workspace-main"
+              className="sr-only focus:not-sr-only focus:fixed focus:left-2 focus:top-2 focus:z-[100] focus:rounded-md focus:bg-primary focus:px-4 focus:py-2 focus:text-primary-foreground"
+            >
+              Skip to main content
+            </a>
             {children}
           </div>
         </TooltipProvider>
@@ -317,6 +323,8 @@ const SidebarInset = React.forwardRef<HTMLDivElement, React.ComponentProps<"main
   ({ className, ...props }, ref) => {
     return (
       <main
+        id="workspace-main"
+        tabIndex={-1}
         ref={ref}
         className={cn(
           "relative flex w-full flex-1 flex-col bg-background overflow-y-auto",

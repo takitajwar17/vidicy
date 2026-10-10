@@ -72,7 +72,7 @@ export function ClientReportControls({
     router.refresh();
   }
   return (
-    <div className="flex flex-wrap gap-3 print:hidden">
+    <div className="flex min-w-0 flex-wrap gap-3 print:hidden">
       {canEditRecipient ? (
         <form onSubmit={updateRecipient} className="flex w-full flex-wrap items-end gap-3">
           <div className="min-w-0 flex-1 space-y-2">
@@ -110,6 +110,7 @@ export function ClientReportControls({
             isPending || isSavingRecipient || hasUnsavedRecipient || !recipient || !csrfToken
           }
           onClick={sendReport}
+          className="h-auto min-h-9 max-w-full whitespace-normal break-all py-2"
         >
           {isPending
             ? "Sending…"

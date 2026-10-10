@@ -119,7 +119,7 @@ export function AgencyCaseToolbar({
       <Button
         type="button"
         size="sm"
-        className={styles.secondaryButton}
+        variant="outline"
         onClick={handleGenerateReport}
         disabled={!hasEvaluation || reporting}
       >
@@ -315,7 +315,7 @@ export function ReviewIssueStatusSelect({
         <Button
           type="button"
           size="sm"
-          className={styles.secondaryButton}
+          variant="outline"
           disabled={isPending || value === "dismissed"}
           onClick={() => handleChange("dismissed")}
         >
@@ -361,9 +361,11 @@ export function AddReviewIssueForm({ applicationId }: { applicationId: string })
   return (
     <form onSubmit={handleSubmit} className="space-y-3">
       <div className="grid gap-2">
-        <Label className="text-xs font-bold text-muted-foreground">Reviewer issue</Label>
+        <Label htmlFor="review-issue-title" className="text-xs font-bold text-muted-foreground">
+          Reviewer issue
+        </Label>
         <Input
-          aria-label="Missing bank statement"
+          id="review-issue-title"
           value={title}
           onChange={(event) => setTitle(event.target.value)}
           placeholder="Missing bank statement"
@@ -371,9 +373,14 @@ export function AddReviewIssueForm({ applicationId }: { applicationId: string })
         />
       </div>
       <div className="grid gap-2">
-        <Label className="text-xs font-bold text-muted-foreground">Description</Label>
+        <Label
+          htmlFor="review-issue-description"
+          className="text-xs font-bold text-muted-foreground"
+        >
+          Description
+        </Label>
         <Textarea
-          aria-label="What needs reviewer or client attention?"
+          id="review-issue-description"
           value={description}
           onChange={(event) => setDescription(event.target.value)}
           placeholder="What needs reviewer or client attention?"
@@ -381,18 +388,25 @@ export function AddReviewIssueForm({ applicationId }: { applicationId: string })
         />
       </div>
       <div className="grid gap-2">
-        <Label className="text-xs font-bold text-muted-foreground">Client action</Label>
+        <Label
+          htmlFor="review-issue-recommendation"
+          className="text-xs font-bold text-muted-foreground"
+        >
+          Client action
+        </Label>
         <Textarea
-          aria-label="What should the client send or fix?"
+          id="review-issue-recommendation"
           value={recommendation}
           onChange={(event) => setRecommendation(event.target.value)}
           placeholder="What should the client send or fix?"
         />
       </div>
       <div className="grid gap-2">
-        <Label className="text-xs font-bold text-muted-foreground">Severity</Label>
+        <Label htmlFor="review-issue-severity" className="text-xs font-bold text-muted-foreground">
+          Severity
+        </Label>
         <Select value={severity} onValueChange={setSeverity}>
-          <SelectTrigger className="h-10 rounded-xl bg-card">
+          <SelectTrigger id="review-issue-severity" className="h-10 bg-card">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>

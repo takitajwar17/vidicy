@@ -38,6 +38,7 @@ export function AgencyCaseDocumentDesk({
 }: AgencyCaseDocumentDeskProps) {
   const [preview, setPreview] = useState<{ id: string; url: string } | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [retry, setRetry] = useState(0);
   const documentId = document?.id;
   const isPdf = document?.mimeType === "application/pdf";
 
@@ -62,7 +63,7 @@ export function AgencyCaseDocumentDesk({
       controller.abort();
       if (objectUrl) URL.revokeObjectURL(objectUrl);
     };
-  }, [documentId, isPdf]);
+  }, [documentId, isPdf, retry]);
 
   return (
     <section className={styles.evidence} aria-label="Supporting evidence">
@@ -90,7 +91,7 @@ export function AgencyCaseDocumentDesk({
               {document.fileName} · {formatBytes(document.fileSize)}
             </span>
             <div className="flex items-center gap-2">
-              <Button asChild size="sm" className={styles.secondaryButton}>
+              <Button asChild size="sm" variant="outline">
                 <a
                   href={`/api/document-preview/${document.id}?download=1`}
                   download={document.fileName}
@@ -131,6 +132,9 @@ export function AgencyCaseDocumentDesk({
               <div className={styles.previewState} role="alert">
                 <AlertCircleIcon />
                 <p>{error}</p>
+                <Button variant="outline" onClick={() => setRetry((value) => value + 1)}>
+                  Retry preview
+                </Button>
                 <a href={`/api/document-preview/${document.id}?download=1`} className="underline">
                   Download the file
                 </a>

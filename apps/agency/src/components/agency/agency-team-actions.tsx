@@ -18,6 +18,8 @@ import {
   DialogContent,
   DialogDescription,
   DialogHeader,
+  DialogFooter,
+  DialogClose,
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
@@ -95,11 +97,15 @@ function AddStaffForm({
   return (
     <form onSubmit={handleSubmit} className="grid gap-4">
       <div className="grid gap-2">
-        <Label className="flex h-5 items-end text-xs font-bold text-muted-foreground">
+        <Label
+          htmlFor="staff-email"
+          className="flex h-5 items-end text-xs font-bold text-muted-foreground"
+        >
           Work email
         </Label>
         <Input
-          aria-label="reviewer@agency.com"
+          id="staff-email"
+          autoComplete="email"
           className="h-10"
           value={email}
           onChange={(event) => setEmail(event.target.value)}
@@ -110,9 +116,14 @@ function AddStaffForm({
         />
       </div>
       <div className="grid gap-2">
-        <Label className="flex h-5 items-end text-xs font-bold text-muted-foreground">Role</Label>
+        <Label
+          htmlFor="staff-role"
+          className="flex h-5 items-end text-xs font-bold text-muted-foreground"
+        >
+          Role
+        </Label>
         <Select value={role} onValueChange={setRole} disabled={disabled}>
-          <SelectTrigger className="h-10 w-full">
+          <SelectTrigger id="staff-role" className="h-10 w-full">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -168,7 +179,7 @@ export function StaffRoleSelect({
 
   return (
     <Select value={value} onValueChange={handleChange} disabled={disabled || isPending}>
-      <SelectTrigger className="h-9 rounded-xl bg-card text-xs">
+      <SelectTrigger aria-label="Staff role" className="h-9 bg-card text-xs">
         <SelectValue />
       </SelectTrigger>
       <SelectContent>
@@ -188,6 +199,7 @@ export function DisableStaffButton({
 }) {
   const router = useRouter();
   const { execute, isPending } = useServerAction(disableAgencyStaffAction);
+  const [open, setOpen] = useState(false);
 
   async function handleDisable() {
     const [, error] = await execute({ staffMemberId });
@@ -195,24 +207,49 @@ export function DisableStaffButton({
       toast.error(error.message ?? "Could not disable staff member.");
       return;
     }
+    setOpen(false);
     toast.success("Staff member disabled.");
     router.refresh();
   }
 
   return (
-    <Button
-      type="button"
-      size="sm"
-      variant="outline"
-      onClick={handleDisable}
-      disabled={disabled || isPending}
-    >
-      {isPending ? (
-        <Loader2Icon className="h-4 w-4 animate-spin" />
-      ) : (
-        <UserMinusIcon className="h-4 w-4" />
-      )}
-      Disable
-    </Button>
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        <Button type="button" size="sm" variant="outline" disabled={disabled || isPending}>
+          <UserMinusIcon className="h-4 w-4" />
+          Disable
+        </Button>
+      </DialogTrigger>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Disable staff access?</DialogTitle>
+          <DialogDescription>
+            This staff member will lose access to agency cases. Their existing work will remain
+            saved.
+          </DialogDescription>
+        </DialogHeader>
+        <DialogFooter>
+          <DialogClose asChild>
+            <Button variant="outline" disabled={isPending}>
+              Cancel
+            </Button>
+          </DialogClose>
+          <Button
+            type="button"
+            size="sm"
+            variant="destructive"
+            onClick={handleDisable}
+            disabled={disabled || isPending}
+          >
+            {isPending ? (
+              <Loader2Icon className="h-4 w-4 animate-spin" />
+            ) : (
+              <UserMinusIcon className="h-4 w-4" />
+            )}
+            {isPending ? "Disabling…" : "Disable access"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
