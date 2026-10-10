@@ -9,6 +9,7 @@ const tailwindBreakpoints = {
 } as const;
 
 const MEDIA_QUERIES = {
+  REDUCED_MOTION: "(prefers-reduced-motion: reduce)",
   // Single breakpoint queries
   SM_AND_SMALLER: `(max-width: ${tailwindBreakpoints.sm - 1}px)`,
   MD_AND_SMALLER: `(max-width: ${tailwindBreakpoints.md - 1}px)`,
@@ -47,7 +48,8 @@ const MEDIA_QUERIES = {
 type MediaQuery = keyof typeof MEDIA_QUERIES;
 
 export const useMediaQuery = (query: MediaQuery) => {
-  return useMediaQueryHook(MEDIA_QUERIES[query]);
+  // Keep the first client render equal to the server render.
+  return useMediaQueryHook(MEDIA_QUERIES[query], { initializeWithValue: false });
 };
 
 /**

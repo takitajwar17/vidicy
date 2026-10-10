@@ -1,5 +1,7 @@
 "use client";
 
+import { useMediaQuery } from "@/hooks/useMediaQuery";
+
 import { motion } from "motion/react";
 import Link from "next/link";
 import { buttonVariants } from "@/components/ui/button";
@@ -37,6 +39,7 @@ export function ErrorPage({
   body,
   onRetry,
 }: ErrorPageProps) {
+  const reduceMotion = useMediaQuery("REDUCED_MOTION");
   return (
     <div className="relative flex min-h-screen flex-col items-center justify-center overflow-hidden bg-background px-6">
       <div className={cn("pointer-events-none absolute inset-0 flex items-center justify-center")}>
@@ -45,9 +48,9 @@ export function ErrorPage({
 
       <BlurFade delay={0.05} yOffset={0}>
         <motion.div
-          initial={{ opacity: 0, scale: 0.7 }}
+          initial={reduceMotion ? false : { opacity: 0, scale: 0.7 }}
           animate={{ opacity: 1, scale: 1 }}
-          transition={{ duration: 0.5, ease: _ease }}
+          transition={{ duration: reduceMotion ? 0 : 0.5, ease: _ease }}
           className="mb-8 flex items-center justify-center"
         >
           <div
@@ -59,8 +62,8 @@ export function ErrorPage({
           >
             <motion.div
               className={cn("absolute inset-0 rounded-3xl", iconBg)}
-              animate={{ scale: [1, 1.12, 1] }}
-              transition={{ duration: 3, repeat: Infinity, ease: "easeInOut" }}
+              animate={reduceMotion ? undefined : { scale: [1, 1.12, 1] }}
+              transition={{ duration: 3, repeat: reduceMotion ? 0 : Infinity, ease: "easeInOut" }}
             />
             <Icon className={cn("h-12 w-12", iconColor)} strokeWidth={1.5} />
           </div>

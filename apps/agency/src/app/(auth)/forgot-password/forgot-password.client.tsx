@@ -1,7 +1,7 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { AuthShell } from "../_components/auth-shell";
 import { Input } from "@/components/ui/input";
 import { useRouter } from "next/navigation";
 import { forgotPasswordAction } from "./forgot-password.action";
@@ -49,7 +49,11 @@ export default function ForgotPasswordClientComponent({
 
   const captchaToken = useWatch({ control: form.control, name: "captchaToken" });
 
-  const { execute: sendResetLink, isSuccess } = useServerAction(forgotPasswordAction, {
+  const {
+    execute: sendResetLink,
+    isSuccess,
+    isPending,
+  } = useServerAction(forgotPasswordAction, {
     onError: (error) => {
       toast.dismiss();
       toast.error(error.err?.message);
@@ -73,35 +77,37 @@ export default function ForgotPasswordClientComponent({
 
   if (isSuccess) {
     return (
-      <div className="container mx-auto px-4 flex items-center justify-center min-h-screen">
-        <Card className="w-full max-w-md">
-          <CardHeader>
-            <CardTitle>Check your email</CardTitle>
-            <CardDescription>
+      <AuthShell>
+        <div className="space-y-6">
+          <div className="space-y-2">
+            <h1 className="text-2xl font-semibold tracking-tight">Check your email</h1>
+            <p className="text-sm text-muted-foreground">
               If an account exists with that email, we&apos;ve sent you instructions to reset your
               password.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
+            </p>
+          </div>
+          <div>
             <Button variant="outline" className="w-full" onClick={() => router.push("/sign-in")}>
               Back to login
             </Button>
-          </CardContent>
-        </Card>
-      </div>
+          </div>
+        </div>
+      </AuthShell>
     );
   }
 
   return (
-    <div className="container mx-auto px-4 flex flex-col items-center justify-center min-h-screen">
-      <Card className="w-full max-w-md">
-        <CardHeader>
-          <CardTitle>{email ? "Change Password" : "Forgot Password"}</CardTitle>
-          <CardDescription>
+    <AuthShell>
+      <div className="space-y-6">
+        <div className="space-y-2">
+          <h1 className="text-2xl font-semibold tracking-tight">
+            {email ? "Change password" : "Forgot password"}
+          </h1>
+          <p className="text-sm text-muted-foreground">
             Enter your email address and we&apos;ll send you instructions to reset your password.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
+          </p>
+        </div>
+        <div>
           <Form {...form}>
             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-5">
               <FormField
@@ -134,15 +140,16 @@ export default function ForgotPasswordClientComponent({
                 <Button
                   type="submit"
                   className="mt-8 mb-2"
-                  disabled={Boolean(isTurnstileEnabled && !captchaToken)}
+                  disabled={isPending || Boolean(isTurnstileEnabled && !captchaToken)}
+                  aria-busy={isPending}
                 >
-                  Send Reset Instructions
+                  {isPending ? "Sending instructions…" : "Send reset instructions"}
                 </Button>
               </div>
             </form>
           </Form>
-        </CardContent>
-      </Card>
+        </div>
+      </div>
 
       <div className="mt-4 w-full">
         {email ? (
@@ -165,6 +172,6 @@ export default function ForgotPasswordClientComponent({
           </Button>
         )}
       </div>
-    </div>
+    </AuthShell>
   );
 }

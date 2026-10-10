@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useServerAction } from "zsa-react";
 import { toast } from "sonner";
@@ -36,7 +36,12 @@ export default function PendingVerificationClient({ email }: { email: string }) 
     },
   });
 
-  const canResend = !lastResendTime || Date.now() - lastResendTime > EMAIL_RESEND_COOLDOWN_MS;
+  useEffect(() => {
+    if (lastResendTime === null) return;
+    const timer = setTimeout(() => setLastResendTime(null), EMAIL_RESEND_COOLDOWN_MS);
+    return () => clearTimeout(timer);
+  }, [lastResendTime]);
+  const canResend = lastResendTime === null;
   const isResending = status === "pending";
 
   const handleCheckAgain = async () => {
@@ -86,7 +91,7 @@ export default function PendingVerificationClient({ email }: { email: string }) 
 
       <div className="space-y-3">
         <Button
-          className="h-11 w-full bg-sidebar text-sm font-semibold tracking-[0.01em] text-sidebar-foreground hover:bg-sidebar/90"
+          className="h-11 w-full text-sm"
           disabled={isResending || !canResend}
           onClick={() => resendVerification()}
         >

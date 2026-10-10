@@ -157,7 +157,7 @@ const SignUpPage = ({
             <div className="space-y-4">
               <SSOButtons redirectPath={redirectPath} isGoogleSSOEnabled={isGoogleSSOEnabled} />
 
-              <AuthDivider>or</AuthDivider>
+              {isGoogleSSOEnabled && <AuthDivider>or</AuthDivider>}
 
               <Button
                 type="button"
@@ -224,8 +224,8 @@ const SignUpPage = ({
                     <FormLabel className="text-[13px] font-medium tracking-[0.01em] text-foreground/90">
                       Create Password
                     </FormLabel>
-                    <FormControl>
-                      <div className="relative">
+                    <div className="relative">
+                      <FormControl>
                         <Input
                           type={showPassword ? "text" : "password"}
                           placeholder="Minimum 8 characters"
@@ -233,20 +233,20 @@ const SignUpPage = ({
                           className="h-11 pr-10 text-[15px]"
                           {...field}
                         />
-                        <button
-                          type="button"
-                          onClick={() => setShowPassword((v) => !v)}
-                          className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
-                          aria-label={showPassword ? "Hide password" : "Show password"}
-                        >
-                          {showPassword ? (
-                            <EyeOffIcon className="h-4 w-4" />
-                          ) : (
-                            <EyeIcon className="h-4 w-4" />
-                          )}
-                        </button>
-                      </div>
-                    </FormControl>
+                      </FormControl>
+                      <button
+                        type="button"
+                        onClick={() => setShowPassword((v) => !v)}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                        aria-label={showPassword ? "Hide password" : "Show password"}
+                      >
+                        {showPassword ? (
+                          <EyeOffIcon className="h-4 w-4" />
+                        ) : (
+                          <EyeIcon className="h-4 w-4" />
+                        )}
+                      </button>
+                    </div>
                     <p className="text-xs font-medium tracking-[0.01em] text-muted-foreground/85">
                       Must be at least 8 characters
                     </p>

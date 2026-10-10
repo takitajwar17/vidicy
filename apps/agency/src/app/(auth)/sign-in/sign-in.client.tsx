@@ -82,7 +82,7 @@ const SignInPage = ({ email, redirectPath, isGoogleSSOEnabled }: SignInClientPro
         <SSOButtons isSignIn redirectPath={redirectPath} isGoogleSSOEnabled={isGoogleSSOEnabled} />
       </div>
 
-      <AuthDivider>or</AuthDivider>
+      {isGoogleSSOEnabled && <AuthDivider>or</AuthDivider>}
 
       {/* Email / password form */}
       <Form {...form}>
@@ -122,8 +122,8 @@ const SignInPage = ({ email, redirectPath, isGoogleSSOEnabled }: SignInClientPro
                 <FormLabel className="text-[13px] font-medium tracking-[0.01em] text-foreground/90">
                   Password
                 </FormLabel>
-                <FormControl>
-                  <div className="relative">
+                <div className="relative">
+                  <FormControl>
                     <Input
                       type={showPassword ? "text" : "password"}
                       placeholder="Password"
@@ -131,20 +131,20 @@ const SignInPage = ({ email, redirectPath, isGoogleSSOEnabled }: SignInClientPro
                       className="h-11 pr-10 text-[15px]"
                       {...field}
                     />
-                    <button
-                      type="button"
-                      onClick={() => setShowPassword((v) => !v)}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
-                      aria-label={showPassword ? "Hide password" : "Show password"}
-                    >
-                      {showPassword ? (
-                        <EyeOffIcon className="h-4 w-4" />
-                      ) : (
-                        <EyeIcon className="h-4 w-4" />
-                      )}
-                    </button>
-                  </div>
-                </FormControl>
+                  </FormControl>
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword((v) => !v)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                    aria-label={showPassword ? "Hide password" : "Show password"}
+                  >
+                    {showPassword ? (
+                      <EyeOffIcon className="h-4 w-4" />
+                    ) : (
+                      <EyeIcon className="h-4 w-4" />
+                    )}
+                  </button>
+                </div>
                 <FormMessage />
                 <div className="flex justify-end">
                   <Link

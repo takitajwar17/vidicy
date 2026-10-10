@@ -1,5 +1,7 @@
 "use client";
 
+import { NativeSelect } from "@/components/ui/native-select";
+
 import { useState } from "react";
 import { useServerAction } from "zsa-react";
 import { submitEnterpriseInquiryAction } from "@/actions/enterprise.action";
@@ -94,7 +96,7 @@ export function EnterpriseForm() {
       {/* Right — form */}
       <form
         onSubmit={handleSubmit}
-        className="lg:col-span-3 space-y-5 rounded-2xl border bg-card p-6 shadow-sm sm:p-8"
+        className="lg:col-span-3 space-y-5 rounded-md border bg-card p-6 sm:p-8"
       >
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div className="space-y-1.5">
@@ -164,11 +166,11 @@ export function EnterpriseForm() {
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div className="space-y-1.5">
             <Label htmlFor="teamSize">Team size</Label>
-            <select
+            <NativeSelect
               id="teamSize"
               value={teamSize}
               onChange={(e) => setTeamSize(e.target.value)}
-              className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-base shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 md:text-sm"
+              className="flex h-9 w-full rounded-md border border-input bg-card px-3 py-1 text-base shadow-none transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 md:text-sm"
             >
               <option value="" disabled>
                 Select…
@@ -178,15 +180,15 @@ export function EnterpriseForm() {
               <option value="21-50">21–50 people</option>
               <option value="51-200">51–200 people</option>
               <option value="200+">200+ people</option>
-            </select>
+            </NativeSelect>
           </div>
           <div className="space-y-1.5">
             <Label htmlFor="monthlyVolume">Monthly applications</Label>
-            <select
+            <NativeSelect
               id="monthlyVolume"
               value={monthlyVolume}
               onChange={(e) => setMonthlyVolume(e.target.value)}
-              className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-base shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 md:text-sm"
+              className="flex h-9 w-full rounded-md border border-input bg-card px-3 py-1 text-base shadow-none transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 md:text-sm"
             >
               <option value="" disabled>
                 Select…
@@ -196,7 +198,7 @@ export function EnterpriseForm() {
               <option value="51-200">51–200</option>
               <option value="201-500">201–500</option>
               <option value="500+">500+</option>
-            </select>
+            </NativeSelect>
           </div>
         </div>
 

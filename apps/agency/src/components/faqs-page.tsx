@@ -133,7 +133,7 @@ export function FaqsSection({ sections }: FaqsSectionProps) {
           <AccordionItem
             key={faq.id}
             value={faq.id}
-            className="rounded-2xl border border-border/80 bg-background px-4 shadow-sm sm:px-6"
+            className="rounded-md border border-border/80 bg-background px-4 sm:px-6"
           >
             <AccordionTrigger className="text-left text-base font-semibold text-foreground hover:no-underline">
               {faq.question}
@@ -146,7 +146,7 @@ export function FaqsSection({ sections }: FaqsSectionProps) {
       </Accordion>
 
       {filteredFaqs.length === 0 && (
-        <div className="mt-10 rounded-2xl border border-border/70 bg-muted/20 px-5 py-6 text-center shadow-sm sm:px-6">
+        <div className="mt-10 rounded-md border border-border/70 bg-muted/20 px-5 py-6 text-center sm:px-6">
           <p className="text-sm font-semibold text-foreground">No FAQs found for that search.</p>
           <Button variant="outline" className="mt-3" onClick={() => setSearchTerm("")}>
             <SearchSlashIcon data-icon="inline-start" />
@@ -155,7 +155,7 @@ export function FaqsSection({ sections }: FaqsSectionProps) {
         </div>
       )}
 
-      <div className="mt-10 rounded-2xl border bg-muted/30 px-5 py-6 text-center shadow-sm sm:px-6">
+      <div className="mt-10 rounded-md border bg-muted/30 px-5 py-6 text-center sm:px-6">
         <p className="text-sm font-semibold text-foreground">Still have questions?</p>
         <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
           Tell us how your agency reviews client files today and what volume you want to handle.

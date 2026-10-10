@@ -1,5 +1,7 @@
 "use client";
 
+import { useMediaQuery } from "@/hooks/useMediaQuery";
+
 import { AnimatePresence, motion, useInView, Variants } from "motion/react";
 import { useRef } from "react";
 
@@ -30,6 +32,7 @@ export default function BlurFade({
   inViewMargin = "-50px",
   blur = "6px",
 }: BlurFadeProps) {
+  const reduceMotion = useMediaQuery("REDUCED_MOTION");
   const ref = useRef(null);
   const inViewResult = useInView(ref, { once: true, margin: inViewMargin });
   const isInView = !inView || inViewResult;
@@ -42,13 +45,15 @@ export default function BlurFade({
     <AnimatePresence>
       <motion.div
         ref={ref}
-        initial="hidden"
-        animate={isInView ? "visible" : "hidden"}
+        initial={reduceMotion ? false : "hidden"}
+        animate={
+          reduceMotion ? { opacity: 1, y: 0, filter: "none" } : isInView ? "visible" : "hidden"
+        }
         exit="hidden"
         variants={combinedVariants}
         transition={{
-          delay: 0.04 + delay,
-          duration,
+          delay: reduceMotion ? 0 : 0.04 + delay,
+          duration: reduceMotion ? 0 : duration,
           ease: "easeOut",
         }}
         className={className}

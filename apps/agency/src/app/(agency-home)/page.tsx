@@ -1,3 +1,4 @@
+import { DecorativeVideo } from "@/components/decorative-video";
 import Image from "next/image";
 import Link from "next/link";
 import type { Route } from "next";
@@ -74,8 +75,8 @@ export default function Home() {
   return (
     <>
       <main className="public-site-font-system public-landing-surface min-h-screen public-landing-ink">
-        <section className="public-landing-surface relative overflow-hidden pb-0">
-          <video
+        <section className="public-hero-surface relative overflow-hidden pb-0">
+          <DecorativeVideo
             aria-hidden="true"
             autoPlay
             className="absolute inset-x-0 top-0 h-[84vh] w-full object-cover object-bottom"
@@ -121,7 +122,7 @@ export default function Home() {
                 Log in
               </Link>
               <Link
-                className="public-button-primary rounded-2xl px-3.5 py-2 text-sm font-semibold transition-colors sm:px-4 sm:py-2.5"
+                className="public-button-primary rounded-[5px] px-3.5 py-2 text-sm font-semibold transition-colors sm:px-4 sm:py-2.5"
                 href="/sign-up"
               >
                 Sign up
@@ -142,13 +143,13 @@ export default function Home() {
 
             <div className="mt-7 flex w-full max-w-[21rem] flex-col gap-3 sm:max-w-2xl sm:flex-row sm:justify-center">
               <Link
-                className="public-button-primary-strong inline-flex h-12 items-center justify-center rounded-2xl px-7 text-sm font-bold ring-1 ring-primary/10 transition-colors sm:h-14 sm:px-10 sm:text-base"
+                className="public-button-primary-strong inline-flex h-12 items-center justify-center rounded-[5px] px-7 text-sm font-bold ring-1 ring-primary/10 transition-colors sm:h-14 sm:px-10 sm:text-base"
                 href="/sign-up"
               >
                 Start a pilot
               </Link>
               <Link
-                className="public-button-secondary inline-flex h-12 items-center justify-center rounded-2xl border px-7 text-sm font-bold backdrop-blur transition-colors sm:h-14 sm:px-10 sm:text-base"
+                className="public-button-secondary inline-flex h-12 items-center justify-center rounded-[5px] border px-7 text-sm font-bold backdrop-blur transition-colors sm:h-14 sm:px-10 sm:text-base"
                 href="/enterprise"
               >
                 Request a demo

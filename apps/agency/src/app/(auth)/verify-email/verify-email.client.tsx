@@ -3,7 +3,7 @@
 import { useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { AuthShell } from "../_components/auth-shell";
 import { Button } from "@/components/ui/button";
 import { useServerAction } from "zsa-react";
 import { verifyEmailAction } from "./verify-email.action";
@@ -72,55 +72,59 @@ export default function VerifyEmailClientComponent({ token }: { token: string })
 
   if (isPending) {
     return (
-      <div className="container mx-auto px-4 flex items-center justify-center min-h-screen">
-        <Card className="w-full max-w-md">
-          <CardHeader className="text-center">
+      <AuthShell>
+        <div className="space-y-6">
+          <div className="space-y-2 text-center">
             <div className="flex flex-col items-center space-y-4">
               <Spinner size="large" />
-              <CardTitle>Verifying Email</CardTitle>
-              <CardDescription>Please wait while we verify your email address...</CardDescription>
+              <h1 className="text-2xl font-semibold tracking-tight">Verifying Email</h1>
+              <p className="text-sm text-muted-foreground">
+                Please wait while we verify your email address...
+              </p>
             </div>
-          </CardHeader>
-        </Card>
-      </div>
+          </div>
+        </div>
+      </AuthShell>
     );
   }
 
   if (error) {
     return (
-      <div className="container mx-auto px-4 flex items-center justify-center min-h-screen">
-        <Card className="w-full max-w-md">
-          <CardHeader>
-            <CardTitle>Verification failed</CardTitle>
-            <CardDescription>{error?.message || "Failed to verify email"}</CardDescription>
-          </CardHeader>
-          <CardContent>
+      <AuthShell>
+        <div className="space-y-6">
+          <div className="space-y-2">
+            <h1 className="text-2xl font-semibold tracking-tight">Verification failed</h1>
+            <p className="text-sm text-muted-foreground">
+              {error?.message || "Failed to verify email"}
+            </p>
+          </div>
+          <div>
             <Button variant="outline" className="w-full" onClick={() => router.push("/sign-in")}>
               Back to sign in
             </Button>
-          </CardContent>
-        </Card>
-      </div>
+          </div>
+        </div>
+      </AuthShell>
     );
   }
 
   if (!token) {
     return (
-      <div className="container mx-auto px-4 flex items-center justify-center min-h-screen">
-        <Card className="w-full max-w-md">
-          <CardHeader>
-            <CardTitle>Invalid verification link</CardTitle>
-            <CardDescription>
+      <AuthShell>
+        <div className="space-y-6">
+          <div className="space-y-2">
+            <h1 className="text-2xl font-semibold tracking-tight">Invalid verification link</h1>
+            <p className="text-sm text-muted-foreground">
               The verification link is invalid. Please request a new verification email.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
+            </p>
+          </div>
+          <div>
             <Button variant="outline" className="w-full" onClick={() => router.push("/sign-in")}>
               Back to sign in
             </Button>
-          </CardContent>
-        </Card>
-      </div>
+          </div>
+        </div>
+      </AuthShell>
     );
   }
 

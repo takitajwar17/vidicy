@@ -1,7 +1,7 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { AuthShell } from "../_components/auth-shell";
 import { useRouter } from "next/navigation";
 import { resetPasswordAction } from "./reset-password.action";
 import { useServerAction } from "zsa-react";
@@ -34,7 +34,11 @@ export default function ResetPasswordClientComponent({ token }: { token: string 
     },
   });
 
-  const { execute: resetPassword, isSuccess } = useServerAction(resetPasswordAction, {
+  const {
+    execute: resetPassword,
+    isSuccess,
+    isPending,
+  } = useServerAction(resetPasswordAction, {
     onError: (error) => {
       toast.dismiss();
       toast.error(error.err?.message);
@@ -54,32 +58,32 @@ export default function ResetPasswordClientComponent({ token }: { token: string 
 
   if (isSuccess) {
     return (
-      <div className="container mx-auto px-4 flex items-center justify-center min-h-screen">
-        <Card className="w-full max-w-md">
-          <CardHeader>
-            <CardTitle>Password Reset Successfully</CardTitle>
-            <CardDescription>
+      <AuthShell>
+        <div className="space-y-6">
+          <div className="space-y-2">
+            <h1 className="text-2xl font-semibold tracking-tight">Password Reset Successfully</h1>
+            <p className="text-sm text-muted-foreground">
               Your password has been reset. You can now log in with your new password.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
+            </p>
+          </div>
+          <div>
             <Button variant="outline" className="w-full" onClick={() => router.push("/sign-in")}>
               Go to Login
             </Button>
-          </CardContent>
-        </Card>
-      </div>
+          </div>
+        </div>
+      </AuthShell>
     );
   }
 
   return (
-    <div className="container mx-auto px-4 flex items-center justify-center min-h-screen">
-      <Card className="w-full max-w-md">
-        <CardHeader>
-          <CardTitle>Reset Password</CardTitle>
-          <CardDescription>Enter your new password below.</CardDescription>
-        </CardHeader>
-        <CardContent>
+    <AuthShell>
+      <div className="space-y-6">
+        <div className="space-y-2">
+          <h1 className="text-2xl font-semibold tracking-tight">Reset Password</h1>
+          <p className="text-sm text-muted-foreground">Enter your new password below.</p>
+        </div>
+        <div>
           <Form {...form}>
             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
               <FormField
@@ -89,7 +93,7 @@ export default function ResetPasswordClientComponent({ token }: { token: string 
                   <FormItem>
                     <FormLabel>New Password</FormLabel>
                     <FormControl>
-                      <Input type="password" {...field} />
+                      <Input type="password" autoComplete="new-password" {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -102,19 +106,19 @@ export default function ResetPasswordClientComponent({ token }: { token: string 
                   <FormItem>
                     <FormLabel>Confirm Password</FormLabel>
                     <FormControl>
-                      <Input type="password" {...field} />
+                      <Input type="password" autoComplete="new-password" {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
                 )}
               />
-              <Button type="submit" className="w-full">
-                Reset Password
+              <Button type="submit" className="w-full" disabled={isPending} aria-busy={isPending}>
+                {isPending ? "Resetting password…" : "Reset password"}
               </Button>
             </form>
           </Form>
-        </CardContent>
-      </Card>
-    </div>
+        </div>
+      </div>
+    </AuthShell>
   );
 }

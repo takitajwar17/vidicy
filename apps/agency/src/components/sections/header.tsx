@@ -128,7 +128,7 @@ export default function Header() {
             </Link>
             {hidePrimaryCta ? null : (
               <Link
-                className="public-button-primary rounded-2xl px-3.5 py-2 text-sm font-semibold transition-colors sm:px-4 sm:py-2.5"
+                className="public-button-primary rounded-[5px] px-3.5 py-2 text-sm font-semibold transition-colors sm:px-4 sm:py-2.5"
                 href="/sign-up"
               >
                 Sign up

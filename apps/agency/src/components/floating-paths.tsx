@@ -1,5 +1,7 @@
 "use client";
 
+import { useMediaQuery } from "@/hooks/useMediaQuery";
+
 import { motion } from "motion/react";
 
 /**
@@ -7,6 +9,7 @@ import { motion } from "motion/react";
  * Each path is slightly offset to create a flowing layered effect.
  */
 export function FloatingPaths({ position, className }: { position: number; className?: string }) {
+  const reduceMotion = useMediaQuery("REDUCED_MOTION");
   const paths = Array.from({ length: 36 }, (_, i) => ({
     id: i,
     d: `M-${380 - i * 5 * position} -${189 + i * 6}C-${
@@ -23,6 +26,7 @@ export function FloatingPaths({ position, className }: { position: number; class
   return (
     <div className="absolute inset-0 overflow-hidden pointer-events-none">
       <svg
+        aria-hidden="true"
         className={className || "w-full h-full text-foreground"}
         viewBox="0 0 696 316"
         fill="none"
@@ -35,15 +39,19 @@ export function FloatingPaths({ position, className }: { position: number; class
             stroke="currentColor"
             strokeWidth={path.width}
             strokeOpacity={0.1 + path.id * 0.03}
-            initial={{ pathLength: 0.3, opacity: 0.6 }}
-            animate={{
-              pathLength: 1,
-              opacity: [0.3, 0.6, 0.3],
-              pathOffset: [0, 1, 0],
-            }}
+            initial={false}
+            animate={
+              reduceMotion
+                ? { pathLength: 1, opacity: 0.4 }
+                : {
+                    pathLength: 1,
+                    opacity: [0.3, 0.6, 0.3],
+                    pathOffset: [0, 1, 0],
+                  }
+            }
             transition={{
-              duration: 20 + Math.random() * 10,
-              repeat: Infinity,
+              duration: reduceMotion ? 0 : 20 + (path.id % 10),
+              repeat: reduceMotion ? 0 : Infinity,
               ease: "linear",
             }}
           />

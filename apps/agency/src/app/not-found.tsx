@@ -1,5 +1,7 @@
 "use client";
 
+import { useMediaQuery } from "@/hooks/useMediaQuery";
+
 import { motion } from "motion/react";
 import Link from "next/link";
 import { buttonVariants } from "@/components/ui/button";
@@ -10,6 +12,7 @@ import { MapPinOffIcon, HomeIcon, LayoutDashboardIcon } from "lucide-react";
 const _ease = [0.16, 1, 0.3, 1];
 
 export default function NotFound() {
+  const reduceMotion = useMediaQuery("REDUCED_MOTION");
   return (
     <div className="relative flex min-h-screen flex-col items-center justify-center overflow-hidden bg-background px-4">
       {/* Subtle radial glow */}
@@ -20,16 +23,16 @@ export default function NotFound() {
       {/* Icon */}
       <BlurFade delay={0.05} yOffset={0}>
         <motion.div
-          initial={{ opacity: 0, scale: 0.7 }}
+          initial={reduceMotion ? false : { opacity: 0, scale: 0.7 }}
           animate={{ opacity: 1, scale: 1 }}
-          transition={{ duration: 0.5, ease: _ease }}
+          transition={{ duration: reduceMotion ? 0 : 0.5, ease: _ease }}
           className="mb-8 flex items-center justify-center"
         >
           <div className="relative flex h-28 w-28 items-center justify-center rounded-3xl bg-primary/10 ring-1 ring-primary/20">
             <motion.div
               className="absolute inset-0 rounded-3xl bg-primary/5"
-              animate={{ scale: [1, 1.12, 1] }}
-              transition={{ duration: 3, repeat: Infinity, ease: "easeInOut" }}
+              animate={reduceMotion ? undefined : { scale: [1, 1.12, 1] }}
+              transition={{ duration: 3, repeat: reduceMotion ? 0 : Infinity, ease: "easeInOut" }}
             />
             <MapPinOffIcon className="h-12 w-12 text-primary" strokeWidth={1.5} />
           </div>
