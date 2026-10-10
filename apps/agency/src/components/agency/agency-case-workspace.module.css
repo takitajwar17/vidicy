@@ -189,7 +189,7 @@
 .reviewPanel {
   display: flex;
   flex-direction: column;
-  overflow: hidden;
+  overflow-y: auto;
 }
 .reviewPanel[data-state="inactive"] {
   display: none;

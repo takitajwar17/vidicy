@@ -810,6 +810,69 @@ test("review workspace links findings to evidence and keeps actions usable at sm
   expect(errors).toEqual([]);
 });
 
+test("long review findings can scroll above the bottom bar", async ({ page, context }) => {
+  const errors: string[] = [];
+  page.on("pageerror", (error) => errors.push(error.message));
+  const db = drizzle(pool, { schema });
+  const title = "No evidence of ties to the home country or prior immigration compliance.";
+  const description = Array.from(
+    { length: 12 },
+    (_, index) => `Evidence ${index + 1}: Confirm the applicant's home address and employment.`,
+  ).join("\n\n");
+  const [issue] = await db
+    .insert(schema.reviewIssueTable)
+    .values({
+      applicationId,
+      title,
+      description,
+      recommendation: `${description}\n\nUpload all supporting evidence before submission.`,
+      severity: "high",
+      source: "reviewer",
+    })
+    .returning();
+  await db
+    .update(schema.documentEvaluationTable)
+    .set({ reviewStatus: "incomplete" })
+    .where(eq(schema.documentEvaluationTable.applicationId, applicationId));
+  await context.addCookies([
+    { name: "session", value: staffCookie, url: base },
+    { name: "csrf-token", value: "isolated-browser-csrf-token", url: base },
+  ]);
+  const output = resolve("output/verification");
+  mkdirSync(output, { recursive: true });
+  for (const [width, height] of [
+    [1280, 600],
+    [1024, 500],
+    [390, 600],
+  ]) {
+    await page.setViewportSize({ width, height });
+    await page.goto(`${base}/dashboard/${applicationId}?issue=${issue.id}`);
+    const panel = page.getByRole("tabpanel", { name: "Review", exact: true });
+    const detail = page.getByRole("region", { name: "Selected issue" });
+    const dismiss = detail.getByRole("button", { name: "Dismiss issue", exact: true });
+    await expect(panel).toHaveCSS("scrollbar-width", "none");
+    await expect(detail.getByRole("heading", { name: title, exact: true })).toBeAttached();
+    if (width >= 900) {
+      const bounds = await panel.boundingBox();
+      if (!bounds) throw new Error("Review panel is not visible");
+      await page.mouse.move(bounds.x + 10, bounds.y + 10);
+      await page.mouse.wheel(0, 5000);
+      await expect.poll(() => panel.evaluate((element) => element.scrollTop)).toBeGreaterThan(0);
+    } else {
+      await dismiss.scrollIntoViewIfNeeded();
+    }
+    await expect(dismiss).toBeInViewport({ ratio: 1 });
+    await expect(
+      detail.getByText("Upload all supporting evidence before submission.", {
+        exact: false,
+      }),
+    ).toBeInViewport();
+    await dismiss.hover();
+    await page.screenshot({ path: join(output, `review-scroll-${width}x${height}.png`) });
+  }
+  expect(errors).toEqual([]);
+});
+
 test("shared styles work across pages, forms, menus, and themes", async ({ page, context }) => {
   test.setTimeout(120_000);
   const errors: string[] = [];

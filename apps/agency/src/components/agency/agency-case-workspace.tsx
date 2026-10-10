@@ -121,7 +121,10 @@ export function AgencyCaseWorkspace({
       </TabsList>
       <div className={styles.body}>
         <div className={styles.left}>
-          <TabsContent value="review" className={`${styles.panel} ${styles.reviewPanel}`}>
+          <TabsContent
+            value="review"
+            className={`${styles.panel} ${styles.reviewPanel} scrollbar-hide`}
+          >
             {isReviewStale ? (
               <p role="status" className={styles.notice}>
                 The previous review is incomplete or no longer matches the documents. Run review
