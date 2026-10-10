@@ -4,9 +4,11 @@ AI document review for visa agencies.
 
 Visa agency staff must compare documents with a route's requirements, find missing or conflicting evidence, and track corrections across replacement files. A complete set of uploads can still contain an expired document, a name mismatch, or evidence that needs clarification.
 
-Vidicy connects these tasks in one case workspace. Generative AI builds contextual checklists and turns document evidence into structured findings. Staff can inspect files, resolve or dismiss issues, and run review again after a correction. The agency keeps control of the review. An AI evaluation does not determine a visa outcome.
+Vidicy connects these tasks through a staged, multimodal review pipeline and a shared case workspace. Route research becomes a structured checklist. Extracted text, retrieved document context, and images feed individual document assessments, deterministic consistency checks, and a combined Gemini review. Borderline scores trigger a second assessment against the same evidence and scoring rules.
 
-The intended value is less repeated document checking and clearer client follow-up. Review time, correction rounds, and missed material issues are useful measures of that value; no quantified improvement is claimed here.
+The engineering connects model execution to durable application state: bounded parallel calls, deadline-aware retries, document snapshots, atomic review publication, and recoverable report delivery. Staff inspect the evidence, control issue decisions, and run review again after corrections. Staff retain responsibility for submission decisions.
+
+The workflow helps staff reduce repeated document checking and give clients a clear list of corrections.
 
 The application is in `apps/agency`. It runs on Next.js, Cloud Run, and PostgreSQL. The review pipeline uses Gemini through Vertex AI, with other providers for specific research, structuring, translation, and embedding tasks.
 
@@ -15,6 +17,7 @@ This README is the entry point for developers and technical reviewers. The [tech
 ## Contents
 
 - [Agency workflow](#agency-workflow)
+- [Engineering design](#engineering-design)
 - [Technology and services](#technology-and-services)
 - [System architecture](#system-architecture)
 - [AI configuration](#ai-configuration)
@@ -33,7 +36,9 @@ This README is the entry point for developers and technical reviewers. The [tech
 5. Review the findings. Resolve or dismiss tracked issues and check case readiness.
 6. Replace or correct documents when needed. Document changes invalidate affected evaluations and reports.
 
-The case workspace places document preview, checklist requirements, review findings, notes, and activity together. Findings carry descriptions, recommendations, severity, and a reviewer-controlled status. Previous AI findings are marked when the review is stale. The [case page](<apps/agency/src/app/(workspace)/dashboard/[appId]/_agency-case-content.tsx>) and [document desk](apps/agency/src/components/agency/agency-case-document-desk.tsx) implement this flow. Accessibility and task completion still need browser and user testing; component choice alone does not establish them.
+The case workspace links document findings to their available source files and places document preview, requirements, issue decisions, notes, and activity together. Priority, status, search, and selected evidence use URL state so a review can survive navigation and reloads. The dashboard derives the next action from missing files, review validity, assignments, and open issues. See the [workspace](apps/agency/src/components/agency/agency-case-workspace.tsx), [source selection rules](apps/agency/src/lib/agency-review-workspace.ts), and [work queue](apps/agency/src/lib/agency-dashboard-queue.ts).
+
+Review continues into a private client report with HTML download, print/PDF controls, and email handoff. Delivery preserves the complete provider request and an idempotency key across retries. [Browser regression tests](apps/agency/tests/report-workflow.pw.ts) exercise review, report handoff, access checks, recovery states, and narrow layouts using private PostgreSQL and Redis with provider stubs.
 
 ### From files to review findings
 
@@ -48,14 +53,18 @@ The case workspace places document preview, checklist requirements, review findi
 
 The design combines generated analysis with explicit workflow rules. A high score cannot bypass a missing required file or an open issue when the server checks submission readiness. Conditional updates protect newer human decisions during synchronization. The [review pipeline](apps/agency/README.md#review-pipeline) explains the stages, fallback behavior, and source evidence.
 
-For example, a replacement passport can correct an expiry issue while a name mismatch with another document still needs review. Vidicy invalidates the previous assessment, checks the current uploads, and keeps the remaining concern as an issue for staff. This illustrates the correction workflow; it is not a measured outcome or a guarantee of finding every error.
+For example, a replacement passport can correct an expiry issue while a name mismatch with another document still needs review. Vidicy invalidates the previous assessment, checks the current uploads, and keeps the remaining concern as an issue for staff.
 
-### Implementation limits
+## Engineering design
 
-- The case toolbar generates reports and finalizes review. Reports have a private view, an HTML download, print/PDF controls, and email delivery. A sent status records provider acceptance; it does not establish receipt in the client's inbox. Apply the report delivery migration before deploying this workflow.
-- Document chat endpoints remain in the code. Atlas is not a separate step in the current agency case interface.
-- Checklist research can use cached results or fall back to model knowledge. Citations and generated requirements still need reviewer verification.
-- Standard tests check implementation behavior. Model accuracy, production capacity, accessibility, and user impact need separate evaluation.
+| Mechanism                     | Completed implementation                                                                                                                                                                                                              | Evidence                                                                                                                                                                                |
+| ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Shared production review core | The application, quality harness, and benchmark execute the same Gemini prompts, schemas, document checks, combined assessment, and conditional second pass.                                                                          | [Review core](apps/agency/src/services/case-evaluation.ts), [core tests](apps/agency/src/__tests__/case-evaluation.test.ts)                                                             |
+| Consistent review state       | Required model stages must finish before publication. A transaction saves the evaluation, issues, scores, and report state together. Snapshot checks reject corrected evidence; conditional updates protect newer reviewer decisions. | [Publication](apps/agency/src/server/agency-review.ts), [database workflow tests](apps/agency/src/__tests__/agency-review.test.ts)                                                      |
+| Controlled inference          | Each case defaults to two concurrent document calls. Transient retries share a 120-second stage deadline. Per-attempt timing, status, and token usage are recorded without collecting document text in the metrics collector.         | [Model adapter](apps/agency/src/lib/gemini-evaluation.ts), [metrics](apps/agency/src/infra/evaluation-metrics.ts), [adapter tests](apps/agency/src/__tests__/evaluation-action.test.ts) |
+| Recoverable client handoff    | A short SQL transaction claims a send and saves the complete request. The provider call runs outside the transaction. Retries reuse the saved request and key; concurrent sends and stale reports are rejected.                       | [Report delivery](apps/agency/src/server/client-reports.ts), [delivery tests](apps/agency/src/__tests__/client-report-delivery.test.ts)                                                 |
+
+Quality checks include a complete reference case and controlled variants with one changed document. Benchmarks retain failures and record code, harness, metric, and dataset hashes alongside concurrency, latency percentiles, and token-based cost estimates. This makes a result inspectable against its exact implementation and inputs. The [technical reference](apps/agency/README.md#engineering-contracts) connects these mechanisms to their tests and measurement boundaries.
 
 ## Technology and services
 
@@ -112,23 +121,23 @@ The server checks the user's session and case permission before accepting a docu
 
 Cloud Tasks calls an authenticated internal route on the same service. The route acquires a PostgreSQL lock for the document, extracts content, and indexes document chunks. Cloud Scheduler identifies old or failed work and reserves bounded recovery attempts. PostgreSQL remains authoritative for document identity and case state; vector results are checked against it before use.
 
-These steps are separate service operations. File storage, SQL commit, and queue creation are not one atomic transaction. The [sequence diagram and failure map](apps/agency/README.md#system-boundaries) describe what can remain after a partial failure.
+Each service has an explicit state boundary. Queue acceptance confirms delivery scheduling, document locks control active processing, and reconciliation finds stored work that needs another attempt. The [sequence diagram](apps/agency/README.md#system-boundaries) shows this flow.
 
 Within PostgreSQL, case creation commits client changes, the case, and its primary applicant together. Review publication commits the evaluation, tracked findings, scores, and report state together. Failed writes roll back their group. A late failed extraction cannot erase text saved by a successful attempt. See the [transaction and review contracts](apps/agency/README.md#transactions-and-locks).
 
 ### Why the services fit this implementation
 
-| Service                     | Role in this code                                                          | Technical boundary                                                                                    |
-| --------------------------- | -------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
-| Cloud Run and Cloud Tasks   | Serve the application and deliver document jobs outside the upload request | Request capacity, task dispatch, and SQL connection limits must be sized together                     |
-| Cloud SQL                   | Store case state and apply transactions and document locks                 | Repeated jobs and concurrent reviewers must preserve consistent state                                 |
-| Cloud Storage               | Store source files and larger vector metadata                              | Object writes do not join SQL transactions                                                            |
-| Memorystore                 | Cache route research and supply sessions, tokens, and atomic counters      | Redis failure can affect access; per-user action limits allow requests after counter errors           |
-| Vertex AI and Vector Search | Extract and evaluate evidence; retrieve relevant document context          | Model quotas, retrieval limits, and asynchronous index updates remain capacity and quality boundaries |
+| Service                     | Role in this code                                                          | Design mechanism                                               |
+| --------------------------- | -------------------------------------------------------------------------- | -------------------------------------------------------------- |
+| Cloud Run and Cloud Tasks   | Serve the application and deliver document jobs outside the upload request | Named tasks, authenticated delivery, and bounded recovery      |
+| Cloud SQL                   | Store case state and coordinate concurrent work                            | Transactions, document locks, and conditional issue updates    |
+| Cloud Storage               | Store source files and larger vector metadata                              | Generation-pinned reads and content-addressed metadata         |
+| Memorystore                 | Supply sessions, tokens, route research caches, and counters               | Atomic token consumption, expiry, and fixed rate-limit windows |
+| Vertex AI and Vector Search | Extract and evaluate evidence; retrieve relevant document context          | Structured model output and database-checked retrieval         |
 
-The implementation reuses stored extraction and completed indexes. It can reuse per-document feedback when the saved version key matches, and it caches route research. These controls reduce repeated work by design; their cost and latency effects need measurement. Document calls can run in parallel within an evaluation request, while the combined assessment still runs during that request. Increasing queue capacity alone does not scale every part of review. See [capacity and cost controls](apps/agency/README.md#capacity-and-cost-controls).
+The implementation reuses stored extraction, completed indexes, matching per-document feedback, and cached route research. Document assessments run with bounded concurrency within the review request, followed by the combined assessment. The [measurement tools](apps/agency/README.md#repeatable-review-measurements) record latency, token usage, failures, and token-based cost estimates for the shared review core.
 
-See the [service-by-service reference](apps/agency/README.md#cloud-run) for the implementation details and source links. The [observed deployment profile](apps/agency/README.md#observed-deployment-profile) separates service settings from source configuration. Verify service settings before an operating decision; they can change independently of this repository.
+See the [service reference](apps/agency/README.md#cloud-run) for implementation details and source links.
 
 ## AI configuration
 
@@ -142,7 +151,6 @@ These are the model IDs requested by the checked-in code. The project must have 
 | Structured checklist generation | OpenAI: `gpt-4o`                                        |
 | Document embeddings             | OpenAI: `text-embedding-3-small`, with 1,536 dimensions |
 | Evaluation translation          | OpenAI: `gpt-4.1-mini`                                  |
-| Document chat                   | OpenAI: `gpt-5.4`, with `gpt-4.1` as fallback           |
 
 PDF extraction first tries native text extraction. It then tries Gemini when needed. OpenAI extraction fallback uses `gpt-4.1`, then `gpt-4.1-mini`.
 
@@ -152,7 +160,7 @@ Model constants are in [gemini.ts](apps/agency/src/lib/gemini.ts). Extraction is
 
 ## Runtime configuration
 
-The application requires PostgreSQL, Redis, Cloud Storage, Vertex AI, and Cloud Tasks. Provision these services and grant the Cloud Run service identity the required access before deployment. The repository does not provision a complete cloud environment.
+The application requires PostgreSQL, Redis, Cloud Storage, Vertex AI, and Cloud Tasks. Provision these services and grant the Cloud Run service identity the required access before deployment.
 
 Configure the service with `NEXT_PUBLIC_SITE_URL`, `GOOGLE_CLOUD_PROJECT`, `GOOGLE_CLOUD_LOCATION`, `GOOGLE_CLOUD_REGION`, and `GCS_DOCUMENT_BUCKET`. Set `DATABASE_URL` or the standard `PGHOST`, `PGPORT`, `PGDATABASE`, `PGUSER`, and `PGPASSWORD` variables for PostgreSQL, and `REDIS_URL` for Redis. Cloud Run can use a Cloud SQL socket path in `PGHOST`.
 
@@ -180,7 +188,7 @@ Document uploads queue extraction work in `vidicy-document-extraction`. `DOCUMEN
 
 ### Schema changes
 
-Generate named PostgreSQL migrations with `pnpm db:generate:agency <name>`. Review the generated SQL and metadata, then apply the schema change to the intended database before deploying code that requires it. Database schema changes are separate from the image release. Apply `0005_review_completion_status` before this release. Existing reviews default to incomplete and require a new review before report delivery or readiness approval; their saved data remains available.
+Generate named PostgreSQL migrations with `pnpm db:generate:agency <name>`. Review the generated SQL and metadata, then apply the schema change to the intended database before deploying code that requires it. Database schema changes are separate from the image release. The review workflow requires `0005_review_completion_status`. Existing reviews default to incomplete and require a new review before report delivery or readiness approval; their saved data remains available.
 
 ## Commands
 
@@ -238,19 +246,17 @@ The [technical reference](apps/agency/README.md) covers architecture, design cho
 | Question                                                               | Reference                                                                                                                                                                     |
 | ---------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | What happens between upload and completed indexing?                    | [System boundaries and sequence](apps/agency/README.md#system-boundaries)                                                                                                     |
-| What is deployed, and what is only configured in source?               | [Observed deployment profile](apps/agency/README.md#observed-deployment-profile)                                                                                              |
 | How do SQL transactions, Redis TTLs, and object generations work here? | [SQL](apps/agency/README.md#cloud-sql-for-postgresql), [Redis](apps/agency/README.md#memorystore-for-redis), [Storage](apps/agency/README.md#cloud-storage)                   |
 | How are duplicate jobs and failed uploads handled?                     | [Task delivery and reconciliation](apps/agency/README.md#cloud-tasks-and-cloud-scheduler)                                                                                     |
 | How does Gen AI turn documents into review findings?                   | [Review pipeline](apps/agency/README.md#review-pipeline), [Gemini](apps/agency/README.md#gemini-on-vertex-ai), [Vector Search](apps/agency/README.md#vertex-ai-vector-search) |
 | Which identity can access which service?                               | [Identity, IAM, and secrets](apps/agency/README.md#identity-iam-and-secrets)                                                                                                  |
 | How is a container built, released, or rolled back?                    | [Release contract](apps/agency/README.md#build-release-and-rollback)                                                                                                          |
 | What do the code and database tests verify?                            | [Code checks and isolated tests](apps/agency/README.md#code-checks-and-isolated-tests)                                                                                        |
-| What should operators measure or investigate?                          | [Monitoring and SLOs](apps/agency/README.md#monitoring-and-service-objectives), [recovery](apps/agency/README.md#recovery-procedures)                                         |
+| How can operators inspect service health and processing state?         | [Monitoring](apps/agency/README.md#monitoring), [recovery](apps/agency/README.md#recovery-procedures)                                                                         |
 | Where does document data go, and how long can it remain?               | [Location and retention](apps/agency/README.md#data-location-and-retention)                                                                                                   |
 | What limits processing capacity and cost?                              | [Capacity and cost controls](apps/agency/README.md#capacity-and-cost-controls)                                                                                                |
-| What is incomplete or still needs an operating decision?               | [Current limits](apps/agency/README.md#current-limits-and-follow-up-work)                                                                                                     |
 
-The documentation distinguishes source behavior, observed service settings, and recommended controls. It does not treat an architecture diagram, a managed service, or a successful container build as proof of measured availability, accuracy, load capacity, or disaster recovery.
+The reference links design decisions to source code, isolated tests, and versioned measurement artifacts.
 
 ## Code map
 
