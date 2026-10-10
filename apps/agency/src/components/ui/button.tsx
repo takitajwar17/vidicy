@@ -5,31 +5,28 @@ import { cva, type VariantProps } from "class-variance-authority";
 import { cn } from "@/lib/utils";
 
 const buttonVariants = cva(
-  "ui-feedback inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-2xl text-sm font-bold tracking-tight ring-offset-background transition-[background-color,color,box-shadow,border-color,transform] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/70 focus-visible:ring-offset-2 disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50 aria-[busy=true]:cursor-wait aria-[busy=true]:opacity-85 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0",
+  "ui-feedback inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-[5px] text-sm font-medium tracking-normal ring-offset-background transition-[background-color,color,border-color,transform] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/70 focus-visible:ring-offset-2 disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50 aria-[busy=true]:cursor-wait aria-[busy=true]:opacity-85 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0",
   {
     variants: {
       variant: {
         default:
-          "bg-primary text-primary-foreground shadow-[var(--shadow-button-primary)] ring-1 ring-primary/10 hover:bg-primary-hover hover:shadow-[var(--shadow-button-primary-hover)] active:bg-primary-strong",
+          "bg-primary text-primary-foreground hover:bg-primary-hover active:bg-primary-strong",
         destructive:
-          "bg-destructive text-destructive-foreground shadow-[var(--shadow-button-destructive)] ring-1 ring-destructive/10 hover:bg-destructive-hover hover:shadow-[var(--shadow-button-destructive-hover)] active:bg-destructive-strong",
-        outline:
-          "border border-primary/10 bg-primary text-primary-foreground shadow-[var(--shadow-button-primary)] ring-1 ring-primary/10 hover:bg-primary-hover hover:shadow-[var(--shadow-button-primary-hover)] active:bg-primary-strong",
-        secondary:
-          "border border-primary/10 bg-primary text-primary-foreground shadow-[var(--shadow-button-primary)] ring-1 ring-primary/10 hover:bg-primary-hover hover:shadow-[var(--shadow-button-primary-hover)] active:bg-primary-strong",
-        ghost:
-          "text-primary hover:bg-primary hover:text-primary-foreground active:bg-primary-strong",
+          "bg-destructive text-destructive-foreground hover:bg-destructive-hover active:bg-destructive-strong",
+        outline: "border border-input bg-card text-foreground hover:bg-muted active:bg-accent",
+        secondary: "bg-muted text-foreground hover:bg-accent active:bg-accent",
+        ghost: "text-foreground hover:bg-muted active:bg-accent",
         link: "text-primary underline-offset-4 hover:underline",
-        hero: "bg-primary text-lg font-bold text-primary-foreground shadow-[var(--shadow-button-primary)] ring-1 ring-primary/10 hover:bg-primary-hover hover:shadow-[var(--shadow-button-primary-hover)] active:bg-primary-strong",
+        hero: "bg-primary text-lg text-primary-foreground hover:bg-primary-hover active:bg-primary-strong",
         "hero-outline":
-          "border border-primary/10 bg-primary text-lg font-bold text-primary-foreground shadow-[var(--shadow-button-primary)] ring-1 ring-primary/10 hover:bg-primary-hover hover:shadow-[var(--shadow-button-primary-hover)] active:bg-primary-strong",
+          "border border-input bg-card text-lg text-foreground hover:bg-muted active:bg-accent",
       },
       size: {
-        default: "h-11 px-5 py-2",
-        sm: "h-10 px-4 text-xs",
-        lg: "h-12 px-8 text-sm",
-        xl: "h-14 px-10 py-4",
-        icon: "h-10 w-10 rounded-xl",
+        default: "h-9 px-4 py-2",
+        sm: "h-8 px-3 text-xs",
+        lg: "h-11 px-6 text-sm",
+        xl: "h-12 px-8 py-3",
+        icon: "h-9 w-9",
       },
     },
     defaultVariants: {

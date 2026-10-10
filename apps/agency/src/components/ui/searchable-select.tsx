@@ -17,6 +17,8 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 type SelectOption = { value: string; label: string };
 
 interface SearchableSelectProps {
+  id?: string;
+  "aria-label"?: string;
   value: string;
   onChange: (value: string) => void;
   options: SelectOption[] | string[];
@@ -28,6 +30,8 @@ interface SearchableSelectProps {
 }
 
 export function SearchableSelect({
+  id,
+  "aria-label": ariaLabel,
   value,
   onChange,
   options,
@@ -49,13 +53,15 @@ export function SearchableSelect({
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
         <button
+          id={id}
+          aria-label={ariaLabel}
           type="button"
           role="combobox"
           aria-expanded={open}
           aria-controls={listboxId}
           disabled={disabled}
           className={cn(
-            "flex h-9 w-full items-center justify-between rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-xs ring-offset-background",
+            "flex h-10 w-full items-center justify-between rounded-[5px] border border-input bg-card px-3 py-2 text-sm ring-offset-background",
             "hover:bg-accent/40 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2",
             "disabled:cursor-not-allowed disabled:opacity-50",
             !selected && "text-muted-foreground",

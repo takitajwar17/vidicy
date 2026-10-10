@@ -126,7 +126,7 @@ export function DataTable<TData extends { id: number | string }, TValue>({
       {hasSelection && bulkActions ? (
         <div className="flex animate-in flex-col gap-2 rounded-xl border border-border/70 bg-muted/45 p-3 shadow-2xs duration-200 slide-in-from-top-2 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex shrink-0 items-center gap-2">
-            <Badge variant="secondary" className="h-5 rounded-full px-2 py-0.5 text-xs">
+            <Badge variant="secondary" className="h-5 rounded-[4px] px-2 py-0.5 text-xs">
               {selectedIds.length} selected
             </Badge>
             <Button
