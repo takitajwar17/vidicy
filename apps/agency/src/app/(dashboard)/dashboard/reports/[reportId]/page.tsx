@@ -4,7 +4,11 @@ import { notFound } from "next/navigation";
 import { getClientReport } from "@/server/client-reports";
 import { requireVerifiedPageSession } from "@/utils/auth-page";
 import { ClientReportControls } from "@/components/agency/client-report-controls";
-import { CLIENT_REPORT_DELIVERY_STATUS_META, getDisplayCaseNumber } from "@/lib/agency-workflow";
+import {
+  CLIENT_REPORT_DELIVERY_STATUS_META,
+  CLIENT_REPORT_REVIEW_NOTE,
+  getDisplayCaseNumber,
+} from "@/lib/agency-workflow";
 import { getCsrfToken } from "@/infra/csrf";
 import { PageHeader } from "@/components/page-header";
 import { formatShortDate } from "@/components/agency/agency-ui";
@@ -102,10 +106,7 @@ export default async function ClientReportPage({
             </li>
           ))}
         </ol>
-        <p className="text-sm text-muted-foreground">
-          This report supports document preparation. It does not guarantee a visa decision. Send
-          corrections to your agency reviewer.
-        </p>
+        <p className="text-sm text-muted-foreground">{CLIENT_REPORT_REVIEW_NOTE}</p>
         {!recipient ? <p>Add a valid client email address before sending this report.</p> : null}
         <CsrfProvider token={await getCsrfToken()}>
           <ClientReportControls

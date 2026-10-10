@@ -158,14 +158,14 @@ export const faqSections = [
           "Only authorized agency users should see client files. Admins manage staff access, and reviewer roles can be set during rollout.",
       },
       {
-        question: "Is Vidicy legal advice?",
+        question: "How does Vidicy support agency reviewers?",
         answer:
-          "No. Vidicy is review workflow software. It does not replace licensed immigration advice, agency judgment, or official government instructions.",
+          "Vidicy organizes document checks, evidence, and corrections in one review workflow. Agency staff use the findings alongside official requirements and their professional judgment.",
       },
       {
-        question: "Do you guarantee visa approval?",
+        question: "Who makes the final visa decision?",
         answer:
-          "No. Government authorities make final visa decisions. Vidicy helps agencies reduce preventable mistakes and improve review consistency, but it cannot guarantee outcomes.",
+          "Government authorities make final visa decisions. Vidicy helps agencies check documents, track corrections, and prepare the case for submission.",
       },
       {
         question: "Where can we review subprocessors?",

@@ -14,6 +14,7 @@ import {
 import { requireAgencyStaff } from "@/server/agency-team";
 import { newestEvaluationOrder, requireCurrentAgencyReview } from "@/server/agency-review";
 import { createClientReportEmailRequest, sendClientReportEmail } from "@/utils/email";
+import { CLIENT_REPORT_REVIEW_NOTE } from "@/lib/agency-workflow";
 
 const RETRY_DELAY_MS = 2 * 60_000;
 // Resend retains idempotency keys for 24 hours. Stop earlier to avoid an
@@ -178,8 +179,7 @@ export async function deliverClientReport({ reportId }: { reportId: string }) {
         item.detail,
         "",
       ]),
-      "Please send these corrections to your agency reviewer.",
-      "This report supports document preparation. It does not guarantee a visa decision.",
+      CLIENT_REPORT_REVIEW_NOTE,
     ].join("\n"),
   };
   const request = report.deliveryRequest ?? createClientReportEmailRequest(payload);

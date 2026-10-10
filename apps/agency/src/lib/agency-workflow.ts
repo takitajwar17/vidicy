@@ -112,6 +112,9 @@ export const CLIENT_REPORT_STATUS_META = {
   [CLIENT_REPORT_STATUS.SENT]: { label: "Sent" },
 } as const;
 
+export const CLIENT_REPORT_REVIEW_NOTE =
+  "Review these document corrections with your agency. Government authorities make final visa decisions.";
+
 export const CLIENT_REPORT_DELIVERY_STATUS_META = {
   [CLIENT_REPORT_DELIVERY_STATUS.DRAFT]: { label: "Draft" },
   [CLIENT_REPORT_DELIVERY_STATUS.READY]: { label: "Ready" },
