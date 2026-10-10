@@ -147,7 +147,7 @@ export function PdfCanvasPreview({
             aria-label="Previous page"
             disabled={pageNumber <= 1}
             onClick={() => setPageNumber((value) => value - 1)}
-            className="rounded p-1.5 hover:bg-white disabled:opacity-30"
+            className="rounded p-1.5 hover:bg-card disabled:opacity-30"
           >
             <ChevronLeftIcon className="size-4" />
           </button>
@@ -159,7 +159,7 @@ export function PdfCanvasPreview({
             aria-label="Next page"
             disabled={pageNumber >= pageCount}
             onClick={() => setPageNumber((value) => value + 1)}
-            className="rounded p-1.5 hover:bg-white disabled:opacity-30"
+            className="rounded p-1.5 hover:bg-card disabled:opacity-30"
           >
             <ChevronRightIcon className="size-4" />
           </button>
@@ -169,7 +169,7 @@ export function PdfCanvasPreview({
             aria-label="Zoom out"
             disabled={zoom <= 0.5}
             onClick={() => setZoom((value) => Math.max(0.5, value - 0.25))}
-            className="rounded p-1.5 hover:bg-white disabled:opacity-30"
+            className="rounded p-1.5 hover:bg-card disabled:opacity-30"
           >
             <MinusIcon className="size-4" />
           </button>
@@ -177,7 +177,7 @@ export function PdfCanvasPreview({
             type="button"
             aria-label="Fit to width"
             onClick={() => setZoom(1)}
-            className="min-w-12 rounded px-1 py-1.5 hover:bg-white"
+            className="min-w-12 rounded px-1 py-1.5 hover:bg-card"
           >
             {Math.round(zoom * 100)}%
           </button>
@@ -186,7 +186,7 @@ export function PdfCanvasPreview({
             aria-label="Zoom in"
             disabled={zoom >= 2}
             onClick={() => setZoom((value) => Math.min(2, value + 0.25))}
-            className="rounded p-1.5 hover:bg-white disabled:opacity-30"
+            className="rounded p-1.5 hover:bg-card disabled:opacity-30"
           >
             <PlusIcon className="size-4" />
           </button>
@@ -194,7 +194,7 @@ export function PdfCanvasPreview({
             type="button"
             aria-label="Rotate page"
             onClick={() => setRotation((value) => (value + 90) % 360)}
-            className="rounded p-1.5 hover:bg-white"
+            className="rounded p-1.5 hover:bg-card"
           >
             <RotateCwIcon className="size-4" />
           </button>

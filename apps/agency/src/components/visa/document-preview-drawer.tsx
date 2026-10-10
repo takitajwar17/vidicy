@@ -102,7 +102,7 @@ export function DocumentPreviewDrawer({
           type="button"
           variant="outline"
           size="sm"
-          className="h-8 rounded-lg px-3 text-xs font-bold"
+          className="h-8 rounded-[5px] px-3 text-xs font-bold"
           onClick={() => setOpen(true)}
           aria-label={`Preview document: ${fileName}`}
         >

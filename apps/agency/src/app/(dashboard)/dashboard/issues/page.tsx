@@ -67,10 +67,11 @@ export default async function IssuesPage({
       <AgencyFilterCard>
         <form className="grid gap-3 lg:grid-cols-[minmax(280px,1fr)_180px_180px]">
           <Input
+            aria-label="Search issues"
             name="q"
             defaultValue={query}
             placeholder="Search issues, applicants, cases..."
-            className="h-11 rounded-xl bg-card"
+            className="h-11 rounded-md bg-card"
           />
           <Button type="submit" variant="outline" className="h-11">
             Apply filters

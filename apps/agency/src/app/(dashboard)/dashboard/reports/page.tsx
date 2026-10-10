@@ -68,10 +68,11 @@ export default async function ReportsPage({
       <AgencyFilterCard>
         <form className="grid gap-3 lg:grid-cols-[minmax(280px,1fr)_180px_180px]">
           <Input
+            aria-label="Search reports"
             name="q"
             defaultValue={query}
             placeholder="Search reports, clients, applicants..."
-            className="h-11 rounded-xl bg-card"
+            className="h-11 rounded-md bg-card"
           />
           <Button type="submit" variant="outline" className="h-11">
             Apply filters
@@ -131,7 +132,7 @@ export default async function ReportsPage({
                     </TableCell>
                     <TableCell>{caseRow?.application.clientName ?? "—"}</TableCell>
                     <TableCell>
-                      <Badge variant="outline" className="rounded-full text-2xs font-bold">
+                      <Badge variant="outline" className="rounded-[4px] text-2xs font-bold">
                         {report.isStale
                           ? "Out of date"
                           : (CLIENT_REPORT_DELIVERY_STATUS_META[
@@ -168,7 +169,7 @@ export default async function ReportsPage({
           </AgencyTableCard>
 
           {data.casesWithoutReports.length > 0 ? (
-            <Card className="rounded-xl shadow-[var(--shadow-dashboard)]">
+            <Card className="rounded-md">
               <CardHeader>
                 <CardTitle className="text-base">Cases still missing a client list</CardTitle>
               </CardHeader>
@@ -177,7 +178,7 @@ export default async function ReportsPage({
                   <Link
                     key={row.application.id}
                     href={`/dashboard/${row.application.id}` as Route}
-                    className="grid gap-3 rounded-xl border border-border/80 bg-card p-3 hover:bg-muted/40 md:grid-cols-[180px_1fr_auto]"
+                    className="grid gap-3 rounded-md border border-border bg-card p-3 hover:bg-muted/40 md:grid-cols-[180px_1fr_auto]"
                   >
                     <span className="font-bold text-primary">
                       {getDisplayCaseNumber(row.application.caseNumber, row.application.id)}

@@ -42,7 +42,7 @@ export function SessionsClient({ sessions }: { sessions: SessionWithMeta[] }) {
         <Card
           key={session.id}
           className={cn(
-            "overflow-hidden rounded-xl border-border/80 shadow-[var(--shadow-dashboard)] transition-colors",
+            "overflow-hidden rounded-md border-border transition-colors",
             session.isCurrentSession && "border-primary/25 bg-primary/[0.04]",
           )}
         >

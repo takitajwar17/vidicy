@@ -42,11 +42,7 @@ export function ChecklistGenerator({
           application details.
         </p>
       </div>
-      <Button
-        onClick={handleGenerate}
-        disabled={loading}
-        className="gap-2 shadow-lg hover:shadow-primary/10 transition-all hover:-translate-y-0.5"
-      >
+      <Button onClick={handleGenerate} disabled={loading} className="gap-2">
         {loading ? (
           <>
             <Loader2Icon className="h-4 w-4 animate-spin" />

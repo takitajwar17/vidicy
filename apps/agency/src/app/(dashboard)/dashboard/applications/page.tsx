@@ -1,3 +1,4 @@
+import { NativeSelect } from "@/components/ui/native-select";
 import type { Metadata } from "next";
 import Link from "next/link";
 import type { Route } from "next";
@@ -111,15 +112,17 @@ export default async function ApplicationsPage({
         <div className="grid gap-3 lg:grid-cols-[minmax(280px,1fr)_180px_180px_180px]">
           <form className="contents">
             <Input
+              aria-label="Search applications"
               name="q"
               defaultValue={query}
               placeholder="Search cases, clients, applicants..."
-              className="h-11 rounded-xl bg-card"
+              className="h-11 rounded-md bg-card"
             />
-            <select
+            <NativeSelect
+              aria-label="Case status"
               name="status"
               defaultValue={status}
-              className="h-11 rounded-xl border border-input bg-card px-3 text-sm font-medium"
+              className="h-11 rounded-md border border-input bg-card px-3 text-sm font-medium"
             >
               <option value="">All statuses</option>
               {AGENCY_CASE_STATUS_OPTIONS.map((status) => (
@@ -127,7 +130,7 @@ export default async function ApplicationsPage({
                   {CASE_STATUS_META[status].label}
                 </option>
               ))}
-            </select>
+            </NativeSelect>
             <Button type="submit" variant="outline" className="h-11">
               Apply filters
             </Button>

@@ -52,7 +52,7 @@ export default async function TeamPage() {
       description="Who can enter the review desk and who owns each client file."
     >
       <section>
-        <Card className="overflow-hidden rounded-xl border-border/80 shadow-[var(--shadow-dashboard)]">
+        <Card className="overflow-hidden rounded-md border-border">
           <CardHeader className="flex flex-col gap-4 border-b border-border/70 bg-muted/20 sm:flex-row sm:items-start sm:justify-between">
             <div>
               <CardTitle className="text-base">Team capacity</CardTitle>
@@ -63,7 +63,7 @@ export default async function TeamPage() {
             {isAdmin ? (
               <AddStaffDialog />
             ) : (
-              <Badge variant="outline" className="w-fit rounded-full px-3 py-1 text-2xs font-bold">
+              <Badge variant="outline" className="w-fit rounded-[4px] px-3 py-1 text-2xs font-bold">
                 Admins manage staff
               </Badge>
             )}
@@ -94,10 +94,10 @@ export default async function TeamPage() {
         description="Assigned cases, client waits, ready files, and open issues by reviewer."
         actions={
           <>
-            <Badge variant="outline" className="rounded-full px-3 py-1 text-2xs font-bold">
+            <Badge variant="outline" className="rounded-[4px] px-3 py-1 text-2xs font-bold">
               {memberCount} members
             </Badge>
-            <Badge variant="outline" className="rounded-full px-3 py-1 text-2xs font-bold">
+            <Badge variant="outline" className="rounded-[4px] px-3 py-1 text-2xs font-bold">
               {totalActiveCases} active cases
             </Badge>
           </>
@@ -131,7 +131,7 @@ export default async function TeamPage() {
                     <Badge
                       variant="outline"
                       className={cn(
-                        "rounded-full px-2.5 py-1 text-2xs font-bold",
+                        "rounded-[4px] px-2.5 py-1 text-2xs font-bold",
                         row.staff?.role === AGENCY_STAFF_ROLE.ADMIN &&
                           "border-primary/25 bg-primary/[0.08] text-primary",
                       )}

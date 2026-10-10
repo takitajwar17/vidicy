@@ -12,7 +12,7 @@ import ThemeSwitch from "@/components/theme-switch";
 import { AccountDetailsCard } from "@/components/settings/account-details-card";
 import { DangerZoneCard } from "@/components/settings/danger-zone-card";
 
-const SETTINGS_CARD_CLASS = "rounded-xl border-border/80 shadow-[var(--shadow-dashboard)]";
+const SETTINGS_CARD_CLASS = "rounded-md border-border";
 
 function SettingsFormSkeleton() {
   return (
@@ -75,7 +75,7 @@ export default async function SettingsPage() {
   return (
     <div className="flex flex-col gap-4 md:gap-6">
       <div className="space-y-1">
-        <h1 className="text-2xl font-bold tracking-tight text-foreground md:text-3xl">Profile</h1>
+        <h1 className="text-2xl font-bold tracking-tight text-foreground">Profile</h1>
         <p className="max-w-3xl text-sm text-muted-foreground">
           Your profile, sign-in details, device preferences, and account controls.
         </p>

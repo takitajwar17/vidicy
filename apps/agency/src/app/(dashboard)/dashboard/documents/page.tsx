@@ -67,10 +67,11 @@ export default async function DocumentsPage({
       <AgencyFilterCard>
         <form className="grid gap-3 lg:grid-cols-[minmax(280px,1fr)_180px_180px]">
           <Input
+            aria-label="Search documents"
             name="q"
             defaultValue={query}
             placeholder="Search files, applicants, clients..."
-            className="h-11 rounded-xl bg-card"
+            className="h-11 rounded-md bg-card"
           />
           <Button type="submit" variant="outline" className="h-11">
             Apply filters

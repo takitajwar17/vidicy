@@ -31,9 +31,7 @@ export function AgencyPageShell({
       >
         <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
           <div className="min-w-0 space-y-1">
-            <h1 className="text-2xl font-bold tracking-tight text-foreground md:text-3xl">
-              {title}
-            </h1>
+            <h1 className="text-2xl font-bold tracking-tight text-foreground">{title}</h1>
             {description ? (
               <p className="max-w-3xl text-sm text-muted-foreground">{description}</p>
             ) : null}

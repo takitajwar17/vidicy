@@ -3,6 +3,8 @@
 import * as React from "react";
 import { LucideIcon } from "lucide-react";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
+import { getActiveNavigationUrl } from "@/lib/navigation";
 import type { Route } from "next";
 import {
   SidebarGroup,
@@ -28,6 +30,7 @@ export function NavSecondary({
   label?: string;
 } & React.ComponentPropsWithoutRef<typeof SidebarGroup>) {
   const { setOpenMobile } = useSidebar();
+  const activeUrl = getActiveNavigationUrl({ pathname: usePathname(), items });
 
   return (
     <SidebarGroup {...props}>
@@ -40,8 +43,16 @@ export function NavSecondary({
         <SidebarMenu className="space-y-1">
           {items.map((item) => (
             <SidebarMenuItem key={item.title}>
-              <SidebarMenuButton asChild className="rounded-lg px-2.5">
-                <Link href={item.url as Route} onClick={() => setOpenMobile(false)}>
+              <SidebarMenuButton
+                asChild
+                className="rounded-[5px] px-2.5"
+                isActive={activeUrl === item.url}
+              >
+                <Link
+                  href={item.url as Route}
+                  aria-current={activeUrl === item.url ? "page" : undefined}
+                  onClick={() => setOpenMobile(false)}
+                >
                   <item.icon />
                   <span>{item.title}</span>
                   {item.badge ? (

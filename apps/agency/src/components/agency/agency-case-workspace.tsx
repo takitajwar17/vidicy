@@ -1,5 +1,7 @@
 "use client";
 
+import { NativeSelect } from "@/components/ui/native-select";
+
 import type { ReactNode } from "react";
 import { parseAsString, parseAsStringLiteral, useQueryStates } from "nuqs";
 import {
@@ -178,7 +180,7 @@ export function AgencyCaseWorkspace({
             </div>
             <label className={styles.statusFilter}>
               Show
-              <select
+              <NativeSelect
                 aria-label="Filter issue status"
                 value={view.status}
                 onChange={(event) =>
@@ -193,7 +195,7 @@ export function AgencyCaseWorkspace({
                 <option value="all">All issues</option>
                 <option value="resolved">Resolved</option>
                 <option value="dismissed">Dismissed</option>
-              </select>
+              </NativeSelect>
             </label>
             <div className={styles.tableScroll}>
               <table className={styles.table} aria-label="Review issues">

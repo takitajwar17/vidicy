@@ -35,7 +35,15 @@ vi.mock("@/server/agency-data", () => ({
 }));
 
 vi.mock("@/components/page-header", () => ({
-  PageHeader: () => null,
+  PageHeader: ({ items }: { items: { href: string; label: string }[] }) => (
+    <header>
+      {items.map((item) => (
+        <a key={item.href} href={item.href}>
+          {item.label}
+        </a>
+      ))}
+    </header>
+  ),
 }));
 
 vi.mock("@/components/ui/sidebar", () => ({

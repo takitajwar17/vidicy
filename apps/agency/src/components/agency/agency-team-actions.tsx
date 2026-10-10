@@ -99,6 +99,7 @@ function AddStaffForm({
           Work email
         </Label>
         <Input
+          aria-label="reviewer@agency.com"
           className="h-10"
           value={email}
           onChange={(event) => setEmail(event.target.value)}

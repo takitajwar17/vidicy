@@ -32,7 +32,7 @@ import { ChecklistGenerator } from "@/components/visa/checklist-generator";
 import { DocumentUpload } from "@/components/visa/document-upload";
 import { EvaluationTrigger } from "@/components/visa/evaluation-trigger";
 import { Progress } from "@/components/ui/progress";
-import { SidebarTrigger } from "@/components/ui/sidebar";
+import { PageHeader } from "@/components/page-header";
 import { CHECKLIST_ITEM_STATUS } from "@/db/schema";
 import {
   formatAgencyVisaLabel,
@@ -121,21 +121,20 @@ export async function AgencyCaseContent({ appId }: { appId: string }) {
 
   return (
     <div className={styles.workspace} aria-label="Application review workspace">
+      <PageHeader
+        items={[
+          { href: "/dashboard", label: "Dashboard" },
+          { href: "/dashboard/applications", label: "Applications" },
+          { href: `/dashboard/${app.id}`, label: `Case ${caseNumber}` },
+        ]}
+      />
       <header className={styles.header}>
         <div className={styles.headerTop}>
-          <div className="min-w-0">
-            <div className={styles.caseNumber}>
-              <SidebarTrigger className="size-7" />
-              <Link href="/dashboard/applications" className="hover:text-primary">
-                Applications
-              </Link>
-              <span>/</span>
-              <span>Case {caseNumber}</span>
-              <AgencyCaseStatusSelect applicationId={app.id} status={app.agencyStatus} />
-            </div>
+          <div className="flex min-w-0 flex-wrap items-center gap-3">
             <h1 className={styles.title}>
               {primaryApplicant?.name || app.clientName || `Case ${caseNumber}`}
             </h1>
+            <AgencyCaseStatusSelect applicationId={app.id} status={app.agencyStatus} />
           </div>
           <div className={styles.dates}>
             <p>Created {formatShortDate(app.createdAt)}</p>
@@ -405,7 +404,6 @@ export async function AgencyCaseContent({ appId }: { appId: string }) {
                 applicantId={primaryApplicant.id}
                 hasDocuments={hasDocuments}
                 rerun={hasEvaluation || data.isReviewStale}
-                className={styles.secondaryButton}
               />
             </Suspense>
           ) : null}

@@ -46,7 +46,7 @@ export function CaseStatusBadge({ status, className }: { status: string; classNa
     <Badge
       variant="outline"
       className={cn(
-        "rounded-full px-2.5 py-1 text-2xs font-bold",
+        "rounded-[4px] px-2 py-0.5 text-2xs font-medium",
         getStatusBadgeClass(status),
         className,
       )}
@@ -81,7 +81,7 @@ export function RiskBadge({
     <Badge
       variant="outline"
       className={cn(
-        "rounded-full px-2.5 py-1 text-2xs font-bold",
+        "rounded-[4px] px-2 py-0.5 text-2xs font-medium",
         getRiskBadgeClass(riskLevel),
         className,
       )}
@@ -98,7 +98,7 @@ export function IssueSeverityBadge({ severity }: { severity: string }) {
   return (
     <Badge
       variant="outline"
-      className={cn("rounded-full px-2.5 py-1 text-2xs font-bold", meta?.badgeClassName)}
+      className={cn("rounded-[4px] px-2 py-0.5 text-2xs font-medium", meta?.badgeClassName)}
     >
       {meta?.label ?? severity}
     </Badge>
@@ -177,7 +177,7 @@ export function MetricCard({
   }[tone];
 
   return (
-    <Card className="rounded-xl shadow-[var(--shadow-dashboard)]">
+    <Card className="rounded-md">
       <CardContent className="flex items-center gap-4 p-5">
         <span
           className={cn(
@@ -211,14 +211,9 @@ export function AgencyTableCard({
   className?: string;
 }) {
   return (
-    <Card
-      className={cn(
-        "overflow-hidden rounded-xl border-border/80 shadow-[var(--shadow-dashboard)]",
-        className,
-      )}
-    >
+    <Card className={cn("overflow-hidden rounded-md border-border", className)}>
       {title || description || actions ? (
-        <CardHeader className="flex flex-col gap-3 border-b border-border/70 bg-muted/20 sm:flex-row sm:items-center sm:justify-between">
+        <CardHeader className="flex flex-col gap-3 border-b border-border bg-[var(--surface-header)] sm:flex-row sm:items-center sm:justify-between">
           <div className="min-w-0">
             {title ? <CardTitle className="text-base">{title}</CardTitle> : null}
             {description ? (
@@ -241,7 +236,7 @@ export function AgencyFilterCard({
   className?: string;
 }) {
   return (
-    <Card className={cn("rounded-xl border-border/80 shadow-[var(--shadow-dashboard)]", className)}>
+    <Card className={cn("rounded-md border-border", className)}>
       <CardContent className="p-4">{children}</CardContent>
     </Card>
   );
@@ -312,16 +307,13 @@ export function EmptyState({
   actionLabel?: string;
 }) {
   return (
-    <div className="flex min-h-[280px] flex-col items-center justify-center rounded-xl border border-dashed border-border bg-card px-6 py-12 text-center">
+    <div className="flex min-h-[280px] flex-col items-center justify-center rounded-md border border-dashed border-border bg-card px-6 py-12 text-center">
       <h2 className="text-lg font-bold tracking-tight">{title}</h2>
       <p className="mt-2 max-w-md text-sm text-muted-foreground">{description}</p>
       {href && actionLabel ? (
-        <Link
-          href={href as Route}
-          className="mt-5 inline-flex h-11 items-center justify-center rounded-2xl bg-primary px-5 text-sm font-bold text-primary-foreground shadow-[var(--shadow-button-primary)] hover:bg-primary-hover"
-        >
-          {actionLabel}
-        </Link>
+        <Button asChild className="mt-5">
+          <Link href={href as Route}>{actionLabel}</Link>
+        </Button>
       ) : null}
     </div>
   );

@@ -105,7 +105,12 @@ function Field({
 }) {
   return (
     <div className={cn("space-y-2", className)}>
-      <Label className="text-xs font-bold text-muted-foreground">{label}</Label>
+      <Label
+        htmlFor={`intake-${label.toLowerCase().replaceAll(" ", "-")}`}
+        className="text-xs font-bold text-muted-foreground"
+      >
+        {label}
+      </Label>
       {children}
     </div>
   );
@@ -231,13 +236,14 @@ export function NewApplicationClient({ staff }: NewApplicationClientProps) {
     >
       <form onSubmit={handleSubmit} className="grid gap-4 xl:grid-cols-[1fr_360px]">
         <div className="space-y-4">
-          <Card className="rounded-xl shadow-[var(--shadow-dashboard)]">
+          <Card className="rounded-md">
             <CardHeader>
               <CardTitle className="text-base">Who sent the file</CardTitle>
             </CardHeader>
             <CardContent className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
               <Field label="Client name">
                 <Input
+                  id="intake-client-name"
                   value={form.clientName}
                   onChange={(event) => update("clientName", event.target.value)}
                   placeholder="Global Visa Co."
@@ -245,6 +251,7 @@ export function NewApplicationClient({ staff }: NewApplicationClientProps) {
               </Field>
               <Field label="Client email">
                 <Input
+                  id="intake-client-email"
                   type="email"
                   value={form.clientEmail}
                   onChange={(event) => update("clientEmail", event.target.value)}
@@ -253,6 +260,7 @@ export function NewApplicationClient({ staff }: NewApplicationClientProps) {
               </Field>
               <Field label="Client phone">
                 <Input
+                  id="intake-client-phone"
                   value={form.clientPhone}
                   onChange={(event) => update("clientPhone", event.target.value)}
                   placeholder="+1 555 0100"
@@ -260,6 +268,7 @@ export function NewApplicationClient({ staff }: NewApplicationClientProps) {
               </Field>
               <Field label="Applicant name">
                 <Input
+                  id="intake-applicant-name"
                   value={form.applicantName}
                   onChange={(event) => update("applicantName", event.target.value)}
                   placeholder="Rahul Mehta"
@@ -267,6 +276,7 @@ export function NewApplicationClient({ staff }: NewApplicationClientProps) {
               </Field>
               <Field label="Applicant email">
                 <Input
+                  id="intake-applicant-email"
                   type="email"
                   value={form.applicantEmail}
                   onChange={(event) => update("applicantEmail", event.target.value)}
@@ -275,63 +285,69 @@ export function NewApplicationClient({ staff }: NewApplicationClientProps) {
               </Field>
               <Field label="Passport country">
                 <SearchableSelect
+                  id="intake-passport-country"
                   value={form.homeCountry}
                   onChange={(value) => update("homeCountry", value)}
                   options={COUNTRIES}
                   placeholder="Select country"
-                  triggerClassName="h-10 rounded-lg bg-background/95"
+                  triggerClassName="h-10"
                 />
               </Field>
             </CardContent>
           </Card>
 
-          <Card className="rounded-xl shadow-[var(--shadow-dashboard)]">
+          <Card className="rounded-md">
             <CardHeader>
               <CardTitle className="text-base">Route and reviewer</CardTitle>
             </CardHeader>
             <CardContent className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
               <Field label="Applying from">
                 <SearchableSelect
+                  id="intake-applying-from"
                   value={form.currentCountry}
                   onChange={updateCurrentCountry}
                   options={COUNTRIES}
                   placeholder="Select country"
-                  triggerClassName="h-10 rounded-lg bg-background/95"
+                  triggerClassName="h-10"
                 />
               </Field>
               <Field label="Destination">
                 <SearchableSelect
+                  id="intake-destination"
                   value={form.destinationCountry}
                   onChange={updateDestination}
                   options={DESTINATION_COUNTRIES}
                   placeholder="Select destination"
-                  triggerClassName="h-10 rounded-lg bg-background/95"
+                  triggerClassName="h-10"
                 />
               </Field>
               <Field label="Visa type">
                 <SearchableSelect
+                  id="intake-visa-type"
                   value={form.visaType}
                   onChange={(value) => update("visaType", value)}
                   options={visaTypes}
                   placeholder="Select visa type"
                   disabled={!form.destinationCountry}
-                  triggerClassName="h-10 rounded-lg bg-background/95"
+                  triggerClassName="h-10"
                 />
               </Field>
               {embassyList ? (
                 <Field label="Submission post">
                   <SearchableSelect
+                    id="intake-submission-post"
                     value={form.embassy}
                     onChange={(value) => update("embassy", value)}
                     options={embassyList}
                     placeholder="Select embassy or consulate"
                     disabled={!form.destinationCountry || !form.currentCountry}
-                    triggerClassName="h-10 rounded-lg bg-background/95"
+                    triggerClassName="h-10"
                   />
                 </Field>
               ) : (
                 <Field label="Submission post">
                   <Input
+                    id="intake-submission-post"
                     value={form.customEmbassy}
                     onChange={(event) => update("customEmbassy", event.target.value)}
                     placeholder="Embassy or consulate"
@@ -341,7 +357,7 @@ export function NewApplicationClient({ staff }: NewApplicationClientProps) {
               )}
               <Field label="Priority">
                 <Select value={form.priority} onValueChange={(value) => update("priority", value)}>
-                  <SelectTrigger>
+                  <SelectTrigger id="intake-priority">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -360,7 +376,7 @@ export function NewApplicationClient({ staff }: NewApplicationClientProps) {
                     update("assignedReviewerId", value === "unassigned" ? "" : value)
                   }
                 >
-                  <SelectTrigger>
+                  <SelectTrigger id="intake-reviewer">
                     <SelectValue placeholder="Assign reviewer" />
                   </SelectTrigger>
                   <SelectContent>
@@ -376,19 +392,26 @@ export function NewApplicationClient({ staff }: NewApplicationClientProps) {
             </CardContent>
           </Card>
 
-          <Card className="rounded-xl shadow-[var(--shadow-dashboard)]">
+          <Card className="rounded-md">
             <CardHeader>
               <CardTitle className="text-base">Prior visa history</CardTitle>
             </CardHeader>
             <CardContent className="grid gap-5 xl:grid-cols-2">
-              <div className="space-y-4 rounded-xl border border-border/70 bg-muted/30 p-4">
+              <div className="space-y-4 rounded-md border border-border/70 bg-muted/30 p-4">
                 <div className="flex items-center justify-between gap-4">
-                  <Label className="text-sm font-bold">Previously approved</Label>
-                  <Switch checked={form.approvedBefore} onCheckedChange={updateApprovedBefore} />
+                  <Label htmlFor="approved-before" className="text-sm font-bold">
+                    Previously approved
+                  </Label>
+                  <Switch
+                    id="approved-before"
+                    checked={form.approvedBefore}
+                    onCheckedChange={updateApprovedBefore}
+                  />
                 </div>
                 {form.approvedBefore ? (
                   <div className="grid gap-3 sm:grid-cols-2">
                     <Input
+                      aria-label="Previously approved visa type"
                       value={form.approvedVisaType}
                       onChange={(event) => update("approvedVisaType", event.target.value)}
                       placeholder="Visa type"
@@ -397,7 +420,7 @@ export function NewApplicationClient({ staff }: NewApplicationClientProps) {
                       value={form.approvedYear}
                       onValueChange={(value) => update("approvedYear", value)}
                     >
-                      <SelectTrigger>
+                      <SelectTrigger aria-label="Previously approved year">
                         <SelectValue placeholder="Year" />
                       </SelectTrigger>
                       <SelectContent>
@@ -411,15 +434,22 @@ export function NewApplicationClient({ staff }: NewApplicationClientProps) {
                   </div>
                 ) : null}
               </div>
-              <div className="space-y-4 rounded-xl border border-border/70 bg-muted/30 p-4">
+              <div className="space-y-4 rounded-md border border-border/70 bg-muted/30 p-4">
                 <div className="flex items-center justify-between gap-4">
-                  <Label className="text-sm font-bold">Previously refused</Label>
-                  <Switch checked={form.rejectedBefore} onCheckedChange={updateRejectedBefore} />
+                  <Label htmlFor="rejected-before" className="text-sm font-bold">
+                    Previously refused
+                  </Label>
+                  <Switch
+                    id="rejected-before"
+                    checked={form.rejectedBefore}
+                    onCheckedChange={updateRejectedBefore}
+                  />
                 </div>
                 {form.rejectedBefore ? (
                   <div className="grid gap-3">
                     <div className="grid gap-3 sm:grid-cols-2">
                       <Input
+                        aria-label="Previously refused visa type"
                         value={form.rejectedVisaType}
                         onChange={(event) => update("rejectedVisaType", event.target.value)}
                         placeholder="Visa type"
@@ -428,7 +458,7 @@ export function NewApplicationClient({ staff }: NewApplicationClientProps) {
                         value={form.rejectedYear}
                         onValueChange={(value) => update("rejectedYear", value)}
                       >
-                        <SelectTrigger>
+                        <SelectTrigger aria-label="Previously refused year">
                           <SelectValue placeholder="Year" />
                         </SelectTrigger>
                         <SelectContent>
@@ -441,6 +471,7 @@ export function NewApplicationClient({ staff }: NewApplicationClientProps) {
                       </Select>
                     </div>
                     <Textarea
+                      aria-label="Refusal reason"
                       value={form.rejectedReason}
                       onChange={(event) => update("rejectedReason", event.target.value)}
                       placeholder="Refusal reason, refusal letter note, or reviewer context"
@@ -453,7 +484,7 @@ export function NewApplicationClient({ staff }: NewApplicationClientProps) {
         </div>
 
         <aside className="space-y-4">
-          <Card className="sticky top-20 rounded-xl shadow-[var(--shadow-dashboard)]">
+          <Card className="sticky top-20 rounded-md">
             <CardHeader>
               <CardTitle className="text-base">Dates for the queue</CardTitle>
             </CardHeader>
@@ -462,6 +493,7 @@ export function NewApplicationClient({ staff }: NewApplicationClientProps) {
                 <div className="relative">
                   <CalendarIcon className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                   <Input
+                    id="intake-received-date"
                     type="date"
                     value={form.submittedAt}
                     onChange={(event) => update("submittedAt", event.target.value)}
@@ -473,6 +505,7 @@ export function NewApplicationClient({ staff }: NewApplicationClientProps) {
                 <div className="relative">
                   <CalendarIcon className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                   <Input
+                    id="intake-internal-due-date"
                     type="date"
                     value={form.dueAt}
                     onChange={(event) => update("dueAt", event.target.value)}
@@ -480,7 +513,7 @@ export function NewApplicationClient({ staff }: NewApplicationClientProps) {
                   />
                 </div>
               </Field>
-              <div className="rounded-xl border border-border/70 bg-muted/35 p-4 text-sm text-muted-foreground">
+              <div className="rounded-md border border-border/70 bg-muted/35 p-4 text-sm text-muted-foreground">
                 <p className="font-semibold text-foreground">Starts in intake</p>
                 <p className="mt-1">
                   Every active staff member can see the case. The assigned reviewer owns the file

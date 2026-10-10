@@ -70,7 +70,7 @@ export function DangerZoneCard() {
   }
 
   return (
-    <Card className="rounded-xl border-destructive/50 shadow-[var(--shadow-dashboard)]">
+    <Card className="rounded-md border-destructive/50">
       <CardHeader>
         <CardTitle className="text-destructive">Danger Zone</CardTitle>
         <CardDescription>
@@ -136,6 +136,7 @@ export function DangerZoneCard() {
                 </AlertDialogDescription>
               </AlertDialogHeader>
               <Input
+                aria-label="DELETE MY ACCOUNT"
                 value={confirmText}
                 onChange={(e) => setConfirmText(e.target.value)}
                 placeholder="DELETE MY ACCOUNT"

@@ -1,5 +1,7 @@
 "use client";
 
+import { NativeSelect } from "@/components/ui/native-select";
+
 import { useEffect, useState } from "react";
 import { AlertCircleIcon, DownloadIcon, FileTextIcon, Loader2Icon } from "lucide-react";
 import { DocumentUpload } from "@/components/visa/document-upload";
@@ -66,7 +68,7 @@ export function AgencyCaseDocumentDesk({
     <section className={styles.evidence} aria-label="Supporting evidence">
       <div className={styles.evidenceHeading}>
         <h2>Evidence</h2>
-        <select
+        <NativeSelect
           aria-label="Select evidence document"
           value={document?.id ?? ""}
           onChange={(event) => onSelectDocument(event.target.value)}
@@ -79,7 +81,7 @@ export function AgencyCaseDocumentDesk({
               {file.fileName}
             </option>
           ))}
-        </select>
+        </NativeSelect>
       </div>
       <div className={styles.viewer}>
         {document ? (

@@ -363,6 +363,7 @@ export function AddReviewIssueForm({ applicationId }: { applicationId: string })
       <div className="grid gap-2">
         <Label className="text-xs font-bold text-muted-foreground">Reviewer issue</Label>
         <Input
+          aria-label="Missing bank statement"
           value={title}
           onChange={(event) => setTitle(event.target.value)}
           placeholder="Missing bank statement"
@@ -372,6 +373,7 @@ export function AddReviewIssueForm({ applicationId }: { applicationId: string })
       <div className="grid gap-2">
         <Label className="text-xs font-bold text-muted-foreground">Description</Label>
         <Textarea
+          aria-label="What needs reviewer or client attention?"
           value={description}
           onChange={(event) => setDescription(event.target.value)}
           placeholder="What needs reviewer or client attention?"
@@ -381,6 +383,7 @@ export function AddReviewIssueForm({ applicationId }: { applicationId: string })
       <div className="grid gap-2">
         <Label className="text-xs font-bold text-muted-foreground">Client action</Label>
         <Textarea
+          aria-label="What should the client send or fix?"
           value={recommendation}
           onChange={(event) => setRecommendation(event.target.value)}
           placeholder="What should the client send or fix?"

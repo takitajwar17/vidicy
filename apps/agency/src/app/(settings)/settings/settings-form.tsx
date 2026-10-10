@@ -25,7 +25,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useRouter } from "next/navigation";
 import { useCsrfToken } from "@/components/csrf-provider";
 
-const SETTINGS_CARD_CLASS = "rounded-xl border-border/80 shadow-[var(--shadow-dashboard)]";
+const SETTINGS_CARD_CLASS = "rounded-md border-border";
 
 export function SettingsForm() {
   const router = useRouter();

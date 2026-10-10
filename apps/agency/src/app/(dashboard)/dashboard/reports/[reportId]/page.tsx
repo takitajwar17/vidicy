@@ -61,7 +61,7 @@ export default async function ClientReportPage({
         </p>
       </header>
       {isStale ? (
-        <p role="alert" className="rounded-xl border border-amber-500 p-4">
+        <p role="alert" className="rounded-md border border-amber-500 p-4">
           This report is out of date. It is a historical copy. Prepare a new report before sending
           current corrections.
         </p>
@@ -76,7 +76,7 @@ export default async function ClientReportPage({
       <p className="whitespace-pre-wrap">{report.summary}</p>
       <ol className="space-y-4">
         {report.actionItems.map((item, index) => (
-          <li key={index} className="break-inside-avoid rounded-xl border p-4">
+          <li key={index} className="break-inside-avoid rounded-md border p-4">
             <h2 className="font-semibold">
               {index + 1}. {item.title}
             </h2>

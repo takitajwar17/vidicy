@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import { getActiveNavigationUrl } from "@/lib/navigation";
 import { renderToStaticMarkup } from "react-dom/server";
 
 vi.mock("@/components/logo", () => ({
@@ -127,5 +128,28 @@ describe("sidebar navigation guards", () => {
       "Reports",
       "Settings",
     ]);
+  });
+});
+
+describe("active sidebar route", () => {
+  const items = [
+    { url: "/dashboard" },
+    { url: "/dashboard/applications" },
+    { url: "/dashboard/reports" },
+    { url: "/admin" },
+    { url: "/admin/support" },
+  ];
+  it.each([
+    ["/dashboard", "/dashboard"],
+    ["/dashboard/applications/new", "/dashboard/applications"],
+    ["/dashboard/case-123", "/dashboard/applications"],
+    ["/dashboard/reports/report-123", "/dashboard/reports"],
+    ["/admin/support", "/admin/support"],
+    ["/admin/users/user-123", "/admin"],
+    ["/dashboard/support", undefined],
+    ["/dashboard/announcements", undefined],
+    ["/administrator", undefined],
+  ])("selects the route for %s", (pathname, expected) => {
+    expect(getActiveNavigationUrl({ pathname, items })).toBe(expected);
   });
 });

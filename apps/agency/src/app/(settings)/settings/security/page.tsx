@@ -14,13 +14,13 @@ export default async function SecurityPage() {
   return (
     <div className="flex flex-col gap-4 md:gap-6">
       <div className="space-y-1">
-        <h1 className="text-2xl font-bold tracking-tight text-foreground md:text-3xl">Security</h1>
+        <h1 className="text-2xl font-bold tracking-tight text-foreground">Security</h1>
         <p className="text-sm text-muted-foreground">
           Password access and account safeguards for the review desk.
         </p>
       </div>
 
-      <Card className="rounded-xl border-border/80 shadow-[var(--shadow-dashboard)]">
+      <Card className="rounded-md border-border">
         <CardHeader>
           <CardTitle>Account protection</CardTitle>
           <CardDescription>
@@ -28,9 +28,9 @@ export default async function SecurityPage() {
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="flex flex-col gap-4 rounded-lg border border-border/80 p-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex flex-col gap-4 rounded-lg border border-border p-4 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex min-w-0 items-start gap-3">
-              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
+              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary">
                 <ShieldCheck className="h-5 w-5" />
               </span>
               <div className="min-w-0">

@@ -4,7 +4,6 @@ import type { Route } from "next";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { User, Smartphone, Lock, KeyRound } from "lucide-react";
-import { useMediaQuery } from "@/hooks/useMediaQuery";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
@@ -34,19 +33,12 @@ const settingsNavItems: SettingsNavItem[] = [
 
 export function SettingsNav() {
   const pathname = usePathname();
-  const isLgAndSmaller = useMediaQuery("LG_AND_SMALLER");
 
   return (
-    <div className="w-full flex items-center justify-between gap-4">
-      <div
-        className={
-          isLgAndSmaller
-            ? "whitespace-nowrap overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
-            : "whitespace-nowrap"
-        }
-      >
+    <div className="w-full flex flex-col items-stretch justify-between gap-3 sm:flex-row sm:items-center">
+      <div className="min-w-0">
         <Tabs value={pathname}>
-          <TabsList className="h-auto p-1">
+          <TabsList className="grid w-full grid-cols-3 sm:flex">
             {settingsNavItems.map((item) => (
               <TabsTrigger key={item.href} value={item.href} asChild>
                 <Link href={item.href} className="flex items-center gap-2">
@@ -59,7 +51,7 @@ export function SettingsNav() {
         </Tabs>
       </div>
 
-      <Button asChild variant="outline" size="sm" className="shrink-0 whitespace-nowrap">
+      <Button asChild variant="outline" size="sm" className="shrink-0 self-end whitespace-nowrap">
         <Link href={"/forgot-password" as Route}>
           <KeyRound className="h-4 w-4" />
           <span className="hidden sm:inline">Change password</span>

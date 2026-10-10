@@ -130,13 +130,13 @@ export default async function DashboardPage() {
           </section>
 
           <section className="grid gap-4 xl:grid-cols-[1.45fr_0.95fr_0.95fr]">
-            <Card className="rounded-xl shadow-[var(--shadow-dashboard)]">
+            <Card className="rounded-md">
               <CardHeader className="flex-row items-center justify-between gap-3">
                 <CardTitle className="text-base">Files moving this week</CardTitle>
                 <span className="text-xs font-medium text-muted-foreground">Last 7 days</span>
               </CardHeader>
               <CardContent>
-                <div className="grid h-56 grid-cols-7 items-end gap-3 border-b border-border/80 pb-4">
+                <div className="grid h-56 grid-cols-7 items-end gap-3 border-b border-border pb-4">
                   {movement.map((day) => (
                     <div key={day.label} className="flex h-full flex-col justify-end gap-1.5">
                       <div
@@ -182,7 +182,7 @@ export default async function DashboardPage() {
               </CardContent>
             </Card>
 
-            <Card className="rounded-xl shadow-[var(--shadow-dashboard)]">
+            <Card className="rounded-md">
               <CardHeader className="flex-row items-center justify-between gap-3">
                 <CardTitle className="text-base">Most repeated issues</CardTitle>
                 <Link
@@ -219,7 +219,7 @@ export default async function DashboardPage() {
               </CardContent>
             </Card>
 
-            <Card className="rounded-xl shadow-[var(--shadow-dashboard)]">
+            <Card className="rounded-md">
               <CardHeader className="flex-row items-center justify-between gap-3">
                 <CardTitle className="text-base">Reviewer workload</CardTitle>
                 <Link href={"/dashboard/team" as Route} className="text-xs font-bold text-primary">

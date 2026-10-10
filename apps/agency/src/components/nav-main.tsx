@@ -2,6 +2,8 @@
 
 import { PlusCircleIcon } from "lucide-react";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
+import { getActiveNavigationUrl } from "@/lib/navigation";
 import type { Route } from "next";
 import {
   SidebarGroup,
@@ -26,6 +28,7 @@ export function NavMain({
   label?: string;
 }) {
   const { setOpenMobile } = useSidebar();
+  const activeUrl = getActiveNavigationUrl({ pathname: usePathname(), items });
 
   return (
     <SidebarGroup>
@@ -35,7 +38,7 @@ export function NavMain({
             <SidebarMenuButton
               asChild
               tooltip="New client file"
-              className="min-w-8 rounded-full border border-[var(--sidebar-action-border)] bg-[var(--sidebar-action)] text-[var(--sidebar-action-foreground)] duration-200 ease-linear hover:bg-[var(--sidebar-action-hover)] hover:text-[var(--sidebar-action-foreground)] active:bg-[var(--sidebar-action-active)]"
+              className="min-w-8 rounded-[5px] border border-[var(--sidebar-action-border)] bg-[var(--sidebar-action)] text-[var(--sidebar-action-foreground)] duration-200 ease-linear hover:bg-[var(--sidebar-action-hover)] hover:text-[var(--sidebar-action-foreground)] active:bg-[var(--sidebar-action-active)]"
             >
               <Link
                 href={"/dashboard/applications/new" as Route}
@@ -51,8 +54,12 @@ export function NavMain({
         <SidebarMenu>
           {items.map((item) => (
             <SidebarMenuItem key={item.title}>
-              <SidebarMenuButton asChild tooltip={item.title}>
-                <Link href={item.url as Route} onClick={() => setOpenMobile(false)}>
+              <SidebarMenuButton asChild tooltip={item.title} isActive={activeUrl === item.url}>
+                <Link
+                  href={item.url as Route}
+                  aria-current={activeUrl === item.url ? "page" : undefined}
+                  onClick={() => setOpenMobile(false)}
+                >
                   {item.icon ? <item.icon /> : null}
                   <span>{item.title}</span>
                   {item.badge ? (
