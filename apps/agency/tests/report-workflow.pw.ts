@@ -771,6 +771,42 @@ test("review workspace links findings to evidence and keeps actions usable at sm
     }
     await page.screenshot({ path: join(output, `case-workspace-${width}.png`), fullPage: true });
   }
+  for (const [status, label] of [
+    ["intake", "Intake"],
+    ["in_review", "In Review"],
+    ["needs_client", "Needs Client"],
+    ["ready_to_submit", "Ready to Submit"],
+  ]) {
+    await db
+      .update(schema.visaApplicationTable)
+      .set({ agencyStatus: status })
+      .where(eq(schema.visaApplicationTable.id, applicationId));
+    for (const width of [1586, 390]) {
+      await page.setViewportSize({ width, height: 900 });
+      await page.reload();
+      const statusControl = page.getByRole("combobox", { name: "Case status", exact: true });
+      await expect(statusControl).toHaveText(label);
+      await expect(statusControl).toHaveCSS("height", "28px");
+      const bounds = await statusControl.evaluate((element) => {
+        const label = element.querySelector("span")!;
+        const rect = element.getBoundingClientRect();
+        return {
+          labelWidth: label.clientWidth,
+          fullLabelWidth: label.scrollWidth,
+          left: rect.left,
+          right: rect.right,
+          viewportWidth: window.innerWidth,
+        };
+      });
+      expect(bounds.labelWidth, `${label} at ${width}px`).toBeGreaterThanOrEqual(
+        bounds.fullLabelWidth,
+      );
+      expect(bounds.left).toBeGreaterThanOrEqual(0);
+      expect(bounds.right).toBeLessThanOrEqual(bounds.viewportWidth);
+      await expectDropdownSpacing({ page });
+      await statusControl.screenshot({ path: join(output, `case-status-${status}-${width}.png`) });
+    }
+  }
   expect(errors).toEqual([]);
 });
 

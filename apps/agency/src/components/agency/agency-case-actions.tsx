@@ -245,7 +245,7 @@ export function AgencyCaseStatusSelect({
     <Select value={statusValue} onValueChange={handleStatusChange} disabled={isPending}>
       <SelectTrigger
         aria-label="Case status"
-        className="h-7 w-[130px] rounded-full border-primary/25 bg-primary/8 px-3 text-xs font-bold text-primary shadow-none"
+        className="h-7 w-auto shrink-0 rounded-full border-primary/25 bg-primary/8 px-3 text-xs font-bold text-primary shadow-none"
       >
         <SelectValue />
       </SelectTrigger>
