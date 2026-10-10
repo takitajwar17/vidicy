@@ -23,6 +23,7 @@
     "dev": "pnpm --filter @vidicy/agency run dev",
     "format:check": "pnpm -r run format:check",
     "eval:review": "pnpm --filter @vidicy/agency run eval:review",
+    "benchmark:workflow": "pnpm --filter @vidicy/agency run benchmark:workflow",
     "benchmark:review": "pnpm --filter @vidicy/agency run benchmark:review",
     "test:e2e": "pnpm --filter @vidicy/agency run test:e2e"
   },
