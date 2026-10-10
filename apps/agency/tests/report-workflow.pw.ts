@@ -488,6 +488,16 @@ test("generate, view, export, and deliver with real auth and a private provider 
   ).toHaveCount(0);
   await context.clearCookies();
   await context.addCookies([{ name: "session", value: outsiderCookie, url: base }]);
+  expect((await context.request.get(`${base}/api/client-reports/${reportId}`)).status()).toBe(200);
+  const joined = await pool.query(
+    'SELECT role, status FROM agency_team_member WHERE "userId" = $1',
+    [outsiderCookie.split(":")[0]],
+  );
+  expect(joined.rows).toEqual([{ role: "member", status: "active" }]);
+  await pool.query('UPDATE agency_team_member SET status = $1 WHERE "userId" = $2', [
+    "suspended",
+    outsiderCookie.split(":")[0],
+  ]);
   expect((await context.request.get(`${base}/api/client-reports/${reportId}`)).status()).toBe(403);
   await context.clearCookies();
   expect((await context.request.get(`${base}/api/client-reports/${reportId}`)).status()).toBe(403);
