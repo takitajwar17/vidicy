@@ -1,4 +1,4 @@
-import { test, expect } from "@playwright/test";
+import { test, expect, type Page } from "@playwright/test";
 import { createHash, randomUUID } from "node:crypto";
 import { execFileSync, spawn, type ChildProcess } from "node:child_process";
 import {
@@ -36,6 +36,44 @@ let applicationId: string;
 let mailLog: string;
 let control: string;
 let serverLog: string;
+
+interface DropdownSpacingOptions {
+  page: Page;
+}
+
+async function expectDropdownSpacing({ page }: DropdownSpacingOptions) {
+  const controls = await page
+    .locator('select.native-select, button[role="combobox"]')
+    .evaluateAll((elements) =>
+      elements
+        .filter((element) => element.getBoundingClientRect().width > 0)
+        .map((element) => {
+          const bounds = element.getBoundingClientRect();
+          const style = getComputedStyle(element);
+          const arrow = element.querySelector(":scope > svg")?.getBoundingClientRect();
+          const label = element.querySelector(":scope > span")?.getBoundingClientRect();
+          return {
+            name: element.getAttribute("aria-label") || element.id || element.textContent?.trim(),
+            native: element.tagName === "SELECT",
+            paddingRight: parseFloat(style.paddingRight),
+            backgroundPosition: style.backgroundPositionX,
+            backgroundImage: style.backgroundImage,
+            arrowInset: arrow ? bounds.right - arrow.right : null,
+            textGap: arrow && label ? arrow.left - label.right : null,
+          };
+        }),
+    );
+  for (const control of controls) {
+    if (control.native) {
+      expect(control.paddingRight, control.name).toBeGreaterThanOrEqual(36);
+      expect(control.backgroundPosition, control.name).toContain("12px");
+      expect(control.backgroundImage, control.name).not.toBe("none");
+    } else if (control.arrowInset !== null) {
+      expect(control.arrowInset, control.name).toBeGreaterThanOrEqual(11);
+      if (control.textGap !== null) expect(control.textGap, control.name).toBeGreaterThanOrEqual(7);
+    }
+  }
+}
 
 async function freePort() {
   const listener = createServer();
@@ -655,6 +693,11 @@ test("review workspace links findings to evidence and keeps actions usable at sm
     page.getByRole("region", { name: "Supporting evidence" }).getByRole("combobox"),
   ).toHaveValue(itinerary.id);
   await expect(page.getByText("Page 1 of 2", { exact: true })).toBeVisible();
+  await expectDropdownSpacing({ page });
+  await expect(page.getByRole("combobox", { name: "Filter issue status" })).toHaveCSS(
+    "height",
+    "32px",
+  );
   await expect(page.locator("canvas")).toHaveCount(1);
   const output = resolve("output/verification");
   mkdirSync(output, { recursive: true });
@@ -754,6 +797,7 @@ test("shared styles work across pages, forms, menus, and themes", async ({ page,
       const response = await page.goto(base + path);
       expect(response?.status(), path).toBe(200);
       await expect(page.getByRole("heading", { name: heading, exact: true }).first()).toBeVisible();
+      await expectDropdownSpacing({ page });
       expect(
         await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
         `${path} at ${width}px`,
@@ -788,13 +832,14 @@ test("shared styles work across pages, forms, menus, and themes", async ({ page,
   ]) {
     await page.goto(base + path);
     await expect(page.locator("html")).toHaveClass(/dark/);
+    await expectDropdownSpacing({ page });
     await page.screenshot({ path: join(output, `${name}-dark.png`), animations: "disabled" });
   }
   await context.clearCookies();
   await page.evaluate(() => localStorage.setItem("theme", "light"));
   for (const width of [1440, 390]) {
     await page.setViewportSize({ width, height: 960 });
-    for (const path of ["/sign-in", "/sign-up", "/forgot-password", "/"]) {
+    for (const path of ["/sign-in", "/sign-up", "/forgot-password", "/enterprise", "/"]) {
       const response = await page.goto(base + path);
       expect(response?.status(), path).toBe(200);
       if (path === "/forgot-password") {
@@ -808,6 +853,7 @@ test("shared styles work across pages, forms, menus, and themes", async ({ page,
         await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
         `${path} at ${width}px`,
       ).toBe(true);
+      await expectDropdownSpacing({ page });
       if (path === "/") {
         await expect(page.locator("h1 span").last()).toHaveCSS("opacity", "1");
       }
@@ -915,6 +961,7 @@ test("UI fixes cover admin, recovery, accessible controls, and narrow layouts", 
     ]) {
       expect((await page.goto(base + path))?.status(), path).toBe(200);
       await expect(page.getByRole("heading", { level: 1 }).first()).toHaveCount(1);
+      await expectDropdownSpacing({ page });
       expect(
         await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth),
         path,
@@ -938,6 +985,7 @@ test("UI fixes cover admin, recovery, accessible controls, and narrow layouts", 
   await page.getByText(ticket.subject, { exact: true }).click();
   await expect(page.getByRole("button", { name: "Delete conversation" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Conversation options" })).toBeVisible();
+  await expectDropdownSpacing({ page });
   await expect(page.getByRole("button", { name: "Send reply" })).toBeDisabled();
   await context.clearCookies();
   await page.emulateMedia({ reducedMotion: "reduce" });
