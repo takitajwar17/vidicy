@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import type { Route } from "next";
 
 import { AgencyPageShell } from "@/components/agency/agency-page-shell";
@@ -54,6 +55,7 @@ export default async function DocumentsPage({
   const rows = rowsWithLookahead.slice(0, DOCUMENTS_PAGE_SIZE);
   const hasNextPage = rowsWithLookahead.length > DOCUMENTS_PAGE_SIZE;
   const hasActiveFilters = Boolean(query);
+  if (page > 1 && rows.length === 0) redirect(getDocumentsHref({ page: 1, query }));
 
   return (
     <AgencyPageShell

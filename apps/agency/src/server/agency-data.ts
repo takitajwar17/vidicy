@@ -214,17 +214,20 @@ export async function getAgencyCaseRows({
   offset = 0,
   query: rawQuery = null,
   statuses,
+  clientId,
 }: {
   limit?: number | null;
   offset?: number;
   query?: string | null;
   statuses?: string[];
+  clientId?: string;
 } = {}): Promise<AgencyCaseRow[]> {
   const db = getDB();
   const query = normalizeSearchQuery(rawQuery);
   const applicantMatches = await getApplicantSearchMatches(query);
 
   const filters = getAgencyCaseFilters();
+  if (clientId) filters.push(eq(visaApplicationTable.clientId, clientId));
   if (statuses?.length) {
     filters.push(inArray(visaApplicationTable.agencyStatus, statuses));
   }
@@ -536,9 +539,10 @@ export async function getAgencyDashboardData() {
     const unassignedActive = unassignedCases.filter(({ application }) => {
       const status = normalizeAgencyCaseStatus(application.agencyStatus);
       return (
-        status === AGENCY_CASE_STATUS.INTAKE ||
-        status === AGENCY_CASE_STATUS.IN_REVIEW ||
-        status === AGENCY_CASE_STATUS.NEEDS_CLIENT
+        !application.finalSubmissionAt &&
+        (status === AGENCY_CASE_STATUS.INTAKE ||
+          status === AGENCY_CASE_STATUS.IN_REVIEW ||
+          status === AGENCY_CASE_STATUS.NEEDS_CLIENT)
       );
     }).length;
 
@@ -709,7 +713,10 @@ export async function getAgencyClientsWithCounts({
           normalizeAgencyCaseStatus(application.agencyStatus) !==
           AGENCY_CASE_STATUS.READY_TO_SUBMIT,
       ).length,
-      lastCaseAt: clientCases[0]?.updatedAt ?? clientCases[0]?.createdAt ?? null,
+      lastCaseAt: clientCases.reduce<Date | null>((latest, application) => {
+        const activity = application.updatedAt ?? application.createdAt;
+        return !latest || activity > latest ? activity : latest;
+      }, null),
     };
   });
 }

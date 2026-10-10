@@ -33,6 +33,7 @@ import {
   filterDashboardCases,
   getDashboardAttention,
   getDashboardNextAction,
+  isDashboardCaseOverdue,
   type DashboardCase,
   type DashboardAttention,
 } from "@/lib/agency-dashboard-queue";
@@ -178,6 +179,7 @@ export function AgencyDashboard({ cases, reviewers, today: serverToday }: Agency
           <button
             key={status}
             type="button"
+            aria-pressed={view.status === status && view.attention === "all" && !view.q}
             aria-label={`${label}: ${status === "all" ? cases.length : cases.filter((row) => row.status === status).length}`}
             onClick={() => void setView({ status, attention: "all", q: "", page: 1 })}
             className="rounded-md border border-border bg-card p-4 text-left transition-colors hover:border-primary/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
@@ -210,7 +212,7 @@ export function AgencyDashboard({ cases, reviewers, today: serverToday }: Agency
                 Client files
               </CardTitle>
               <div className="flex w-full flex-wrap gap-2 sm:w-auto">
-                <div className="relative min-w-0 flex-1 sm:w-52">
+                <div className="relative min-w-0 basis-full sm:w-52 sm:basis-auto sm:flex-1">
                   <SearchIcon
                     aria-hidden="true"
                     className="pointer-events-none absolute left-2.5 top-2.5 size-4 text-muted-foreground"
@@ -229,7 +231,7 @@ export function AgencyDashboard({ cases, reviewers, today: serverToday }: Agency
                   onChange={(event) =>
                     void setView({ sort: event.target.value as "due" | "updated", page: 1 })
                   }
-                  className="h-9 rounded-[5px] border border-input bg-card pl-3 text-xs"
+                  className="h-9 w-full rounded-[5px] border border-input bg-card pl-3 text-xs sm:w-auto"
                 >
                   <option value="due">Due date</option>
                   <option value="updated">Last updated</option>
@@ -294,7 +296,7 @@ export function AgencyDashboard({ cases, reviewers, today: serverToday }: Agency
                 visible.map((row) => {
                   const action = getDashboardNextAction(row);
                   const href = `/dashboard/${row.id}?tab=${action.tab}` as Route;
-                  const late = row.dueDate && row.dueDate < today && !row.finalSubmissionAt;
+                  const late = isDashboardCaseOverdue({ row, today });
                   return (
                     <TableRow key={row.id}>
                       <TableCell className="max-w-56 whitespace-normal py-3.5 pl-4">
@@ -381,7 +383,14 @@ export function AgencyDashboard({ cases, reviewers, today: serverToday }: Agency
                         {row.visaType} · {row.destination}
                       </p>
                       <p className="mt-1 text-[10px] text-muted-foreground">
-                        {row.caseNumber} · {dueLabel(row.dueDate)}
+                        {row.caseNumber} ·{" "}
+                        <span
+                          className={cn(
+                            isDashboardCaseOverdue({ row, today }) && "text-status-warning",
+                          )}
+                        >
+                          {dueLabel(row.dueDate)}
+                        </span>
                       </p>
                     </div>
                     <span className="shrink-0">

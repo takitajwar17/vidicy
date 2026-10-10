@@ -1,6 +1,7 @@
 import { NativeSelect } from "@/components/ui/native-select";
 import type { Metadata } from "next";
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import type { Route } from "next";
 import { PlusIcon } from "lucide-react";
 
@@ -54,14 +55,17 @@ function getApplicationsHref({
   page,
   query,
   status,
+  client,
 }: {
   page: number;
   query: string;
   status: string;
+  client: string;
 }) {
   const params = new URLSearchParams();
   if (query) params.set("q", query);
   if (status) params.set("status", status);
+  if (client) params.set("client", client);
   if (page > 1) params.set("page", String(page));
   const suffix = params.toString();
   return `/dashboard/applications${suffix ? `?${suffix}` : ""}` as Route;
@@ -70,10 +74,11 @@ function getApplicationsHref({
 export default async function ApplicationsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ page?: string; q?: string; status?: string }>;
+  searchParams: Promise<{ page?: string; q?: string; status?: string; client?: string }>;
 }) {
   const params = await searchParams;
   const query = params.q?.trim() ?? "";
+  const client = params.client?.trim() ?? "";
   const statusFilter = normalize(params.status);
   const status = AGENCY_CASE_STATUS_OPTIONS.includes(
     statusFilter as (typeof AGENCY_CASE_STATUS_OPTIONS)[number],
@@ -86,10 +91,13 @@ export default async function ApplicationsPage({
     offset: (page - 1) * APPLICATIONS_PAGE_SIZE,
     query,
     statuses: status ? [status] : undefined,
+    clientId: client || undefined,
   });
   const rows = rowsWithLookahead.slice(0, APPLICATIONS_PAGE_SIZE);
   const hasNextPage = rowsWithLookahead.length > APPLICATIONS_PAGE_SIZE;
-  const hasActiveFilters = Boolean(query || status);
+  const hasActiveFilters = Boolean(query || status || client);
+  if (page > 1 && rows.length === 0)
+    redirect(getApplicationsHref({ page: 1, query, status, client }));
 
   return (
     <AgencyPageShell
@@ -108,9 +116,13 @@ export default async function ApplicationsPage({
         </Button>
       }
     >
+      {client ? (
+        <p className="text-sm text-muted-foreground">Showing cases for the selected client.</p>
+      ) : null}
       <AgencyFilterCard>
         <div className="grid gap-3 lg:grid-cols-[minmax(280px,1fr)_180px_180px_180px]">
           <form className="contents">
+            {client ? <input type="hidden" name="client" value={client} /> : null}
             <Input
               aria-label="Search applications"
               name="q"
@@ -164,7 +176,7 @@ export default async function ApplicationsPage({
                 <TableHead>Client</TableHead>
                 <TableHead>Applicant</TableHead>
                 <TableHead>Visa</TableHead>
-                <TableHead>Submitted</TableHead>
+                <TableHead>Received</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead>Risk</TableHead>
                 <TableHead>Priority</TableHead>
@@ -244,8 +256,8 @@ export default async function ApplicationsPage({
           <AgencyPagination
             page={page}
             hasNextPage={hasNextPage}
-            previousHref={getApplicationsHref({ page: page - 1, query, status })}
-            nextHref={getApplicationsHref({ page: page + 1, query, status })}
+            previousHref={getApplicationsHref({ page: page - 1, query, status, client })}
+            nextHref={getApplicationsHref({ page: page + 1, query, status, client })}
             endLabel="End of queue"
           />
         </AgencyTableCard>

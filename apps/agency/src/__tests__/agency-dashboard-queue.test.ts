@@ -4,6 +4,7 @@ import {
   getDashboardNextAction,
   filterDashboardCases,
   needsReadinessCheck,
+  isDashboardCaseOverdue,
   type DashboardCase,
 } from "@/lib/agency-dashboard-queue";
 
@@ -30,6 +31,22 @@ const caseRow: DashboardCase = {
 };
 
 describe("dashboard action queue", () => {
+  it("uses the same overdue rule for attention counts and due-date warnings", () => {
+    const past = { ...caseRow, dueDate: "2026-10-20" };
+    expect(isDashboardCaseOverdue({ row: past, today })).toBe(true);
+    expect(isDashboardCaseOverdue({ row: { ...past, status: "ready_to_submit" }, today })).toBe(
+      false,
+    );
+    expect(
+      isDashboardCaseOverdue({
+        row: { ...past, status: "ready_to_submit", openIssueCount: 1 },
+        today,
+      }),
+    ).toBe(true);
+    expect(isDashboardCaseOverdue({ row: { ...past, finalSubmissionAt: today }, today })).toBe(
+      false,
+    );
+  });
   it("uses calendar due dates, excludes submitted cases and keeps overlapping groups distinct", () => {
     const cases = [
       { ...caseRow, id: "past", dueDate: "2026-10-20", reviewerId: null },

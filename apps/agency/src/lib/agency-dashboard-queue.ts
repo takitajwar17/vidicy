@@ -61,10 +61,19 @@ function matchesAttention({
   if (attention === "review_outdated") return row.reviewState === "outdated";
   if (attention === "recheck") return needsReadinessCheck(row);
   if (!row.dueDate || (row.status === "ready_to_submit" && !needsReadinessCheck(row))) return false;
-  if (attention === "overdue") return row.dueDate < today;
+  if (attention === "overdue") return isDashboardCaseOverdue({ row, today });
   const end = new Date(`${today}T00:00:00Z`);
   end.setUTCDate(end.getUTCDate() + 7);
   return row.dueDate >= today && row.dueDate <= end.toISOString().slice(0, 10);
+}
+
+export function isDashboardCaseOverdue({ row, today }: { row: DashboardCase; today: string }) {
+  return Boolean(
+    row.dueDate &&
+    row.dueDate < today &&
+    !row.finalSubmissionAt &&
+    (row.status !== "ready_to_submit" || needsReadinessCheck(row)),
+  );
 }
 
 export function getDashboardAttention({ cases, today }: { cases: DashboardCase[]; today: string }) {

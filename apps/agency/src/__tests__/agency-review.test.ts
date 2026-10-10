@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { eq } from "drizzle-orm";
 import { startTestPostgres } from "./helpers/postgres";
 import { readFileSync, readdirSync } from "node:fs";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
@@ -127,7 +128,13 @@ import {
   publishAgencyReview,
   syncAgencyReviewIssues,
 } from "@/server/agency-review";
-import { getAgencyCaseDetail, getAgencyCaseRows, getAgencyReports } from "@/server/agency-data";
+import {
+  getAgencyCaseDetail,
+  getAgencyCaseRows,
+  getAgencyReports,
+  getAgencyClientsWithCounts,
+  getAgencyDashboardData,
+} from "@/server/agency-data";
 import { updateClientReportRecipient } from "@/server/client-reports";
 
 import { deleteTicket } from "@/server/support";
@@ -324,6 +331,45 @@ describe("agency review workflow with the real database driver", () => {
       choices: [{ message: { content: JSON.stringify({ items }) } }],
     });
   }
+
+  it("filters cases by client and uses the most recent activity across their cases", async () => {
+    const [client] = await fixture.db
+      .insert(agencyClientTable)
+      .values({ name: "Activity Client" })
+      .returning();
+    const [other] = await fixture.db
+      .insert(agencyClientTable)
+      .values({ name: "Other Client" })
+      .returning();
+    const older = new Date("2026-09-19T00:00:00Z");
+    const recent = new Date("2026-10-20T00:00:00Z");
+    await fixture.db
+      .update(visaApplicationTable)
+      .set({ clientId: client.id, createdAt: older, updatedAt: recent })
+      .where(eq(visaApplicationTable.id, applicationId));
+    const common = {
+      userId,
+      homeCountry: "Bangladesh",
+      currentCountry: "Bangladesh",
+      destinationCountry: "Japan",
+      visaType: "Tourist",
+      embassy: "Dhaka",
+    };
+    await fixture.db.insert(visaApplicationTable).values([
+      {
+        ...common,
+        clientId: client.id,
+        createdAt: new Date("2026-09-21T00:00:00Z"),
+        updatedAt: new Date("2026-09-24T00:00:00Z"),
+      },
+      { ...common, clientId: other.id },
+    ]);
+    const cases = await getAgencyCaseRows({ clientId: client.id });
+    expect(cases).toHaveLength(2);
+    expect(cases.every((row) => row.application.clientId === client.id)).toBe(true);
+    const clients = await getAgencyClientsWithCounts();
+    expect(clients.find((row) => row.client.id === client.id)?.lastCaseAt).toEqual(recent);
+  });
 
   it("keeps successful extraction when a concurrent attempt fails later", async () => {
     let finishSuccess!: (value: { success: boolean; text: string }) => void;
@@ -1003,6 +1049,23 @@ describe("agency review workflow with the real database driver", () => {
     const application = await fixture.db.query.visaApplicationTable.findFirst();
     expect(application).toMatchObject({ agencyStatus: "ready_to_submit", status: "ready" });
     expect(application?.reviewCompletedAt).toBeInstanceOf(Date);
+  });
+
+  it("excludes submitted cases from assigned and unassigned active workloads", async () => {
+    await fixture.db
+      .update(visaApplicationTable)
+      .set({ agencyStatus: "intake", finalSubmissionAt: new Date(), assignedReviewerId: userId });
+    expect(
+      (await getAgencyDashboardData()).workload.find((row) => row.userId === userId)?.inReview,
+    ).toBe(0);
+    await fixture.db.update(visaApplicationTable).set({ assignedReviewerId: null });
+    expect(
+      (await getAgencyDashboardData()).workload.find((row) => row.id === "unassigned")?.inReview,
+    ).toBe(0);
+    await fixture.db.update(visaApplicationTable).set({ finalSubmissionAt: null });
+    expect(
+      (await getAgencyDashboardData()).workload.find((row) => row.id === "unassigned")?.inReview,
+    ).toBe(1);
   });
 
   it("counts required checklist coverage once per item and checks every applicant for the dashboard", async () => {

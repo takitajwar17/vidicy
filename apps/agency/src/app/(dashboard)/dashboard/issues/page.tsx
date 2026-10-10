@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import type { Route } from "next";
 
 import { AgencyPageShell } from "@/components/agency/agency-page-shell";
@@ -54,6 +55,7 @@ export default async function IssuesPage({
   const rows = rowsWithLookahead.slice(0, ISSUES_PAGE_SIZE);
   const hasNextPage = rowsWithLookahead.length > ISSUES_PAGE_SIZE;
   const hasActiveFilters = Boolean(query);
+  if (page > 1 && rows.length === 0) redirect(getIssuesHref({ page: 1, query }));
 
   return (
     <AgencyPageShell
@@ -118,13 +120,26 @@ export default async function IssuesPage({
                       className="truncate font-bold"
                       title={`${issue.title}: ${issue.description}`}
                     >
-                      {issue.title}
+                      {application ? (
+                        <Link
+                          className="hover:underline"
+                          href={
+                            `/dashboard/${application.id}?tab=review&status=all&issue=${issue.id}` as Route
+                          }
+                        >
+                          {issue.title}
+                        </Link>
+                      ) : (
+                        issue.title
+                      )}
                     </p>
                   </TableCell>
                   <TableCell>
                     {application ? (
                       <Link
-                        href={`/dashboard/${application.id}` as Route}
+                        href={
+                          `/dashboard/${application.id}?tab=review&status=all&issue=${issue.id}` as Route
+                        }
                         className="font-bold text-primary"
                       >
                         {getDisplayCaseNumber(application.caseNumber, application.id)}

@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import type { Route } from "next";
 
 import { AgencyPageShell } from "@/components/agency/agency-page-shell";
@@ -51,6 +52,7 @@ export default async function ClientsPage({
   const rows = rowsWithLookahead.slice(0, CLIENTS_PAGE_SIZE);
   const hasNextPage = rowsWithLookahead.length > CLIENTS_PAGE_SIZE;
   const hasActiveFilters = Boolean(query);
+  if (page > 1 && rows.length === 0) redirect(getClientsHref({ page: 1, query }));
 
   return (
     <AgencyPageShell
@@ -115,7 +117,16 @@ export default async function ClientsPage({
             <TableBody>
               {rows.map(({ client, caseCount, openCaseCount, lastCaseAt }) => (
                 <TableRow key={client.id}>
-                  <TableCell className="pl-5 font-bold">{client.name}</TableCell>
+                  <TableCell className="pl-5 font-bold">
+                    <Link
+                      className="text-primary hover:underline"
+                      href={
+                        `/dashboard/applications?client=${encodeURIComponent(client.id)}` as Route
+                      }
+                    >
+                      {client.name}
+                    </Link>
+                  </TableCell>
                   <TableCell>{client.email ?? "—"}</TableCell>
                   <TableCell>{client.phone ?? "—"}</TableCell>
                   <TableCell>{client.country ?? "—"}</TableCell>
