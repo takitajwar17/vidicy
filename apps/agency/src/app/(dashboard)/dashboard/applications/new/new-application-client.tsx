@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import type { Route } from "next";
@@ -41,6 +41,7 @@ interface StaffOption {
 }
 
 interface NewApplicationClientProps {
+  draftOwnerId: string;
   staff: StaffOption[];
 }
 
@@ -83,7 +84,7 @@ const DEFAULT_FORM: IntakeForm = {
   customEmbassy: "",
   priority: AGENCY_CASE_PRIORITY.NORMAL,
   assignedReviewerId: "",
-  submittedAt: new Date().toISOString().slice(0, 10),
+  submittedAt: "",
   dueAt: "",
   approvedBefore: false,
   approvedVisaType: "",
@@ -98,7 +99,9 @@ function Field({
   label,
   children,
   className,
+  error,
 }: {
+  error?: string;
   label: string;
   children: ReactNode;
   className?: string;
@@ -112,13 +115,70 @@ function Field({
         {label}
       </Label>
       {children}
+      {error ? (
+        <p
+          id={`intake-${label.toLowerCase().replaceAll(" ", "-")}-error`}
+          className="text-xs text-destructive"
+        >
+          {error}
+        </p>
+      ) : null}
     </div>
   );
 }
 
-export function NewApplicationClient({ staff }: NewApplicationClientProps) {
+export function NewApplicationClient({ staff, draftOwnerId }: NewApplicationClientProps) {
   const router = useRouter();
   const [form, setForm] = useState<IntakeForm>(DEFAULT_FORM);
+  const [errors, setErrors] = useState<Record<string, string>>({});
+  const [draftLoaded, setDraftLoaded] = useState(false);
+  const [draftStored, setDraftStored] = useState(true);
+  const [submitted, setSubmitted] = useState(false);
+  const draftKey = `vidicy:intake:${draftOwnerId}`;
+  useEffect(() => {
+    const now = new Date();
+    const localDate = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+    let saved: Partial<IntakeForm> = {};
+    try {
+      const stored = JSON.parse(sessionStorage.getItem(draftKey) || "{}");
+      // Drafts are local input, not trusted application data.
+      saved = Object.fromEntries(
+        Object.entries(DEFAULT_FORM)
+          .filter(([key, value]) => typeof stored?.[key] === typeof value)
+          .map(([key]) => [key, stored[key]]),
+      );
+    } catch {
+      /* Storage may be unavailable in private browsing. */
+    }
+    setForm({ ...DEFAULT_FORM, submittedAt: localDate, ...saved });
+    setDraftLoaded(true);
+  }, [draftKey]);
+  useEffect(() => {
+    if (!draftLoaded || submitted) return;
+    try {
+      sessionStorage.setItem(draftKey, JSON.stringify(form));
+      setDraftStored(true);
+    } catch {
+      setDraftStored(false);
+    }
+  }, [form, draftKey, draftLoaded, submitted]);
+  useEffect(() => {
+    if (
+      !draftLoaded ||
+      submitted ||
+      draftStored ||
+      !Object.entries(form).some(
+        ([key, value]) => key !== "submittedAt" && value !== DEFAULT_FORM[key as keyof IntakeForm],
+      )
+    )
+      return;
+    function warn(event: BeforeUnloadEvent) {
+      event.preventDefault();
+      event.returnValue = "";
+    }
+    window.addEventListener("beforeunload", warn);
+    return () => window.removeEventListener("beforeunload", warn);
+  }, [form, draftLoaded, submitted, draftStored]);
   const { execute, isPending } = useServerAction(createAgencyCaseAction);
 
   const visaTypes = useMemo(() => getVisaTypes(form.destinationCountry), [form.destinationCountry]);
@@ -171,16 +231,24 @@ export function NewApplicationClient({ staff }: NewApplicationClientProps) {
   }
 
   function validate() {
-    const required = [
-      form.clientName,
-      form.applicantName,
-      form.homeCountry,
-      form.currentCountry,
-      form.destinationCountry,
-      form.visaType,
-      resolvedEmbassy,
-    ];
-    return required.every((value) => value.trim().length > 0);
+    const required = {
+      "client-name": form.clientName,
+      "applicant-name": form.applicantName,
+      "passport-country": form.homeCountry,
+      "applying-from": form.currentCountry,
+      destination: form.destinationCountry,
+      "visa-type": form.visaType,
+      "submission-post": resolvedEmbassy,
+    };
+    const nextErrors = Object.fromEntries(
+      Object.entries(required)
+        .filter(([, value]) => !value.trim())
+        .map(([key]) => [key, "This field is required."]),
+    );
+    setErrors(nextErrors);
+    const first = Object.keys(nextErrors)[0];
+    if (first) document.getElementById(`intake-${first}`)?.focus();
+    return !first;
   }
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
@@ -220,6 +288,12 @@ export function NewApplicationClient({ staff }: NewApplicationClientProps) {
       return;
     }
 
+    setSubmitted(true);
+    try {
+      sessionStorage.removeItem(draftKey);
+    } catch {
+      /* No saved draft to remove. */
+    }
     toast.success("Client file added to the agency queue.");
     router.push(`/dashboard/${result.application.id}` as Route);
   }
@@ -235,15 +309,22 @@ export function NewApplicationClient({ staff }: NewApplicationClientProps) {
       description="Add the client, applicant, route, reviewer, and dates before documents arrive."
     >
       <form onSubmit={handleSubmit} className="grid gap-4 xl:grid-cols-[1fr_360px]">
+        <p className="text-xs text-muted-foreground xl:col-span-2">
+          {draftStored
+            ? "Your draft is kept in this browser tab until the case is created."
+            : "Draft storage is unavailable. Keep this page open until the case is created."}
+        </p>
         <div className="space-y-4">
           <Card className="rounded-md">
             <CardHeader>
               <CardTitle className="text-base">Who sent the file</CardTitle>
             </CardHeader>
             <CardContent className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-              <Field label="Client name">
+              <Field label="Client name" error={errors["client-name"]}>
                 <Input
                   id="intake-client-name"
+                  aria-invalid={Boolean(errors["client-name"])}
+                  aria-describedby={errors["client-name"] ? "intake-client-name-error" : undefined}
                   value={form.clientName}
                   onChange={(event) => update("clientName", event.target.value)}
                   placeholder="Global Visa Co."
@@ -266,9 +347,13 @@ export function NewApplicationClient({ staff }: NewApplicationClientProps) {
                   placeholder="+1 555 0100"
                 />
               </Field>
-              <Field label="Applicant name">
+              <Field label="Applicant name" error={errors["applicant-name"]}>
                 <Input
                   id="intake-applicant-name"
+                  aria-invalid={Boolean(errors["applicant-name"])}
+                  aria-describedby={
+                    errors["applicant-name"] ? "intake-applicant-name-error" : undefined
+                  }
                   value={form.applicantName}
                   onChange={(event) => update("applicantName", event.target.value)}
                   placeholder="Rahul Mehta"
@@ -283,9 +368,13 @@ export function NewApplicationClient({ staff }: NewApplicationClientProps) {
                   placeholder="applicant@example.com"
                 />
               </Field>
-              <Field label="Passport country">
+              <Field label="Passport country" error={errors["passport-country"]}>
                 <SearchableSelect
                   id="intake-passport-country"
+                  aria-invalid={Boolean(errors["passport-country"])}
+                  aria-describedby={
+                    errors["passport-country"] ? "intake-passport-country-error" : undefined
+                  }
                   value={form.homeCountry}
                   onChange={(value) => update("homeCountry", value)}
                   options={COUNTRIES}
@@ -301,9 +390,13 @@ export function NewApplicationClient({ staff }: NewApplicationClientProps) {
               <CardTitle className="text-base">Route and reviewer</CardTitle>
             </CardHeader>
             <CardContent className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-              <Field label="Applying from">
+              <Field label="Applying from" error={errors["applying-from"]}>
                 <SearchableSelect
                   id="intake-applying-from"
+                  aria-invalid={Boolean(errors["applying-from"])}
+                  aria-describedby={
+                    errors["applying-from"] ? "intake-applying-from-error" : undefined
+                  }
                   value={form.currentCountry}
                   onChange={updateCurrentCountry}
                   options={COUNTRIES}
@@ -311,9 +404,11 @@ export function NewApplicationClient({ staff }: NewApplicationClientProps) {
                   triggerClassName="h-10"
                 />
               </Field>
-              <Field label="Destination">
+              <Field label="Destination" error={errors["destination"]}>
                 <SearchableSelect
                   id="intake-destination"
+                  aria-invalid={Boolean(errors["destination"])}
+                  aria-describedby={errors["destination"] ? "intake-destination-error" : undefined}
                   value={form.destinationCountry}
                   onChange={updateDestination}
                   options={DESTINATION_COUNTRIES}
@@ -321,9 +416,11 @@ export function NewApplicationClient({ staff }: NewApplicationClientProps) {
                   triggerClassName="h-10"
                 />
               </Field>
-              <Field label="Visa type">
+              <Field label="Visa type" error={errors["visa-type"]}>
                 <SearchableSelect
                   id="intake-visa-type"
+                  aria-invalid={Boolean(errors["visa-type"])}
+                  aria-describedby={errors["visa-type"] ? "intake-visa-type-error" : undefined}
                   value={form.visaType}
                   onChange={(value) => update("visaType", value)}
                   options={visaTypes}
@@ -333,9 +430,13 @@ export function NewApplicationClient({ staff }: NewApplicationClientProps) {
                 />
               </Field>
               {embassyList ? (
-                <Field label="Submission post">
+                <Field label="Submission post" error={errors["submission-post"]}>
                   <SearchableSelect
                     id="intake-submission-post"
+                    aria-invalid={Boolean(errors["submission-post"])}
+                    aria-describedby={
+                      errors["submission-post"] ? "intake-submission-post-error" : undefined
+                    }
                     value={form.embassy}
                     onChange={(value) => update("embassy", value)}
                     options={embassyList}
@@ -345,9 +446,13 @@ export function NewApplicationClient({ staff }: NewApplicationClientProps) {
                   />
                 </Field>
               ) : (
-                <Field label="Submission post">
+                <Field label="Submission post" error={errors["submission-post"]}>
                   <Input
                     id="intake-submission-post"
+                    aria-invalid={Boolean(errors["submission-post"])}
+                    aria-describedby={
+                      errors["submission-post"] ? "intake-submission-post-error" : undefined
+                    }
                     value={form.customEmbassy}
                     onChange={(event) => update("customEmbassy", event.target.value)}
                     placeholder="Embassy or consulate"
@@ -520,7 +625,12 @@ export function NewApplicationClient({ staff }: NewApplicationClientProps) {
                   once documents arrive.
                 </p>
               </div>
-              <Button type="submit" className="w-full" disabled={isPending}>
+              <Button
+                type="submit"
+                className="w-full"
+                disabled={isPending || !draftLoaded}
+                aria-busy={isPending}
+              >
                 {isPending ? (
                   <Loader2Icon className="h-4 w-4 animate-spin" />
                 ) : (

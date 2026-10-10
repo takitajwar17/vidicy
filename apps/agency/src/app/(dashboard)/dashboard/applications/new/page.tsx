@@ -3,11 +3,12 @@ import { getActiveAgencyStaffRows } from "@/server/agency-data";
 import { NewApplicationClient } from "./new-application-client";
 
 export default async function Page() {
-  await requireVerifiedPageSession();
+  const session = await requireVerifiedPageSession();
   const staff = await getActiveAgencyStaffRows();
 
   return (
     <NewApplicationClient
+      draftOwnerId={session.user.id}
       staff={staff
         .filter((member) => member.userId && member.user)
         .map((member) => ({

@@ -19,6 +19,8 @@ type SelectOption = { value: string; label: string };
 interface SearchableSelectProps {
   id?: string;
   "aria-label"?: string;
+  "aria-invalid"?: boolean;
+  "aria-describedby"?: string;
   value: string;
   onChange: (value: string) => void;
   options: SelectOption[] | string[];
@@ -32,6 +34,8 @@ interface SearchableSelectProps {
 export function SearchableSelect({
   id,
   "aria-label": ariaLabel,
+  "aria-invalid": ariaInvalid,
+  "aria-describedby": ariaDescribedBy,
   value,
   onChange,
   options,
@@ -55,6 +59,8 @@ export function SearchableSelect({
         <button
           id={id}
           aria-label={ariaLabel}
+          aria-invalid={ariaInvalid}
+          aria-describedby={ariaDescribedBy}
           type="button"
           role="combobox"
           aria-expanded={open}
@@ -63,7 +69,7 @@ export function SearchableSelect({
           className={cn(
             "flex h-10 w-full items-center justify-between gap-2 rounded-[5px] border border-input bg-card px-3 py-2 text-sm ring-offset-background",
             "hover:bg-accent/40 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2",
-            "disabled:cursor-not-allowed disabled:opacity-50",
+            "disabled:cursor-not-allowed disabled:opacity-50 aria-[invalid=true]:border-destructive",
             !selected && "text-muted-foreground",
             triggerClassName,
             "gap-3 pr-5",
