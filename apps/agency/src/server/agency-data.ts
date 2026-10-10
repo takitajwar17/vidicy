@@ -18,6 +18,7 @@ import {
   documentEvaluationTable,
   reviewIssueTable,
   uploadedDocumentTable,
+  reviewJobTable,
   userTable,
   visaApplicationTable,
 } from "@/db/schema";
@@ -600,6 +601,7 @@ export async function getAgencyCaseDetail(appId: string) {
     issues,
     reports,
     staff,
+    activeReview,
   ] = await Promise.all([
     db.query.visaApplicationTable.findFirst({
       where: and(
@@ -633,13 +635,21 @@ export async function getAgencyCaseDetail(appId: string) {
       orderBy: [desc(clientReportTable.createdAt)],
     }),
     getActiveAgencyStaffRows(),
+    db.query.reviewJobTable.findFirst({
+      where: and(
+        eq(reviewJobTable.applicationId, appId),
+        inArray(reviewJobTable.status, ["queued", "running"]),
+      ),
+    }),
   ]);
 
-  const hasCurrentEvaluation = isEvaluationCurrent({
-    evaluation: latestEvaluation,
-    checklistItems,
-    documents,
-  });
+  const hasCurrentEvaluation =
+    !activeReview &&
+    isEvaluationCurrent({
+      evaluation: latestEvaluation,
+      checklistItems,
+      documents,
+    });
 
   return {
     application,
@@ -651,7 +661,7 @@ export async function getAgencyCaseDetail(appId: string) {
     checklistItems,
     documents,
     latestEvaluation: hasCurrentEvaluation ? latestEvaluation : null,
-    isReviewStale: Boolean(latestEvaluation) && !hasCurrentEvaluation,
+    isReviewStale: !activeReview && Boolean(latestEvaluation) && !hasCurrentEvaluation,
     issues: issues.map((issue) => ({
       ...issue,
       status: normalizeReviewIssueStatus(issue.status),

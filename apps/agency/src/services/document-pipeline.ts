@@ -1,3 +1,4 @@
+import { measureProviderCall } from "@/infra/evaluation-metrics";
 import "server-only";
 
 import { and, eq, sql } from "drizzle-orm";
@@ -874,13 +875,18 @@ export async function indexExtractedDocument({
 
     for (let i = 0; i < chunks.length; i += EMBEDDING_BATCH_SIZE) {
       const batch = chunks.slice(i, i + EMBEDDING_BATCH_SIZE);
-      const response = await openai.embeddings.create(
-        {
-          model: "text-embedding-3-small",
-          input: batch.map((chunk) => chunk.content),
-        },
-        { signal: AbortSignal.timeout(AI_TIMEOUT_EMBEDDING_MS) },
-      );
+      const response = await measureProviderCall({
+        model: "text-embedding-3-small",
+        stage: "index_embedding",
+        run: () =>
+          openai.embeddings.create(
+            {
+              model: "text-embedding-3-small",
+              input: batch.map((chunk) => chunk.content),
+            },
+            { signal: AbortSignal.timeout(AI_TIMEOUT_EMBEDDING_MS) },
+          ),
+      });
       embeddings.push(...response.data.map((item) => item.embedding));
     }
 

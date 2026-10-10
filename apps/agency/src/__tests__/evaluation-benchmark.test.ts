@@ -1,9 +1,62 @@
 import { describe, expect, it, vi } from "vitest";
 import { estimateModelCost, runBenchmark, summarizeBenchmark } from "./eval/framework/benchmark";
-import { withEvaluationMetrics, recordEvaluationCall } from "@/infra/evaluation-metrics";
+import {
+  withEvaluationMetrics,
+  recordEvaluationCall,
+  measureProviderCall,
+} from "@/infra/evaluation-metrics";
 vi.mock("@/infra/logger", () => ({ logger: { info: vi.fn() } }));
 
 describe("evaluation measurements", () => {
+  it("retains failed attempts in a supplied collector without error content", async () => {
+    const calls: import("@/infra/evaluation-metrics").EvaluationCallMetric[] = [];
+    await expect(
+      withEvaluationMetrics({
+        calls,
+        run: () =>
+          measureProviderCall({
+            model: "embedding-test",
+            stage: "embedding",
+            run: async () => {
+              throw new Error("private response");
+            },
+          }),
+      }),
+    ).rejects.toThrow("private response");
+    expect(calls).toHaveLength(1);
+    expect(calls[0]).toMatchObject({ status: "failed", totalTokens: null });
+    expect(JSON.stringify(calls)).not.toContain("private response");
+  });
+  it("captures embedding and extraction token formats", async () => {
+    const { calls } = await withEvaluationMetrics({
+      run: async () => {
+        await measureProviderCall({
+          model: "embedding",
+          stage: "embedding",
+          run: async () => ({ usage: { prompt_tokens: 20, total_tokens: 20 } }),
+        });
+        await measureProviderCall({
+          model: "extraction",
+          stage: "extraction",
+          run: async () => ({
+            usageMetadata: {
+              promptTokenCount: 30,
+              candidatesTokenCount: 10,
+              thoughtsTokenCount: 5,
+              totalTokenCount: 45,
+            },
+          }),
+        });
+      },
+    });
+    expect(calls[0]).toMatchObject({ inputTokens: 20, totalTokens: 20 });
+    expect(calls[1]).toMatchObject({
+      inputTokens: 30,
+      outputTokens: 10,
+      thinkingTokens: 5,
+      totalTokens: 45,
+    });
+  });
   it("limits concurrent cases, retains failures, and measures completed throughput", async () => {
     let active = 0;
     let peak = 0;

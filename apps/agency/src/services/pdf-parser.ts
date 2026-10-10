@@ -1,3 +1,5 @@
+import { measureProviderCall } from "@/infra/evaluation-metrics";
+import { withGeminiCapacity } from "@/infra/google/gemini-capacity";
 import "server-only";
 import { logger } from "@/infra/logger";
 import { AI_TIMEOUT_CHAT_MS } from "@/constants";
@@ -131,13 +133,15 @@ async function loadPdfJsDocument(bytes: Uint8Array) {
   graphics.Path2D ??= Path2D;
   const { createIsomorphicCanvasFactory, getDocumentProxy } = await import("unpdf");
   const CanvasFactory = await createIsomorphicCanvasFactory(() => import("@napi-rs/canvas"));
-  return getDocumentProxy(bytes, { CanvasFactory });
+  // PDF.js can transfer its input to a worker. Keep the caller's bytes intact
+  // for storage, metadata, rendering, and extraction fallbacks.
+  return getDocumentProxy(bytes.slice(), { CanvasFactory });
 }
 
 async function extractTextFromPdfNative(bytes: Uint8Array): Promise<PdfParseResult> {
   try {
     const { getDocumentProxy, extractText } = await import("unpdf");
-    const pdf = await getDocumentProxy(bytes);
+    const pdf = await getDocumentProxy(bytes.slice());
     const { text } = await extractText(pdf, { mergePages: true });
 
     if (!text || text.trim().length === 0) {
@@ -195,14 +199,19 @@ async function callOpenAITextExtraction({
         },
   ];
 
-  const response = await openai.responses.create(
-    {
-      model,
-      input: [{ role: "user", content }],
-      max_output_tokens: 6_000,
-    },
-    { signal: AbortSignal.timeout(AI_TIMEOUT_CHAT_MS) },
-  );
+  const response = await measureProviderCall({
+    model,
+    stage: "extraction_fallback",
+    run: () =>
+      openai.responses.create(
+        {
+          model,
+          input: [{ role: "user", content }],
+          max_output_tokens: 6_000,
+        },
+        { signal: AbortSignal.timeout(AI_TIMEOUT_CHAT_MS) },
+      ),
+  });
 
   const raw = response.output_text?.trim() ?? "";
   if (!raw || raw === OPENAI_DOC_EXTRACT_EMPTY_SENTINEL) {
@@ -227,22 +236,31 @@ async function callGeminiTextExtraction({
   mimeType: "application/pdf" | `image/${string}`;
 }): Promise<PdfParseResult> {
   const gemini = getGeminiClient();
-  const response = await gemini.models.generateContent({
+  const response = await measureProviderCall({
     model: GEMINI_DOCUMENT_EXTRACTION_MODEL,
-    contents: [
-      {
-        inlineData: {
-          data: bufferToBase64(bytes),
-          mimeType,
-        },
-      },
-      buildGeminiDocumentPrompt({ mimeType }),
-    ],
-    config: {
-      thinkingConfig: { thinkingLevel: ThinkingLevel.LOW },
-      abortSignal: AbortSignal.timeout(AI_TIMEOUT_CHAT_MS),
-      httpOptions: { timeout: AI_TIMEOUT_CHAT_MS },
-    },
+    stage: "extraction",
+    run: () =>
+      withGeminiCapacity({
+        timeoutMs: AI_TIMEOUT_CHAT_MS,
+        run: (remainingMs) =>
+          gemini.models.generateContent({
+            model: GEMINI_DOCUMENT_EXTRACTION_MODEL,
+            contents: [
+              {
+                inlineData: {
+                  data: bufferToBase64(bytes),
+                  mimeType,
+                },
+              },
+              buildGeminiDocumentPrompt({ mimeType }),
+            ],
+            config: {
+              thinkingConfig: { thinkingLevel: ThinkingLevel.LOW },
+              abortSignal: AbortSignal.timeout(remainingMs),
+              httpOptions: { timeout: remainingMs, retryOptions: { attempts: 1 } },
+            },
+          }),
+      }),
   });
 
   const candidate = response.candidates?.[0];
@@ -612,7 +630,7 @@ export async function extractPdfMetadata(bytes: Uint8Array): Promise<PdfMetadata
     const { getResolvedPDFJS } = await import("unpdf");
     const { getDocument } = await getResolvedPDFJS();
 
-    const pdf = await getDocument({ data: bytes }).promise;
+    const pdf = await getDocument({ data: bytes.slice() }).promise;
 
     const { info } = (await pdf.getMetadata()) as {
       info: Record<string, unknown>;

@@ -43,6 +43,13 @@
       "when": 1792429824167,
       "tag": "0005_review_completion_status",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1792567334182,
+      "tag": "0006_durable_review_jobs",
+      "breakpoints": true
     }
   ]
 }

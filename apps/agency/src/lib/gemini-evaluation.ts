@@ -1,4 +1,5 @@
 import "server-only";
+import { withGeminiCapacity } from "@/infra/google/gemini-capacity";
 import { ThinkingLevel, type Part } from "@google/genai";
 import type OpenAI from "openai";
 import { GEMINI_DOCUMENT_EVALUATION_MODEL, getGeminiClient } from "@/lib/gemini";
@@ -83,24 +84,28 @@ async function runEvaluationAttempt({
       }
     | undefined;
   try {
-    const response = await getGeminiClient().models.generateContent({
-      model,
-      contents: [{ role: "user", parts: buildEvaluationParts(userContent) }],
-      config: {
-        systemInstruction: systemPrompt,
-        responseMimeType: "application/json",
-        // Send JSON Schema directly: responseSchema's OpenAPI subset cannot
-        // preserve the existing required, nullable and additionalProperties rules.
-        responseJsonSchema: schema,
-        // Gemini counts thinking in its output budget. Reserve room for thinking
-        // in addition to the existing response budget used by the evaluation UI.
-        maxOutputTokens: Math.min(maxTokens + 8_192, 32_768),
-        thinkingConfig: { thinkingLevel },
-        abortSignal: AbortSignal.timeout(timeoutMs),
-        // Keep retry ownership here so each failed attempt is measured and all
-        // attempts share the same deadline.
-        httpOptions: { timeout: timeoutMs, retryOptions: { attempts: 1 } },
-      },
+    const response = await withGeminiCapacity({
+      timeoutMs,
+      run: (remainingMs) =>
+        getGeminiClient().models.generateContent({
+          model,
+          contents: [{ role: "user", parts: buildEvaluationParts(userContent) }],
+          config: {
+            systemInstruction: systemPrompt,
+            responseMimeType: "application/json",
+            // Send JSON Schema directly: responseSchema's OpenAPI subset cannot
+            // preserve the existing required, nullable and additionalProperties rules.
+            responseJsonSchema: schema,
+            // Gemini counts thinking in its output budget. Reserve room for thinking
+            // in addition to the existing response budget used by the evaluation UI.
+            maxOutputTokens: Math.min(maxTokens + 8_192, 32_768),
+            thinkingConfig: { thinkingLevel },
+            abortSignal: AbortSignal.timeout(remainingMs),
+            // Keep retry ownership here so each failed attempt is measured and all
+            // attempts share the same deadline.
+            httpOptions: { timeout: remainingMs, retryOptions: { attempts: 1 } },
+          },
+        }),
     });
 
     usage = response.usageMetadata;

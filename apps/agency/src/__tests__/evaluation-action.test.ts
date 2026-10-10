@@ -1,5 +1,14 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ThinkingLevel } from "@google/genai";
+vi.mock("@/infra/google/gemini-capacity", () => ({
+  withGeminiCapacity: ({
+    timeoutMs,
+    run,
+  }: {
+    timeoutMs: number;
+    run: (remainingMs: number) => unknown;
+  }) => run(timeoutMs),
+}));
 const { generateContent } = vi.hoisted(() => ({ generateContent: vi.fn() }));
 vi.mock("@/lib/gemini", () => ({
   GEMINI_DOCUMENT_EVALUATION_MODEL: "gemini-evaluation-test",

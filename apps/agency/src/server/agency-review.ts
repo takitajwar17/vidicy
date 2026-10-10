@@ -17,6 +17,7 @@ import {
   documentEvaluationTable,
   reviewIssueTable,
   uploadedDocumentTable,
+  reviewJobTable,
   visaApplicationTable,
 } from "@/db/schema";
 import { isOpenReviewIssueStatus } from "@/lib/agency-workflow";
@@ -302,8 +303,15 @@ export async function publishAgencyReview({
   applicationId,
   userId,
   evaluation,
+  completion,
 }: ReviewContext & {
   userId: string;
+  completion?: {
+    jobId: string;
+    token: string;
+    started: number;
+    calls: import("@/infra/evaluation-metrics").EvaluationCallMetric[];
+  };
   evaluation: Omit<
     typeof documentEvaluationTable.$inferInsert,
     "id" | "createdAt" | "applicantId"
@@ -329,7 +337,7 @@ export async function publishAgencyReview({
   });
   // Publish the score, issue list, and report status together. A failed write must
   // never expose a completed evaluation without its tracked findings.
-  const [[savedEvaluation]] = await db.batch([
+  const writes = [
     db.insert(documentEvaluationTable).values(evaluation).returning(),
     ...changes,
     db
@@ -352,23 +360,74 @@ export async function publishAgencyReview({
       })
       .where(eq(visaApplicationTable.id, applicationId)),
     ...getAgencyReportInvalidationQueries({ db, applicationId }),
-  ]);
-  const [checklistItems, documents] = await Promise.all([
-    db.query.checklistItemTable.findMany({
-      where: eq(checklistItemTable.applicationId, applicationId),
-    }),
-    db.query.uploadedDocumentTable.findMany({
-      where: eq(uploadedDocumentTable.applicationId, applicationId),
-      orderBy: newestDocumentOrder,
-    }),
-  ]);
-  if (!isEvaluationCurrent({ evaluation: savedEvaluation, checklistItems, documents })) {
-    await invalidateAgencyReview({ db, applicationId });
-    throw new ZSAError(
-      "PRECONDITION_FAILED",
-      "The documents changed during review. Run review again.",
-    );
-  }
+  ] as const;
+  const savedEvaluation = await db.withTransaction(async () => {
+    if (completion) {
+      // Updating the claim locks its row through publication. A stale worker
+      // cannot publish after recovery assigns a different token.
+      const claimed = await db
+        .update(reviewJobTable)
+        .set({ updatedAt: new Date() })
+        .where(
+          and(
+            eq(reviewJobTable.id, completion.jobId),
+            eq(reviewJobTable.claimToken, completion.token),
+            eq(reviewJobTable.status, "running"),
+            eq(reviewJobTable.applicationId, applicationId),
+            eq(reviewJobTable.applicantId, evaluation.applicantId),
+            sql`${reviewJobTable.leaseUntil} > now()`,
+          ),
+        )
+        .returning();
+      if (!claimed.length)
+        throw new ZSAError(
+          "PRECONDITION_FAILED",
+          "The review job lease expired. Run review again.",
+        );
+    }
+    const [saved] = await writes[0];
+    for (const write of writes.slice(1)) await write;
+    const [checklistItems, documents] = await Promise.all([
+      db.query.checklistItemTable.findMany({
+        where: eq(checklistItemTable.applicationId, applicationId),
+      }),
+      db.query.uploadedDocumentTable.findMany({
+        where: eq(uploadedDocumentTable.applicationId, applicationId),
+        orderBy: newestDocumentOrder,
+      }),
+    ]);
+    if (!isEvaluationCurrent({ evaluation: saved, checklistItems, documents })) {
+      throw new ZSAError(
+        "PRECONDITION_FAILED",
+        "The documents changed during review. Run review again.",
+      );
+    }
+    if (completion) {
+      const completed = await db
+        .update(reviewJobTable)
+        .set({
+          status: "succeeded",
+          evaluationId: saved.id,
+          claimToken: null,
+          leaseUntil: null,
+          finishedAt: new Date(),
+          updatedAt: new Date(),
+          error: null,
+          metrics: { durationMs: performance.now() - completion.started, calls: completion.calls },
+        })
+        .where(
+          and(
+            eq(reviewJobTable.id, completion.jobId),
+            eq(reviewJobTable.claimToken, completion.token),
+            eq(reviewJobTable.status, "running"),
+            sql`${reviewJobTable.leaseUntil} > now()`,
+          ),
+        )
+        .returning();
+      if (!completed.length) throw new Error("Review claim expired before publication");
+    }
+    return saved;
+  });
   return savedEvaluation;
 }
 
@@ -377,6 +436,17 @@ export async function requireCurrentAgencyReview({
   applicationId,
   userId,
 }: ReviewContext & { userId: string }) {
+  const pending = await db.query.reviewJobTable.findFirst({
+    where: and(
+      eq(reviewJobTable.applicationId, applicationId),
+      sql`${reviewJobTable.status} in ('queued', 'running')`,
+    ),
+  });
+  if (pending)
+    throw new ZSAError(
+      "PRECONDITION_FAILED",
+      "Wait for the current review to finish before you prepare a report or mark the case ready.",
+    );
   const [items, documents, evaluations] = await Promise.all([
     db.query.checklistItemTable.findMany({
       where: eq(checklistItemTable.applicationId, applicationId),

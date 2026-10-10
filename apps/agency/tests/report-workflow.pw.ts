@@ -493,6 +493,65 @@ test("generate, view, export, and deliver with real auth and a private provider 
   expect((await context.request.get(`${base}/api/client-reports/${reportId}`)).status()).toBe(403);
 });
 
+test("review status survives reloads and shows completion and failure", async ({
+  page,
+  context,
+}) => {
+  await context.addCookies([{ name: "session", value: staffCookie, url: base }]);
+  const db = drizzle(pool, { schema });
+  const applicant = await db.query.applicantTable.findFirst({
+    where: eq(schema.applicantTable.applicationId, applicationId),
+  });
+  const staff = await db.query.agencyTeamMemberTable.findFirst({
+    where: eq(schema.agencyTeamMemberTable.status, "active"),
+  });
+  const [job] = await db
+    .insert(schema.reviewJobTable)
+    .values({ applicationId, applicantId: applicant!.id, userId: staff!.userId!, status: "queued" })
+    .returning();
+  try {
+    await page.goto(`${base}/dashboard/${applicationId}`);
+    await expect(page.getByRole("button", { name: "Review queued", exact: true })).toBeDisabled();
+    await page.reload();
+    await expect(page.getByRole("button", { name: "Review queued", exact: true })).toBeDisabled();
+    await db
+      .update(schema.reviewJobTable)
+      .set({ status: "running" })
+      .where(eq(schema.reviewJobTable.id, job.id));
+    await expect(page.getByRole("button", { name: "Reviewing...", exact: true })).toBeDisabled();
+    await db
+      .update(schema.reviewJobTable)
+      .set({ status: "succeeded" })
+      .where(eq(schema.reviewJobTable.id, job.id));
+    await expect(page.getByRole("button", { name: "Re-run Review", exact: true })).toBeEnabled();
+    await db
+      .update(schema.reviewJobTable)
+      .set({ status: "failed", error: "Review failed" })
+      .where(eq(schema.reviewJobTable.id, job.id));
+    await page.reload();
+    await expect(
+      page.getByRole("alert").filter({ hasText: "Review failed. Run it again." }),
+    ).toBeVisible();
+    await expect(page.getByRole("button", { name: "Re-run Review", exact: true })).toBeEnabled();
+  } finally {
+    await db.delete(schema.reviewJobTable).where(eq(schema.reviewJobTable.id, job.id));
+  }
+  // Cloud access is disabled in this fixture. An uncertain enqueue must still
+  // show the durable job, without requiring a second click or page reload.
+  await page.reload();
+  await page.getByRole("button", { name: "Re-run Review", exact: true }).click();
+  await expect(
+    page.getByText(
+      "Review request was saved, but delivery is not confirmed. It will retry automatically.",
+      { exact: true },
+    ),
+  ).toBeVisible();
+  await expect(page.getByRole("button", { name: "Review queued", exact: true })).toBeDisabled();
+  await db
+    .delete(schema.reviewJobTable)
+    .where(eq(schema.reviewJobTable.applicationId, applicationId));
+});
+
 test("review workspace links findings to evidence and keeps actions usable at small widths", async ({
   page,
   context,

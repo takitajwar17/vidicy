@@ -12,6 +12,7 @@ import { enqueueDocumentExtraction } from "@/infra/google/document-tasks";
 import { verifyInternalGoogleRequest } from "@/infra/google/internal-auth";
 import { cleanDeletedVectorMetadata } from "@/infra/google/vector-search";
 import { logger } from "@/infra/logger";
+import { recoverReviewJobs } from "@/server/review-jobs";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -81,6 +82,9 @@ export async function POST(request: Request): Promise<Response> {
       .limit(30);
     let enqueued = 0;
     let failed = 0;
+    const reviews = await recoverReviewJobs();
+    enqueued += reviews.enqueued;
+    failed += reviews.failed;
     for (let offset = 0; offset < documents.length; offset += 3) {
       const results = await Promise.allSettled(
         documents.slice(offset, offset + 3).map(async (document) => {

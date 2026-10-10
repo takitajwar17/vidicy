@@ -1,13 +1,15 @@
 "use client";
 
 import type { Route } from "next";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { useServerAction } from "zsa-react";
+import type { getLatestReviewJob } from "@/server/review-jobs";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Loader2Icon, RefreshCwIcon, BrainCircuitIcon, UploadIcon } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { evaluateDocumentsAction } from "@/actions/evaluation.action";
+import { evaluateDocumentsAction, getReviewJobAction } from "@/actions/evaluation.action";
 
 interface EvaluationTriggerProps {
   applicationId: string;
@@ -27,19 +29,53 @@ export function EvaluationTrigger({
   checklistHref,
   className,
 }: EvaluationTriggerProps) {
-  const [loading, setLoading] = useState(false);
   const router = useRouter();
+  const [job, setJob] = useState<Awaited<ReturnType<typeof getLatestReviewJob>>>(null);
+  const { execute, isPending } = useServerAction(evaluateDocumentsAction);
+  const { execute: readStatus } = useServerAction(getReviewJobAction);
+  const readStatusRef = useRef(readStatus);
+  readStatusRef.current = readStatus;
+  const wasPending = useRef(false);
+  const pending = job?.status === "queued" || job?.status === "running";
+  const loading = isPending || pending;
+  useEffect(() => {
+    let cancelled = false;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    async function poll() {
+      const [current, error] = await readStatusRef.current({ applicationId, applicantId });
+      if (cancelled) return;
+      if (error) {
+        timer = setTimeout(poll, 5000);
+        return;
+      }
+      setJob(current ?? null);
+      const active = current?.status === "queued" || current?.status === "running";
+      if (wasPending.current && !active) router.refresh();
+      wasPending.current = active;
+      if (active) timer = setTimeout(poll, 3000);
+    }
+    void poll();
+    return () => {
+      cancelled = true;
+      if (timer) clearTimeout(timer);
+    };
+  }, [applicationId, applicantId, job?.id, router]);
 
   async function handleEvaluate() {
-    setLoading(true);
-    const [, err] = await evaluateDocumentsAction({ applicationId, applicantId });
-    if (err) {
-      // Use Sonner toast for consistency with the rest of the app — never native alert()
-      toast.error(err.message || "Review failed. Please try again.");
-    } else {
+    const [result, error] = await execute({ applicationId, applicantId });
+    if (error) {
+      toast.error(error.message || "Review could not start. Please try again.");
+      const [saved] = await readStatusRef.current({ applicationId, applicantId });
+      if (saved) {
+        setJob(saved);
+        router.refresh();
+      }
+    } else if (result) {
+      wasPending.current = true;
+      setJob(result);
       router.refresh();
+      toast.success("Review queued. You can leave this page and return later.");
     }
-    setLoading(false);
   }
 
   const IdleIcon = !hasDocuments ? UploadIcon : rerun ? RefreshCwIcon : BrainCircuitIcon;
@@ -61,24 +97,31 @@ export function EvaluationTrigger({
   }
 
   return (
-    <Button
-      onClick={handleEvaluate}
-      disabled={loading || !hasDocuments}
-      variant={rerun ? "outline" : "default"}
-      size={rerun ? "sm" : "default"}
-      className={className ?? "gap-2"}
-    >
-      {loading ? (
-        <>
-          <Loader2Icon className="h-4 w-4 animate-spin" />
-          Evaluating...
-        </>
-      ) : (
-        <>
-          <IdleIcon className="h-4 w-4" />
-          {idleLabel}
-        </>
-      )}
-    </Button>
+    <div className="flex flex-wrap items-center gap-2">
+      <Button
+        onClick={handleEvaluate}
+        disabled={loading || !hasDocuments}
+        variant={rerun ? "outline" : "default"}
+        size={rerun ? "sm" : "default"}
+        className={className ?? "gap-2"}
+      >
+        {loading ? (
+          <>
+            <Loader2Icon className="h-4 w-4 animate-spin" />
+            {job?.status === "queued" ? "Review queued" : "Reviewing..."}
+          </>
+        ) : (
+          <>
+            <IdleIcon className="h-4 w-4" />
+            {idleLabel}
+          </>
+        )}
+      </Button>
+      {job?.status === "failed" ? (
+        <span role="alert" className="text-sm text-destructive">
+          Review failed. Run it again.
+        </span>
+      ) : null}
+    </div>
   );
 }

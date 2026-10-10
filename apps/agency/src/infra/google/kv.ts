@@ -47,7 +47,7 @@ interface RedisState {
 
 const processState = globalThis as typeof globalThis & { __vidicyRedisState?: RedisState };
 
-async function getRedis(): Promise<RedisClient> {
+export async function getRedis(): Promise<RedisClient> {
   const state = (processState.__vidicyRedisState ??= {});
   if (state.client?.isReady) return state.client;
   if (state.connection) return state.connection;

@@ -1,3 +1,12 @@
+vi.mock("@/infra/google/gemini-capacity", () => ({
+  withGeminiCapacity: ({
+    timeoutMs,
+    run,
+  }: {
+    timeoutMs: number;
+    run: (remainingMs: number) => unknown;
+  }) => run(timeoutMs),
+}));
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import {
   buildDocumentExtractionPrompt,
@@ -77,6 +86,17 @@ describe("extractTextFromPdf", () => {
   });
 
   describe("page-aware PDF helpers", () => {
+    it("keeps upload bytes when the PDF worker takes ownership of its input", async () => {
+      const { getDocumentProxy } = await getUnpdfMocks();
+      getDocumentProxy.mockImplementation(async (input) => {
+        const bytes = input as Uint8Array<ArrayBuffer>;
+        structuredClone(bytes, { transfer: [bytes.buffer] });
+        return { numPages: 1 } as never;
+      });
+      const bytes = new Uint8Array([1, 2, 3]);
+      await expect(getPdfPageCount(bytes)).resolves.toBe(1);
+      expect(Array.from(bytes)).toEqual([1, 2, 3]);
+    });
     it("returns the detected PDF page count", async () => {
       const { getResolvedPDFJS } = await getUnpdfMocks();
       const { getDocument } = createPdfRenderMocks({ totalPages: 3 });

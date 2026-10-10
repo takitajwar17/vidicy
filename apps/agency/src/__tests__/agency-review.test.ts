@@ -102,7 +102,7 @@ import {
   updateReviewIssueStatusAction,
 } from "@/actions/agency-case.action";
 vi.mock("@/lib/gemini-evaluation", () => ({ createGeminiEvaluation: mockGemini }));
-import { evaluateDocumentsAction } from "@/actions/evaluation.action";
+import { runAgencyEvaluation } from "@/services/agency-evaluation";
 import { generateChecklistAction } from "@/actions/checklist.action";
 import { getDBFromDatabase } from "@/db";
 import {
@@ -116,6 +116,7 @@ import {
   supportTicketTable,
   supportMessageTable,
   uploadedDocumentTable,
+  reviewJobTable,
   userTable,
   visaApplicationTable,
 } from "@/db/schema";
@@ -500,6 +501,17 @@ describe("agency review workflow with the real database driver", () => {
     expect(await fixture.db.query.supportMessageTable.findMany()).toHaveLength(1);
   });
 
+  it("blocks reports and readiness while a newer review is pending", async () => {
+    await fixture.db.insert(reviewJobTable).values({ applicationId, applicantId, userId });
+    await expect(generateClientReportAction({ applicationId })).rejects.toThrow(
+      "Wait for the current review",
+    );
+    await expect(finalizeReviewAction({ applicationId })).rejects.toThrow(
+      "Wait for the current review",
+    );
+    expect((await getAgencyCaseDetail(applicationId)).latestEvaluation).toBeNull();
+  });
+
   it("evaluates stored evidence and publishes the combined review", async () => {
     await fixture.db
       .update(uploadedDocumentTable)
@@ -527,7 +539,7 @@ describe("agency review workflow with the real database driver", () => {
         itemFeedback: {},
       }),
     );
-    await evaluateDocumentsAction({ applicationId, applicantId });
+    await runAgencyEvaluation({ applicationId, applicantId, userId });
     const saved = await fixture.db.query.documentEvaluationTable.findMany();
     expect(saved).toHaveLength(2);
     const result = saved.find((row) => row.id !== evaluation.id)!;
@@ -560,7 +572,7 @@ describe("agency review workflow with the real database driver", () => {
     );
     mockGemini.mockRejectedValueOnce(new Error("Orchestrator unavailable"));
     const before = await fixture.db.query.visaApplicationTable.findFirst();
-    await expect(evaluateDocumentsAction({ applicationId, applicantId })).rejects.toThrow(
+    await expect(runAgencyEvaluation({ applicationId, applicantId, userId })).rejects.toThrow(
       "combined review did not complete",
     );
     expect(await fixture.db.query.documentEvaluationTable.findMany()).toEqual([evaluation]);
@@ -597,7 +609,7 @@ describe("agency review workflow with the real database driver", () => {
     );
     mockGemini.mockRejectedValueOnce(new Error("Adversarial pass unavailable"));
     const before = await fixture.db.query.visaApplicationTable.findFirst();
-    await expect(evaluateDocumentsAction({ applicationId, applicantId })).rejects.toThrow(
+    await expect(runAgencyEvaluation({ applicationId, applicantId, userId })).rejects.toThrow(
       "second review did not complete",
     );
     expect(await fixture.db.query.documentEvaluationTable.findMany()).toEqual([evaluation]);
@@ -662,7 +674,7 @@ describe("agency review workflow with the real database driver", () => {
         strengths: [],
       });
     });
-    await expect(evaluateDocumentsAction({ applicationId, applicantId })).rejects.toThrow(
+    await expect(runAgencyEvaluation({ applicationId, applicantId, userId })).rejects.toThrow(
       "could not evaluate",
     );
     expect(await fixture.db.query.documentEvaluationTable.findMany()).toHaveLength(1);
@@ -670,7 +682,7 @@ describe("agency review workflow with the real database driver", () => {
       mockGemini.mock.calls.every(([input]) => input.schemaName === "per_document_evaluation"),
     ).toBe(true);
     mockGemini.mockClear();
-    await evaluateDocumentsAction({ applicationId, applicantId });
+    await runAgencyEvaluation({ applicationId, applicantId, userId });
     const documentCalls = mockGemini.mock.calls.filter(
       ([input]) => input.schemaName === "per_document_evaluation",
     );
@@ -689,7 +701,7 @@ describe("agency review workflow with the real database driver", () => {
       .set({ textContent: "Passport document text", extractionStatus: "completed" });
     mockGemini.mockReset();
     mockGemini.mockRejectedValue(new Error("Provider unavailable"));
-    await expect(evaluateDocumentsAction({ applicationId, applicantId })).rejects.toThrow(
+    await expect(runAgencyEvaluation({ applicationId, applicantId, userId })).rejects.toThrow(
       "could not evaluate",
     );
     expect(await fixture.db.query.documentEvaluationTable.findMany()).toHaveLength(1);
