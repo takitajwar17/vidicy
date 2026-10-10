@@ -118,7 +118,7 @@ The [browser suite](tests/report-workflow.pw.ts) adds checks across real applica
 
 ## Review pipeline
 
-The review pipeline converts route requirements and uploaded evidence into findings that agency staff can act on. Its main entry points are [checklist.action.ts](src/actions/checklist.action.ts), [evaluation.action.ts](src/actions/evaluation.action.ts), [case-evaluation.ts](src/services/case-evaluation.ts), and [agency-review.ts](src/server/agency-review.ts). The action prepares evidence and publishes results. The shared core runs the production prompts, schemas, per-document checks, combined assessment, and skeptical pass. Quality and benchmark tools call this same core. Each stage has a separate purpose and an explicit failure path.
+The review pipeline converts route requirements and uploaded evidence into findings that agency staff can act on. Its main entry points are [checklist.action.ts](src/actions/checklist.action.ts), [evaluation.action.ts](src/actions/evaluation.action.ts), [case-evaluation.ts](src/services/case-evaluation.ts), and [agency-review.ts](src/server/agency-review.ts). The action persists a review job and awaits task acceptance. The [worker service](src/services/agency-evaluation.ts) prepares evidence and publishes results. The shared core runs the production prompts, schemas, per-document checks, combined assessment, and skeptical pass. Quality and benchmark tools call this same core. Each stage has a separate purpose and an explicit failure path.
 
 ```mermaid
 flowchart TB
@@ -156,7 +156,9 @@ The Gemini adapter owns retries explicitly. It permits at most two retries for H
 
 The evaluator prefers a machine translation when one is available. Otherwise, it uses retrieved relevant chunks when available, then falls back to the first 8,000 characters of extracted text. It can also send uploaded images or rendered previews of up to three PDF pages to Gemini. Translation is requested explicitly on later runs when a previous evaluation identified a non-English document; the first-run prompt asks the model to translate internally.
 
-Per-document feedback can be reused when a saved version key matches the document ID, configured evaluation model, and availability of text and images. Saved feedback retains the extracted identity, expiry, issuer, language, and date-range fields. A reused document therefore still participates in current name, expiry, and language checks. Uploaded documents with legacy feedback that lacks these fields are evaluated again once. This avoids some repeated per-document model calls without dropping structured evidence. The combined assessment still runs. Stored extraction, completed indexing, and a seven-day route-research cache provide separate reuse paths.
+Per-document feedback uses a versioned SHA-256 key over the complete model request, full source text, and translated text, with the document ID and configured evaluation model retained in the key prefix. The request includes the requirement, case context, system prompt, output schema, text excerpt, and available images. A change to those inputs invalidates the saved feedback, including a source-text change beyond the prompt excerpt. Legacy keys cannot match the current version. [Cache regression tests](src/__tests__/case-evaluation.test.ts) cover these invalidation paths.
+
+Saved feedback retains the extracted identity, expiry, issuer, language, and date-range fields. A reused document therefore still participates in current name, expiry, and language checks. Feedback that lacks required structured fields is evaluated again. The combined assessment still runs. Stored extraction, completed indexing, and a seven-day route-research cache provide separate reuse paths.
 
 ### Publication and readiness
 
@@ -588,7 +590,19 @@ Processing has explicit controls at each service boundary:
 | Retrieval         | Bounded text, chunk batches, query candidate counts, and database identity checks                    |
 | Recovery          | Bounded selections, atomic recovery claims, and grouped enqueue requests                             |
 
-Review concurrency is scoped to each case. Queue settings control extraction delivery. Size these controls with instance resources, SQL connection capacity, and provider quotas. The shared review core and its measurement tools support comparisons of model quality, latency, retries, and token cost on the same inputs.
+Review uses two document calls per case and a shared Redis capacity limit for Gemini extraction and assessment calls. `GEMINI_GLOBAL_CONCURRENCY` defaults to four across instances that use the same Redis namespace. Leases last 135 seconds, beyond the adapter's maximum 120-second request deadline; releases remove only the caller's token. A provider rate-limit response also sets a shared 30-second cooldown before new calls can acquire capacity. Redis failure stops new model calls. Queue settings control task delivery. Size these controls with instance resources, SQL connection capacity, and provider quotas. The shared review core and its measurement tools support comparisons of model quality, latency, retries, and token cost on the same inputs.
+
+### Durable review execution
+
+Apply generated migration `0006_durable_review_jobs` before deploying this path. [Review jobs](src/server/review-jobs.ts) allow one queued/running job per applicant. A conditional update claims a 30-minute worker lease. Completed jobs acknowledge duplicate delivery. Failed attempts retain safe status and call metrics; five attempts or three recovery enqueues bound automatic work. The existing authenticated reconciliation route repairs unconfirmed delivery after two minutes and accepted queued work or expired worker leases after thirty minutes. Accepted queue backlogs do not consume the short delivery-repair budget. Staff access is checked again when a worker starts.
+
+The worker publishes the evaluation, issues, scores, and successful job state in one transaction. Publication conditionally locks the running job by its claim token and checks that the lease is still valid. A replacement claim prevents the old worker from publishing; a failed completion write rolls back the evaluation and issue writes. Current-document checks run inside the transaction. Pending review jobs block report preparation and readiness approval. Network and model calls remain outside the publication transaction.
+
+The client polls authorized saved status and restores queued or running work after navigation or reload. A task acceptance failure leaves the saved job available for recovery and gives staff an explicit delivery message. Failed model attempts retain safe status and usage metrics for the next attempt. Metrics collect timing, status, and token counts without prompt or document text.
+
+[Database tests](src/__tests__/review-jobs.test.ts) cover simultaneous requests, duplicate delivery, access revocation, stale claims, and atomic completion. A separate test process is stopped during model execution without cleanup; after the saved lease expires, a new worker completes the same job. [Redis integration tests](src/__tests__/gemini-capacity.integration.test.ts) use separate clients against a private server to check the shared limit, token-safe release, expired leases, deadlines, and the shared rate-limit cooldown. [Task contract tests](src/__tests__/review-tasks.test.ts) check acceptance before return, deterministic task names, recovery names, and the target's OIDC audience.
+
+`REVIEW_TASK_QUEUE` can select a dedicated pre-provisioned queue. It defaults to `vidicy-document-extraction`, so the existing authenticated delivery identity and queue can serve both worker routes. The worker URL is `/api/internal/case-review`; task payloads contain only the job ID.
 
 ### Repeatable review measurements
 
@@ -609,6 +623,12 @@ The artifact records model, source, harness, metric, and dataset hashes, provena
 These measurements cover the prepared-evidence review core. Upload, extraction, retrieval services, SQL publication, HTTP load, and email are outside the benchmark. Compare matching model and implementation hashes when using saved results.
 
 Token cost estimates use a rates object with `model`, `inputUsdPerMillion`, `cachedInputUsdPerMillion`, `outputUsdPerMillion`, and `source`. The model must match the configured review model. Reasoning output is included in total-minus-input usage. Missing cache counts receive no discount; missing usage or rates remain unknown. Estimates cover the review model's tokens.
+
+### Upload-to-report measurements
+
+Run `pnpm benchmark:workflow` from the repository root. The default uses six synthetic cases at concurrency levels 1, 2, and 4, real PDF/image bytes, private PostgreSQL and Redis, production upload/extraction/retrieval/review/publication/report functions, and simulated external providers. `pnpm benchmark:workflow --live` enables live model, embedding, storage, and vector APIs with a four-case cap. Only synthetic cloud objects and vector IDs created by that run are removed during cleanup. Task delivery and authentication remain simulated; these backend measurements do not establish Cloud Run HTTP capacity or email delivery.
+
+`WORKFLOW_CASES`, `WORKFLOW_CONCURRENCY`, and `WORKFLOW_BENCHMARK_OUTPUT` control the workload and saved JSON. Artifacts include failures, stage times, model token usage, source/dataset hashes, and provider mode. `WORKFLOW_RATES_FILE` accepts an array of the rate objects described above. Missing rates or usage remain unpriced. `WORKFLOW_INFRA_USD_PER_CASE` can supply an explicit infrastructure allocation; full cost remains unknown without both model pricing and that allocation. Estimates are separate from actual billing. Results remain in the ignored local `output/verification/` directory.
 
 ## Configuration and code map
 
