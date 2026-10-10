@@ -74,19 +74,26 @@ export async function ensureAgencyTeamMembership(
     return null;
   }
 
-  if (user.role === ROLES_ENUM.ADMIN) {
-    await db.insert(agencyTeamMemberTable).values({
-      userId: user.id,
-      email: email ?? user.id,
-      role: AGENCY_STAFF_ROLE.ADMIN,
-      status: AGENCY_STAFF_STATUS.ACTIVE,
-      joinedAt: new Date(),
-    });
+  const isAdmin = user.role === ROLES_ENUM.ADMIN;
 
-    return { role: AGENCY_STAFF_ROLE.ADMIN, isAdmin: true };
+  if (!isAdmin && !user.emailVerified) {
+    return null;
   }
 
-  return null;
+  const role = isAdmin ? AGENCY_STAFF_ROLE.ADMIN : AGENCY_STAFF_ROLE.MEMBER;
+
+  await db
+    .insert(agencyTeamMemberTable)
+    .values({
+      userId: user.id,
+      email: email ?? user.id,
+      role,
+      status: AGENCY_STAFF_STATUS.ACTIVE,
+      joinedAt: new Date(),
+    })
+    .onConflictDoNothing({ target: agencyTeamMemberTable.userId });
+
+  return { role, isAdmin };
 }
 
 export const getAgencyStaffContextForSession = cache(

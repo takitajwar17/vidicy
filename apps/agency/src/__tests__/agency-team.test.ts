@@ -1,8 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { findFirst, values, set, where } = vi.hoisted(() => ({
+const { findFirst, values, onConflictDoNothing, set, where } = vi.hoisted(() => ({
   findFirst: vi.fn(),
   values: vi.fn(),
+  onConflictDoNothing: vi.fn(),
   set: vi.fn(),
   where: vi.fn(),
 }));
@@ -20,7 +21,7 @@ import type { SessionValidationResult } from "@/types";
 
 function createSession(role = "user") {
   return {
-    user: { id: "user_1", email: "user@example.com", role },
+    user: { id: "user_1", email: "user@example.com", role, emailVerified: new Date() },
   } as NonNullable<SessionValidationResult>;
 }
 
@@ -28,13 +29,33 @@ describe("agency team access", () => {
   beforeEach(() => {
     vi.resetAllMocks();
     findFirst.mockResolvedValue(null);
-    values.mockResolvedValue([]);
+    values.mockReturnValue({ onConflictDoNothing });
+    onConflictDoNothing.mockResolvedValue([]);
     set.mockReturnValue({ where });
     where.mockResolvedValue([]);
   });
 
-  it("does not make an uninvited user admin when the team is empty", async () => {
-    await expect(ensureAgencyTeamMembership(createSession())).resolves.toBeNull();
+  it("lets a verified new account join as a regular member", async () => {
+    await expect(ensureAgencyTeamMembership(createSession())).resolves.toEqual({
+      role: "member",
+      isAdmin: false,
+    });
+    expect(values).toHaveBeenCalledWith(
+      expect.objectContaining({
+        userId: "user_1",
+        email: "user@example.com",
+        role: "member",
+        status: "active",
+      }),
+    );
+    expect(onConflictDoNothing).toHaveBeenCalledWith({ target: expect.anything() });
+  });
+
+  it("does not enroll an unverified account", async () => {
+    const session = createSession();
+    session.user.emailVerified = null;
+
+    await expect(ensureAgencyTeamMembership(session)).resolves.toBeNull();
     expect(values).not.toHaveBeenCalled();
   });
 
@@ -65,6 +86,18 @@ describe("agency team access", () => {
 
   it("keeps a suspended member out of the workspace", async () => {
     findFirst.mockResolvedValueOnce({ id: "member_1", role: "admin", status: "suspended" });
+    await expect(ensureAgencyTeamMembership(createSession())).resolves.toBeNull();
+    expect(values).not.toHaveBeenCalled();
+  });
+
+  it("keeps a suspended email invitation out of the workspace", async () => {
+    findFirst.mockResolvedValueOnce(null).mockResolvedValueOnce({
+      id: "invitation",
+      userId: null,
+      role: "member",
+      status: "suspended",
+    });
+
     await expect(ensureAgencyTeamMembership(createSession())).resolves.toBeNull();
     expect(values).not.toHaveBeenCalled();
   });
