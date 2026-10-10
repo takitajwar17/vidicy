@@ -66,6 +66,7 @@ export function SearchableSelect({
             "disabled:cursor-not-allowed disabled:opacity-50",
             !selected && "text-muted-foreground",
             triggerClassName,
+            "gap-3 pr-5",
           )}
         >
           <span className="truncate">{selected ? selected.label : placeholder}</span>

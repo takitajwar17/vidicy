@@ -814,9 +814,9 @@ body {
 /* Keep the arrow clear of both the selected text and the control edge. */
 .native-select {
   appearance: none;
-  padding-right: 2.25rem;
+  padding-right: 3rem;
   background-image: var(--select-chevron);
-  background-position: right 0.75rem center;
+  background-position: right 1.25rem center;
   background-repeat: no-repeat;
   background-size: 1rem 1rem;
 }

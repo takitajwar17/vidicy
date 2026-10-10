@@ -23,6 +23,7 @@ const SelectTrigger = React.forwardRef<
     className={cn(
       "flex h-10 w-full items-center justify-between gap-2 rounded-[5px] border border-input bg-card px-3 py-2 text-sm ring-offset-background transition-[border-color,box-shadow,background-color] data-[placeholder]:text-muted-foreground hover:border-border/80 focus-visible:border-primary/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/20 focus-visible:ring-offset-0 disabled:cursor-not-allowed disabled:bg-muted/35 disabled:text-muted-foreground [&>span]:min-w-0 [&>span]:truncate",
       className,
+      !hideIcon && "gap-3 pr-5",
     )}
     {...props}
   >

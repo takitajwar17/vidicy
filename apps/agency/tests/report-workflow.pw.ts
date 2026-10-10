@@ -65,12 +65,13 @@ async function expectDropdownSpacing({ page }: DropdownSpacingOptions) {
     );
   for (const control of controls) {
     if (control.native) {
-      expect(control.paddingRight, control.name).toBeGreaterThanOrEqual(36);
-      expect(control.backgroundPosition, control.name).toContain("12px");
+      expect(control.paddingRight, control.name).toBeGreaterThanOrEqual(48);
+      expect(control.backgroundPosition, control.name).toContain("20px");
       expect(control.backgroundImage, control.name).not.toBe("none");
     } else if (control.arrowInset !== null) {
-      expect(control.arrowInset, control.name).toBeGreaterThanOrEqual(11);
-      if (control.textGap !== null) expect(control.textGap, control.name).toBeGreaterThanOrEqual(7);
+      expect(control.arrowInset, control.name).toBeGreaterThanOrEqual(19);
+      if (control.textGap !== null)
+        expect(control.textGap, control.name).toBeGreaterThanOrEqual(11);
     }
   }
 }
@@ -702,6 +703,12 @@ test("review workspace links findings to evidence and keeps actions usable at sm
   const output = resolve("output/verification");
   mkdirSync(output, { recursive: true });
   await page.screenshot({ path: join(output, "case-workspace-desktop.png"), fullPage: true });
+  await page
+    .getByRole("combobox", { name: "Filter issue status" })
+    .screenshot({ path: join(output, "issue-filter-spacing.png") });
+  await page
+    .getByRole("combobox", { name: "Select evidence document" })
+    .screenshot({ path: join(output, "evidence-dropdown-spacing.png") });
   await page.getByRole("button", { name: "Next page", exact: true }).click();
   await expect(page.getByText("Page 2 of 2", { exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Zoom in", exact: true }).click();
