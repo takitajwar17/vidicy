@@ -972,6 +972,10 @@ test("dashboard uses real coverage, attention filters, next actions, and respons
   await page.setViewportSize({ width: 1586, height: 1000 });
   await page.goto(`${base}/dashboard`);
   const queue = page.getByRole("table", { name: "Client file work queue" });
+  await expect(page.getByRole("button", { name: /^Client files:/ })).toHaveAttribute(
+    "aria-pressed",
+    "true",
+  );
   await expect(page.getByRole("heading", { name: "Needs attention", exact: true })).toBeVisible();
   await expect(page.getByText("Most repeated issues", { exact: true })).toHaveCount(0);
   await expect(page.getByText("Files moving this week", { exact: true })).toHaveCount(0);
@@ -1023,7 +1027,7 @@ test("dashboard uses real coverage, attention filters, next actions, and respons
   await page.getByRole("button", { name: "Clear filters", exact: true }).click();
   const output = resolve("output/verification/dashboard");
   mkdirSync(output, { recursive: true });
-  for (const width of [1586, 1024, 390]) {
+  for (const width of [1586, 1024, 390, 320]) {
     await page.setViewportSize({ width, height: 1000 });
     expect(
       await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
@@ -1031,6 +1035,11 @@ test("dashboard uses real coverage, attention filters, next actions, and respons
     await expectDropdownSpacing({ page });
     if (width < 768) {
       const mobileQueue = page.getByRole("list", { name: "Client file work queue", exact: true });
+      expect(
+        (await page
+          .getByRole("textbox", { name: "Search client files", exact: true })
+          .boundingBox())!.width,
+      ).toBeGreaterThan(220);
       await expect(mobileQueue.getByRole("listitem")).toHaveCount(8);
       await expect(
         mobileQueue.getByRole("link", { name: "Recheck readiness", exact: true }),
@@ -1241,7 +1250,7 @@ test("UI fixes cover admin, recovery, accessible controls, and narrow layouts", 
       await expect(page.getByRole("heading", { level: 1 }).first()).toHaveCount(1);
       await expectDropdownSpacing({ page });
       expect(
-        await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth),
+        await page.evaluate(() => window.document.documentElement.scrollWidth <= innerWidth),
         path,
       ).toBe(true);
       if (path === "/admin/enterprise") {
@@ -1330,4 +1339,260 @@ test("UI fixes cover admin, recovery, accessible controls, and narrow layouts", 
     animations: "disabled",
   });
   expect(errors).toEqual([]);
+});
+
+test.describe("UI audit regression", () => {
+  test.use({ timezoneId: "Asia/Dhaka" });
+  test("UI audit fixes preserve drafts, links, focus, and recovery", async ({ page, context }) => {
+    test.setTimeout(120_000);
+    page.on("dialog", (dialog) => dialog.accept());
+    const errors: string[] = [];
+    page.on("pageerror", (error) => errors.push(error.message));
+    const db = drizzle(pool, { schema });
+    const staffId = staffCookie.split(":")[0];
+    await context.addCookies([
+      { name: "session", value: staffCookie, url: base },
+      { name: "csrf-token", value: "isolated-browser-csrf-token", url: base },
+    ]);
+    await page.setViewportSize({ width: 390, height: 900 });
+    await page.clock.setFixedTime(new Date("2026-10-20T19:00:00Z"));
+    await page.goto(base + "/dashboard/applications/new");
+    const localDate = await page.evaluate(() => {
+      const now = new Date();
+      return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+    });
+    expect(localDate).toBe("2026-10-21");
+    await expect(page.getByLabel("Received date", { exact: true })).toHaveValue(localDate);
+    await expect(page.locator("main")).toHaveCount(1);
+    await page.getByRole("button", { name: "Create client file", exact: true }).click();
+    await expect(page.getByLabel("Client name", { exact: true })).toBeFocused();
+    await expect(page.getByLabel("Client name", { exact: true })).toHaveAttribute(
+      "aria-invalid",
+      "true",
+    );
+    await expect(page.locator('[aria-invalid="true"]')).toHaveCount(7);
+    await page.getByLabel("Client name", { exact: true }).fill("Preserved intake draft");
+    // Navigate through the application's own links, then use browser Back.
+    await page.getByRole("button", { name: "Toggle Sidebar", exact: true }).click();
+    await page
+      .locator('a[data-sidebar="menu-button"][href="/dashboard/applications"]')
+      .last()
+      .click();
+    await page.waitForURL(base + "/dashboard/applications");
+    await page.goBack();
+    await expect(page.getByLabel("Client name", { exact: true })).toHaveValue(
+      "Preserved intake draft",
+    );
+    await page.goto(base + "/dashboard/applications");
+    for (const route of ["applications", "clients", "documents", "issues", "reports"]) {
+      await page.goto(base + `/dashboard/${route}?page=999`);
+      await expect(page).toHaveURL(base + `/dashboard/${route}`);
+    }
+    const [issue] = await db
+      .insert(schema.reviewIssueTable)
+      .values({
+        applicationId,
+        title: "Inspect this exact finding",
+        description: "Confirm the identity.",
+        severity: "high",
+        source: "reviewer",
+        status: "resolved",
+      })
+      .returning();
+    await page.goto(base + "/dashboard/issues");
+    await page.getByRole("link", { name: issue.title, exact: true }).click();
+    await expect(page).toHaveURL(new RegExp(`issue=${issue.id}`));
+    await expect(page).toHaveURL(/status=all/);
+    await expect(page.getByRole("region", { name: "Selected issue" })).toContainText(issue.title);
+    let previewRequests = 0;
+    await page.route("**/api/document-preview/**", async (route) => {
+      previewRequests++;
+      await route.fulfill({ status: 503, body: "Isolated preview failure" });
+    });
+    const document = await db.query.uploadedDocumentTable.findFirst({
+      where: eq(schema.uploadedDocumentTable.applicationId, applicationId),
+    });
+    await page
+      .getByRole("combobox", { name: "Select evidence document", exact: true })
+      .selectOption(document!.id);
+    await expect(page.getByRole("button", { name: "Retry preview", exact: true })).toBeVisible();
+    const requestsBeforeRetry = previewRequests;
+    await page.getByRole("button", { name: "Retry preview", exact: true }).click();
+    await expect.poll(() => previewRequests).toBeGreaterThan(requestsBeforeRetry);
+    await page.unrouteAll({ behavior: "wait" });
+    const tab = page.getByRole("tab", { name: "Review", exact: true });
+    await tab.focus();
+    await tab.press("ArrowRight");
+    await expect(page.getByRole("tab", { name: "Checklist", exact: true })).toBeFocused();
+    await expect(page.getByRole("tab", { name: "Checklist", exact: true })).toHaveCSS(
+      "outline-style",
+      "solid",
+    );
+    await page.getByRole("tab", { name: "Notes", exact: true }).click();
+    await expect(page.getByRole("combobox", { name: "Severity", exact: true })).toBeVisible();
+    await expect(page.getByRole("combobox", { name: "Severity", exact: true })).toHaveCSS(
+      "border-radius",
+      "5px",
+    );
+    await page.getByLabel("Reviewer issue", { exact: true }).click();
+    await expect(page.getByLabel("Reviewer issue", { exact: true })).toBeFocused();
+    await page.goto(base + "/dashboard/clients");
+    const application = await db.query.visaApplicationTable.findFirst({
+      where: eq(schema.visaApplicationTable.id, applicationId),
+    });
+    const client = await db.query.agencyClientTable.findFirst({
+      where: eq(schema.agencyClientTable.id, application!.clientId!),
+    });
+    await page.getByRole("link", { name: client!.name, exact: true }).click();
+    await expect(page).toHaveURL(new RegExp(`client=${client!.id}`));
+    await expect(page.getByText("Showing cases for the selected client.")).toBeVisible();
+    await page.goto(base + "/dashboard/team");
+    await page.getByRole("button", { name: "Add staff", exact: true }).click();
+    await expect(page.getByRole("combobox", { name: "Role", exact: true })).toBeVisible();
+    await page.keyboard.press("Escape");
+    await expect(page.getByRole("combobox", { name: "Staff role", exact: true })).toHaveCSS(
+      "border-radius",
+      "5px",
+    );
+    const [member] = await db
+      .insert(schema.agencyTeamMemberTable)
+      .values({ email: "another-reviewer@example.test", role: "member", status: "active" })
+      .returning();
+    await page.reload();
+    await page
+      .getByRole("row")
+      .filter({ hasText: "another-reviewer@example.test" })
+      .getByRole("button", { name: "Disable", exact: true })
+      .click();
+    await expect(page.getByRole("dialog", { name: "Disable staff access?" })).toBeVisible();
+    await page.getByRole("button", { name: "Cancel", exact: true }).click();
+    expect(
+      (
+        await db.query.agencyTeamMemberTable.findFirst({
+          where: eq(schema.agencyTeamMemberTable.id, member.id),
+        })
+      )?.status,
+    ).toBe("active");
+    // The save action stays pending until this private response is released.
+    await page.goto(base + "/settings");
+    let release!: () => void;
+    const held = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    let saveRequests = 0;
+    await page.route(base + "/settings", async (route) => {
+      if (route.request().method() === "POST") {
+        saveRequests++;
+        await held;
+        await route.fulfill({ status: 500, body: "Isolated rejection" });
+      } else await route.continue();
+    });
+    await page.getByRole("textbox", { name: "First Name", exact: true }).fill("Unsaved profile");
+    await page.getByRole("button", { name: "Save changes", exact: true }).click();
+    await expect.poll(() => saveRequests).toBe(1);
+    await expect(page.getByRole("button", { name: "Saving…", exact: true })).toBeDisabled();
+    await expect(page.getByRole("button", { name: "Saving…", exact: true })).toHaveAttribute(
+      "aria-busy",
+      "true",
+    );
+    release();
+    await page.unrouteAll({ behavior: "wait" });
+    await expect(
+      page.getByText("Could not save your profile. Try again.", { exact: true }),
+    ).toBeVisible();
+    await expect(page.getByRole("button", { name: "Save changes", exact: true })).toBeEnabled();
+    await expect(page.getByRole("textbox", { name: "First Name", exact: true })).toHaveValue(
+      "Unsaved profile",
+    );
+    const longEmail = `reviewer.${"a".repeat(52)}@${"b".repeat(60)}.example.test`;
+    await db
+      .update(schema.visaApplicationTable)
+      .set({ clientEmail: longEmail, clientReportStatus: "ready" })
+      .where(eq(schema.visaApplicationTable.id, applicationId));
+    await db
+      .update(schema.documentEvaluationTable)
+      .set({ reviewStatus: "complete" })
+      .where(eq(schema.documentEvaluationTable.applicationId, applicationId));
+    const [report] = await db
+      .insert(schema.clientReportTable)
+      .values({ applicationId, status: "ready", summary: "Correct the scan.", actionItems: [] })
+      .returning();
+    const output = resolve("output/verification/ui-audit-fixes");
+    mkdirSync(output, { recursive: true });
+    for (const width of [390, 320]) {
+      await page.setViewportSize({ width, height: 900 });
+      await page.goto(base + `/dashboard/reports/${report.id}`);
+      await expect(page.getByRole("button", { name: "Toggle Sidebar", exact: true })).toBeVisible();
+      await expect(page.locator("main")).toHaveCount(1);
+      const send = page.getByRole("button", { name: `Send report to ${longEmail}`, exact: true });
+      await expect(send).toBeVisible();
+      const bounds = await send.boundingBox();
+      expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(width);
+      expect(await send.evaluate((element) => element.scrollHeight <= element.clientHeight)).toBe(
+        true,
+      );
+      await page.screenshot({ path: join(output, `report-${width}.png`), fullPage: true });
+    }
+    await db
+      .update(schema.visaApplicationTable)
+      .set({ clientReportStatus: "draft" })
+      .where(eq(schema.visaApplicationTable.id, applicationId));
+    await page.reload();
+    await expect(page.locator("article header")).toContainText("Out of date");
+    const [ticket] = await db
+      .insert(schema.supportTicketTable)
+      .values({
+        userId: staffId,
+        subject: "Preserve support context",
+        description: "Check this support conversation.",
+        category: "bug",
+      })
+      .returning();
+    await page.goto(base + `/dashboard/support?ticket=${ticket.id}&view=ticket`);
+    await expect(page.getByRole("heading", { name: ticket.subject, exact: true })).toBeVisible();
+    await page.reload();
+    await expect(page.getByRole("heading", { name: ticket.subject, exact: true })).toBeVisible();
+    await page.goto(base + "/dashboard/announcements?type=maintenance&q=planned");
+    await expect(
+      page.getByRole("textbox", { name: "Search announcements", exact: true }),
+    ).toHaveValue("planned");
+    await expect(page.getByRole("combobox", { name: "Announcement type", exact: true })).toHaveText(
+      "Maintenance",
+    );
+    await page.reload();
+    await expect(
+      page.getByRole("textbox", { name: "Search announcements", exact: true }),
+    ).toHaveValue("planned");
+    await context.clearCookies();
+    await page.goto(base + "/sign-in");
+    const password = await page
+      .getByRole("button", { name: "Show password", exact: true })
+      .boundingBox();
+    expect(password!.width).toBeGreaterThanOrEqual(36);
+    expect(password!.height).toBeGreaterThanOrEqual(36);
+    await page.goto(base + "/");
+    await page.getByRole("button", { name: "Open navigation", exact: true }).click();
+    await page
+      .getByRole("navigation", { name: "Mobile primary", exact: true })
+      .getByRole("link", { name: "About", exact: true })
+      .click();
+    await expect(page).toHaveURL(base + "/about");
+    expect(
+      await page.evaluate(() => window.document.documentElement.scrollWidth <= innerWidth),
+    ).toBe(true);
+    await page.getByRole("button", { name: "Open navigation", exact: true }).click();
+    await expect(
+      page.getByRole("navigation", { name: "Mobile primary", exact: true }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("navigation", { name: "Mobile primary", exact: true }),
+    ).toBeInViewport({ ratio: 1 });
+    await page.screenshot({
+      path: join(output, "public-navigation-320.png"),
+      animations: "disabled",
+    });
+    await page.keyboard.press("Escape");
+    await expect(page.getByText("All systems operational", { exact: true })).toHaveCount(0);
+    expect(errors).toEqual([]);
+  });
 });
