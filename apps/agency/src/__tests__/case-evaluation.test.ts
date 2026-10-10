@@ -269,7 +269,7 @@ describe("production case evaluation core", () => {
       evaluate.mockResolvedValueOnce(JSON.stringify({ ...documentResult, extractedFields }));
     }
     evaluate.mockResolvedValueOnce(overall(40));
-    const first = await runCaseEvaluation({ ...input, asOfDate: "2026-09-19", evaluate });
+    const first = await runCaseEvaluation({ ...input, asOfDate: "2026-10-18", evaluate });
     const previousEvaluation = JSON.parse(
       JSON.stringify({
         docSnapshots: first.docSnapshots,
@@ -317,6 +317,208 @@ describe("production case evaluation core", () => {
       "orchestrator_evaluation",
     ]);
     expect(second.perDocumentEvaluations[0].reused).not.toBe(true);
+  });
+
+  it.each([
+    "requirement name",
+    "requirement description",
+    "common mistakes",
+    "required status",
+    "case context",
+    "review date",
+    "document identity",
+    "file name",
+    "extracted text",
+    "translated text",
+    "retrieved text",
+    "image bytes",
+    "PDF metadata",
+  ])("refreshes saved document findings after a change to %s", async (change) => {
+    const input = { ...fixture(), asOfDate: "2026-10-18" };
+    const docId = "doc-item-0";
+    input.evidence.visionDataByDocId.set(docId, ["data:image/png;base64,AAAA"]);
+    input.evidence.relevantChunksByItemId.set("item-0", "Original retrieved text");
+    const first = await runCaseEvaluation({
+      ...input,
+      evaluate: async ({ schemaName }) =>
+        schemaName === "per_document_evaluation" ? JSON.stringify(documentResult) : overall(40),
+    });
+    const changed = structuredClone(input);
+    const item = changed.checklistItems[0];
+    const doc = changed.evidence.docByChecklistItem.get(item.id)!;
+    switch (change) {
+      case "requirement name":
+        item.documentName = "Bank statement";
+        break;
+      case "requirement description":
+        item.description = "Valid for six months";
+        break;
+      case "common mistakes":
+        item.commonMistakes = "Missing signatures";
+        break;
+      case "required status":
+        item.isRequired = false;
+        break;
+      case "case context":
+        changed.applicationContext = "Different applicant; student visa";
+        break;
+      case "review date":
+        changed.asOfDate = "2026-10-19";
+        break;
+      case "document identity":
+        doc.id = "replacement-document";
+        break;
+      case "file name":
+        doc.fileName = "replacement.pdf";
+        break;
+      case "extracted text":
+        changed.evidence.textByDocId.set(docId, "Corrected passport text");
+        break;
+      case "translated text":
+        changed.evidence.translatedTextByDocId.set(docId, "Translated passport text");
+        break;
+      case "retrieved text":
+        changed.evidence.relevantChunksByItemId.set(item.id, "Corrected retrieved text");
+        break;
+      case "image bytes":
+        changed.evidence.visionDataByDocId.set(docId, ["data:image/png;base64,BBBB"]);
+        break;
+      case "PDF metadata":
+        changed.evidence.metadataByDocId.set(docId, {
+          creator: "Changed authoring tool",
+          producer: null,
+          creationDate: null,
+          modDate: null,
+          isModified: false,
+          modificationGapDays: null,
+          creationInFuture: false,
+          hasNoMetadata: false,
+          pageCount: 1,
+        });
+        break;
+    }
+    const evaluate = vi.fn(async ({ schemaName }: { schemaName: string }) =>
+      schemaName === "per_document_evaluation"
+        ? JSON.stringify({ ...documentResult, issues: ["New evidence needs review"] })
+        : overall(40),
+    );
+    const result = await runCaseEvaluation({
+      ...changed,
+      previousEvaluation: {
+        docSnapshots: first.docSnapshots,
+        itemFeedback: first.evaluationData.itemFeedback,
+      },
+      evaluate,
+    });
+    expect(evaluate.mock.calls.map(([request]) => request.schemaName)).toEqual([
+      "per_document_evaluation",
+      "orchestrator_evaluation",
+    ]);
+    expect(result.perDocumentEvaluations[0].reused).not.toBe(true);
+    expect(result.perDocumentEvaluations[0].issues).toContain("New evidence needs review");
+    expect(result.docSnapshots[item.id]).not.toBe(first.docSnapshots[item.id]);
+    expect((evaluate.mock.calls[1][0] as { userContent?: string }).userContent).toContain(
+      "New evidence needs review",
+    );
+  });
+
+  it("reuses unchanged translated evidence and refreshes a changed translation", async () => {
+    const input = { ...fixture(), asOfDate: "2026-10-18" };
+    input.evidence.textByDocId.set("doc-item-0", "");
+    input.evidence.translatedTextByDocId.set("doc-item-0", "Original translated text");
+    const evaluate = vi.fn(async ({ schemaName }: { schemaName: string }) =>
+      schemaName === "per_document_evaluation" ? JSON.stringify(documentResult) : overall(40),
+    );
+    const first = await runCaseEvaluation({ ...input, evaluate });
+    const previousEvaluation = {
+      docSnapshots: first.docSnapshots,
+      itemFeedback: first.evaluationData.itemFeedback,
+    };
+    evaluate.mockClear();
+    const second = await runCaseEvaluation({ ...input, previousEvaluation, evaluate });
+    expect(second.perDocumentEvaluations[0].reused).toBe(true);
+    expect(evaluate).toHaveBeenCalledTimes(1);
+    input.evidence.translatedTextByDocId.set("doc-item-0", "Corrected translated text");
+    evaluate.mockClear();
+    const third = await runCaseEvaluation({ ...input, previousEvaluation, evaluate });
+    expect(third.perDocumentEvaluations[0].reused).not.toBe(true);
+    expect(evaluate).toHaveBeenCalledTimes(2);
+  });
+
+  it.each(["source", "translation"])(
+    "refreshes findings when %s text changes beyond all prompt excerpts",
+    async (kind) => {
+      const input = { ...fixture(), asOfDate: "2026-10-18" };
+      const texts =
+        kind === "source" ? input.evidence.textByDocId : input.evidence.translatedTextByDocId;
+      texts.set("doc-item-0", "A".repeat(9000) + "Original ending");
+      const evaluate = vi.fn(async ({ schemaName }: { schemaName: string }) =>
+        schemaName === "per_document_evaluation" ? JSON.stringify(documentResult) : overall(40),
+      );
+      const first = await runCaseEvaluation({ ...input, evaluate });
+      texts.set("doc-item-0", "A".repeat(9000) + "Corrected ending");
+      evaluate.mockClear();
+      const second = await runCaseEvaluation({
+        ...input,
+        previousEvaluation: {
+          docSnapshots: first.docSnapshots,
+          itemFeedback: first.evaluationData.itemFeedback,
+        },
+        evaluate,
+      });
+      expect(second.perDocumentEvaluations[0].reused).not.toBe(true);
+      expect(evaluate).toHaveBeenCalledTimes(2);
+    },
+  );
+
+  it("recomputes missing document findings when the requirement changes", async () => {
+    const input = { ...fixture(), asOfDate: "2026-10-18" };
+    input.evidence.docByChecklistItem.clear();
+    const evaluate = vi.fn().mockResolvedValue(overall(40));
+    const first = await runCaseEvaluation({ ...input, evaluate });
+    input.checklistItems[0].isRequired = false;
+    input.checklistItems[0].documentName = "Optional evidence";
+    const second = await runCaseEvaluation({
+      ...input,
+      previousEvaluation: {
+        docSnapshots: first.docSnapshots,
+        itemFeedback: first.evaluationData.itemFeedback,
+      },
+      evaluate,
+    });
+    expect(second.docSnapshots["item-0"]).toBe("missing");
+    expect(second.perDocumentEvaluations[0].issues).toEqual([
+      "Optional document has not been uploaded.",
+    ]);
+    expect(second.perDocumentEvaluations[0].feedback).toContain("Optional evidence");
+    expect(
+      evaluate.mock.calls.every(([request]) => request.schemaName === "orchestrator_evaluation"),
+    ).toBe(true);
+  });
+
+  it("refreshes only the changed document and rejects old snapshot keys", async () => {
+    const input = { ...fixture(2), asOfDate: "2026-10-18" };
+    const evaluate = vi.fn(async ({ schemaName }: { schemaName: string }) =>
+      schemaName === "per_document_evaluation" ? JSON.stringify(documentResult) : overall(40),
+    );
+    const first = await runCaseEvaluation({ ...input, evaluate });
+    input.checklistItems[0].description = "Changed requirement";
+    const previousEvaluation = {
+      docSnapshots: first.docSnapshots,
+      itemFeedback: first.evaluationData.itemFeedback,
+    };
+    evaluate.mockClear();
+    const second = await runCaseEvaluation({ ...input, previousEvaluation, evaluate });
+    expect(second.perDocumentEvaluations.map((document) => !!document.reused)).toEqual([
+      false,
+      true,
+    ]);
+    expect(evaluate).toHaveBeenCalledTimes(2);
+    previousEvaluation.docSnapshots["item-1"] =
+      `doc-item-1:${first.docSnapshots["item-1"].split(":")[1]}:1:0`;
+    evaluate.mockClear();
+    const third = await runCaseEvaluation({ ...input, previousEvaluation, evaluate });
+    expect(third.perDocumentEvaluations.every((document) => !document.reused)).toBe(true);
   });
 
   it("rejects invalid concurrency before provider work", async () => {

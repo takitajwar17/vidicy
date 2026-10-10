@@ -1,4 +1,5 @@
 import "server-only";
+import { createHash } from "node:crypto";
 import { ZSAError } from "zsa";
 import { z } from "zod";
 import type OpenAI from "openai";
@@ -337,21 +338,27 @@ export interface PerDocumentEvaluation {
   reused?: boolean;
 }
 
-/**
- * Computes a stable version key for a document slot.
- * Changes when: a new file is uploaded (new doc.id) or text content
- * becomes available for the first time (hasContent flag flips), or the
- * evaluation model changes.
- * Unchanged slots produce the same key across re-runs, allowing the
- * evaluator to skip redundant AI calls.
+interface DocumentReviewCacheInput {
+  documentId: string;
+  request: Parameters<EvaluationProvider>[0];
+  sourceText: string;
+  translatedText: string | undefined;
+}
+
+/** Hash the request and full source text, including content beyond prompt excerpts.
+ * Keep the document ID prefix for publication checks. Old keys cannot match v2.
+ * Bump the version when result processing changes without a request change.
  */
-function getDocVersionKey(
-  doc: { id: string } | undefined,
-  hasContent: boolean,
-  hasVision: boolean,
-): string {
-  if (!doc) return "missing";
-  return `${doc.id}:${GEMINI_DOCUMENT_EVALUATION_MODEL}:${hasContent ? "1" : "0"}:${hasVision ? "1" : "0"}`;
+function getDocVersionKey({
+  documentId,
+  request,
+  sourceText,
+  translatedText,
+}: DocumentReviewCacheInput): string {
+  const digest = createHash("sha256")
+    .update(JSON.stringify({ request, sourceText, translatedText }))
+    .digest("hex");
+  return `${documentId}:${GEMINI_DOCUMENT_EVALUATION_MODEL}:v2:${digest}`;
 }
 
 /**
@@ -484,6 +491,7 @@ async function evaluateChecklistDocuments({
   // PHASE 1: Per-document individual evaluation (parallel AI calls)
   // ---------------------------------------------------------------------------
 
+  const docSnapshots: Record<string, string> = {};
   const perDocumentEvaluations: PerDocumentEvaluation[] = await mapConcurrent({
     items: checklistItems,
     concurrency: maxConcurrency,
@@ -499,43 +507,9 @@ async function evaluateChecklistDocuments({
       const visionImages = doc ? (visionDataByDocId.get(doc.id) ?? []) : [];
       const hasVision = visionImages.length > 0;
 
-      // ---------------------------------------------------------------------------
-      // Incremental evaluation — skip the AI call if this document slot is unchanged
-      // since the last evaluation. Version key encodes document identity, text content
-      // availability, and vision availability — so newly-enabled vision triggers re-eval.
-      // ---------------------------------------------------------------------------
-      const currentVersionKey = getDocVersionKey(doc, hasContent, hasVision);
-      const prevFeedback =
-        previousEvaluation?.docSnapshots?.[item.id] === currentVersionKey
-          ? previousEvaluation.itemFeedback?.[item.id]
-          : undefined;
-
-      // Legacy feedback lacks the fields needed for consistency checks. Refresh
-      // uploaded documents once instead of reusing an incomplete evidence record.
-      if (prevFeedback && (!hasDocument || prevFeedback.extractedFields)) {
-        return {
-          checklistItemId: item.id,
-          documentName: item.documentName,
-          isRequired: !!item.isRequired,
-          hasDocument,
-          hasContent,
-          status: (prevFeedback.status ?? "needs_review") as PerDocumentEvaluation["status"],
-          score: prevFeedback.score ?? 0,
-          issues: prevFeedback.issues ?? [],
-          strengths: prevFeedback.strengths ?? [],
-          feedback: prevFeedback.feedback ?? "",
-          confidence: (prevFeedback as { confidence?: number }).confidence ?? 70,
-          confidenceReason:
-            (prevFeedback as { confidenceReason?: string }).confidenceReason ??
-            "Reused from previous evaluation.",
-          extractedFields: extractedFieldsSchema.parse(prevFeedback.extractedFields),
-          contentExcerpt: rawText.slice(0, 3000),
-          reused: true,
-        };
-      }
-
       // Documents without any upload → evaluated as missing immediately (no AI call needed)
       if (!hasDocument) {
+        docSnapshots[item.id] = "missing";
         return {
           checklistItemId: item.id,
           documentName: item.documentName,
@@ -671,27 +645,62 @@ Return JSON with this exact structure:
   }
 }`;
 
-      try {
-        // When vision images are available, send a multimodal message so Gemini
-        // can see the document directly — critical for scanned docs with no text.
-        const userMessageContent: OpenAI.ChatCompletionUserMessageParam["content"] =
-          visionImages.length > 0
-            ? [
-                { type: "text", text: perDocUserPrompt },
-                ...visionImages.map((url) => ({
-                  type: "image_url" as const,
-                  image_url: { url, detail: "high" as const },
-                })),
-              ]
-            : perDocUserPrompt;
+      // Hash the same multimodal request that is sent to the provider.
+      const userMessageContent: OpenAI.ChatCompletionUserMessageParam["content"] =
+        visionImages.length > 0
+          ? [
+              { type: "text", text: perDocUserPrompt },
+              ...visionImages.map((url) => ({
+                type: "image_url" as const,
+                image_url: { url, detail: "high" as const },
+              })),
+            ]
+          : perDocUserPrompt;
 
-        const response = await evaluate({
-          systemPrompt: perDocSystemPrompt,
-          userContent: userMessageContent,
-          schemaName: "per_document_evaluation",
-          schema: perDocJsonSchema as Record<string, unknown>,
-          maxTokens: AI_MAX_TOKENS_SMALL,
-        });
+      const request: Parameters<EvaluationProvider>[0] = {
+        systemPrompt: perDocSystemPrompt,
+        userContent: userMessageContent,
+        schemaName: "per_document_evaluation",
+        schema: perDocJsonSchema as Record<string, unknown>,
+        maxTokens: AI_MAX_TOKENS_SMALL,
+      };
+      const currentVersionKey = getDocVersionKey({
+        documentId: doc.id,
+        request,
+        sourceText: textByDocId.get(doc.id) ?? "",
+        translatedText: translatedTextByDocId.get(doc.id),
+      });
+      docSnapshots[item.id] = currentVersionKey;
+      const prevFeedback =
+        previousEvaluation?.docSnapshots?.[item.id] === currentVersionKey
+          ? previousEvaluation.itemFeedback?.[item.id]
+          : undefined;
+
+      // Legacy feedback without extracted fields needs a fresh assessment.
+      if (prevFeedback?.extractedFields) {
+        return {
+          checklistItemId: item.id,
+          documentName: item.documentName,
+          isRequired: !!item.isRequired,
+          hasDocument,
+          hasContent,
+          status: (prevFeedback.status ?? "needs_review") as PerDocumentEvaluation["status"],
+          score: prevFeedback.score ?? 0,
+          issues: prevFeedback.issues ?? [],
+          strengths: prevFeedback.strengths ?? [],
+          feedback: prevFeedback.feedback ?? "",
+          confidence: (prevFeedback as { confidence?: number }).confidence ?? 70,
+          confidenceReason:
+            (prevFeedback as { confidenceReason?: string }).confidenceReason ??
+            "Reused from previous evaluation.",
+          extractedFields: extractedFieldsSchema.parse(prevFeedback.extractedFields),
+          contentExcerpt: rawText.slice(0, 3000),
+          reused: true,
+        };
+      }
+
+      try {
+        const response = await evaluate(request);
 
         const raw = JSON.parse(response);
         // perDocAiResponseSchema uses .catch() on every field — parse never throws
@@ -734,19 +743,6 @@ Return JSON with this exact structure:
       }
     },
   });
-
-  // ---------------------------------------------------------------------------
-  // Build docSnapshots — records what version of each document was just evaluated.
-  // Persisted with the evaluation so future re-runs can compare against it.
-  // ---------------------------------------------------------------------------
-
-  const docSnapshots: Record<string, string> = {};
-  for (const item of checklistItems) {
-    const doc = docByChecklistItem.get(item.id);
-    const rawText = doc ? (textByDocId.get(doc.id) ?? "") : "";
-    const hasVisionSnap = doc ? (visionDataByDocId.get(doc.id)?.length ?? 0) > 0 : false;
-    docSnapshots[item.id] = getDocVersionKey(doc, rawText.trim().length > 0, hasVisionSnap);
-  }
 
   const reusedCount = perDocumentEvaluations.filter((e) => e.reused).length;
   if (reusedCount > 0) {
