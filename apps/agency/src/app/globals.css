@@ -318,6 +318,7 @@
   --destructive-foreground: oklch(0.985 0.004 24);
   --border: #e1e6e2;
   --input: #d8dfda;
+  --select-chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2364716f' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
   --ring: #154b39;
   --chart-1: #25302e;
   --chart-2: #3f6f63;
@@ -423,6 +424,7 @@
   --destructive-foreground: oklch(0.2 0.01 24);
   --border: #42504d;
   --input: #4b5a56;
+  --select-chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23b4bfbb' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
   --ring: #92c9ae;
   --chart-1: #f4f4f2;
   --chart-2: #8fb3a6;
@@ -807,4 +809,21 @@ body {
 
 @utility animate-marquee-vertical {
   animation: marquee-vertical var(--duration) linear infinite;
+}
+
+/* Keep the arrow clear of both the selected text and the control edge. */
+.native-select {
+  appearance: none;
+  padding-right: 2.25rem;
+  background-image: var(--select-chevron);
+  background-position: right 0.75rem center;
+  background-repeat: no-repeat;
+  background-size: 1rem 1rem;
+}
+
+@media (forced-colors: active) {
+  .native-select {
+    appearance: auto;
+    background-image: none;
+  }
 }

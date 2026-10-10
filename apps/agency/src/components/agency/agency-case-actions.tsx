@@ -195,7 +195,7 @@ export function AgencyCaseAssignmentSelect({
     <Select value={value} onValueChange={handleChange} disabled={isPending}>
       <SelectTrigger
         aria-label="Assigned reviewer"
-        className="h-7 w-auto max-w-[210px] gap-2 border-0 bg-transparent px-0 text-xs shadow-none"
+        className="h-7 w-auto max-w-[210px] gap-2 border-0 bg-transparent px-2 pr-3 text-xs shadow-none"
       >
         <SelectValue placeholder="Assign reviewer" />
       </SelectTrigger>

@@ -61,7 +61,7 @@ export function SearchableSelect({
           aria-controls={listboxId}
           disabled={disabled}
           className={cn(
-            "flex h-10 w-full items-center justify-between rounded-[5px] border border-input bg-card px-3 py-2 text-sm ring-offset-background",
+            "flex h-10 w-full items-center justify-between gap-2 rounded-[5px] border border-input bg-card px-3 py-2 text-sm ring-offset-background",
             "hover:bg-accent/40 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2",
             "disabled:cursor-not-allowed disabled:opacity-50",
             !selected && "text-muted-foreground",
@@ -69,7 +69,7 @@ export function SearchableSelect({
           )}
         >
           <span className="truncate">{selected ? selected.label : placeholder}</span>
-          <ChevronsUpDownIcon className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+          <ChevronsUpDownIcon className="h-4 w-4 shrink-0 opacity-50" />
         </button>
       </PopoverTrigger>
       <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">

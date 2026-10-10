@@ -182,6 +182,7 @@ export function AgencyCaseWorkspace({
               Show
               <NativeSelect
                 aria-label="Filter issue status"
+                className="h-8 px-2 py-1 text-xs"
                 value={view.status}
                 onChange={(event) =>
                   void setView({

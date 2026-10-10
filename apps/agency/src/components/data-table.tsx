@@ -221,7 +221,7 @@ export function DataTable<TData extends { id: number | string }, TValue>({
                 table.setPageSize(Number(value));
               }}
             >
-              <SelectTrigger className="h-8 w-[70px] focus-visible:ring-4 focus-visible:ring-primary/15 focus-visible:ring-offset-0">
+              <SelectTrigger className="h-8 w-[84px] focus-visible:ring-4 focus-visible:ring-primary/15 focus-visible:ring-offset-0">
                 <SelectValue placeholder={table.getState().pagination.pageSize} />
               </SelectTrigger>
               <SelectContent side="top">
