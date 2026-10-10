@@ -29,6 +29,7 @@ vi.mock("@/db", () => ({
 vi.mock("@/db/schema", () => ({
   visaApplicationTable: {
     id: "visa_application.id",
+    agencyId: "visa_application.agencyId",
     trashedAt: "visa_application.trashedAt",
     clientId: "visa_application.clientId",
   },
@@ -76,23 +77,36 @@ describe("application auth with agency staff", () => {
 
     mockFindApplication.mockResolvedValue({
       id: "vapp_123",
+      agencyId: "agency_1",
     });
   });
 
   it("grants agency members access to application cases", async () => {
-    mockEnsureAgencyTeamMembership.mockResolvedValue({ role: "member", isAdmin: false });
+    mockEnsureAgencyTeamMembership.mockResolvedValue({
+      agencyId: "agency_1",
+      role: "member",
+      isAdmin: false,
+    });
 
     await expect(hasApplicationPermission("vapp_123", "access_application")).resolves.toBe(true);
   });
 
   it("does not grant staff management permissions to agency members", async () => {
-    mockEnsureAgencyTeamMembership.mockResolvedValue({ role: "member", isAdmin: false });
+    mockEnsureAgencyTeamMembership.mockResolvedValue({
+      agencyId: "agency_1",
+      role: "member",
+      isAdmin: false,
+    });
 
     await expect(hasApplicationPermission("vapp_123", "invite_members")).resolves.toBe(false);
   });
 
   it("grants staff management permissions to agency admins", async () => {
-    mockEnsureAgencyTeamMembership.mockResolvedValue({ role: "admin", isAdmin: true });
+    mockEnsureAgencyTeamMembership.mockResolvedValue({
+      agencyId: "agency_1",
+      role: "admin",
+      isAdmin: true,
+    });
 
     await expect(hasApplicationPermission("vapp_123", "invite_members")).resolves.toBe(true);
   });
@@ -110,6 +124,15 @@ describe("application auth with agency staff", () => {
       id: "vapp_123",
     });
 
+    await expect(hasApplicationPermission("vapp_123", "access_application")).resolves.toBe(false);
+  });
+
+  it("denies a case from another agency even for an agency admin", async () => {
+    mockEnsureAgencyTeamMembership.mockResolvedValue({
+      agencyId: "agency_2",
+      role: "admin",
+      isAdmin: true,
+    });
     await expect(hasApplicationPermission("vapp_123", "access_application")).resolves.toBe(false);
   });
 });

@@ -166,13 +166,14 @@ export const previewDeleteUsersAction = createServerAction()
       return { usersToDelete: 0, appsToTransfer: 0, appsToDelete: 0 };
     }
 
-    const [[ownedCases], replacementStaff] = await Promise.all([
+    const [ownedCases, replacementStaff] = await Promise.all([
       db
-        .select({ total: count() })
+        .select({ agencyId: visaApplicationTable.agencyId, total: count() })
         .from(visaApplicationTable)
-        .where(inArray(visaApplicationTable.userId, filteredUserIds)),
+        .where(inArray(visaApplicationTable.userId, filteredUserIds))
+        .groupBy(visaApplicationTable.agencyId),
       db
-        .select({ userId: agencyTeamMemberTable.userId })
+        .select({ agencyId: agencyTeamMemberTable.agencyId })
         .from(agencyTeamMemberTable)
         .where(
           and(
@@ -180,11 +181,17 @@ export const previewDeleteUsersAction = createServerAction()
             notInArray(agencyTeamMemberTable.userId, filteredUserIds),
             eq(agencyTeamMemberTable.status, AGENCY_STAFF_STATUS.ACTIVE),
           ),
-        )
-        .limit(1),
+        ),
     ]);
-    const appsToTransfer = replacementStaff.length > 0 ? ownedCases.total : 0;
-    const appsToDelete = replacementStaff.length > 0 ? 0 : ownedCases.total;
+    const replacementAgencyIds = new Set(
+      replacementStaff.map((member) => member.agencyId).filter(Boolean),
+    );
+    const appsToTransfer = ownedCases.reduce(
+      (total, row) =>
+        total + (row.agencyId && replacementAgencyIds.has(row.agencyId) ? row.total : 0),
+      0,
+    );
+    const appsToDelete = ownedCases.reduce((total, row) => total + row.total, 0) - appsToTransfer;
 
     return { usersToDelete: filteredUserIds.length, appsToTransfer, appsToDelete };
   });

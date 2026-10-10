@@ -196,7 +196,12 @@ export async function processReviewJob({ jobId }: { jobId: string }) {
         ),
       }),
     ]);
-    if (!application?.clientId || !staff) {
+    if (
+      !application?.clientId ||
+      !application.agencyId ||
+      !staff ||
+      staff.agencyId !== application.agencyId
+    ) {
       terminal = true;
       throw new Error("Review access was revoked");
     }

@@ -1,27 +1,22 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-
-const { findFirst, values, onConflictDoNothing, set, where } = vi.hoisted(() => ({
-  findFirst: vi.fn(),
-  values: vi.fn(),
-  onConflictDoNothing: vi.fn(),
-  set: vi.fn(),
-  where: vi.fn(),
-}));
-vi.mock("@/db", () => ({
-  getDB: () => ({
-    query: { agencyTeamMemberTable: { findFirst } },
-    select: () => ({ from: async () => [{ total: 0 }] }),
-    insert: () => ({ values }),
-    update: () => ({ set }),
-  }),
-}));
-vi.mock("@/utils/auth", () => ({ requireVerifiedEmail: vi.fn() }));
-import { ensureAgencyTeamMembership } from "@/server/agency-team";
 import type { SessionValidationResult } from "@/types";
+
+const { findFirst, provision } = vi.hoisted(() => ({ findFirst: vi.fn(), provision: vi.fn() }));
+vi.mock("@/db", () => ({ getDB: () => ({ query: { agencyTeamMemberTable: { findFirst } } }) }));
+vi.mock("@/utils/auth", () => ({ requireVerifiedEmail: vi.fn() }));
+vi.mock("@/server/agency-provisioning", () => ({ provisionAgencyMembership: provision }));
+import { ensureAgencyTeamMembership } from "@/server/agency-team";
 
 function createSession(role = "user") {
   return {
-    user: { id: "user_1", email: "user@example.com", role, emailVerified: new Date() },
+    user: {
+      id: "user_1",
+      firstName: "New",
+      lastName: "Owner",
+      email: " User@Example.com ",
+      role,
+      emailVerified: new Date(),
+    },
   } as NonNullable<SessionValidationResult>;
 }
 
@@ -29,76 +24,73 @@ describe("agency team access", () => {
   beforeEach(() => {
     vi.resetAllMocks();
     findFirst.mockResolvedValue(null);
-    values.mockReturnValue({ onConflictDoNothing });
-    onConflictDoNothing.mockResolvedValue([]);
-    set.mockReturnValue({ where });
-    where.mockResolvedValue([]);
   });
 
-  it("lets a verified new account join as a regular member", async () => {
-    await expect(ensureAgencyTeamMembership(createSession())).resolves.toEqual({
+  it("returns the existing agency without creating another one", async () => {
+    findFirst.mockResolvedValue({
+      id: "member",
+      agencyId: "agency_1",
+      role: "member",
+      status: "active",
+    });
+    expect(await ensureAgencyTeamMembership(createSession())).toEqual({
+      agencyId: "agency_1",
       role: "member",
       isAdmin: false,
     });
-    expect(values).toHaveBeenCalledWith(
-      expect.objectContaining({
-        userId: "user_1",
-        email: "user@example.com",
-        role: "member",
-        status: "active",
-      }),
-    );
-    expect(onConflictDoNothing).toHaveBeenCalledWith({ target: expect.anything() });
+    expect(provision).not.toHaveBeenCalled();
+  });
+
+  it("does not elevate a platform admin inside another agency", async () => {
+    findFirst.mockResolvedValue({
+      id: "member",
+      agencyId: "agency_1",
+      role: "member",
+      status: "active",
+    });
+    expect(await ensureAgencyTeamMembership(createSession("admin"))).toEqual({
+      agencyId: "agency_1",
+      role: "member",
+      isAdmin: false,
+    });
   });
 
   it("does not enroll an unverified account", async () => {
     const session = createSession();
     session.user.emailVerified = null;
-
-    await expect(ensureAgencyTeamMembership(session)).resolves.toBeNull();
-    expect(values).not.toHaveBeenCalled();
+    expect(await ensureAgencyTeamMembership(session)).toBeNull();
+    expect(findFirst).not.toHaveBeenCalled();
+    expect(provision).not.toHaveBeenCalled();
   });
 
-  it("allows an existing global admin to join the agency", async () => {
-    await expect(ensureAgencyTeamMembership(createSession("admin"))).resolves.toEqual({
+  it("keeps disabled members blocked", async () => {
+    findFirst.mockResolvedValue({
+      id: "member",
+      agencyId: "agency_1",
       role: "admin",
-      isAdmin: true,
+      status: "disabled",
     });
-    expect(values).toHaveBeenCalledWith(
-      expect.objectContaining({ userId: "user_1", role: "admin" }),
-    );
+    expect(await ensureAgencyTeamMembership(createSession())).toBeNull();
+    expect(provision).not.toHaveBeenCalled();
   });
 
-  it("links an active email invitation without granting admin access", async () => {
-    findFirst
-      .mockResolvedValueOnce(null)
-      .mockResolvedValueOnce({ id: "invitation", userId: null, role: "member", status: "active" });
-    await expect(ensureAgencyTeamMembership(createSession())).resolves.toEqual({
-      role: "member",
-      isAdmin: false,
+  it("creates the account's own agency through the provisioning service", async () => {
+    const context = { agencyId: "own_agency", role: "admin", isAdmin: true };
+    provision.mockResolvedValue(context);
+    expect(await ensureAgencyTeamMembership(createSession())).toEqual(context);
+    expect(provision).toHaveBeenCalledWith({
+      userId: "user_1",
+      email: "user@example.com",
+      name: "New Owner's agency",
     });
-    expect(set).toHaveBeenCalledWith(
-      expect.objectContaining({ userId: "user_1", joinedAt: expect.any(Date) }),
-    );
-    expect(where).toHaveBeenCalledOnce();
-    expect(values).not.toHaveBeenCalled();
   });
 
-  it("keeps a suspended member out of the workspace", async () => {
-    findFirst.mockResolvedValueOnce({ id: "member_1", role: "admin", status: "suspended" });
-    await expect(ensureAgencyTeamMembership(createSession())).resolves.toBeNull();
-    expect(values).not.toHaveBeenCalled();
-  });
-
-  it("keeps a suspended email invitation out of the workspace", async () => {
-    findFirst.mockResolvedValueOnce(null).mockResolvedValueOnce({
-      id: "invitation",
-      userId: null,
-      role: "member",
-      status: "suspended",
+  it("repairs an old membership without an agency", async () => {
+    findFirst.mockResolvedValue({ id: "member", agencyId: null, role: "member", status: "active" });
+    provision.mockResolvedValue({ agencyId: "own_agency", role: "admin", isAdmin: true });
+    expect(await ensureAgencyTeamMembership(createSession())).toMatchObject({
+      agencyId: "own_agency",
     });
-
-    await expect(ensureAgencyTeamMembership(createSession())).resolves.toBeNull();
-    expect(values).not.toHaveBeenCalled();
+    expect(provision).toHaveBeenCalledOnce();
   });
 });

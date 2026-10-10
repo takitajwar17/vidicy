@@ -75,13 +75,16 @@ function getStaffDisplayName(user: {
 async function requireAgencyCase({
   db,
   applicationId,
+  agencyId,
 }: {
   db: ReturnType<typeof getDB>;
   applicationId: string;
+  agencyId: string;
 }) {
   const application = await db.query.visaApplicationTable.findFirst({
     where: and(
       eq(visaApplicationTable.id, applicationId),
+      eq(visaApplicationTable.agencyId, agencyId),
       isNull(visaApplicationTable.trashedAt),
       isNotNull(visaApplicationTable.clientId),
     ),
@@ -96,11 +99,13 @@ async function requireAgencyCase({
 }
 
 async function resolveOrCreateClient({
+  agencyId,
   name,
   email,
   phone,
   country,
 }: {
+  agencyId: string;
   name: string;
   email?: string | null;
   phone?: string | null;
@@ -111,7 +116,10 @@ async function resolveOrCreateClient({
 
   if (normalizedEmail) {
     const existing = await db.query.agencyClientTable.findFirst({
-      where: eq(agencyClientTable.email, normalizedEmail),
+      where: and(
+        eq(agencyClientTable.agencyId, agencyId),
+        eq(agencyClientTable.email, normalizedEmail),
+      ),
     });
 
     if (existing) {
@@ -123,7 +131,9 @@ async function resolveOrCreateClient({
           country: country || existing.country,
           updatedAt: new Date(),
         })
-        .where(eq(agencyClientTable.id, existing.id));
+        .where(
+          and(eq(agencyClientTable.id, existing.id), eq(agencyClientTable.agencyId, agencyId)),
+        );
       return existing.id;
     }
   }
@@ -131,6 +141,7 @@ async function resolveOrCreateClient({
   const [client] = await db
     .insert(agencyClientTable)
     .values({
+      agencyId,
       name,
       email: normalizedEmail,
       phone: phone || null,
@@ -173,7 +184,7 @@ const createAgencyCaseSchema = z.object({
 export const createAgencyCaseAction = createServerAction()
   .input(createAgencyCaseSchema)
   .handler(async ({ input }) => {
-    const { session } = await requireAgencyStaff();
+    const { session, staff } = await requireAgencyStaff();
     const db = getDB();
 
     const assignedReviewerId = input.assignedReviewerId?.trim() || null;
@@ -185,6 +196,7 @@ export const createAgencyCaseAction = createServerAction()
         where: and(
           eq(agencyTeamMemberTable.userId, assignedReviewerId),
           eq(agencyTeamMemberTable.status, AGENCY_STAFF_STATUS.ACTIVE),
+          eq(agencyTeamMemberTable.agencyId, staff.agencyId),
         ),
       });
 
@@ -195,6 +207,7 @@ export const createAgencyCaseAction = createServerAction()
 
     const { application, applicant } = await db.withTransaction(async () => {
       const clientId = await resolveOrCreateClient({
+        agencyId: staff.agencyId,
         name: input.clientName,
         email: input.clientEmail || null,
         phone: input.clientPhone || null,
@@ -204,6 +217,7 @@ export const createAgencyCaseAction = createServerAction()
       const [application] = await db
         .insert(visaApplicationTable)
         .values({
+          agencyId: staff.agencyId,
           userId: session.userId,
           homeCountry: input.homeCountry,
           currentCountry: input.currentCountry,
@@ -267,9 +281,9 @@ export const updateAgencyCaseStatusAction = createServerAction()
     }),
   )
   .handler(async ({ input }) => {
-    const { session } = await requireAgencyStaff();
+    const { session, staff } = await requireAgencyStaff();
     const db = getDB();
-    await requireAgencyCase({ db, applicationId: input.applicationId });
+    await requireAgencyCase({ db, applicationId: input.applicationId, agencyId: staff.agencyId });
 
     if (input.status === AGENCY_CASE_STATUS.READY_TO_SUBMIT) {
       await markAgencyCaseReady({ db, applicationId: input.applicationId, userId: session.userId });
@@ -281,7 +295,12 @@ export const updateAgencyCaseStatusAction = createServerAction()
           reviewCompletedAt: null,
           status: VISA_APPLICATION_STATUS.IN_PROGRESS,
         })
-        .where(eq(visaApplicationTable.id, input.applicationId));
+        .where(
+          and(
+            eq(visaApplicationTable.id, input.applicationId),
+            eq(visaApplicationTable.agencyId, staff.agencyId),
+          ),
+        );
     }
 
     revalidatePath(`/dashboard/${input.applicationId}`);
@@ -298,9 +317,9 @@ export const assignAgencyCaseAction = createServerAction()
     }),
   )
   .handler(async ({ input }) => {
-    await requireAgencyStaff();
+    const { staff } = await requireAgencyStaff();
     const db = getDB();
-    await requireAgencyCase({ db, applicationId: input.applicationId });
+    await requireAgencyCase({ db, applicationId: input.applicationId, agencyId: staff.agencyId });
     const reviewerId = input.reviewerId?.trim() || null;
 
     if (reviewerId) {
@@ -308,6 +327,7 @@ export const assignAgencyCaseAction = createServerAction()
         where: and(
           eq(agencyTeamMemberTable.userId, reviewerId),
           eq(agencyTeamMemberTable.status, AGENCY_STAFF_STATUS.ACTIVE),
+          eq(agencyTeamMemberTable.agencyId, staff.agencyId),
         ),
       });
 
@@ -322,7 +342,12 @@ export const assignAgencyCaseAction = createServerAction()
         assignedReviewerId: reviewerId,
         ...(reviewerId ? { agencyStatus: AGENCY_CASE_STATUS.IN_REVIEW } : {}),
       })
-      .where(eq(visaApplicationTable.id, input.applicationId));
+      .where(
+        and(
+          eq(visaApplicationTable.id, input.applicationId),
+          eq(visaApplicationTable.agencyId, staff.agencyId),
+        ),
+      );
 
     revalidatePath(`/dashboard/${input.applicationId}`);
     revalidatePath("/dashboard");
@@ -333,9 +358,9 @@ export const assignAgencyCaseAction = createServerAction()
 export const syncReviewIssuesFromEvaluationAction = createServerAction()
   .input(z.object({ applicationId: z.string().min(1) }))
   .handler(async ({ input }) => {
-    const { session } = await requireAgencyStaff();
+    const { session, staff } = await requireAgencyStaff();
     const db = getDB();
-    await requireAgencyCase({ db, applicationId: input.applicationId });
+    await requireAgencyCase({ db, applicationId: input.applicationId, agencyId: staff.agencyId });
 
     const evaluation = await db.query.documentEvaluationTable.findFirst({
       where: eq(documentEvaluationTable.applicationId, input.applicationId),
@@ -373,9 +398,9 @@ export const addReviewIssueAction = createServerAction()
     }),
   )
   .handler(async ({ input }) => {
-    const { session } = await requireAgencyStaff();
+    const { session, staff } = await requireAgencyStaff();
     const db = getDB();
-    await requireAgencyCase({ db, applicationId: input.applicationId });
+    await requireAgencyCase({ db, applicationId: input.applicationId, agencyId: staff.agencyId });
 
     const [[issue]] = await db.batch([
       db
@@ -402,7 +427,12 @@ export const addReviewIssueAction = createServerAction()
           status: VISA_APPLICATION_STATUS.IN_PROGRESS,
           reviewCompletedAt: null,
         })
-        .where(eq(visaApplicationTable.id, input.applicationId)),
+        .where(
+          and(
+            eq(visaApplicationTable.id, input.applicationId),
+            eq(visaApplicationTable.agencyId, staff.agencyId),
+          ),
+        ),
 
       ...getAgencyReportInvalidationQueries({ db, applicationId: input.applicationId }),
     ]);
@@ -423,7 +453,7 @@ export const updateReviewIssueStatusAction = createServerAction()
     }),
   )
   .handler(async ({ input }) => {
-    await requireAgencyStaff();
+    const { staff } = await requireAgencyStaff();
     const db = getDB();
 
     const issue = await db.query.reviewIssueTable.findFirst({
@@ -434,7 +464,7 @@ export const updateReviewIssueStatusAction = createServerAction()
     if (!issue) {
       throw new ZSAError("NOT_FOUND", "Issue not found");
     }
-    await requireAgencyCase({ db, applicationId: issue.applicationId });
+    await requireAgencyCase({ db, applicationId: issue.applicationId, agencyId: staff.agencyId });
 
     await db.batch([
       db
@@ -459,7 +489,12 @@ export const updateReviewIssueStatusAction = createServerAction()
                 status: VISA_APPLICATION_STATUS.IN_PROGRESS,
                 reviewCompletedAt: null,
               })
-              .where(eq(visaApplicationTable.id, issue.applicationId)),
+              .where(
+                and(
+                  eq(visaApplicationTable.id, issue.applicationId),
+                  eq(visaApplicationTable.agencyId, staff.agencyId),
+                ),
+              ),
           ]
         : []),
     ]);
@@ -472,10 +507,14 @@ export const updateReviewIssueStatusAction = createServerAction()
 export const generateClientReportAction = createServerAction()
   .input(z.object({ applicationId: z.string().min(1) }))
   .handler(async ({ input }) => {
-    const { session } = await requireAgencyStaff();
+    const { session, staff } = await requireAgencyStaff();
     const db = getDB();
 
-    const original = await requireAgencyCase({ db, applicationId: input.applicationId });
+    const original = await requireAgencyCase({
+      db,
+      applicationId: input.applicationId,
+      agencyId: staff.agencyId,
+    });
     await requireCurrentAgencyReview({
       db,
       applicationId: input.applicationId,
@@ -488,6 +527,7 @@ export const generateClientReportAction = createServerAction()
       db.query.visaApplicationTable.findFirst({
         where: and(
           eq(visaApplicationTable.id, input.applicationId),
+          eq(visaApplicationTable.agencyId, staff.agencyId),
           isNull(visaApplicationTable.trashedAt),
           isNotNull(visaApplicationTable.clientId),
         ),
@@ -535,6 +575,7 @@ export const generateClientReportAction = createServerAction()
         .where(
           and(
             eq(visaApplicationTable.id, input.applicationId),
+            eq(visaApplicationTable.agencyId, staff.agencyId),
             sql`${visaApplicationTable.updateCounter} IS NOT DISTINCT FROM ${original.updateCounter}`,
           ),
         )
@@ -606,9 +647,9 @@ export const sendClientReportAction = createServerAction()
 export const finalizeReviewAction = createServerAction()
   .input(z.object({ applicationId: z.string().min(1) }))
   .handler(async ({ input }) => {
-    const { session } = await requireAgencyStaff();
+    const { session, staff } = await requireAgencyStaff();
     const db = getDB();
-    await requireAgencyCase({ db, applicationId: input.applicationId });
+    await requireAgencyCase({ db, applicationId: input.applicationId, agencyId: staff.agencyId });
 
     await markAgencyCaseReady({ db, applicationId: input.applicationId, userId: session.userId });
 
@@ -626,7 +667,7 @@ export const addAgencyStaffAction = createServerAction()
     }),
   )
   .handler(async ({ input }) => {
-    const { session } = await requireAgencyAdmin();
+    const { session, staff } = await requireAgencyAdmin();
     const db = getDB();
     const email = input.email.trim().toLowerCase();
     const addedByName = getStaffDisplayName(session.user);
@@ -655,8 +696,12 @@ export const addAgencyStaffAction = createServerAction()
     }
 
     const existingMember = existingByEmail ?? existingByUser;
+    if (existingMember && existingMember.agencyId !== staff.agencyId) {
+      throw new ZSAError("CONFLICT", "This account already belongs to another agency.");
+    }
     const now = new Date();
     const nextValues = {
+      agencyId: staff.agencyId,
       email,
       userId: existingUser?.id ?? existingMember?.userId ?? null,
       role: input.role,
@@ -673,7 +718,12 @@ export const addAgencyStaffAction = createServerAction()
       await db
         .update(agencyTeamMemberTable)
         .set(nextValues)
-        .where(eq(agencyTeamMemberTable.id, existingMember.id));
+        .where(
+          and(
+            eq(agencyTeamMemberTable.id, existingMember.id),
+            eq(agencyTeamMemberTable.agencyId, staff.agencyId),
+          ),
+        );
     } else {
       await db.insert(agencyTeamMemberTable).values(nextValues);
     }
@@ -702,11 +752,14 @@ export const updateAgencyStaffRoleAction = createServerAction()
     }),
   )
   .handler(async ({ input }) => {
-    const { session } = await requireAgencyAdmin();
+    const { session, staff } = await requireAgencyAdmin();
     const db = getDB();
 
     const member = await db.query.agencyTeamMemberTable.findFirst({
-      where: eq(agencyTeamMemberTable.id, input.staffMemberId),
+      where: and(
+        eq(agencyTeamMemberTable.id, input.staffMemberId),
+        eq(agencyTeamMemberTable.agencyId, staff.agencyId),
+      ),
       columns: { id: true, userId: true },
     });
 
@@ -721,7 +774,12 @@ export const updateAgencyStaffRoleAction = createServerAction()
     await db
       .update(agencyTeamMemberTable)
       .set({ role: input.role, updatedAt: new Date() })
-      .where(eq(agencyTeamMemberTable.id, input.staffMemberId));
+      .where(
+        and(
+          eq(agencyTeamMemberTable.id, input.staffMemberId),
+          eq(agencyTeamMemberTable.agencyId, staff.agencyId),
+        ),
+      );
 
     revalidatePath("/dashboard/team");
     return { success: true };
@@ -730,11 +788,14 @@ export const updateAgencyStaffRoleAction = createServerAction()
 export const disableAgencyStaffAction = createServerAction()
   .input(z.object({ staffMemberId: z.string().min(1) }))
   .handler(async ({ input }) => {
-    const { session } = await requireAgencyAdmin();
+    const { session, staff } = await requireAgencyAdmin();
     const db = getDB();
 
     const member = await db.query.agencyTeamMemberTable.findFirst({
-      where: eq(agencyTeamMemberTable.id, input.staffMemberId),
+      where: and(
+        eq(agencyTeamMemberTable.id, input.staffMemberId),
+        eq(agencyTeamMemberTable.agencyId, staff.agencyId),
+      ),
       columns: { id: true, userId: true },
     });
 
@@ -749,7 +810,12 @@ export const disableAgencyStaffAction = createServerAction()
     await db
       .update(agencyTeamMemberTable)
       .set({ status: AGENCY_STAFF_STATUS.DISABLED, updatedAt: new Date() })
-      .where(eq(agencyTeamMemberTable.id, input.staffMemberId));
+      .where(
+        and(
+          eq(agencyTeamMemberTable.id, input.staffMemberId),
+          eq(agencyTeamMemberTable.agencyId, staff.agencyId),
+        ),
+      );
 
     revalidatePath("/dashboard/team");
     return { success: true };

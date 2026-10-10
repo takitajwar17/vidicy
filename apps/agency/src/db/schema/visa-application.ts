@@ -3,6 +3,7 @@ import { type InferSelectModel } from "drizzle-orm";
 import { createId } from "@paralleldrive/cuid2";
 import { commonColumns } from "./_common";
 import { userTable } from "./user";
+import { agencyTable } from "./agency-workspace";
 
 // Visa Application Status
 export const VISA_APPLICATION_STATUS = {
@@ -81,6 +82,7 @@ export const visaApplicationTable = pgTable(
     userId: text()
       .notNull()
       .references(() => userTable.id, { onDelete: "cascade" }),
+    agencyId: text().references(() => agencyTable.id, { onDelete: "cascade" }),
     homeCountry: text().notNull(),
     currentCountry: text().notNull(),
     destinationCountry: text().notNull(),
@@ -129,6 +131,7 @@ export const visaApplicationTable = pgTable(
   },
   (table) => [
     index("visa_app_user_id_idx").on(table.userId),
+    index("visa_app_agency_idx").on(table.agencyId),
     index("visa_app_status_idx").on(table.status),
     index("visa_app_agency_status_idx").on(table.agencyStatus),
     index("visa_app_case_number_idx").on(table.caseNumber),

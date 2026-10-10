@@ -77,6 +77,23 @@ describe("durable review jobs against private PostgreSQL", () => {
     });
     expect(await fixture.db.query.documentEvaluationTable.findMany()).toHaveLength(1);
   });
+  it("rejects review work after the requester moves to another agency", async () => {
+    const foreign = await seedWorkflowCase({ db: fixture.db });
+    const foreignMember = await fixture.db.query.agencyTeamMemberTable.findFirst({
+      where: eq(agencyTeamMemberTable.userId, foreign.userId),
+    });
+    const job = await requestReviewJob(input);
+    await fixture.db
+      .update(agencyTeamMemberTable)
+      .set({ agencyId: foreignMember!.agencyId })
+      .where(eq(agencyTeamMemberTable.userId, input.userId));
+
+    await processReviewJob({ jobId: job.id });
+
+    expect(state.evaluate).not.toHaveBeenCalled();
+    expect(await getLatestReviewJob(input)).toMatchObject({ status: "failed" });
+  });
+
   it("rejects overlapping workers", async () => {
     const job = await requestReviewJob(input);
     let release!: () => void;

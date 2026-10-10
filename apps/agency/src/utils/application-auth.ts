@@ -30,8 +30,7 @@ const AGENCY_STAFF_PERMISSIONS: Record<string, readonly string[]> = {
 
 /**
  * Core access resolver — shared by the three exported helpers.
- * Active agency staff can access the shared case queue according to their
- * agency role. There is no per-application membership model here.
+ * Staff can access cases only inside their own agency.
  * Returns { hasAccess, session } without throwing.
  */
 const resolveAccessForSession = async (
@@ -41,19 +40,21 @@ const resolveAccessForSession = async (
 ) => {
   if (!session) return { hasAccess: false, session: null } as const;
 
+  const agencyStaff = await ensureAgencyTeamMembership(session);
+  if (!agencyStaff?.agencyId) return { hasAccess: false, session } as const;
+
   const db = getDB();
   const app = await db.query.visaApplicationTable.findFirst({
     where: and(
       eq(visaApplicationTable.id, applicationId),
+      eq(visaApplicationTable.agencyId, agencyStaff.agencyId),
       isNull(visaApplicationTable.trashedAt),
       isNotNull(visaApplicationTable.clientId),
     ),
-    columns: { id: true },
+    columns: { id: true, agencyId: true },
   });
 
-  if (!app) return { hasAccess: false, session } as const;
-
-  const agencyStaff = await ensureAgencyTeamMembership(session);
+  if (!app || app.agencyId !== agencyStaff.agencyId) return { hasAccess: false, session } as const;
 
   if (agencyStaff) {
     if (!permission) {

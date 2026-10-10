@@ -16,6 +16,7 @@ import { visaApplicationTable } from "./visa-application";
 import { applicantTable } from "./applicant";
 import { checklistItemTable } from "./checklist";
 import { uploadedDocumentTable } from "./document";
+import { agencyTable } from "./agency-workspace";
 
 export const AGENCY_STAFF_ROLE = {
   ADMIN: "admin",
@@ -95,6 +96,7 @@ export const agencyTeamMemberTable = pgTable(
       .$defaultFn(() => `atm_${createId()}`)
       .notNull(),
     userId: text().references(() => userTable.id, { onDelete: "set null" }),
+    agencyId: text().references(() => agencyTable.id, { onDelete: "cascade" }),
     email: text(),
     role: text({ enum: agencyStaffRoleTuple }).default(AGENCY_STAFF_ROLE.MEMBER).notNull(),
     status: text({ enum: agencyStaffStatusTuple }).default(AGENCY_STAFF_STATUS.ACTIVE).notNull(),
@@ -104,6 +106,7 @@ export const agencyTeamMemberTable = pgTable(
   },
   (table) => [
     uniqueIndex("agency_team_member_user_unique_idx").on(table.userId),
+    index("agency_team_member_agency_idx").on(table.agencyId),
     uniqueIndex("agency_team_member_email_unique_idx").on(table.email),
     index("agency_team_member_email_idx").on(table.email),
     index("agency_team_member_role_idx").on(table.role),
@@ -120,6 +123,7 @@ export const agencyClientTable = pgTable(
       .$defaultFn(() => `acl_${createId()}`)
       .notNull(),
     name: text().notNull(),
+    agencyId: text().references(() => agencyTable.id, { onDelete: "cascade" }),
     email: text(),
     phone: text(),
     companyName: text(),
@@ -128,6 +132,7 @@ export const agencyClientTable = pgTable(
   },
   (table) => [
     index("agency_client_name_idx").on(table.name),
+    index("agency_client_agency_idx").on(table.agencyId),
     index("agency_client_email_idx").on(table.email),
   ],
 );

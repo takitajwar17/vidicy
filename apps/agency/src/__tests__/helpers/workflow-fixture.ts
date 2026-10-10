@@ -30,17 +30,32 @@ export async function seedWorkflowCase({
     .insert(schema.userTable)
     .values({ email: `${randomUUID()}@example.test`, emailVerified: new Date() })
     .returning();
+  const [agency] = await db
+    .insert(schema.agencyTable)
+    .values({ ownerUserId: user.id, name: "Test agency" })
+    .returning();
   await db
     .insert(schema.agencyTeamMemberTable)
-    .values({ userId: user.id, email: user.email!, role: "admin", status: "active" });
+    .values({
+      agencyId: agency.id,
+      userId: user.id,
+      email: user.email!,
+      role: "admin",
+      status: "active",
+    });
   const [client] = await db
     .insert(schema.agencyClientTable)
-    .values({ name: "Synthetic Client", email: `client-${randomUUID()}@example.test` })
+    .values({
+      agencyId: agency.id,
+      name: "Synthetic Client",
+      email: `client-${randomUUID()}@example.test`,
+    })
     .returning();
   const [application] = await db
     .insert(schema.visaApplicationTable)
     .values({
       userId: user.id,
+      agencyId: agency.id,
       clientId: client.id,
       clientName: client.name,
       homeCountry: "Bangladesh",
@@ -75,6 +90,8 @@ export async function seedWorkflowCase({
       fileKey: "synthetic/passport",
     });
   return {
+    agencyId: agency.id,
+    clientId: client.id,
     applicationId: application.id,
     applicantId: applicant.id,
     userId: user.id,

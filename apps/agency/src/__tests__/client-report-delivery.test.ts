@@ -17,6 +17,7 @@ vi.mock("@/server/agency-review", async (original) => ({
 }));
 import { getDBFromDatabase } from "@/db";
 import {
+  agencyTable,
   agencyClientTable,
   applicantTable,
   checklistItemTable,
@@ -64,12 +65,23 @@ beforeEach(async () => {
   mocks.send.mockReset();
   mocks.send.mockResolvedValue({ id: "provider_1" });
   const [user] = await db.insert(userTable).values({ email: "staff@example.com" }).returning();
-  mocks.staff.mockResolvedValue({ session: { userId: user.id } });
-  const [client] = await db.insert(agencyClientTable).values({ name: "Client" }).returning();
+  const [agency] = await db
+    .insert(agencyTable)
+    .values({ ownerUserId: user.id, name: "Test agency" })
+    .returning();
+  mocks.staff.mockResolvedValue({
+    session: { userId: user.id },
+    staff: { agencyId: agency.id, role: "admin", isAdmin: true },
+  });
+  const [client] = await db
+    .insert(agencyClientTable)
+    .values({ agencyId: agency.id, name: "Client" })
+    .returning();
   const [application] = await db
     .insert(visaApplicationTable)
     .values({
       userId: user.id,
+      agencyId: agency.id,
       clientId: client.id,
       clientName: "Client",
       clientEmail: "client@example.com",
@@ -335,5 +347,29 @@ describe("client report delivery", () => {
     expect(mocks.send).not.toHaveBeenCalled();
     mocks.staff.mockRejectedValueOnce(new Error("forbidden"));
     await expect(getClientReport({ reportId })).rejects.toThrow("forbidden");
+  });
+
+  it("blocks report reading, recipient changes, and delivery from another agency", async () => {
+    const [otherUser] = await db
+      .insert(userTable)
+      .values({ email: "other-agency@example.test" })
+      .returning();
+    const [otherAgency] = await db
+      .insert(agencyTable)
+      .values({ ownerUserId: otherUser.id, name: "Other agency" })
+      .returning();
+    mocks.staff.mockResolvedValue({
+      session: { userId: otherUser.id },
+      staff: { agencyId: otherAgency.id, role: "admin", isAdmin: true },
+    });
+    await expect(getClientReport({ reportId })).rejects.toThrow("Case not found");
+    await expect(
+      updateClientReportRecipient({ reportId, email: "other@example.test" }),
+    ).rejects.toThrow("Case not found");
+    await expect(deliverClientReport({ reportId })).rejects.toThrow("Case not found");
+    expect(mocks.send).not.toHaveBeenCalled();
+    expect((await db.query.visaApplicationTable.findFirst())?.clientEmail).toBe(
+      "client@example.com",
+    );
   });
 });

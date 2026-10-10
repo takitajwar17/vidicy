@@ -7,6 +7,7 @@ import {
   applicationInvitationTable,
   applicationMembershipTable,
   agencyTeamMemberTable,
+  agencyTable,
   uploadedDocumentTable,
   userTable,
   visaApplicationTable,
@@ -127,7 +128,13 @@ export async function deleteApplicationAsAdmin({ applicationId }: { applicationI
   logger.info("Application deleted by admin", { applicationId });
 }
 
-async function getReplacementAgencyOwner({ userId }: { userId: string }) {
+async function getReplacementAgencyOwner({
+  userId,
+  agencyId,
+}: {
+  userId: string;
+  agencyId: string;
+}) {
   const db = getDB();
   const activeStaff = await db
     .select({
@@ -139,6 +146,7 @@ async function getReplacementAgencyOwner({ userId }: { userId: string }) {
     .from(agencyTeamMemberTable)
     .where(
       and(
+        eq(agencyTeamMemberTable.agencyId, agencyId),
         isNotNull(agencyTeamMemberTable.userId),
         ne(agencyTeamMemberTable.userId, userId),
         eq(agencyTeamMemberTable.status, AGENCY_STAFF_STATUS.ACTIVE),
@@ -161,47 +169,83 @@ async function getReplacementAgencyOwner({ userId }: { userId: string }) {
 export async function transferOrDeleteOwnedApplicationsForUser({ userId }: { userId: string }) {
   const db = getDB();
 
-  const ownedApps = await db
-    .select({ id: visaApplicationTable.id })
-    .from(visaApplicationTable)
-    .where(eq(visaApplicationTable.userId, userId));
+  const [ownedApps, ownedAgencies] = await Promise.all([
+    db
+      .select({ id: visaApplicationTable.id, agencyId: visaApplicationTable.agencyId })
+      .from(visaApplicationTable)
+      .where(eq(visaApplicationTable.userId, userId)),
+    db.select({ id: agencyTable.id }).from(agencyTable).where(eq(agencyTable.ownerUserId, userId)),
+  ]);
 
-  if (ownedApps.length === 0) {
+  if (ownedApps.length === 0 && ownedAgencies.length === 0) {
     return { appsTransferred: 0, appsDeleted: 0 };
   }
 
-  const replacement = await getReplacementAgencyOwner({ userId });
-
-  if (replacement) {
-    await db
-      .update(visaApplicationTable)
-      .set({ userId: replacement.userId!, updatedAt: new Date() })
-      .where(eq(visaApplicationTable.userId, userId));
-
-    logger.info("Agency case ownership transferred before user deletion", {
-      fromUserId: userId,
-      toUserId: replacement.userId,
-      applicationCount: ownedApps.length,
-    });
-
-    return { appsTransferred: ownedApps.length, appsDeleted: 0 };
-  }
-
+  let appsTransferred = 0;
   let appsDeleted = 0;
-  for (const app of ownedApps) {
-    try {
-      await deleteApplicationAsAdmin({ applicationId: app.id });
-      appsDeleted++;
-    } catch (error) {
-      logger.warn("Failed to delete application during user deletion", {
-        applicationId: app.id,
-        userId,
-        error,
+  const agencyIds = new Set([
+    ...ownedApps.map((app) => app.agencyId),
+    ...ownedAgencies.map((agency) => agency.id),
+  ]);
+  for (const agencyId of agencyIds) {
+    const agencyApps = ownedApps.filter((app) => app.agencyId === agencyId);
+    const replacement = agencyId ? await getReplacementAgencyOwner({ userId, agencyId }) : null;
+    if (replacement) {
+      await db.withTransaction(async () => {
+        await db
+          .update(visaApplicationTable)
+          .set({ userId: replacement.userId!, updatedAt: new Date() })
+          .where(
+            and(
+              eq(visaApplicationTable.userId, userId),
+              eq(visaApplicationTable.agencyId, agencyId!),
+            ),
+          );
+        const transferredAgency = await db
+          .update(agencyTable)
+          .set({ ownerUserId: replacement.userId!, updatedAt: new Date() })
+          .where(and(eq(agencyTable.id, agencyId!), eq(agencyTable.ownerUserId, userId)))
+          .returning({ id: agencyTable.id });
+        if (transferredAgency.length > 0) {
+          const promoted = await db
+            .update(agencyTeamMemberTable)
+            .set({ role: AGENCY_STAFF_ROLE.ADMIN, updatedAt: new Date() })
+            .where(
+              and(
+                eq(agencyTeamMemberTable.agencyId, agencyId!),
+                eq(agencyTeamMemberTable.userId, replacement.userId!),
+                eq(agencyTeamMemberTable.status, AGENCY_STAFF_STATUS.ACTIVE),
+              ),
+            )
+            .returning({ id: agencyTeamMemberTable.id });
+          if (promoted.length === 0) {
+            throw new Error("Replacement agency owner is no longer active");
+          }
+        }
       });
+      appsTransferred += agencyApps.length;
+      logger.info("Agency case ownership transferred before user deletion", {
+        fromUserId: userId,
+        toUserId: replacement.userId,
+        applicationCount: agencyApps.length,
+      });
+      continue;
+    }
+    for (const app of agencyApps) {
+      try {
+        await deleteApplicationAsAdmin({ applicationId: app.id });
+        appsDeleted++;
+      } catch (error) {
+        logger.warn("Failed to delete application during user deletion", {
+          applicationId: app.id,
+          userId,
+          error,
+        });
+      }
     }
   }
 
-  return { appsTransferred: 0, appsDeleted };
+  return { appsTransferred, appsDeleted };
 }
 
 /**

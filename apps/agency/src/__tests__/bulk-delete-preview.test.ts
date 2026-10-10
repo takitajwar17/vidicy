@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { eq } from "drizzle-orm";
 import { readFileSync, readdirSync } from "node:fs";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { startTestPostgres } from "./helpers/postgres";
@@ -24,7 +25,7 @@ vi.mock("@/infra/csrf", () => ({ validateCsrfToken: async () => true }));
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 import { previewDeleteUsersAction } from "@/app/(admin)/admin/_actions/bulk-actions";
 import { getDBFromDatabase } from "@/db";
-import { userTable, agencyTeamMemberTable, visaApplicationTable } from "@/db/schema";
+import { userTable, agencyTable, agencyTeamMemberTable, visaApplicationTable } from "@/db/schema";
 let postgres: ReturnType<typeof startTestPostgres>;
 let adminPool: ReturnType<ReturnType<typeof startTestPostgres>["createPool"]>;
 beforeAll(() => {
@@ -59,14 +60,34 @@ describe("bulk deletion impact", () => {
         ])
         .returning();
       mocks.admin.mockResolvedValue({ userId: admin.id });
+      const [agency, foreignAgency] = await db
+        .insert(agencyTable)
+        .values([
+          { ownerUserId: first.id, name: "Selected agency" },
+          { ownerUserId: admin.id, name: "Other agency" },
+        ])
+        .returning();
       await db.insert(agencyTeamMemberTable).values([
-        { userId: first.id, email: first.email!, role: "member", status: "active" },
-        { userId: second.id, email: second.email!, role: "member", status: "active" },
-        { email: "invited@example.com", role: "member", status: "active" },
+        {
+          agencyId: agency.id,
+          userId: first.id,
+          email: first.email!,
+          role: "member",
+          status: "active",
+        },
+        {
+          agencyId: agency.id,
+          userId: second.id,
+          email: second.email!,
+          role: "member",
+          status: "active",
+        },
+        { agencyId: agency.id, email: "invited@example.com", role: "member", status: "active" },
       ]);
       await db.insert(visaApplicationTable).values(
         [first, second].map((user) => ({
           userId: user.id,
+          agencyId: agency.id,
           homeCountry: "Bangladesh",
           currentCountry: "Bangladesh",
           destinationCountry: "Japan",
@@ -80,10 +101,24 @@ describe("bulk deletion impact", () => {
         appsToTransfer: 0,
         appsToDelete: 2,
       });
-      // A linked, active member who survives the deletion can receive both cases.
+      // Surviving staff from another agency cannot receive these cases.
+      await db.insert(agencyTeamMemberTable).values({
+        agencyId: foreignAgency.id,
+        userId: admin.id,
+        email: admin.email!,
+        role: "admin",
+        status: "active",
+      });
+      await expect(previewDeleteUsersAction(input)).resolves.toEqual({
+        usersToDelete: 2,
+        appsToTransfer: 0,
+        appsToDelete: 2,
+      });
+      // A linked, active member of this agency can receive its cases.
       await db
-        .insert(agencyTeamMemberTable)
-        .values({ userId: admin.id, email: admin.email!, role: "admin", status: "active" });
+        .update(agencyTeamMemberTable)
+        .set({ agencyId: agency.id })
+        .where(eq(agencyTeamMemberTable.userId, admin.id));
       await expect(previewDeleteUsersAction(input)).resolves.toEqual({
         usersToDelete: 2,
         appsToTransfer: 2,
@@ -92,6 +127,16 @@ describe("bulk deletion impact", () => {
       await expect(
         previewDeleteUsersAction({ ...input, userIds: [first.id, first.id, second.id, admin.id] }),
       ).resolves.toEqual({ usersToDelete: 2, appsToTransfer: 2, appsToDelete: 0 });
+      // Different case agencies have separate replacement decisions.
+      await db
+        .update(visaApplicationTable)
+        .set({ agencyId: foreignAgency.id })
+        .where(eq(visaApplicationTable.userId, second.id));
+      await expect(previewDeleteUsersAction(input)).resolves.toEqual({
+        usersToDelete: 2,
+        appsToTransfer: 1,
+        appsToDelete: 1,
+      });
     } finally {
       await pool.end();
       await adminPool.query(`DROP DATABASE "${name}"`);

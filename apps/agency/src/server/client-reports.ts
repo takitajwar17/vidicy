@@ -22,7 +22,7 @@ const RETRY_DELAY_MS = 2 * 60_000;
 const RETRY_WINDOW_MS = 23 * 60 * 60_000;
 
 export async function getClientReport({ reportId }: { reportId: string }) {
-  const { session } = await requireAgencyStaff();
+  const { session, staff } = await requireAgencyStaff();
   const db = getDB();
   const report = await db.query.clientReportTable.findFirst({
     where: eq(clientReportTable.id, reportId),
@@ -31,6 +31,7 @@ export async function getClientReport({ reportId }: { reportId: string }) {
   const application = await db.query.visaApplicationTable.findFirst({
     where: and(
       eq(visaApplicationTable.id, report.applicationId),
+      eq(visaApplicationTable.agencyId, staff.agencyId),
       isNull(visaApplicationTable.trashedAt),
       isNotNull(visaApplicationTable.clientId),
     ),

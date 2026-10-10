@@ -43,8 +43,14 @@ vi.mock("zsa", () => ({
 }));
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 vi.mock("@/server/agency-team", () => ({
-  requireAgencyStaff: async () => ({ session: await mockPermission() }),
-  requireAgencyAdmin: async () => ({ session: await mockPermission() }),
+  requireAgencyStaff: async () => {
+    const session = await mockPermission();
+    return { session, staff: session.staff };
+  },
+  requireAgencyAdmin: async () => {
+    const session = await mockPermission();
+    return { session, staff: session.staff };
+  },
 }));
 vi.mock("@/utils/email", () => ({
   sendAgencyTeamAccessEmail: vi.fn(),
@@ -106,6 +112,7 @@ import { runAgencyEvaluation } from "@/services/agency-evaluation";
 import { generateChecklistAction } from "@/actions/checklist.action";
 import { getDBFromDatabase } from "@/db";
 import {
+  agencyTable,
   agencyTeamMemberTable,
   agencyClientTable,
   applicantTable,
@@ -193,6 +200,7 @@ async function createDatabase({ lastMigration }: { lastMigration?: string } = {}
 describe("agency review workflow with the real database driver", () => {
   let fixture: Awaited<ReturnType<typeof createDatabase>>;
   let userId: string;
+  let agencyId: string;
   let applicationId: string;
   let applicantId: string;
   let itemId: string;
@@ -208,7 +216,12 @@ describe("agency review workflow with the real database driver", () => {
     mockGetDB.mockReturnValue(db);
     const [user] = await db.insert(userTable).values({ email: "reviewer@example.com" }).returning();
     userId = user.id;
-    mockPermission.mockResolvedValue({ userId });
+    const [agency] = await db
+      .insert(agencyTable)
+      .values({ ownerUserId: userId, name: "Test agency" })
+      .returning();
+    agencyId = agency.id;
+    mockPermission.mockResolvedValue({ userId, staff: { agencyId, role: "admin", isAdmin: true } });
     mockPerplexity.mockResolvedValue({
       choices: [{ message: { content: "Official requirements" } }],
       citations: [],
@@ -216,11 +229,12 @@ describe("agency review workflow with the real database driver", () => {
     mockOpenAI.mockReset();
     await db
       .insert(agencyTeamMemberTable)
-      .values({ userId, email: "reviewer@example.com", role: "admin", status: "active" });
+      .values({ agencyId, userId, email: "reviewer@example.com", role: "admin", status: "active" });
     const [application] = await db
       .insert(visaApplicationTable)
       .values({
         userId,
+        agencyId,
         clientId: "client",
         clientName: "Client",
         homeCountry: "Bangladesh",
@@ -336,11 +350,11 @@ describe("agency review workflow with the real database driver", () => {
   it("filters cases by client and uses the most recent activity across their cases", async () => {
     const [client] = await fixture.db
       .insert(agencyClientTable)
-      .values({ name: "Activity Client" })
+      .values({ agencyId, name: "Activity Client" })
       .returning();
     const [other] = await fixture.db
       .insert(agencyClientTable)
-      .values({ name: "Other Client" })
+      .values({ agencyId, name: "Other Client" })
       .returning();
     const older = new Date("2026-09-19T00:00:00Z");
     const recent = new Date("2026-10-20T00:00:00Z");
@@ -350,6 +364,7 @@ describe("agency review workflow with the real database driver", () => {
       .where(eq(visaApplicationTable.id, applicationId));
     const common = {
       userId,
+      agencyId,
       homeCountry: "Bangladesh",
       currentCountry: "Bangladesh",
       destinationCountry: "Japan",
@@ -787,8 +802,12 @@ describe("agency review workflow with the real database driver", () => {
         citations: ["https://example.gov/b"],
       });
     const response = { choices: [{ message: { content: JSON.stringify({ items }) } }] };
+    let enteredFirst!: () => void;
     let enteredSecond!: () => void;
     let finishSecond!: () => void;
+    const firstEntered = new Promise<void>((resolve) => {
+      enteredFirst = resolve;
+    });
     const secondEntered = new Promise<void>((resolve) => {
       enteredSecond = resolve;
     });
@@ -798,6 +817,7 @@ describe("agency review workflow with the real database driver", () => {
     mockOpenAI.mockReset();
     mockOpenAI
       .mockImplementationOnce(async () => {
+        enteredFirst();
         await secondEntered;
         return response;
       })
@@ -807,6 +827,7 @@ describe("agency review workflow with the real database driver", () => {
         return response;
       });
     const first = generateChecklistAction({ applicationId, applicantId });
+    await firstEntered;
     const second = generateChecklistAction({ applicationId, applicantId });
     await first;
     const before = await fixture.db.query.visaApplicationTable.findFirst();
@@ -1407,19 +1428,14 @@ describe("document upload sequence migration", () => {
         .insert(userTable)
         .values({ email: "migration@example.com" })
         .returning();
-      const [application] = await fixture.db
-        .insert(visaApplicationTable)
-        .values({
-          userId: user.id,
-          clientId: "client",
-          clientName: "Client",
-          homeCountry: "Bangladesh",
-          currentCountry: "Bangladesh",
-          destinationCountry: "Japan",
-          visaType: "Tourist",
-          embassy: "Dhaka",
-        })
-        .returning();
+      // The historical schema predates agencyId; use its original columns.
+      const {
+        rows: [application],
+      } = await fixture.pool.query<{ id: string }>(
+        `INSERT INTO visa_application (id, "createdAt", "updatedAt", "userId", "clientId", "clientName", "homeCountry", "currentCountry", "destinationCountry", "visaType", embassy)
+         VALUES ('migration_case', now(), now(), $1, 'client', 'Client', 'Bangladesh', 'Bangladesh', 'Japan', 'Tourist', 'Dhaka') RETURNING id`,
+        [user.id],
+      );
       const [applicant] = await fixture.db
         .insert(applicantTable)
         .values({ applicationId: application.id, name: "Applicant", relationship: "primary" })

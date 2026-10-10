@@ -3,6 +3,8 @@ import "server-only";
 import { and, desc, eq, inArray, isNotNull, isNull, ilike, ne, or } from "drizzle-orm";
 
 import { getDB } from "@/db";
+import { ZSAError } from "zsa";
+import { requireAgencyStaff } from "@/server/agency-team";
 import {
   AGENCY_CASE_STATUS,
   AGENCY_STAFF_STATUS,
@@ -71,8 +73,19 @@ export interface AgencyCaseRow {
   reviewState: "not_started" | "outdated" | "current";
 }
 
-function getAgencyCaseFilters() {
-  return [isNull(visaApplicationTable.trashedAt), isNotNull(visaApplicationTable.clientId)];
+function getAgencyCaseFilters(agencyId: string) {
+  return [
+    eq(visaApplicationTable.agencyId, agencyId),
+    isNull(visaApplicationTable.trashedAt),
+    isNotNull(visaApplicationTable.clientId),
+  ];
+}
+
+function getAgencyApplicationIds(agencyId: string) {
+  return getDB()
+    .select({ id: visaApplicationTable.id })
+    .from(visaApplicationTable)
+    .where(and(...getAgencyCaseFilters(agencyId)));
 }
 
 function normalizeSearchQuery(query?: string | null) {
@@ -98,7 +111,13 @@ function getPrimaryApplicantByApplication(applicants: ApplicantRow[]) {
   return primaryApplicantByApp;
 }
 
-async function getApplicantSearchMatches(query: string): Promise<{
+async function getApplicantSearchMatches({
+  query,
+  agencyId,
+}: {
+  query: string;
+  agencyId: string;
+}): Promise<{
   applicationIds: string[];
   applicantIds: string[];
 }> {
@@ -106,7 +125,10 @@ async function getApplicantSearchMatches(query: string): Promise<{
 
   const db = getDB();
   const applicants = await db.query.applicantTable.findMany({
-    where: ilike(applicantTable.name, `%${query}%`),
+    where: and(
+      ilike(applicantTable.name, `%${query}%`),
+      inArray(applicantTable.applicationId, getAgencyApplicationIds(agencyId)),
+    ),
     columns: {
       id: true,
       applicationId: true,
@@ -120,13 +142,19 @@ async function getApplicantSearchMatches(query: string): Promise<{
   };
 }
 
-async function getApplicationSearchMatches(query: string): Promise<string[]> {
+async function getApplicationSearchMatches({
+  query,
+  agencyId,
+}: {
+  query: string;
+  agencyId: string;
+}): Promise<string[]> {
   if (!query) return [];
 
   const db = getDB();
   const applications = await db.query.visaApplicationTable.findMany({
     where: and(
-      ...getAgencyCaseFilters(),
+      ...getAgencyCaseFilters(agencyId),
       or(
         ilike(visaApplicationTable.caseNumber, `%${query}%`),
         ilike(visaApplicationTable.clientName, `%${query}%`),
@@ -160,6 +188,7 @@ function matchesReportSearch(report: ClientReportRow, query: string) {
 }
 
 export async function getActiveAgencyStaffRows(): Promise<AgencyStaffRow[]> {
+  const { staff } = await requireAgencyStaff();
   const db = getDB();
 
   const rows = await db
@@ -181,7 +210,12 @@ export async function getActiveAgencyStaffRows(): Promise<AgencyStaffRow[]> {
     })
     .from(agencyTeamMemberTable)
     .leftJoin(userTable, eq(agencyTeamMemberTable.userId, userTable.id))
-    .where(eq(agencyTeamMemberTable.status, AGENCY_STAFF_STATUS.ACTIVE))
+    .where(
+      and(
+        eq(agencyTeamMemberTable.agencyId, staff.agencyId),
+        eq(agencyTeamMemberTable.status, AGENCY_STAFF_STATUS.ACTIVE),
+      ),
+    )
     .orderBy(desc(agencyTeamMemberTable.joinedAt));
 
   return rows.map((row) => ({
@@ -223,11 +257,13 @@ export async function getAgencyCaseRows({
   statuses?: string[];
   clientId?: string;
 } = {}): Promise<AgencyCaseRow[]> {
+  const { staff } = await requireAgencyStaff();
+  const agencyId = staff.agencyId;
   const db = getDB();
   const query = normalizeSearchQuery(rawQuery);
-  const applicantMatches = await getApplicantSearchMatches(query);
+  const applicantMatches = await getApplicantSearchMatches({ query, agencyId });
 
-  const filters = getAgencyCaseFilters();
+  const filters = getAgencyCaseFilters(agencyId);
   if (clientId) filters.push(eq(visaApplicationTable.clientId, clientId));
   if (statuses?.length) {
     filters.push(inArray(visaApplicationTable.agencyStatus, statuses));
@@ -298,7 +334,10 @@ export async function getAgencyCaseRows({
               avatar: userTable.avatar,
             })
             .from(userTable)
-            .where(inArray(userTable.id, reviewerIds))
+            .innerJoin(agencyTeamMemberTable, eq(agencyTeamMemberTable.userId, userTable.id))
+            .where(
+              and(inArray(userTable.id, reviewerIds), eq(agencyTeamMemberTable.agencyId, agencyId)),
+            )
         : Promise.resolve([]),
       db.query.checklistItemTable.findMany({
         where: inArray(checklistItemTable.applicationId, applicationIds),
@@ -590,10 +629,14 @@ export async function getAgencyDashboardData() {
 }
 
 export async function getAgencyCaseDetail(appId: string) {
+  const { staff: agencyStaff } = await requireAgencyStaff();
   const db = getDB();
+  const application = await db.query.visaApplicationTable.findFirst({
+    where: and(eq(visaApplicationTable.id, appId), ...getAgencyCaseFilters(agencyStaff.agencyId)),
+  });
+  if (!application) throw new ZSAError("NOT_FOUND", "Case not found");
 
   const [
-    application,
     applicants,
     checklistItems,
     documents,
@@ -603,13 +646,6 @@ export async function getAgencyCaseDetail(appId: string) {
     staff,
     activeReview,
   ] = await Promise.all([
-    db.query.visaApplicationTable.findFirst({
-      where: and(
-        eq(visaApplicationTable.id, appId),
-        isNull(visaApplicationTable.trashedAt),
-        isNotNull(visaApplicationTable.clientId),
-      ),
-    }),
     db.query.applicantTable.findMany({
       where: eq(applicantTable.applicationId, appId),
       orderBy: [desc(applicantTable.createdAt)],
@@ -685,6 +721,8 @@ export async function getAgencyClientsWithCounts({
   offset?: number;
   query?: string | null;
 } = {}) {
+  const { staff } = await requireAgencyStaff();
+  const agencyId = staff.agencyId;
   const db = getDB();
   const query = normalizeSearchQuery(rawQuery);
   const clientFilters = query
@@ -697,13 +735,13 @@ export async function getAgencyClientsWithCounts({
     : undefined;
   const [clients, cases] = await Promise.all([
     db.query.agencyClientTable.findMany({
-      where: clientFilters,
+      where: and(eq(agencyClientTable.agencyId, agencyId), clientFilters),
       orderBy: [desc(agencyClientTable.updatedAt)],
       limit,
       offset,
     }),
     db.query.visaApplicationTable.findMany({
-      where: and(...getAgencyCaseFilters()),
+      where: and(...getAgencyCaseFilters(agencyId)),
       orderBy: [desc(visaApplicationTable.createdAt)],
     }),
   ]);
@@ -740,10 +778,12 @@ export async function getAgencyDocuments({
   offset?: number;
   query?: string | null;
 } = {}) {
+  const { staff } = await requireAgencyStaff();
+  const agencyId = staff.agencyId;
   const db = getDB();
   const query = normalizeSearchQuery(rawQuery);
-  const applicantMatches = await getApplicantSearchMatches(query);
-  const filters = getAgencyCaseFilters();
+  const applicantMatches = await getApplicantSearchMatches({ query, agencyId });
+  const filters = getAgencyCaseFilters(agencyId);
 
   if (query) {
     const queryFilters = [
@@ -811,11 +851,16 @@ export async function getAgencyReviewIssueRows({
   offset?: number;
   query?: string | null;
 } = {}) {
+  const { staff } = await requireAgencyStaff();
+  const agencyId = staff.agencyId;
   const db = getDB();
   const query = normalizeSearchQuery(rawQuery);
-  const applicantMatches = await getApplicantSearchMatches(query);
-  const applicationMatches = await getApplicationSearchMatches(query);
-  const issueFilters = [ne(reviewIssueTable.status, REVIEW_ISSUE_STATUS.DISMISSED)];
+  const applicantMatches = await getApplicantSearchMatches({ query, agencyId });
+  const applicationMatches = await getApplicationSearchMatches({ query, agencyId });
+  const issueFilters = [
+    ne(reviewIssueTable.status, REVIEW_ISSUE_STATUS.DISMISSED),
+    inArray(reviewIssueTable.applicationId, getAgencyApplicationIds(agencyId)),
+  ];
 
   if (query) {
     const queryFilters = [
@@ -855,8 +900,7 @@ export async function getAgencyReviewIssueRows({
     db.query.visaApplicationTable.findMany({
       where: and(
         inArray(visaApplicationTable.id, applicationIds),
-        isNull(visaApplicationTable.trashedAt),
-        isNotNull(visaApplicationTable.clientId),
+        ...getAgencyCaseFilters(agencyId),
       ),
     }),
     db.query.applicantTable.findMany({
@@ -865,7 +909,10 @@ export async function getAgencyReviewIssueRows({
     }),
     documentIds.length
       ? db.query.uploadedDocumentTable.findMany({
-          where: inArray(uploadedDocumentTable.id, documentIds),
+          where: and(
+            inArray(uploadedDocumentTable.id, documentIds),
+            inArray(uploadedDocumentTable.applicationId, applicationIds),
+          ),
         })
       : Promise.resolve([]),
   ]);
@@ -902,10 +949,13 @@ export async function getAgencyReports({
   offset?: number;
   query?: string | null;
 } = {}) {
+  const { staff } = await requireAgencyStaff();
+  const agencyId = staff.agencyId;
   const db = getDB();
   const query = normalizeSearchQuery(rawQuery);
 
   const reports = await db.query.clientReportTable.findMany({
+    where: inArray(clientReportTable.applicationId, getAgencyApplicationIds(agencyId)),
     orderBy: [desc(clientReportTable.createdAt)],
     limit: 500,
   });

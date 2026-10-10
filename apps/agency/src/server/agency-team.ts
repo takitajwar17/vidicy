@@ -4,16 +4,13 @@ import { cache } from "react";
 import { count, eq } from "drizzle-orm";
 import { ZSAError } from "zsa";
 import { getDB } from "@/db";
-import {
-  AGENCY_STAFF_ROLE,
-  AGENCY_STAFF_STATUS,
-  agencyTeamMemberTable,
-  ROLES_ENUM,
-} from "@/db/schema";
+import { AGENCY_STAFF_ROLE, AGENCY_STAFF_STATUS, agencyTeamMemberTable } from "@/db/schema";
 import { requireVerifiedEmail } from "@/utils/auth";
 import type { SessionValidationResult } from "@/types";
+import { provisionAgencyMembership } from "./agency-provisioning";
 
 export interface AgencyStaffContext {
+  agencyId: string;
   role: (typeof AGENCY_STAFF_ROLE)[keyof typeof AGENCY_STAFF_ROLE];
   isAdmin: boolean;
 }
@@ -28,72 +25,32 @@ export async function ensureAgencyTeamMembership(
   const db = getDB();
   const user = getSessionUser(session);
 
+  if (!user.emailVerified) return null;
+
   const existing = await db.query.agencyTeamMemberTable.findFirst({
     where: eq(agencyTeamMemberTable.userId, user.id),
-    columns: { id: true, role: true, status: true },
+    columns: { id: true, role: true, status: true, agencyId: true },
   });
 
-  if (existing?.status === AGENCY_STAFF_STATUS.ACTIVE) {
+  if (existing?.status === AGENCY_STAFF_STATUS.ACTIVE && existing.agencyId) {
     const role = existing.role as AgencyStaffContext["role"];
     return {
+      agencyId: existing.agencyId,
       role,
-      isAdmin: role === AGENCY_STAFF_ROLE.ADMIN || user.role === ROLES_ENUM.ADMIN,
+      isAdmin: role === AGENCY_STAFF_ROLE.ADMIN,
     };
   }
 
-  if (existing) {
+  if (existing && existing.status !== AGENCY_STAFF_STATUS.ACTIVE) {
     return null;
   }
 
-  const email = user.email?.trim().toLowerCase();
-  const accessGrant = email
-    ? await db.query.agencyTeamMemberTable.findFirst({
-        where: eq(agencyTeamMemberTable.email, email),
-        columns: { id: true, role: true, status: true, userId: true },
-      })
-    : null;
-
-  if (accessGrant?.status === AGENCY_STAFF_STATUS.ACTIVE) {
-    const role = accessGrant.role as AgencyStaffContext["role"];
-    await db
-      .update(agencyTeamMemberTable)
-      .set({
-        userId: user.id,
-        ...(accessGrant.userId ? {} : { joinedAt: new Date() }),
-        updatedAt: new Date(),
-      })
-      .where(eq(agencyTeamMemberTable.id, accessGrant.id));
-
-    return {
-      role,
-      isAdmin: role === AGENCY_STAFF_ROLE.ADMIN || user.role === ROLES_ENUM.ADMIN,
-    };
-  }
-
-  if (accessGrant) {
-    return null;
-  }
-
-  const isAdmin = user.role === ROLES_ENUM.ADMIN;
-
-  if (!isAdmin && !user.emailVerified) {
-    return null;
-  }
-
-  const role = isAdmin ? AGENCY_STAFF_ROLE.ADMIN : AGENCY_STAFF_ROLE.MEMBER;
-
-  await db
-    .insert(agencyTeamMemberTable)
-    .values({
-      userId: user.id,
-      email: email ?? user.id,
-      role,
-      status: AGENCY_STAFF_STATUS.ACTIVE,
-      joinedAt: new Date(),
-    })
-    .onConflictDoNothing({ target: agencyTeamMemberTable.userId });
-
-  return { role, isAdmin };
+  const name = [user.firstName, user.lastName].filter(Boolean).join(" ").trim();
+  return provisionAgencyMembership({
+    userId: user.id,
+    email: user.email?.trim().toLowerCase() ?? null,
+    name: name ? `${name}'s agency` : "My agency",
+  });
 }
 
 export const getAgencyStaffContextForSession = cache(
