@@ -161,7 +161,7 @@ function CommentTree({ comments, postId, isAdmin, onReply, onDelete }: CommentTr
         >
           <div
             className={cn(
-              "rounded-2xl border bg-background/90 p-4 shadow-xs",
+              "rounded-md border bg-background/90 p-4",
               visualDepth > 0 &&
                 "relative before:absolute before:-left-[19px] before:top-6 before:h-px before:w-[19px] before:bg-border/70",
             )}
@@ -170,7 +170,7 @@ function CommentTree({ comments, postId, isAdmin, onReply, onDelete }: CommentTr
               <AnnouncementActorAvatar
                 name={actor.name}
                 avatar={actor.avatar}
-                className="h-9 w-9 border shadow-xs"
+                className="h-9 w-9 border"
                 fallbackClassName="bg-primary/10 text-xs font-semibold text-primary"
                 size={36}
               />
@@ -188,7 +188,7 @@ function CommentTree({ comments, postId, isAdmin, onReply, onDelete }: CommentTr
                   <Button
                     size="sm"
                     variant="ghost"
-                    className="h-8 rounded-full px-3 text-xs"
+                    className="h-8 rounded-[5px] px-3 text-xs"
                     onClick={() => setReplyOpenFor(replyFormOpen ? null : comment.id)}
                   >
                     Reply
@@ -197,7 +197,7 @@ function CommentTree({ comments, postId, isAdmin, onReply, onDelete }: CommentTr
                     <Button
                       size="sm"
                       variant="ghost"
-                      className="h-8 rounded-full px-3 text-xs text-destructive hover:text-destructive"
+                      className="h-8 rounded-[5px] px-3 text-xs text-destructive hover:text-destructive"
                       onClick={() => void onDelete(comment.id)}
                     >
                       Delete
@@ -206,8 +206,9 @@ function CommentTree({ comments, postId, isAdmin, onReply, onDelete }: CommentTr
                 </div>
 
                 {replyFormOpen ? (
-                  <div className="space-y-2 rounded-2xl border bg-muted/20 p-3">
+                  <div className="space-y-2 rounded-md border bg-muted/20 p-3">
                     <Textarea
+                      aria-label="Write a reply"
                       value={replyBody}
                       maxLength={5000}
                       disabled={isReplyPending}
@@ -219,7 +220,7 @@ function CommentTree({ comments, postId, isAdmin, onReply, onDelete }: CommentTr
                       <Button
                         size="sm"
                         variant="ghost"
-                        className="rounded-full"
+                        className="rounded-[5px]"
                         onClick={() => {
                           setReplyOpenFor(null);
                           setReplyBody("");
@@ -229,7 +230,7 @@ function CommentTree({ comments, postId, isAdmin, onReply, onDelete }: CommentTr
                       </Button>
                       <Button
                         size="sm"
-                        className="rounded-full"
+                        className="rounded-[5px]"
                         disabled={!trimmedReplyBody || isReplyPending}
                         onClick={async () => {
                           setIsReplyPending(true);
@@ -314,8 +315,8 @@ function PostCard({
   return (
     <Card
       className={cn(
-        "overflow-hidden border-border/60 shadow-sm transition-colors",
-        !post.isRead && "border-primary/35 shadow-primary/5",
+        "overflow-hidden border-border/60 shadow-none transition-colors",
+        !post.isRead && "border-primary/35 ",
       )}
       onFocusCapture={markReadIfNeeded}
     >
@@ -325,7 +326,7 @@ function PostCard({
           <AnnouncementActorAvatar
             name={author.name}
             avatar={author.avatar}
-            className="h-12 w-12 border shadow-xs"
+            className="h-12 w-12 border"
             fallbackClassName="bg-primary/10 font-semibold text-primary"
             size={48}
           />
@@ -337,20 +338,20 @@ function PostCard({
                   <p className="truncate font-semibold text-foreground">{author.name}</p>
                   <Badge
                     variant="outline"
-                    className={cn("gap-1 rounded-full px-3", typeMeta.badgeClassName)}
+                    className={cn("gap-1 rounded-[4px] px-3", typeMeta.badgeClassName)}
                   >
                     <typeMeta.icon className="h-3.5 w-3.5" />
                     {typeMeta.label}
                   </Badge>
                   {post.pinned ? (
-                    <Badge variant="secondary" className="rounded-full px-3">
+                    <Badge variant="secondary" className="rounded-[4px] px-3">
                       Pinned
                     </Badge>
                   ) : null}
                   {post.priority !== "normal" ? (
                     <Badge
                       variant="outline"
-                      className={cn("rounded-full px-3", priorityMeta.badgeClassName)}
+                      className={cn("rounded-[4px] px-3", priorityMeta.badgeClassName)}
                     >
                       {priorityMeta.label}
                     </Badge>
@@ -370,9 +371,9 @@ function PostCard({
 
               <div className="flex flex-wrap items-center gap-2">
                 {!post.isRead ? (
-                  <Badge className="rounded-full px-3">Unread</Badge>
+                  <Badge className="rounded-[4px] px-3">Unread</Badge>
                 ) : (
-                  <Badge variant="outline" className="rounded-full px-3">
+                  <Badge variant="outline" className="rounded-[4px] px-3">
                     Seen
                   </Badge>
                 )}
@@ -380,7 +381,7 @@ function PostCard({
                   <Button
                     size="sm"
                     variant="ghost"
-                    className="h-9 rounded-full px-4"
+                    className="h-9 rounded-[5px] px-4"
                     onClick={() => void onMarkRead(post.id)}
                   >
                     Mark as read
@@ -403,7 +404,7 @@ function PostCard({
             {post.attachments.map((attachment) => (
               <a
                 key={`${post.id}-${attachment.url}`}
-                className="group flex items-center gap-3 rounded-2xl border bg-background/80 p-3 transition-colors hover:border-primary/30 hover:bg-primary/5"
+                className="group flex items-center gap-3 rounded-md border bg-background/80 p-3 transition-colors hover:border-primary/30 hover:bg-primary/5"
                 href={attachment.url}
                 target="_blank"
                 rel="noreferrer noopener"
@@ -424,7 +425,7 @@ function PostCard({
         ) : null}
 
         {embed ? (
-          <div className="overflow-hidden rounded-2xl border bg-background/80">
+          <div className="overflow-hidden rounded-md border bg-background/80">
             <div className="flex items-center gap-2 border-b px-4 py-3 text-sm font-medium">
               <FileTextIcon className="h-4 w-4 text-primary" />
               <span>{post.embedTitle || "Embedded content"}</span>
@@ -442,7 +443,7 @@ function PostCard({
         ) : null}
 
         {post.type === "poll" ? (
-          <div className="space-y-4 rounded-2xl border bg-muted/20 p-4">
+          <div className="space-y-4 rounded-md border bg-muted/20 p-4">
             <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
               <div className="space-y-1">
                 <p className="text-sm font-semibold">Poll</p>
@@ -452,7 +453,7 @@ function PostCard({
                 </p>
               </div>
               {post.pollCloseAt ? (
-                <Badge variant="outline" className="w-fit rounded-full px-3">
+                <Badge variant="outline" className="w-fit rounded-[4px] px-3">
                   Closes {formatRelativeTimestamp(post.pollCloseAt)}
                 </Badge>
               ) : null}
@@ -467,7 +468,7 @@ function PostCard({
                   <div
                     key={option.id}
                     className={cn(
-                      "relative overflow-hidden rounded-2xl border bg-background/90",
+                      "relative overflow-hidden rounded-md border bg-background/90",
                       (option.hasVoted || isSelected) && "border-primary/35",
                     )}
                   >
@@ -529,7 +530,7 @@ function PostCard({
                           <Button
                             size="sm"
                             variant={option.hasVoted ? "default" : "outline"}
-                            className="rounded-full px-4"
+                            className="rounded-[5px] px-4"
                             disabled={pollVotingLocked}
                             onClick={() => void onVote(post.id, [option.id])}
                           >
@@ -551,7 +552,7 @@ function PostCard({
               <Button
                 size="sm"
                 variant="outline"
-                className="rounded-full px-4"
+                className="rounded-[5px] px-4"
                 disabled={selectedPollOptionIds.length === 0 || pollVotingLocked}
                 onClick={() => void onVote(post.id, selectedPollOptionIds)}
               >
@@ -566,7 +567,7 @@ function PostCard({
             ) : null}
 
             {post.pollNamedVotes && shouldShowResults ? (
-              <div className="rounded-2xl border bg-background/80 p-3">
+              <div className="rounded-md border bg-background/80 p-3">
                 <p className="mb-2 text-xs font-medium uppercase tracking-[0.2em] text-muted-foreground">
                   Named votes
                 </p>
@@ -587,12 +588,12 @@ function PostCard({
           </div>
         ) : null}
 
-        <div className="flex flex-wrap items-center gap-2 rounded-2xl border bg-muted/20 p-2">
+        <div className="flex flex-wrap items-center gap-2 rounded-md border bg-muted/20 p-2">
           <Button
             size="sm"
             type="button"
             variant={post.hasUpvoted ? "default" : "outline"}
-            className="gap-1.5 rounded-full px-3"
+            className="gap-1.5 rounded-[5px] px-3"
             aria-label={post.hasUpvoted ? "Remove upvote" : "Upvote"}
             aria-pressed={post.hasUpvoted}
             onClick={() => void onUpvote(post.id)}
@@ -605,17 +606,17 @@ function PostCard({
           <Button
             size="sm"
             variant="ghost"
-            className="rounded-full px-4"
+            className="rounded-[5px] px-4"
             onClick={() => setCommentComposerOpen((open) => !open)}
           >
             <MessageSquareIcon className="mr-2 h-4 w-4" />
             Comment
           </Button>
-          <Badge variant="secondary" className="rounded-full px-3">
+          <Badge variant="secondary" className="rounded-[4px] px-3">
             {post.commentsCount} repl{post.commentsCount === 1 ? "y" : "ies"}
           </Badge>
           {post.ctaUrl && post.ctaLabel ? (
-            <Button size="sm" variant="secondary" className="rounded-full px-4 sm:ml-auto" asChild>
+            <Button size="sm" variant="secondary" className="rounded-[5px] px-4 sm:ml-auto" asChild>
               <a href={post.ctaUrl} target="_blank" rel="noreferrer noopener">
                 {post.ctaLabel}
                 <ExternalLinkIcon className="ml-2 h-4 w-4" />
@@ -635,14 +636,15 @@ function PostCard({
                   Ask questions, react, or add context to this update.
                 </p>
               </div>
-              <Badge variant="outline" className="rounded-full px-3">
+              <Badge variant="outline" className="rounded-[4px] px-3">
                 {post.commentsCount} comment{post.commentsCount === 1 ? "" : "s"}
               </Badge>
             </div>
 
             {commentComposerOpen ? (
-              <div className="space-y-3 rounded-2xl border bg-muted/20 p-3">
+              <div className="space-y-3 rounded-md border bg-muted/20 p-3">
                 <Textarea
+                  aria-label="Share your feedback, ask a question, or add more context"
                   value={commentText}
                   maxLength={5000}
                   disabled={isCommentPending}
@@ -654,7 +656,7 @@ function PostCard({
                   <Button
                     size="sm"
                     variant="ghost"
-                    className="rounded-full px-4"
+                    className="rounded-[5px] px-4"
                     onClick={() => {
                       setCommentComposerOpen(false);
                       setCommentText("");
@@ -664,7 +666,7 @@ function PostCard({
                   </Button>
                   <Button
                     size="sm"
-                    className="rounded-full px-4"
+                    className="rounded-[5px] px-4"
                     disabled={!trimmedCommentText || isCommentPending}
                     onClick={async () => {
                       setIsCommentPending(true);
@@ -685,7 +687,7 @@ function PostCard({
             ) : (
               <button
                 type="button"
-                className="w-full rounded-2xl border border-dashed bg-background/70 px-4 py-3 text-left text-sm text-muted-foreground transition-colors hover:border-primary/30 hover:bg-primary/5 hover:text-foreground"
+                className="w-full rounded-md border border-dashed bg-background/70 px-4 py-3 text-left text-sm text-muted-foreground transition-colors hover:border-primary/30 hover:bg-primary/5 hover:text-foreground"
                 onClick={() => setCommentComposerOpen(true)}
               >
                 Join the conversation
@@ -701,13 +703,13 @@ function PostCard({
                 onReply={onReply}
               />
             ) : showDiscussionEmptyState ? (
-              <div className="rounded-2xl border border-dashed bg-background/60 px-4 py-5 text-sm text-muted-foreground">
+              <div className="rounded-md border border-dashed bg-background/60 px-4 py-5 text-sm text-muted-foreground">
                 No comments yet. Start the thread.
               </div>
             ) : null}
           </div>
         ) : (
-          <div className="rounded-2xl border border-dashed bg-background/60 px-4 py-5 text-sm text-muted-foreground">
+          <div className="rounded-md border border-dashed bg-background/60 px-4 py-5 text-sm text-muted-foreground">
             Comments are disabled for this update.
           </div>
         )}
@@ -886,7 +888,7 @@ export function AnnouncementsFeedClient({
                     Try broadening the filters or clear them to bring the full feed back.
                   </p>
                 </div>
-                <Button variant="outline" className="rounded-full px-5" onClick={clearFilters}>
+                <Button variant="outline" className="rounded-[5px] px-5" onClick={clearFilters}>
                   Clear filters
                 </Button>
               </CardContent>
@@ -895,7 +897,7 @@ export function AnnouncementsFeedClient({
         </section>
 
         <aside className="space-y-4 xl:sticky xl:top-20 xl:self-start">
-          <Card className="border-border/60 shadow-sm">
+          <Card className="border-border/60 shadow-none">
             <CardHeader className="pb-4">
               <CardDescription>Find what matters fast</CardDescription>
               <CardTitle className="text-lg">Filter feed</CardTitle>
@@ -904,6 +906,7 @@ export function AnnouncementsFeedClient({
               <div className="relative">
                 <SearchIcon className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                 <Input
+                  aria-label="Search announcements"
                   placeholder="Search title or body"
                   className="pl-9"
                   value={search}
@@ -920,7 +923,7 @@ export function AnnouncementsFeedClient({
                 value={filterType}
                 onValueChange={(value) => setFilterType(value as AnnouncementType | "all")}
               >
-                <SelectTrigger>
+                <SelectTrigger aria-label="Announcement type">
                   <SelectValue placeholder="All types" />
                 </SelectTrigger>
                 <SelectContent>
@@ -936,33 +939,45 @@ export function AnnouncementsFeedClient({
 
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-1">
                 <div className="space-y-2">
-                  <Label className="text-xs uppercase tracking-[0.18em] text-muted-foreground">
+                  <Label
+                    htmlFor="announcement-from"
+                    className="text-xs uppercase tracking-[0.18em] text-muted-foreground"
+                  >
                     From
                   </Label>
                   <Input
+                    id="announcement-from"
                     type="date"
                     value={dateFrom}
                     onChange={(e) => setDateFrom(e.target.value)}
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label className="text-xs uppercase tracking-[0.18em] text-muted-foreground">
+                  <Label
+                    htmlFor="announcement-to"
+                    className="text-xs uppercase tracking-[0.18em] text-muted-foreground"
+                  >
                     To
                   </Label>
-                  <Input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} />
+                  <Input
+                    id="announcement-to"
+                    type="date"
+                    value={dateTo}
+                    onChange={(e) => setDateTo(e.target.value)}
+                  />
                 </div>
               </div>
 
-              <label className="flex items-center gap-3 rounded-2xl border bg-background/70 px-4 py-3 text-sm">
+              <label className="flex items-center gap-3 rounded-md border bg-background/70 px-4 py-3 text-sm">
                 <Checkbox checked={pinnedOnly} onCheckedChange={(v) => setPinnedOnly(Boolean(v))} />
                 Pinned only
               </label>
 
               <div className="flex flex-wrap gap-2">
-                <Button className="rounded-full px-5" onClick={() => void refresh()}>
+                <Button className="rounded-[5px] px-5" onClick={() => void refresh()}>
                   Apply filters
                 </Button>
-                <Button variant="outline" className="rounded-full px-5" onClick={clearFilters}>
+                <Button variant="outline" className="rounded-[5px] px-5" onClick={clearFilters}>
                   Clear
                 </Button>
               </div>
@@ -970,7 +985,7 @@ export function AnnouncementsFeedClient({
           </Card>
 
           {spotlightPosts.length > 0 ? (
-            <Card className="border-border/60 shadow-sm">
+            <Card className="border-border/60 shadow-none">
               <CardHeader className="pb-4">
                 <CardDescription>High-visibility posts</CardDescription>
                 <CardTitle className="text-lg">Spotlight</CardTitle>
@@ -985,13 +1000,13 @@ export function AnnouncementsFeedClient({
                         <div className="flex items-center gap-2">
                           <Badge
                             variant="outline"
-                            className={cn("gap-1 rounded-full px-3", meta.badgeClassName)}
+                            className={cn("gap-1 rounded-[4px] px-3", meta.badgeClassName)}
                           >
                             <meta.icon className="h-3.5 w-3.5" />
                             {meta.label}
                           </Badge>
                           {post.pinned ? (
-                            <Badge variant="secondary" className="rounded-full px-3">
+                            <Badge variant="secondary" className="rounded-[4px] px-3">
                               Pinned
                             </Badge>
                           ) : null}
@@ -1009,14 +1024,14 @@ export function AnnouncementsFeedClient({
           ) : null}
 
           {isAdmin ? (
-            <Card className="border-border/60 shadow-sm">
+            <Card className="border-border/60 shadow-none">
               <CardHeader className="pb-4">
                 <CardDescription>What makes the feed feel useful</CardDescription>
                 <CardTitle className="text-lg">Posting guide</CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
                 <SheetTrigger asChild>
-                  <Button className="w-full rounded-full">
+                  <Button className="w-full rounded-[5px]">
                     <PlusIcon className="mr-2 h-4 w-4" />
                     Create update
                   </Button>
@@ -1037,7 +1052,7 @@ export function AnnouncementsFeedClient({
                     ],
                   ] as const
                 ).map(([title, body]) => (
-                  <div key={title} className="rounded-2xl border bg-background/70 p-3">
+                  <div key={title} className="rounded-md border bg-background/70 p-3">
                     <p className="text-sm font-medium">{title}</p>
                     <p className="mt-1 text-xs leading-5 text-muted-foreground">{body}</p>
                   </div>
@@ -1053,7 +1068,7 @@ export function AnnouncementsFeedClient({
           <div className="flex flex-wrap items-center gap-2">
             <Badge
               variant="outline"
-              className={cn("gap-1 rounded-full px-3", composerTypeMeta.badgeClassName)}
+              className={cn("gap-1 rounded-[4px] px-3", composerTypeMeta.badgeClassName)}
             >
               <composerTypeMeta.icon className="h-3.5 w-3.5" />
               {composerTypeMeta.label}
@@ -1061,13 +1076,13 @@ export function AnnouncementsFeedClient({
             {newPost.priority !== "normal" ? (
               <Badge
                 variant="outline"
-                className={cn("rounded-full px-3", composerPriorityMeta.badgeClassName)}
+                className={cn("rounded-[4px] px-3", composerPriorityMeta.badgeClassName)}
               >
                 {composerPriorityMeta.label}
               </Badge>
             ) : null}
             {newPost.pinned ? (
-              <Badge variant="secondary" className="rounded-full px-3">
+              <Badge variant="secondary" className="rounded-[4px] px-3">
                 Pinned
               </Badge>
             ) : null}
@@ -1087,8 +1102,9 @@ export function AnnouncementsFeedClient({
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="space-y-2">
-                  <Label>Title</Label>
+                  <Label htmlFor="announcement-title">Title</Label>
                   <Input
+                    id="announcement-title"
                     placeholder="Write a headline that helps people decide to open the post"
                     value={newPost.title}
                     onChange={(e) => setNewPost((prev) => ({ ...prev, title: e.target.value }))}
@@ -1096,8 +1112,9 @@ export function AnnouncementsFeedClient({
                 </div>
 
                 <div className="space-y-2">
-                  <Label>Body</Label>
+                  <Label htmlFor="announcement-body">Body</Label>
                   <Textarea
+                    id="announcement-body"
                     placeholder="Body copy supports markdown, so use headings, bullets, and links when they make the post easier to scan."
                     className="min-h-48"
                     value={newPost.body}
@@ -1107,14 +1124,14 @@ export function AnnouncementsFeedClient({
 
                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                   <div className="space-y-2">
-                    <Label>Type</Label>
+                    <Label htmlFor="announcement-type">Type</Label>
                     <Select
                       value={newPost.type}
                       onValueChange={(value) =>
                         setNewPost((prev) => ({ ...prev, type: value as AnnouncementType }))
                       }
                     >
-                      <SelectTrigger>
+                      <SelectTrigger id="announcement-type">
                         <SelectValue placeholder="Type" />
                       </SelectTrigger>
                       <SelectContent>
@@ -1129,7 +1146,7 @@ export function AnnouncementsFeedClient({
                   </div>
 
                   <div className="space-y-2">
-                    <Label>Priority</Label>
+                    <Label htmlFor="announcement-priority">Priority</Label>
                     <Select
                       value={newPost.priority}
                       onValueChange={(value) =>
@@ -1139,7 +1156,7 @@ export function AnnouncementsFeedClient({
                         }))
                       }
                     >
-                      <SelectTrigger>
+                      <SelectTrigger id="announcement-priority">
                         <SelectValue placeholder="Priority" />
                       </SelectTrigger>
                       <SelectContent>
@@ -1160,8 +1177,9 @@ export function AnnouncementsFeedClient({
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="space-y-2">
-                  <Label>Attachments</Label>
+                  <Label htmlFor="announcement-attachments">Attachments</Label>
                   <Textarea
+                    id="announcement-attachments"
                     placeholder="One per line: Label | https://example.com/file.pdf"
                     value={newPost.attachmentsText}
                     onChange={(e) =>
@@ -1174,8 +1192,9 @@ export function AnnouncementsFeedClient({
 
                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                   <div className="space-y-2">
-                    <Label>CTA label</Label>
+                    <Label htmlFor="announcement-cta-label">CTA label</Label>
                     <Input
+                      id="announcement-cta-label"
                       placeholder="Open checklist"
                       value={newPost.ctaLabel}
                       onChange={(e) =>
@@ -1184,8 +1203,9 @@ export function AnnouncementsFeedClient({
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label>CTA URL</Label>
+                    <Label htmlFor="announcement-cta-url">CTA URL</Label>
                     <Input
+                      id="announcement-cta-url"
                       placeholder="https://..."
                       value={newPost.ctaUrl}
                       onChange={(e) => setNewPost((prev) => ({ ...prev, ctaUrl: e.target.value }))}
@@ -1197,8 +1217,9 @@ export function AnnouncementsFeedClient({
 
                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                   <div className="space-y-2">
-                    <Label>Embed title</Label>
+                    <Label htmlFor="announcement-embed-title">Embed title</Label>
                     <Input
+                      id="announcement-embed-title"
                       placeholder="Walkthrough video"
                       value={newPost.embedTitle}
                       onChange={(e) =>
@@ -1207,8 +1228,9 @@ export function AnnouncementsFeedClient({
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label>Embed URL</Label>
+                    <Label htmlFor="announcement-embed-url">Embed URL</Label>
                     <Input
+                      id="announcement-embed-url"
                       placeholder="YouTube, Loom, Vimeo, Google Docs, or Drive"
                       value={newPost.embedUrl}
                       onChange={(e) =>
@@ -1228,8 +1250,9 @@ export function AnnouncementsFeedClient({
                 </CardHeader>
                 <CardContent className="space-y-4">
                   <div className="space-y-2">
-                    <Label>Options</Label>
+                    <Label htmlFor="announcement-options">Options</Label>
                     <Textarea
+                      id="announcement-options"
                       placeholder="One option per line"
                       value={newPost.pollOptionsText}
                       onChange={(e) =>
@@ -1239,8 +1262,9 @@ export function AnnouncementsFeedClient({
                   </div>
 
                   <div className="space-y-2">
-                    <Label>Close date</Label>
+                    <Label htmlFor="announcement-close-date">Close date</Label>
                     <Input
+                      id="announcement-close-date"
                       type="datetime-local"
                       value={newPost.pollCloseAt}
                       onChange={(e) =>
@@ -1250,7 +1274,7 @@ export function AnnouncementsFeedClient({
                   </div>
 
                   <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                    <label className="flex items-center gap-3 rounded-2xl border bg-background/70 px-4 py-3 text-sm">
+                    <label className="flex items-center gap-3 rounded-md border bg-background/70 px-4 py-3 text-sm">
                       <Checkbox
                         checked={newPost.pollSingleChoice}
                         onCheckedChange={(value) =>
@@ -1262,7 +1286,7 @@ export function AnnouncementsFeedClient({
                       />
                       Single choice
                     </label>
-                    <label className="flex items-center gap-3 rounded-2xl border bg-background/70 px-4 py-3 text-sm">
+                    <label className="flex items-center gap-3 rounded-md border bg-background/70 px-4 py-3 text-sm">
                       <Checkbox
                         checked={newPost.pollNamedVotes}
                         onCheckedChange={(value) =>
@@ -1274,7 +1298,7 @@ export function AnnouncementsFeedClient({
                       />
                       Named votes
                     </label>
-                    <label className="flex items-center gap-3 rounded-2xl border bg-background/70 px-4 py-3 text-sm sm:col-span-2">
+                    <label className="flex items-center gap-3 rounded-md border bg-background/70 px-4 py-3 text-sm sm:col-span-2">
                       <Checkbox
                         checked={newPost.pollAllowVoteChange}
                         onCheckedChange={(value) =>
@@ -1297,7 +1321,7 @@ export function AnnouncementsFeedClient({
                 <CardTitle className="text-lg">Visibility and delivery</CardTitle>
               </CardHeader>
               <CardContent className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                <label className="flex items-center gap-3 rounded-2xl border bg-background/70 px-4 py-3 text-sm">
+                <label className="flex items-center gap-3 rounded-md border bg-background/70 px-4 py-3 text-sm">
                   <Checkbox
                     checked={newPost.pinned}
                     onCheckedChange={(value) =>
@@ -1306,7 +1330,7 @@ export function AnnouncementsFeedClient({
                   />
                   Pinned in the feed
                 </label>
-                <label className="flex items-center gap-3 rounded-2xl border bg-background/70 px-4 py-3 text-sm">
+                <label className="flex items-center gap-3 rounded-md border bg-background/70 px-4 py-3 text-sm">
                   <Checkbox
                     checked={newPost.commentsEnabled}
                     onCheckedChange={(value) =>
@@ -1315,7 +1339,7 @@ export function AnnouncementsFeedClient({
                   />
                   Comments enabled
                 </label>
-                <label className="flex items-center gap-3 rounded-2xl border bg-background/70 px-4 py-3 text-sm sm:col-span-2">
+                <label className="flex items-center gap-3 rounded-md border bg-background/70 px-4 py-3 text-sm sm:col-span-2">
                   <Checkbox
                     checked={newPost.sendEmail}
                     onCheckedChange={(value) =>
@@ -1337,7 +1361,7 @@ export function AnnouncementsFeedClient({
             <div className="flex flex-wrap items-center gap-2">
               <Button
                 variant="ghost"
-                className="rounded-full px-5"
+                className="rounded-[5px] px-5"
                 onClick={() => {
                   resetComposer();
                   setComposerOpen(false);
@@ -1346,7 +1370,7 @@ export function AnnouncementsFeedClient({
                 Cancel
               </Button>
               <Button
-                className="rounded-full px-5"
+                className="rounded-[5px] px-5"
                 disabled={creating || !canPublish}
                 onClick={() =>
                   void createPost({

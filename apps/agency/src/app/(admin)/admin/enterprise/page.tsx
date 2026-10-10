@@ -32,7 +32,7 @@ export default async function AdminEnterpriseInquiriesPage() {
         ]}
       />
       <div className="flex flex-1 flex-col gap-2">
-        <div className="flex flex-col gap-4 py-4 md:gap-6 md:py-6 px-4 lg:px-6">
+        <div className="flex flex-col gap-4 py-4 md:gap-6 md:py-6 px-4 md:px-6">
           <div className="flex items-center justify-between">
             <div>
               <h1 className="text-2xl font-semibold">Enterprise Inquiries</h1>

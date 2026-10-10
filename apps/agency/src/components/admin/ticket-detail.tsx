@@ -222,7 +222,7 @@ export function TicketDetail({ ticket, onBack }: TicketDetailProps) {
   return (
     <div className="flex flex-col h-full w-full bg-background overflow-hidden relative">
       {/* Primary Topbar - Identity Focus */}
-      <div className="h-16 px-4 lg:px-6 bg-card border-b flex items-center justify-between z-30 shrink-0">
+      <div className="h-16 px-4 md:px-6 bg-card border-b flex items-center justify-between z-30 shrink-0">
         <div className="flex items-center gap-3">
           {/* Mobile-only back button to return to ticket list */}
           {onBack && (
@@ -256,7 +256,8 @@ export function TicketDetail({ ticket, onBack }: TicketDetailProps) {
               <Button
                 variant="ghost"
                 size="icon"
-                className="rounded-full h-9 w-9 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+                aria-label="Delete conversation"
+                className="h-9 w-9 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
               >
                 <Trash2Icon className="h-4 w-4" />
               </Button>
@@ -285,7 +286,8 @@ export function TicketDetail({ ticket, onBack }: TicketDetailProps) {
               <Button
                 variant="ghost"
                 size="icon"
-                className="rounded-full h-9 w-9 text-muted-foreground"
+                aria-label="Conversation options"
+                className="h-9 w-9 text-muted-foreground"
               >
                 <MoreVerticalIcon className="h-4 w-4" />
               </Button>
@@ -307,11 +309,11 @@ export function TicketDetail({ ticket, onBack }: TicketDetailProps) {
       {/* Sticky Secondary Header - Standardized Styles */}
       <div className="bg-background/95 backdrop-blur-md border-b z-20 shrink-0 sticky top-0 flex flex-col shadow-sm">
         {/* Subject Row */}
-        <div className="px-4 lg:px-6 py-3 flex items-center justify-between gap-4">
+        <div className="px-4 md:px-6 py-3 flex items-center justify-between gap-4">
           <div className="flex items-baseline gap-2 min-w-0">
-            <h2 className="text-sm font-semibold tracking-tight truncate text-foreground/90 max-w-[500px]">
+            <h1 className="text-sm font-semibold tracking-tight truncate text-foreground/90 max-w-[500px]">
               {ticket.subject}
-            </h2>
+            </h1>
             <span className="text-xs font-mono text-muted-foreground shrink-0">
               ID-{ticket.id.slice(-6)}
             </span>
@@ -327,7 +329,7 @@ export function TicketDetail({ ticket, onBack }: TicketDetailProps) {
         </div>
 
         {/* Dropdowns Row - Enterprise Form Style */}
-        <div className="px-4 lg:px-6 pb-3 flex items-center justify-end gap-3">
+        <div className="px-4 md:px-6 pb-3 flex items-center justify-end gap-3">
           <div className="flex flex-col gap-1">
             <span className="text-xs font-semibold uppercase text-muted-foreground tracking-wider ml-0.5">
               Category
@@ -348,7 +350,10 @@ export function TicketDetail({ ticket, onBack }: TicketDetailProps) {
                 });
               }}
             >
-              <SelectTrigger className="h-8 w-auto min-w-[120px] text-xs font-medium border-border/60 bg-muted/20 hover:bg-muted/40 transition-colors shadow-xs">
+              <SelectTrigger
+                aria-label="Ticket status"
+                className="h-8 w-auto min-w-[120px] text-xs font-medium border-border/60 bg-muted/20 hover:bg-muted/40 transition-colors shadow-xs"
+              >
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -391,7 +396,10 @@ export function TicketDetail({ ticket, onBack }: TicketDetailProps) {
                 });
               }}
             >
-              <SelectTrigger className="h-8 w-auto min-w-[120px] text-xs font-medium border-border/60 bg-muted/20 hover:bg-muted/40 transition-colors shadow-xs">
+              <SelectTrigger
+                aria-label="Ticket priority"
+                className="h-8 w-auto min-w-[120px] text-xs font-medium border-border/60 bg-muted/20 hover:bg-muted/40 transition-colors shadow-xs"
+              >
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -431,7 +439,10 @@ export function TicketDetail({ ticket, onBack }: TicketDetailProps) {
                 });
               }}
             >
-              <SelectTrigger className="h-8 w-auto min-w-[120px] text-xs font-medium border-border/60 bg-muted/20 hover:bg-muted/40 transition-colors shadow-xs">
+              <SelectTrigger
+                aria-label="Assigned staff member"
+                className="h-8 w-auto min-w-[120px] text-xs font-medium border-border/60 bg-muted/20 hover:bg-muted/40 transition-colors shadow-xs"
+              >
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -471,7 +482,7 @@ export function TicketDetail({ ticket, onBack }: TicketDetailProps) {
                 {getInitials(ticket.userFirstName, ticket.userLastName)}
               </AvatarFallback>
             </Avatar>
-            <div className="rounded-xl px-4 py-2.5 text-sm bg-muted text-foreground max-w-[85%] sm:max-w-[75%]">
+            <div className="rounded-md px-4 py-2.5 text-sm bg-muted text-foreground max-w-[85%] sm:max-w-[75%]">
               <p className="leading-relaxed whitespace-pre-wrap">{ticket.description}</p>
               {ticket.screenshotUrls && ticket.screenshotUrls.length > 0 && (
                 <div className="mt-3 grid grid-cols-2 sm:grid-cols-3 gap-2 border-t pt-3 border-border/20">
@@ -524,7 +535,7 @@ export function TicketDetail({ ticket, onBack }: TicketDetailProps) {
             return (
               <div key={msg.id} className="flex flex-col gap-1 items-end">
                 <span className="text-xs font-medium text-muted-foreground">You</span>
-                <div className="rounded-xl px-4 py-2.5 text-sm bg-primary text-primary-foreground max-w-[85%] sm:max-w-[75%]">
+                <div className="rounded-md px-4 py-2.5 text-sm bg-primary text-primary-foreground max-w-[85%] sm:max-w-[75%]">
                   <p className="leading-relaxed whitespace-pre-wrap">{msg.content}</p>
                   {msg.screenshotUrls && msg.screenshotUrls.length > 0 && (
                     <div className="mt-3 grid grid-cols-2 sm:grid-cols-3 gap-2 border-t pt-3 border-primary-foreground/20">
@@ -576,7 +587,7 @@ export function TicketDetail({ ticket, onBack }: TicketDetailProps) {
                     {getInitials(ticket.userFirstName, ticket.userLastName)}
                   </AvatarFallback>
                 </Avatar>
-                <div className="rounded-xl px-4 py-2.5 text-sm bg-muted text-foreground max-w-[85%] sm:max-w-[75%]">
+                <div className="rounded-md px-4 py-2.5 text-sm bg-muted text-foreground max-w-[85%] sm:max-w-[75%]">
                   <p className="leading-relaxed whitespace-pre-wrap">{msg.content}</p>
                   {msg.screenshotUrls && msg.screenshotUrls.length > 0 && (
                     <div className="mt-3 grid grid-cols-2 sm:grid-cols-3 gap-2 border-t pt-3 border-border/20">
@@ -614,7 +625,7 @@ export function TicketDetail({ ticket, onBack }: TicketDetailProps) {
       </div>
 
       {/* Input Area - Full Design Compliance */}
-      <div className="bg-card px-4 lg:px-6 py-4 border-t shrink-0 flex flex-col gap-4 shadow-lg">
+      <div className="bg-card px-4 md:px-6 py-4 border-t shrink-0 flex flex-col gap-4">
         {/* Private Note Card */}
         <div className="flex flex-col gap-1.5 bg-muted/50 border border-border rounded-lg p-3 group transition-colors focus-within:border-primary/30">
           <div className="flex items-center justify-between">
@@ -658,6 +669,7 @@ export function TicketDetail({ ticket, onBack }: TicketDetailProps) {
                   />
                 </div>
                 <button
+                  aria-label={`Remove attachment ${i + 1}`}
                   onClick={() => removeScreenshot(i)}
                   className="absolute -top-1.5 -right-1.5 rounded-full bg-destructive text-destructive-foreground p-0.5 shadow-sm hover:bg-destructive/90 transition-colors"
                 >
@@ -679,9 +691,10 @@ export function TicketDetail({ ticket, onBack }: TicketDetailProps) {
             onChange={handleFileChange}
           />
           <Button
+            aria-label="Attach images"
             variant="outline"
             size="icon"
-            className="rounded-lg text-muted-foreground h-11 w-11 shrink-0 bg-muted/30 border-border/60 hover:bg-muted/50 transition-all"
+            className="rounded-[5px] text-muted-foreground h-11 w-11 shrink-0 bg-muted/30 border-border/60 hover:bg-muted/50 transition-all"
             disabled={uploading || screenshots.length >= 3}
             onClick={() => fileInputRef.current?.click()}
           >
@@ -691,17 +704,19 @@ export function TicketDetail({ ticket, onBack }: TicketDetailProps) {
               <PaperclipIcon className="h-5 w-5" />
             )}
           </Button>
-          <div className="flex-1 bg-muted/30 rounded-lg p-1 border border-border/60 shadow-inner focus-within:border-primary/40 focus-within:bg-background transition-all">
+          <div className="min-w-0 flex-1">
             <Textarea
+              aria-label="Reply message"
               placeholder="Draft your reply..."
               value={replyContent}
               onChange={(e) => setReplyContent(e.target.value)}
               onKeyDown={handleKeyDown}
-              className="min-h-[44px] h-11 max-h-32 border-none bg-transparent resize-none focus-visible:ring-0 text-sm leading-relaxed py-2.5 px-3"
+              className="min-h-20 max-h-40 resize-y text-sm"
             />
           </div>
           <Button
-            className="rounded-lg h-11 px-6 shadow-xs shrink-0 font-semibold tracking-tight"
+            aria-label="Send reply"
+            className="h-10 px-4 shrink-0"
             disabled={isReplying || uploading || (!replyContent.trim() && screenshots.length === 0)}
             onClick={() =>
               executeReply({

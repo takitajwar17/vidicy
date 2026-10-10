@@ -171,7 +171,7 @@ const TicketItem = memo(function TicketItem({
       className={cn(
         "flex items-start gap-3 px-4 lg:px-5 py-4 text-left transition-all border-b last:border-b-0 group w-full relative",
         isActive
-          ? "bg-primary/[0.03] shadow-inner"
+          ? "bg-primary/[0.03] shadow-none"
           : isUnread
             ? "bg-primary/[0.06]"
             : "hover:bg-muted/50",
@@ -528,6 +528,7 @@ export function SupportInboxClient({
         )}
       >
         <div className="shrink-0">
+          <h1 className="sr-only">Support inbox</h1>
           <PageHeader
             items={[
               { href: "/admin", label: "Admin" },
@@ -536,11 +537,12 @@ export function SupportInboxClient({
           />
         </div>
 
-        <div className="px-4 lg:px-6 py-4 border-b shrink-0 bg-background/50 backdrop-blur-sm z-20">
+        <div className="px-4 md:px-6 py-4 border-b shrink-0 bg-background/50 backdrop-blur-sm z-20">
           <div className="flex items-center gap-3">
             <div className="relative flex-1 group">
               <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground group-focus-within:text-primary transition-colors" />
               <Input
+                aria-label="Search conversations"
                 placeholder="Search conversations..."
                 className="pl-10 h-10 bg-muted/50 border-none focus-visible:ring-1 text-sm w-full transition-all"
                 value={filters.searchQuery}
@@ -548,12 +550,14 @@ export function SupportInboxClient({
               />
             </div>
             <Button
+              aria-label="Filter conversations"
+              aria-expanded={filters.isFiltersOpen}
               variant={filters.isFiltersOpen ? "secondary" : "ghost"}
               size="icon"
               className={cn(
-                "h-10 w-10 shrink-0 rounded-xl transition-all",
+                "h-10 w-10 shrink-0 rounded-[5px] transition-all",
                 filters.isFiltersOpen &&
-                  "bg-primary text-primary-foreground hover:bg-primary/90 shadow-sm",
+                  "bg-primary text-primary-foreground hover:bg-primary/90 shadow-none",
               )}
               onClick={() => dispatch({ type: "SET_FILTERS_OPEN", value: !filters.isFiltersOpen })}
             >
@@ -574,7 +578,7 @@ export function SupportInboxClient({
             className="w-full"
           >
             <CollapsibleContent className="pt-3 data-[state=closed]:animate-collapsible-up data-[state=open]:animate-collapsible-down overflow-hidden">
-              <div className="space-y-3 bg-muted/30 p-3 rounded-xl border border-border/50 shadow-inner">
+              <div className="space-y-3 bg-muted/30 p-3 rounded-md border border-border/50 shadow-none">
                 <div className="flex items-center justify-between px-1">
                   <span className="text-xs font-semibold uppercase text-foreground tracking-wider leading-none">
                     Group by User
@@ -667,7 +671,7 @@ export function SupportInboxClient({
 
                     return (
                       <div key={userId} className="flex flex-col">
-                        <div className="px-4 lg:px-6 py-2 bg-muted/30 border-b flex items-center justify-between shadow-inner gap-4">
+                        <div className="px-4 md:px-6 py-2 bg-muted/30 border-b flex items-center justify-between shadow-none gap-4">
                           <div className="flex items-center gap-2 min-w-0">
                             <span className="text-xs font-semibold text-primary/60 truncate max-w-[140px]">
                               {userName}
@@ -679,7 +683,7 @@ export function SupportInboxClient({
                           </div>
                           <Badge
                             variant="secondary"
-                            className="h-5 text-xs px-2 font-semibold bg-primary/10 text-primary border-none rounded-full shrink-0"
+                            className="h-5 text-xs px-2 font-semibold bg-primary/10 text-primary border-none rounded-[4px] shrink-0"
                           >
                             {tickets.length} {tickets.length === 1 ? "Ticket" : "Tickets"}
                           </Badge>

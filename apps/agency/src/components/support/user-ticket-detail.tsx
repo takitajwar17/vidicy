@@ -198,7 +198,7 @@ export function UserTicketDetail({ ticket, onBack, backHref }: UserTicketDetailP
   return (
     <div className="flex flex-col h-full w-full bg-background overflow-hidden">
       {/* Header */}
-      <div className="h-14 px-4 lg:px-6 bg-card border-b flex items-center gap-3 shrink-0 z-10">
+      <div className="h-14 px-4 md:px-6 bg-card border-b flex items-center gap-3 shrink-0 z-10">
         {backHref ? (
           <Button variant="ghost" size="icon" className="h-8 w-8 -ml-1" asChild>
             <Link href={backHref} aria-label="Back to tickets">
@@ -218,7 +218,7 @@ export function UserTicketDetail({ ticket, onBack, backHref }: UserTicketDetailP
         )}
 
         <div className="flex-1 min-w-0 flex items-center gap-2">
-          <span className="font-semibold text-sm truncate">{ticket.subject}</span>
+          <h1 className="font-semibold text-sm truncate">{ticket.subject}</h1>
           <span className="font-mono text-xs text-muted-foreground shrink-0">
             #{ticket.id.slice(-6)}
           </span>
@@ -255,7 +255,7 @@ export function UserTicketDetail({ ticket, onBack, backHref }: UserTicketDetailP
         {/* Original request bubble (right-aligned, user) */}
         <div className="flex flex-col gap-1 items-end">
           <span className="text-xs font-medium text-muted-foreground">You</span>
-          <div className="rounded-xl px-4 py-2.5 text-sm bg-primary text-primary-foreground max-w-[85%] sm:max-w-[75%]">
+          <div className="rounded-md px-4 py-2.5 text-sm bg-primary text-primary-foreground max-w-[85%] sm:max-w-[75%]">
             <p className="leading-relaxed whitespace-pre-wrap">{ticket.description}</p>
             <ScreenshotThumbnails urls={ticket.screenshotUrls} />
           </div>
@@ -285,7 +285,7 @@ export function UserTicketDetail({ ticket, onBack, backHref }: UserTicketDetailP
             return (
               <div key={msg.id} className="flex flex-col gap-1 items-end">
                 <span className="text-xs font-medium text-muted-foreground">You</span>
-                <div className="rounded-xl px-4 py-2.5 text-sm bg-primary text-primary-foreground max-w-[85%] sm:max-w-[75%]">
+                <div className="rounded-md px-4 py-2.5 text-sm bg-primary text-primary-foreground max-w-[85%] sm:max-w-[75%]">
                   <p className="leading-relaxed whitespace-pre-wrap">{msg.content}</p>
                   <ScreenshotThumbnails urls={msg.screenshotUrls} />
                 </div>
@@ -325,7 +325,7 @@ export function UserTicketDetail({ ticket, onBack, backHref }: UserTicketDetailP
                     {adminInitials}
                   </AvatarFallback>
                 </Avatar>
-                <div className="rounded-xl px-4 py-2.5 text-sm bg-muted text-foreground max-w-[85%] sm:max-w-[75%]">
+                <div className="rounded-md px-4 py-2.5 text-sm bg-muted text-foreground max-w-[85%] sm:max-w-[75%]">
                   <p className="leading-relaxed whitespace-pre-wrap">{msg.content}</p>
                   <ScreenshotThumbnails urls={msg.screenshotUrls} />
                 </div>
@@ -342,7 +342,7 @@ export function UserTicketDetail({ ticket, onBack, backHref }: UserTicketDetailP
       </div>
 
       {/* Input Area */}
-      <div className="bg-card px-4 lg:px-6 py-4 border-t shrink-0">
+      <div className="bg-card px-4 md:px-6 py-4 border-t shrink-0">
         {ticket.status === "closed" ? (
           <div className="py-3 flex items-center justify-center">
             <p className="text-sm text-muted-foreground text-center">
@@ -361,6 +361,7 @@ export function UserTicketDetail({ ticket, onBack, backHref }: UserTicketDetailP
                       <img src={s.previewUrl} alt={s.name} className="w-full h-full object-cover" />
                     </div>
                     <button
+                      aria-label={`Remove attachment ${i + 1}`}
                       onClick={() => removeScreenshot(i)}
                       className="absolute -top-1.5 -right-1.5 rounded-full bg-destructive text-destructive-foreground p-0.5 shadow-sm"
                     >
@@ -385,9 +386,10 @@ export function UserTicketDetail({ ticket, onBack, backHref }: UserTicketDetailP
 
               {/* Paperclip button */}
               <Button
+                aria-label="Attach images"
                 variant="outline"
                 size="icon"
-                className="h-10 w-10 rounded-lg shrink-0 border-border/60"
+                className="h-10 w-10 rounded-[5px] shrink-0 border-border/60"
                 disabled={uploading || screenshots.length >= MAX_SCREENSHOTS}
                 onClick={() => fileInputRef.current?.click()}
               >
@@ -399,19 +401,21 @@ export function UserTicketDetail({ ticket, onBack, backHref }: UserTicketDetailP
               </Button>
 
               {/* Textarea */}
-              <div className="flex-1 bg-muted/30 rounded-xl border border-border/60 shadow-inner focus-within:border-primary/40 focus-within:bg-background transition-all px-1">
+              <div className="min-w-0 flex-1">
                 <Textarea
+                  aria-label="Reply message"
                   placeholder="Add the case, file, or screen where this happens..."
                   value={replyContent}
                   onChange={(e) => setReplyContent(e.target.value)}
                   onKeyDown={handleKeyDown}
-                  className="min-h-[40px] h-10 max-h-28 border-none bg-transparent resize-none focus-visible:ring-0 text-sm py-2.5 px-3"
+                  className="min-h-20 max-h-40 resize-y text-sm"
                 />
               </div>
 
               {/* Send button */}
               <Button
-                className="h-10 w-10 rounded-full shadow-xs shrink-0"
+                aria-label="Send reply"
+                className="h-10 w-10 shrink-0"
                 size="icon"
                 disabled={
                   isReplying || uploading || (!replyContent.trim() && screenshots.length === 0)

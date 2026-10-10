@@ -9,7 +9,7 @@ const UsersTable = dynamic(
   () => import("@/components/admin/users-table").then((mod) => mod.UsersTable),
   {
     ssr: false,
-    loading: () => <div className="h-[600px] w-full animate-pulse rounded-xl bg-muted" />,
+    loading: () => <div className="h-[600px] w-full animate-pulse rounded-md bg-muted" />,
   },
 );
 

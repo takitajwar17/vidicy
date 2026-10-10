@@ -320,6 +320,7 @@ export function UsersTable({
           <p className="text-sm text-muted-foreground">Manage and monitor all user accounts.</p>
         </div>
         <Input
+          aria-label="Search users"
           placeholder="Filter emails..."
           type="search"
           value={emailFilter}

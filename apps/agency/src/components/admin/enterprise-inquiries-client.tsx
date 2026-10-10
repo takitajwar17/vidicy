@@ -27,31 +27,10 @@ import {
 import { formatDistanceToNow } from "date-fns";
 import type { EnterpriseInquiry } from "@/db/schema";
 
-const STATUS_CONFIG = {
-  new: {
-    label: "New",
-    className:
-      "bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950/30 dark:text-blue-400 dark:border-blue-800",
-  },
-  contacted: {
-    label: "Contacted",
-    className:
-      "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/30 dark:text-amber-400 dark:border-amber-800",
-  },
-  closed: {
-    label: "Closed",
-    className: "bg-muted text-muted-foreground border-border",
-  },
-} as const;
-
 function StatusBadge({ status }: { status: string }) {
-  const cfg = STATUS_CONFIG[status as keyof typeof STATUS_CONFIG] ?? STATUS_CONFIG.new;
   return (
-    <Badge
-      variant="outline"
-      className={cn("text-xs px-2 h-5 rounded-full font-normal", cfg.className)}
-    >
-      {cfg.label}
+    <Badge variant={status === "new" ? "info" : status === "contacted" ? "warning" : "outline"}>
+      {status === "contacted" ? "Contacted" : status === "closed" ? "Closed" : "New"}
     </Badge>
   );
 }
@@ -159,7 +138,7 @@ function InquiryDetail({
               <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2">
                 Message
               </p>
-              <div className="rounded-xl bg-muted/40 border px-4 py-3 text-sm leading-relaxed whitespace-pre-wrap">
+              <div className="rounded-md bg-muted/40 border px-4 py-3 text-sm leading-relaxed whitespace-pre-wrap">
                 {inquiry.message}
               </div>
             </div>
@@ -173,7 +152,7 @@ function InquiryDetail({
             <div className="flex items-center gap-3">
               <p className="text-sm text-muted-foreground shrink-0">Status</p>
               <Select value={status} onValueChange={(v) => setStatus(v as typeof status)}>
-                <SelectTrigger className="w-40 h-8 text-sm">
+                <SelectTrigger aria-label="Inquiry status" className="w-40 h-8 text-sm">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -184,6 +163,7 @@ function InquiryDetail({
               </Select>
             </div>
             <Textarea
+              aria-label="Internal note"
               placeholder="Internal note (not visible to the user)…"
               value={adminNote}
               onChange={(e) => setAdminNote(e.target.value)}
@@ -243,9 +223,9 @@ export function EnterpriseInquiriesClient({
   }
 
   return (
-    <div className="flex h-[calc(100vh-160px)] rounded-xl border overflow-hidden">
+    <div className="flex min-h-0 flex-col rounded-md border overflow-hidden md:h-[calc(100vh-160px)] md:flex-row">
       {/* Left panel — list */}
-      <div className="w-80 shrink-0 border-r flex flex-col">
+      <div className="h-60 w-full shrink-0 border-b flex flex-col md:h-auto md:w-80 md:border-b-0 md:border-r">
         <div className="px-4 py-3 border-b">
           <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
             {inquiries.length} inquir{inquiries.length === 1 ? "y" : "ies"} ·{" "}
@@ -282,7 +262,7 @@ export function EnterpriseInquiriesClient({
       </div>
 
       {/* Right panel — detail */}
-      <div className="flex-1 min-w-0">
+      <div className="h-[650px] min-w-0 md:h-auto md:flex-1">
         {selected ? (
           <InquiryDetail key={selected.id} inquiry={selected} onUpdate={handleUpdate} />
         ) : (

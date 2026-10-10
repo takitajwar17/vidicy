@@ -56,7 +56,8 @@ export default async function AdminPage() {
       <div className="flex flex-1 flex-col">
         <div className="@container/main flex flex-1 flex-col gap-2">
           <div className="flex flex-col gap-4 py-4 md:gap-6 md:py-6">
-            <div className="px-4 lg:px-6 flex flex-col gap-6">
+            <div className="px-4 md:px-6 flex flex-col gap-6">
+              <h1 className="text-2xl font-bold">Admin dashboard</h1>
               {/* Quick links */}
               <div className="flex flex-wrap gap-3">
                 <Link href={"/admin/status" as Route}>
@@ -156,9 +157,9 @@ export default async function AdminPage() {
                     latestInquiries.map((inquiry) => {
                       const statusVariant =
                         inquiry.status === ENTERPRISE_INQUIRY_STATUS.NEW
-                          ? "default"
+                          ? "info"
                           : inquiry.status === ENTERPRISE_INQUIRY_STATUS.CONTACTED
-                            ? "secondary"
+                            ? "warning"
                             : "outline";
                       const statusLabel =
                         inquiry.status.charAt(0).toUpperCase() + inquiry.status.slice(1);

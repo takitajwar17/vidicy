@@ -25,8 +25,8 @@ export default async function TicketPage({ params }: { params: Promise<{ ticketI
             { href: `/dashboard/support/${ticketId}` as Route, label: ticket.subject },
           ]}
         />
-        <div className="flex flex-col px-4 lg:px-6 py-4 h-[calc(100vh-10rem)]">
-          <div className="flex-1 border rounded-xl overflow-hidden shadow-xs">
+        <div className="flex flex-col px-4 md:px-6 py-4 h-[calc(100vh-10rem)]">
+          <div className="flex-1 border rounded-md overflow-hidden">
             <UserTicketDetail ticket={ticket} backHref="/dashboard/support" />
           </div>
         </div>

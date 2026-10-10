@@ -186,6 +186,7 @@ export function UserInboxClient({ initialTickets, totalCount }: UserInboxClientP
       >
         {/* Header */}
         <div className="shrink-0">
+          <h1 className="sr-only">Support inbox</h1>
           <PageHeader
             items={[
               { href: "/dashboard", label: "Dashboard" },
@@ -195,11 +196,12 @@ export function UserInboxClient({ initialTickets, totalCount }: UserInboxClientP
         </div>
 
         {/* Search + status filter bar */}
-        <div className="px-4 lg:px-6 py-3 border-b shrink-0 space-y-2.5">
+        <div className="px-4 md:px-6 py-3 border-b shrink-0 space-y-2.5">
           <div className="flex items-center justify-between gap-3">
             <div className="relative group flex-1">
               <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground group-focus-within:text-primary transition-colors" />
               <Input
+                aria-label="Search conversations"
                 placeholder="Search support threads..."
                 className="pl-10 h-9 bg-muted/50 border-none focus-visible:ring-1 text-sm w-full transition-all"
                 value={searchQuery}
@@ -250,7 +252,7 @@ export function UserInboxClient({ initialTickets, totalCount }: UserInboxClientP
                 {!searchQuery && statusFilter === "all" && (
                   <Button
                     onClick={onNewTicket}
-                    className="shadow-lg hover:shadow-primary/10 transition-all hover:-translate-y-0.5"
+                    className="transition-colors hover:border-primary/30"
                   >
                     <PlusIcon className="h-4 w-4" />
                     New thread
@@ -285,7 +287,7 @@ export function UserInboxClient({ initialTickets, totalCount }: UserInboxClientP
                     className={cn(
                       "flex items-start gap-3 px-4 lg:px-5 py-4 text-left transition-all border-b last:border-b-0 w-full relative",
                       isActive
-                        ? "bg-primary/[0.03] shadow-inner"
+                        ? "bg-primary/[0.03] shadow-none"
                         : isUnread
                           ? "bg-primary/[0.06]"
                           : "hover:bg-muted/50",

@@ -74,7 +74,7 @@ export default async function UserDetailPage({ params }: UserDetailPageProps) {
       <div className="flex flex-1 flex-col">
         <div className="@container/main flex flex-1 flex-col gap-2">
           <div className="flex flex-col gap-4 py-4 md:gap-6 md:py-6">
-            <div className="px-4 lg:px-6">
+            <div className="px-4 md:px-6">
               <div className="grid gap-6">
                 {/* User Profile Card */}
                 <Card>
@@ -87,7 +87,7 @@ export default async function UserDetailPage({ params }: UserDetailPageProps) {
                         </AvatarFallback>
                       </Avatar>
                       <div className="flex-1">
-                        <CardTitle className="text-2xl">{displayName}</CardTitle>
+                        <h1 className="text-2xl font-bold">{displayName}</h1>
                         <CardDescription className="text-base mt-1">
                           User ID: {user.id}
                         </CardDescription>
@@ -172,7 +172,7 @@ export default async function UserDetailPage({ params }: UserDetailPageProps) {
                           {user.passwordHash ? (
                             <Badge
                               variant="outline"
-                              className="bg-status-success/10 text-status-success border-status-success/20 gap-1.5 font-normal py-0.5 rounded-full"
+                              className="bg-status-success/10 text-status-success border-status-success/20 gap-1.5 font-normal py-0.5 rounded-[4px]"
                             >
                               <Lock className="h-3 w-3" />
                               Enabled
@@ -180,7 +180,7 @@ export default async function UserDetailPage({ params }: UserDetailPageProps) {
                           ) : (
                             <Badge
                               variant="outline"
-                              className="bg-muted/50 text-muted-foreground border-muted/20 gap-1.5 font-normal py-0.5 rounded-full"
+                              className="bg-muted/50 text-muted-foreground border-muted/20 gap-1.5 font-normal py-0.5 rounded-[4px]"
                             >
                               <Unlock className="h-3 w-3" />
                               Not Set

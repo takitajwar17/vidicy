@@ -237,13 +237,13 @@ export default async function StatusPage() {
       <div className="flex flex-1 flex-col">
         <div className="@container/main flex flex-1 flex-col gap-2">
           <div className="flex flex-col gap-6 py-4 md:gap-8 md:py-6">
-            <div className="px-4 lg:px-6 flex flex-col gap-10">
+            <div className="px-4 md:px-6 flex flex-col gap-10">
               {/* ======== SYSTEM HEALTH ======== */}
               <section>
                 <div className="flex items-center justify-between mb-4">
                   <div className="flex items-center gap-2">
                     <ActivityIcon className="h-5 w-5 text-muted-foreground" />
-                    <h2 className="text-lg font-semibold">System Health</h2>
+                    <h1 className="text-2xl font-bold">System status</h1>
                   </div>
                   <HealthBadge status={health.status} />
                 </div>
