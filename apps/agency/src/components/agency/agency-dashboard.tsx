@@ -162,7 +162,12 @@ export function AgencyDashboard({ cases, reviewers, today: serverToday }: Agency
     (view.attention === "recheck" ? "Readiness check needed" : null);
 
   function selectAttention(attention: DashboardAttention) {
-    void setView({ attention, status: "all", q: "", page: 1 });
+    void setView({
+      attention,
+      status: attention === "recheck" ? "ready_to_submit" : "all",
+      q: "",
+      page: 1,
+    });
   }
 
   return (

@@ -1010,6 +1010,16 @@ test("dashboard uses real coverage, attention filters, next actions, and respons
   await page.goBack();
   await expect(queue).toContainText("QUEUE-0");
   await page.getByRole("button", { name: /marked-ready.*readiness check/ }).click();
+  const statusFilters = page.locator('[aria-label="Case status filters"]');
+  await expect(statusFilters.getByRole("button", { name: /^Marked ready/ })).toHaveAttribute(
+    "aria-pressed",
+    "true",
+  );
+  await expect(statusFilters.getByRole("button", { name: /^All / })).toHaveAttribute(
+    "aria-pressed",
+    "false",
+  );
+  await expect(page).toHaveURL(/status=ready_to_submit/);
   await expect(queue.getByRole("link", { name: "Recheck readiness", exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Clear filters", exact: true }).click();
   await page
