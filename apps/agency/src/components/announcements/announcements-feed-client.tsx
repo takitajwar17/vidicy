@@ -1,5 +1,8 @@
 "use client";
 
+import { useEffect, useRef } from "react";
+import { parseAsBoolean, parseAsString, parseAsStringLiteral, useQueryState } from "nuqs";
+
 import { useMemo, useState } from "react";
 import dynamic from "next/dynamic";
 import Image from "next/image";
@@ -727,20 +730,31 @@ export function AnnouncementsFeedClient({
 }) {
   const [feed, setFeed] = useState(initialFeed);
   const [composerOpen, setComposerOpen] = useState(false);
-  const [search, setSearch] = useState("");
-  const [filterType, setFilterType] = useState<AnnouncementType | "all">("all");
-  const [pinnedOnly, setPinnedOnly] = useState(false);
-  const [dateFrom, setDateFrom] = useState("");
-  const [dateTo, setDateTo] = useState("");
+  const [search, setSearch] = useQueryState("q", parseAsString.withDefault(""));
+  const [filterType, setFilterType] = useQueryState(
+    "type",
+    parseAsStringLiteral([
+      "all",
+      "announcement",
+      "release_note",
+      "maintenance",
+      "poll",
+      "event",
+      "action_required",
+    ]).withDefault("all"),
+  );
+  const [pinnedOnly, setPinnedOnly] = useQueryState("pinned", parseAsBoolean.withDefault(false));
+  const [dateFrom, setDateFrom] = useQueryState("from", parseAsString.withDefault(""));
+  const [dateTo, setDateTo] = useQueryState("to", parseAsString.withDefault(""));
   const [newPost, setNewPost] = useState<AnnouncementComposerState>(createEmptyComposerState);
 
-  const { execute: refreshFeed } = useServerAction(getAnnouncementsFeedAction, {
-    onSuccess({ data }) {
-      if (data) {
-        setFeed(data as Feed);
-      }
-    },
-  });
+  const refreshRequest = useRef(0);
+  const refreshRunning = useRef(false);
+  const pendingRefresh = useRef<{
+    request: number;
+    input: Parameters<typeof getAnnouncementsFeedAction>[0];
+  } | null>(null);
+  const { execute: refreshFeed } = useServerAction(getAnnouncementsFeedAction);
 
   const publishPollOptions = useMemo(
     () =>
@@ -764,7 +778,7 @@ export function AnnouncementsFeedClient({
   const composerTypeMeta = announcementTypeMeta[newPost.type];
   const composerPriorityMeta = announcementPriorityMeta[newPost.priority];
 
-  const refresh = (overrides?: {
+  const refresh = async (overrides?: {
     q?: string;
     type?: AnnouncementType | "all";
     pinnedOnly?: boolean;
@@ -777,14 +791,38 @@ export function AnnouncementsFeedClient({
       dateTo: overrides?.dateTo ?? dateTo,
     });
 
-    return refreshFeed({
-      q: (overrides?.q ?? search) || undefined,
-      type: resolvedType === "all" ? undefined : resolvedType,
-      pinnedOnly: overrides?.pinnedOnly ?? pinnedOnly,
-      dateFrom: resolvedDates.dateFrom,
-      dateTo: resolvedDates.dateTo,
-    });
+    pendingRefresh.current = {
+      request: ++refreshRequest.current,
+      input: {
+        q: (overrides?.q ?? search) || undefined,
+        type: resolvedType === "all" ? undefined : resolvedType,
+        pinnedOnly: overrides?.pinnedOnly ?? pinnedOnly,
+        dateFrom: resolvedDates.dateFrom,
+        dateTo: resolvedDates.dateTo,
+      },
+    };
+    // zsa-react tracks one pending call. Keep only the latest queued filter change.
+    if (refreshRunning.current) return;
+    refreshRunning.current = true;
+    try {
+      while (pendingRefresh.current) {
+        const { request, input } = pendingRefresh.current;
+        pendingRefresh.current = null;
+        const [data, error] = await refreshFeed(input);
+        if (request !== refreshRequest.current) continue;
+        if (error) toast.error(error.message || "Could not load announcements. Try again.");
+        else if (data) setFeed(data as Feed);
+      }
+    } finally {
+      refreshRunning.current = false;
+    }
   };
+
+  useEffect(() => {
+    void refresh();
+    // URL state controls the loaded feed, including browser Back and reload.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [search, filterType, pinnedOnly, dateFrom, dateTo]);
 
   const resetComposer = () => {
     setNewPost(createEmptyComposerState());

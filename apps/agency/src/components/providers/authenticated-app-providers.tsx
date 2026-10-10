@@ -1,5 +1,7 @@
 "use client";
 
+import { NuqsAdapter } from "nuqs/adapters/next/app";
+
 import { Suspense } from "react";
 import type { ReactNode } from "react";
 import type { getConfig } from "@/flags";
@@ -20,13 +22,13 @@ export function AuthenticatedAppProviders({
   session,
 }: AuthenticatedAppProvidersProps) {
   return (
-    <>
+    <NuqsAdapter>
       <SessionRefreshProvider initialConfig={config} initialSession={session} />
       <Suspense>
         <RouteProgressProvider />
       </Suspense>
       {children}
       <EmailVerificationDialog />
-    </>
+    </NuqsAdapter>
   );
 }

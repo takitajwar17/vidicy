@@ -1,7 +1,6 @@
 import { PageHeader } from "@/components/page-header";
 import { UsersTableWrapper } from "@/components/admin/users-table-wrapper";
 import type { Metadata } from "next";
-import { NuqsAdapter } from "nuqs/adapters/next/app";
 import { PAGE_SIZE_OPTIONS } from "../admin-constants";
 import { getAdminUsersPage } from "@/server/admin-users";
 
@@ -31,7 +30,7 @@ export default async function AdminUsersPage({
   });
 
   return (
-    <NuqsAdapter>
+    <>
       <PageHeader
         items={[
           { href: "/admin", label: "Admin" },
@@ -52,6 +51,6 @@ export default async function AdminUsersPage({
           </div>
         </div>
       </div>
-    </NuqsAdapter>
+    </>
   );
 }

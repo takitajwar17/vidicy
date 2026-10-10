@@ -6,6 +6,12 @@ const actions = vi.hoisted(() => ({ refresh: vi.fn(), comment: vi.fn(), error: v
 vi.mock("react", async (importOriginal) => ({
   ...(await importOriginal<typeof import("react")>()),
   useMemo: (factory: () => unknown) => factory(),
+  useEffect: () => {},
+  useRef: (value: unknown) => {
+    const slot = state.cursor++;
+    if (!(slot in state.values)) state.values[slot] = { current: value };
+    return state.values[slot];
+  },
   useState: <T,>(initial: T | (() => T)) => {
     const slot = state.cursor++;
     const values = state.values;
@@ -20,6 +26,19 @@ vi.mock("react", async (importOriginal) => ({
     ];
   },
 }));
+vi.mock("nuqs", async () => {
+  const { useState } = await import("react");
+  function parser(defaultValue: unknown) {
+    return { defaultValue, withDefault: parser };
+  }
+  return {
+    parseAsString: parser(""),
+    parseAsBoolean: parser(false),
+    parseAsStringLiteral: () => parser(""),
+    useQueryState: (_key: string, options: { defaultValue: unknown }) =>
+      useState(options.defaultValue),
+  };
+});
 vi.mock("next/dynamic", () => ({ default: () => () => null }));
 vi.mock("sonner", () => ({ toast: { error: actions.error, success: vi.fn() } }));
 vi.mock("@/actions/announcement.action", () => ({
@@ -41,8 +60,8 @@ vi.mock("zsa-react", () => ({
   ) => ({
     execute: async (input: unknown) => {
       const result = (await action(input)) ?? [null, null];
-      if (result[1]) options.onError?.({ err: result[1] });
-      else options.onSuccess?.({ data: result[0] });
+      if (result[1]) options?.onError?.({ err: result[1] });
+      else options?.onSuccess?.({ data: result[0] });
       return result;
     },
     isPending: false,
@@ -120,7 +139,42 @@ const feed: Feed = { viewerRole: "user", posts: [post] };
 describe("announcement controls", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    actions.refresh.mockReset();
+    actions.refresh.mockResolvedValue([feed, null]);
     actions.comment.mockResolvedValue([null, { message: "Comment rejected" }]);
+  });
+
+  it("loads the latest filter after an in-flight refresh without overlapping requests", async () => {
+    const render = frame(() => AnnouncementsFeedClient({ initialFeed: feed, isAdmin: false }));
+    let finish!: (result: unknown) => void;
+    actions.refresh.mockReturnValueOnce(
+      new Promise((resolve) => {
+        finish = resolve;
+      }),
+    );
+    actions.refresh.mockResolvedValueOnce([
+      { ...feed, posts: [{ ...post, title: "Latest result" }] },
+      null,
+    ]);
+    for (const query of ["first", "second", "latest"]) {
+      await fire(
+        find(render(), (element) => element.props.placeholder === "Search title or body"),
+        "onChange",
+        { target: { value: query } },
+      );
+      await fire(button(render(), "Apply filters"), "onClick");
+    }
+    expect(actions.refresh).toHaveBeenCalledTimes(1);
+    finish([{ ...feed, posts: [{ ...post, title: "Old result" }] }, null]);
+    await vi.waitFor(() => {
+      expect(actions.refresh).toHaveBeenCalledTimes(2);
+      expect(actions.refresh).toHaveBeenLastCalledWith(expect.objectContaining({ q: "latest" }));
+      const card = find(
+        render(),
+        (element) => typeof element.type === "function" && element.type.name === "PostCard",
+      );
+      expect((card.props.post as FeedPost).title).toBe("Latest result");
+    });
   });
 
   it("clears the query sent to the server along with the search input", async () => {

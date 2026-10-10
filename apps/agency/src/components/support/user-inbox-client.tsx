@@ -1,5 +1,7 @@
 "use client";
 
+import { parseAsString, parseAsStringLiteral, useQueryState } from "nuqs";
+
 import { useState, useMemo, useEffect, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import {
@@ -38,12 +40,21 @@ const STATUS_FILTERS = ["all", "open", "in_progress", "resolved", "closed"] as c
 
 export function UserInboxClient({ initialTickets, totalCount }: UserInboxClientProps) {
   const router = useRouter();
-  const [selectedTicketId, setSelectedTicketId] = useState<string | null>(null);
-  const [viewMode, setViewMode] = useState<"ticket" | "new" | "empty">(
-    totalCount === 0 ? "new" : "empty",
+  const [selectedTicketId, setSelectedTicketId] = useQueryState(
+    "ticket",
+    parseAsString.withOptions({ history: "push" }),
   );
-  const [searchQuery, setSearchQuery] = useState("");
-  const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [viewMode, setViewMode] = useQueryState(
+    "view",
+    parseAsStringLiteral(["ticket", "new", "empty"])
+      .withDefault(totalCount === 0 ? "new" : "empty")
+      .withOptions({ history: "push" }),
+  );
+  const [searchQuery, setSearchQuery] = useQueryState("q", parseAsString.withDefault(""));
+  const [statusFilter, setStatusFilter] = useQueryState(
+    "status",
+    parseAsStringLiteral(STATUS_FILTERS).withDefault("all"),
+  );
   const [locallyReadAt, setLocallyReadAt] = useState<Record<string, number>>({});
   const [mounted, setMounted] = useState(false);
   const [tickets, setTickets] = useState(initialTickets);
@@ -108,10 +119,6 @@ export function UserInboxClient({ initialTickets, totalCount }: UserInboxClientP
       selectedTicketRequestIdRef.current += 1;
       setSelectedTicket(null);
       setIsSelectedTicketLoading(false);
-      return;
-    }
-
-    if (!tickets.some((ticket) => ticket.id === selectedTicketId)) {
       return;
     }
 
