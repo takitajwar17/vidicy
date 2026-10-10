@@ -1005,6 +1005,54 @@ describe("agency review workflow with the real database driver", () => {
     expect(application?.reviewCompletedAt).toBeInstanceOf(Date);
   });
 
+  it("counts required checklist coverage once per item and checks every applicant for the dashboard", async () => {
+    expect((await getAgencyCaseRows())[0]).toMatchObject({
+      requiredDocumentCount: 1,
+      uploadedRequiredDocumentCount: 1,
+      hasChecklist: true,
+      reviewState: "current",
+    });
+    await fixture.db.insert(uploadedDocumentTable).values({
+      applicationId,
+      applicantId,
+      checklistItemId: itemId,
+      fileName: "older.pdf",
+      fileKey: "older",
+      fileSize: 100,
+      mimeType: "application/pdf",
+      uploadedAt: new Date("2026-09-19"),
+    });
+    const [other] = await fixture.db
+      .insert(applicantTable)
+      .values({
+        applicationId,
+        name: "Dependent",
+        relationship: "spouse",
+      })
+      .returning();
+    await fixture.db.insert(checklistItemTable).values({
+      applicationId,
+      applicantId: other.id,
+      documentName: "Optional file",
+      description: "Optional",
+      isRequired: false,
+    });
+    await fixture.db.insert(checklistItemTable).values({
+      applicationId,
+      applicantId: other.id,
+      documentName: "Dependent passport",
+      description: "Required",
+      isRequired: true,
+    });
+    expect((await getAgencyCaseRows())[0]).toMatchObject({
+      requiredDocumentCount: 2,
+      uploadedRequiredDocumentCount: 1,
+      reviewState: "outdated",
+    });
+    await fixture.db.delete(documentEvaluationTable);
+    expect((await getAgencyCaseRows())[0].reviewState).toBe("not_started");
+  });
+
   it("blocks an empty checklist", async () => {
     await fixture.db.delete(uploadedDocumentTable);
     await fixture.db.delete(checklistItemTable);

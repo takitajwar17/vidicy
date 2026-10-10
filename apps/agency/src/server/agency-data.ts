@@ -38,7 +38,6 @@ type VisaApplicationRow = typeof visaApplicationTable.$inferSelect;
 type ApplicantRow = typeof applicantTable.$inferSelect;
 type EvaluationRow = typeof documentEvaluationTable.$inferSelect;
 type ClientReportRow = typeof clientReportTable.$inferSelect;
-type ReviewIssueRow = typeof reviewIssueTable.$inferSelect;
 
 export interface AgencyStaffRow {
   id: string;
@@ -65,13 +64,10 @@ export interface AgencyCaseRow {
   documentCount: number;
   openIssueCount: number;
   highIssueCount: number;
-}
-
-export interface AgencyIssuePattern {
-  label: string;
-  count: number;
-  high: number;
-  caseCount: number;
+  requiredDocumentCount: number;
+  uploadedRequiredDocumentCount: number;
+  hasChecklist: boolean;
+  reviewState: "not_started" | "outdated" | "current";
 }
 
 function getAgencyCaseFilters() {
@@ -99,48 +95,6 @@ function getPrimaryApplicantByApplication(applicants: ApplicantRow[]) {
   }
 
   return primaryApplicantByApp;
-}
-
-function getAgencyTopIssuePatterns(issues: ReviewIssueRow[]): AgencyIssuePattern[] {
-  const issueBuckets = new Map<
-    string,
-    {
-      label: string;
-      count: number;
-      high: number;
-      caseIds: Set<string>;
-    }
-  >();
-
-  for (const issue of issues) {
-    if (!isOpenReviewIssueStatus(issue.status)) continue;
-
-    const label = issue.title.trim() || "Untitled issue";
-    const key = label.toLowerCase();
-    const current = issueBuckets.get(key) ?? {
-      label,
-      count: 0,
-      high: 0,
-      caseIds: new Set<string>(),
-    };
-
-    current.count += 1;
-    current.caseIds.add(issue.applicationId);
-    if (issue.severity === "high") {
-      current.high += 1;
-    }
-    issueBuckets.set(key, current);
-  }
-
-  return Array.from(issueBuckets.values())
-    .map((pattern) => ({
-      label: pattern.label,
-      count: pattern.count,
-      high: pattern.high,
-      caseCount: pattern.caseIds.size,
-    }))
-    .sort((a, b) => b.count - a.count || b.high - a.high || a.label.localeCompare(b.label))
-    .slice(0, 5);
 }
 
 async function getApplicantSearchMatches(query: string): Promise<{
@@ -261,7 +215,7 @@ export async function getAgencyCaseRows({
   query: rawQuery = null,
   statuses,
 }: {
-  limit?: number;
+  limit?: number | null;
   offset?: number;
   query?: string | null;
   statuses?: string[];
@@ -293,7 +247,7 @@ export async function getAgencyCaseRows({
   const applications = await db.query.visaApplicationTable.findMany({
     where: and(...filters),
     orderBy: [desc(visaApplicationTable.createdAt)],
-    limit,
+    limit: limit ?? undefined,
     offset,
   });
 
@@ -385,6 +339,21 @@ export async function getAgencyCaseRows({
   const reviewerById = new Map(reviewers.map((reviewer) => [reviewer.id, reviewer]));
 
   return applications.map((application) => {
+    const caseItems = checklistItems.filter((item) => item.applicationId === application.id);
+    const caseDocuments = documents.filter((document) => document.applicationId === application.id);
+    const caseEvaluations = evaluations.filter(
+      (evaluation) => evaluation.applicationId === application.id,
+    );
+    const requiredItems = caseItems.filter((item) => item.isRequired);
+    const hasCurrentReviews =
+      caseItems.length > 0 &&
+      [...new Set(caseItems.map((item) => item.applicantId))].every((applicantId) =>
+        isEvaluationCurrent({
+          evaluation: caseEvaluations.find((evaluation) => evaluation.applicantId === applicantId),
+          checklistItems: caseItems,
+          documents: caseDocuments,
+        }),
+      );
     const evaluation = latestEvaluationByApp.get(application.id) ?? null;
     const currentEvaluation = isEvaluationCurrent({
       evaluation,
@@ -407,6 +376,16 @@ export async function getAgencyCaseRows({
       documentCount: documentCountByApp.get(application.id) ?? 0,
       openIssueCount: openIssueCountByApp.get(application.id) ?? 0,
       highIssueCount: highIssueCountByApp.get(application.id) ?? 0,
+      requiredDocumentCount: requiredItems.length,
+      uploadedRequiredDocumentCount: requiredItems.filter((item) =>
+        caseDocuments.some((document) => document.checklistItemId === item.id),
+      ).length,
+      hasChecklist: caseItems.length > 0,
+      reviewState: hasCurrentReviews
+        ? "current"
+        : caseEvaluations.length
+          ? "outdated"
+          : "not_started",
     };
   });
 }
@@ -496,19 +475,9 @@ export async function getAgencyTeamWorkloadRows(): Promise<AgencyTeamWorkloadRow
 
 export async function getAgencyDashboardData() {
   const [cases, staff] = await Promise.all([
-    getAgencyCaseRows({ limit: 500 }),
+    getAgencyCaseRows({ limit: null }),
     getActiveAgencyStaffRows(),
   ]);
-  const caseIds = cases.map((row) => row.application.id);
-  const issueRows = caseIds.length
-    ? await getDB().query.reviewIssueTable.findMany({
-        where: and(
-          inArray(reviewIssueTable.applicationId, caseIds),
-          ne(reviewIssueTable.status, REVIEW_ISSUE_STATUS.DISMISSED),
-        ),
-        orderBy: [desc(reviewIssueTable.createdAt)],
-      })
-    : [];
 
   const totalApplications = cases.length;
   const readyToSubmit = cases.filter(
@@ -532,8 +501,6 @@ export async function getAgencyDashboardData() {
   const readyRate =
     totalApplications > 0 ? Math.round((readyToSubmit / totalApplications) * 1000) / 10 : 0;
 
-  const topFlaggedIssues = getAgencyTopIssuePatterns(issueRows);
-
   const workload = staff
     .filter((member) => member.userId && member.user)
     .map((member) => {
@@ -546,7 +513,10 @@ export async function getAgencyDashboardData() {
       const reviewerInReview = assigned.filter(({ application }) => {
         const status = normalizeAgencyCaseStatus(application.agencyStatus);
         return (
-          status === AGENCY_CASE_STATUS.IN_REVIEW || status === AGENCY_CASE_STATUS.NEEDS_CLIENT
+          !application.finalSubmissionAt &&
+          (status === AGENCY_CASE_STATUS.INTAKE ||
+            status === AGENCY_CASE_STATUS.IN_REVIEW ||
+            status === AGENCY_CASE_STATUS.NEEDS_CLIENT)
         );
       }).length;
 
@@ -599,7 +569,6 @@ export async function getAgencyDashboardData() {
     recentCases: cases.slice(0, 8),
     staff,
     workload,
-    topFlaggedIssues,
     stats: {
       totalApplications,
       completed: readyToSubmit,

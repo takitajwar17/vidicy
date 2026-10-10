@@ -190,6 +190,10 @@ describe("agency application pages", () => {
           documentCount: 2,
           openIssueCount: 1,
           highIssueCount: 1,
+          requiredDocumentCount: 3,
+          uploadedRequiredDocumentCount: 2,
+          hasChecklist: true,
+          reviewState: "outdated",
         },
       ],
       recentCases: [
@@ -335,13 +339,14 @@ describe("agency application pages", () => {
   it("renders the dashboard root as an agency operations dashboard", async () => {
     const markup = renderToStaticMarkup(await DashboardPage());
 
-    expect(markup).toContain(
-      "Today&#x27;s queue: files in review, clients waiting on fixes, and reviewers carrying the work.",
-    );
-    expect(markup).toContain("Files moving this week");
-    expect(markup).toContain("Recent client files");
-    expect(markup).toContain("Bank statement needs review");
-    expect(markup).not.toContain("High-priority file issues");
+    expect(markup).toContain("Client files, deadlines, and the next step.");
+    expect(markup).toContain("Needs attention");
+    expect(markup).toContain("Required files");
+    expect(markup).toContain("Add missing files");
+    expect(markup).toContain("Review out of date");
+    expect(markup).not.toContain("Files moving this week");
+    expect(markup).not.toContain("Most repeated issues");
+    expect(markup).not.toContain("Ready rate");
     expect(markup).toContain("VA-2026-ABC123");
     expect(markup).not.toContain("Start Your First Application");
   });

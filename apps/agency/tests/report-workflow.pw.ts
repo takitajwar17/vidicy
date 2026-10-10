@@ -208,6 +208,18 @@ test.beforeAll(async () => {
     join(directory, "redis.log"),
   ]);
   redis = createClient({ socket: { path: socket, reconnectStrategy: false } });
+  await expect
+    .poll(() => {
+      try {
+        return execFileSync("redis-cli", ["-s", socket, "ping"], {
+          encoding: "utf8",
+          stdio: ["ignore", "pipe", "pipe"],
+        }).trim();
+      } catch {
+        return "not-ready";
+      }
+    })
+    .toBe("PONG");
   await redis.connect();
   async function session(user: typeof staff) {
     const token = randomUUID();
@@ -870,6 +882,166 @@ test("long review findings can scroll above the bottom bar", async ({ page, cont
     await dismiss.hover();
     await page.screenshot({ path: join(output, `review-scroll-${width}x${height}.png`) });
   }
+  expect(errors).toEqual([]);
+});
+
+test("dashboard uses real coverage, attention filters, next actions, and responsive layouts", async ({
+  page,
+  context,
+}) => {
+  test.setTimeout(90_000);
+  const errors: string[] = [];
+  page.on("pageerror", (error) => errors.push(error.message));
+  const db = drizzle(pool, { schema });
+  const staffId = staffCookie.split(":")[0];
+  const today = new Date().toISOString().slice(0, 10);
+  const yesterday = new Date(`${today}T00:00:00Z`);
+  yesterday.setUTCDate(yesterday.getUTCDate() - 1);
+  const nextWeek = new Date(`${today}T00:00:00Z`);
+  nextWeek.setUTCDate(nextWeek.getUTCDate() + 3);
+  const fixtureRows = await db
+    .insert(schema.visaApplicationTable)
+    .values(
+      Array.from({ length: 9 }, (_, index) => ({
+        userId: staffId,
+        clientId: `dashboard-client-${index}`,
+        clientName: `Queue Client ${index}`,
+        caseNumber: `QUEUE-${index}`,
+        destinationCountry: "Germany",
+        visaType: "Student visa",
+        homeCountry: "Bangladesh",
+        currentCountry: "Bangladesh",
+        embassy: "Dhaka",
+        agencyStatus: index === 0 ? "needs_client" : "intake",
+        assignedReviewerId: index === 1 ? null : staffId,
+        dueAt: index === 0 ? yesterday : index === 1 ? nextWeek : null,
+      })),
+    )
+    .returning();
+  const [applicant] = await db
+    .insert(schema.applicantTable)
+    .values({
+      applicationId: fixtureRows[0].id,
+      name: "Queue Applicant",
+      relationship: "primary",
+    })
+    .returning();
+  const items = await db
+    .insert(schema.checklistItemTable)
+    .values([
+      {
+        applicationId: fixtureRows[0].id,
+        applicantId: applicant.id,
+        documentName: "Passport",
+        description: "Required",
+        isRequired: true,
+      },
+      {
+        applicationId: fixtureRows[0].id,
+        applicantId: applicant.id,
+        documentName: "Funding evidence",
+        description: "Required",
+        isRequired: true,
+      },
+    ])
+    .returning();
+  await db.insert(schema.uploadedDocumentTable).values(
+    [1, 2].map((index) => ({
+      applicationId: fixtureRows[0].id,
+      applicantId: applicant.id,
+      checklistItemId: items[0].id,
+      fileName: `passport-${index}.pdf`,
+      fileKey: `dashboard/passport-${index}`,
+      mimeType: "application/pdf",
+      fileSize: 100,
+      extractionStatus: "completed" as const,
+    })),
+  );
+  await db
+    .update(schema.visaApplicationTable)
+    .set({ agencyStatus: "ready_to_submit", assignedReviewerId: staffId })
+    .where(eq(schema.visaApplicationTable.id, applicationId));
+  await db
+    .update(schema.documentEvaluationTable)
+    .set({ reviewStatus: "incomplete" })
+    .where(eq(schema.documentEvaluationTable.applicationId, applicationId));
+  await context.addCookies([
+    { name: "session", value: staffCookie, url: base },
+    { name: "csrf-token", value: "isolated-browser-csrf-token", url: base },
+  ]);
+  await page.setViewportSize({ width: 1586, height: 1000 });
+  await page.goto(`${base}/dashboard`);
+  const queue = page.getByRole("table", { name: "Client file work queue" });
+  await expect(page.getByRole("heading", { name: "Needs attention", exact: true })).toBeVisible();
+  await expect(page.getByText("Most repeated issues", { exact: true })).toHaveCount(0);
+  await expect(page.getByText("Files moving this week", { exact: true })).toHaveCount(0);
+  await expect(queue.getByRole("row")).toHaveCount(9);
+  await page.getByRole("button", { name: "Next", exact: true }).click();
+  await expect(page).toHaveURL(/page=2/);
+  await expect(queue.getByRole("row")).toHaveCount(3);
+  await page.getByRole("button", { name: /Unassigned.*Choose a reviewer/ }).click();
+  await expect(page).toHaveURL(/attention=unassigned/);
+  await expect(queue).toContainText("QUEUE-1");
+  await expect(queue.getByRole("row")).toHaveCount(2);
+  await expect(queue.getByRole("link", { name: "Assign reviewer", exact: true })).toHaveAttribute(
+    "href",
+    `/dashboard/${fixtureRows[1].id}?tab=review`,
+  );
+  await page.reload();
+  await expect(queue).toContainText("QUEUE-1");
+  await page.getByRole("button", { name: /Past due.*Due date passed/ }).click();
+  await expect(page).toHaveURL(/attention=overdue/);
+  const row = queue.getByRole("row").filter({ hasText: "QUEUE-0" });
+  await expect(row).toContainText("1 / 2");
+  await expect(row.getByRole("link", { name: "Add missing files", exact: true })).toHaveAttribute(
+    "href",
+    `/dashboard/${fixtureRows[0].id}?tab=checklist`,
+  );
+  await row.getByRole("link", { name: "Add missing files", exact: true }).click();
+  await expect(page.getByRole("tab", { name: "Checklist", exact: true })).toHaveAttribute(
+    "data-state",
+    "active",
+  );
+  await expect(page.getByText("Funding evidence", { exact: true }).first()).toBeVisible();
+  await page.goBack();
+  await expect(queue).toContainText("QUEUE-0");
+  await page.getByRole("button", { name: /marked-ready.*readiness check/ }).click();
+  await expect(queue.getByRole("link", { name: "Recheck readiness", exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Clear filters", exact: true }).click();
+  await page
+    .getByRole("textbox", { name: "Search client files", exact: true })
+    .fill("Queue Applicant");
+  await expect(queue.getByRole("row")).toHaveCount(2);
+  await page
+    .getByRole("combobox", { name: "Sort client files", exact: true })
+    .selectOption("updated");
+  await expect(page).toHaveURL(/sort=updated/);
+  await page.reload();
+  await expect(page.getByRole("textbox", { name: "Search client files", exact: true })).toHaveValue(
+    "Queue Applicant",
+  );
+  await page.getByRole("button", { name: "Clear filters", exact: true }).click();
+  const output = resolve("output/verification/dashboard");
+  mkdirSync(output, { recursive: true });
+  for (const width of [1586, 1024, 390]) {
+    await page.setViewportSize({ width, height: 1000 });
+    expect(
+      await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
+    ).toBe(true);
+    await expectDropdownSpacing({ page });
+    if (width < 768) {
+      const mobileQueue = page.getByRole("list", { name: "Client file work queue", exact: true });
+      await expect(mobileQueue.getByRole("listitem")).toHaveCount(8);
+      await expect(
+        mobileQueue.getByRole("link", { name: "Recheck readiness", exact: true }),
+      ).toBeVisible();
+    }
+    await page.screenshot({ path: join(output, `dashboard-${width}.png`), fullPage: true });
+  }
+  await page.evaluate(() => localStorage.setItem("theme", "dark"));
+  await page.reload();
+  await expect(page.locator("html")).toHaveClass(/dark/);
+  await page.screenshot({ path: join(output, "dashboard-390-dark.png"), fullPage: true });
   expect(errors).toEqual([]);
 });
 
