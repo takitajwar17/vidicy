@@ -1,3 +1,4 @@
+import { requireAgencyPageSession } from "@/utils/auth-page";
 import type { Metadata } from "next";
 
 import { AgencyPageShell } from "@/components/agency/agency-page-shell";
@@ -31,6 +32,7 @@ function formatRoleLabel(role?: string | null) {
 }
 
 export default async function TeamPage() {
+  await requireAgencyPageSession("/dashboard/team");
   const [{ staff: agencyStaff, session }, staff, workload] = await Promise.all([
     requireAgencyStaff(),
     getActiveAgencyStaffRows(),

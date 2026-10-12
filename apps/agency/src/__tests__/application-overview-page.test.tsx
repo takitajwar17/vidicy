@@ -10,11 +10,13 @@ function renderToStaticMarkup(node: ReactNode) {
 const {
   mockRequireApplicationPagePermission,
   mockGetAgencyDashboardData,
+  mockRequireAgencyPageSession,
   mockGetAgencyCaseDetail,
   mockNotFound,
 } = vi.hoisted(() => ({
   mockRequireApplicationPagePermission: vi.fn(),
   mockGetAgencyDashboardData: vi.fn(),
+  mockRequireAgencyPageSession: vi.fn(),
   mockGetAgencyCaseDetail: vi.fn(),
   mockNotFound: vi.fn(() => {
     throw new Error("NOT_FOUND");
@@ -28,6 +30,8 @@ vi.mock("next/navigation", () => ({
 vi.mock("@/utils/application-page-auth", () => ({
   requireApplicationPagePermission: mockRequireApplicationPagePermission,
 }));
+
+vi.mock("@/utils/auth-page", () => ({ requireAgencyPageSession: mockRequireAgencyPageSession }));
 
 vi.mock("@/server/agency-data", () => ({
   getAgencyDashboardData: mockGetAgencyDashboardData,
@@ -169,6 +173,12 @@ const reviewer = {
 };
 
 describe("agency application pages", () => {
+  it("redirects accounts without agency access before fetching dashboard data", async () => {
+    mockRequireAgencyPageSession.mockRejectedValueOnce(new Error("REDIRECT:/agency-setup"));
+    await expect(DashboardPage()).rejects.toThrow("REDIRECT:/agency-setup");
+    expect(mockGetAgencyDashboardData).not.toHaveBeenCalled();
+  });
+
   beforeEach(() => {
     vi.clearAllMocks();
     mockRequireApplicationPagePermission.mockResolvedValue({

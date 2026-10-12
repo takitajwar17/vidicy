@@ -4,7 +4,12 @@ import { cache } from "react";
 import { count, eq } from "drizzle-orm";
 import { ZSAError } from "zsa";
 import { getDB } from "@/db";
-import { AGENCY_STAFF_ROLE, AGENCY_STAFF_STATUS, agencyTeamMemberTable } from "@/db/schema";
+import {
+  AGENCY_STAFF_ROLE,
+  AGENCY_STAFF_STATUS,
+  agencyTeamMemberTable,
+  agencyTable,
+} from "@/db/schema";
 import { requireVerifiedEmail } from "@/utils/auth";
 import type { SessionValidationResult } from "@/types";
 import { provisionAgencyMembership } from "./agency-provisioning";
@@ -44,6 +49,9 @@ export async function ensureAgencyTeamMembership(
   if (existing && existing.status !== AGENCY_STAFF_STATUS.ACTIVE) {
     return null;
   }
+
+  // New accounts must choose Create or Join. Only repair pre-existing records.
+  if (!existing) return null;
 
   const name = [user.firstName, user.lastName].filter(Boolean).join(" ").trim();
   return provisionAgencyMembership({
@@ -89,4 +97,23 @@ export async function hasActiveAgencyTeamMembers() {
     .where(eq(agencyTeamMemberTable.status, AGENCY_STAFF_STATUS.ACTIVE));
 
   return (result?.total ?? 0) > 0;
+}
+
+// This reveals only the signed-in user's own disabled membership.
+export async function getDisabledAgencyMembershipForSession(
+  session: NonNullable<SessionValidationResult>,
+) {
+  if (!session.user.emailVerified) return null;
+  const db = getDB();
+  const membership = await db.query.agencyTeamMemberTable.findFirst({
+    where: eq(agencyTeamMemberTable.userId, session.user.id),
+  });
+  if (!membership || membership.status === AGENCY_STAFF_STATUS.ACTIVE) return null;
+  const agency = membership.agencyId
+    ? await db.query.agencyTable.findFirst({
+        where: eq(agencyTable.id, membership.agencyId),
+        columns: { name: true },
+      })
+    : null;
+  return { agencyName: agency?.name ?? "your previous agency" };
 }

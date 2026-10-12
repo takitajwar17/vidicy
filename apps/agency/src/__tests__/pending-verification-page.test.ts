@@ -68,7 +68,20 @@ describe("PendingVerificationPage", () => {
         searchParams: Promise.resolve({ redirect: "/dashboard/applications/new" }),
       }),
     ).resolves.toMatchObject({
-      props: { email: "owner@example.com" },
+      props: { email: "owner@example.com", redirectPath: "/dashboard/applications/new" },
+    });
+  });
+
+  it("passes the agency invitation to the resend client", async () => {
+    mockGetSessionFromCookie.mockResolvedValue({
+      user: { email: "owner@example.com", emailVerified: null },
+    });
+    await expect(
+      PendingVerificationPage({
+        searchParams: Promise.resolve({ redirect: "/agency-setup?code=single-use-code" }),
+      }),
+    ).resolves.toMatchObject({
+      props: { email: "owner@example.com", redirectPath: "/agency-setup?code=single-use-code" },
     });
   });
 });

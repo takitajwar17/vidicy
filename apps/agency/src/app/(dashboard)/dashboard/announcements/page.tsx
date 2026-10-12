@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import type { Route } from "next";
 import { AgencyPageShell } from "@/components/agency/agency-page-shell";
-import { requireVerifiedPageSession } from "@/utils/auth-page";
+import { requireAgencyPageSession } from "@/utils/auth-page";
 import { getAnnouncementsFeed } from "@/server/announcements";
 import { AnnouncementsFeedClient } from "@/components/announcements/announcements-feed-client";
 
@@ -11,7 +11,7 @@ export const metadata: Metadata = {
 };
 
 export default async function AnnouncementsPage() {
-  const session = await requireVerifiedPageSession();
+  const session = await requireAgencyPageSession("/dashboard/announcements");
   const feed = await getAnnouncementsFeed();
 
   return (

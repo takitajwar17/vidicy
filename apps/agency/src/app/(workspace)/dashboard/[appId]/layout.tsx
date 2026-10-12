@@ -1,5 +1,5 @@
-import type { Metadata } from "next";
-import { notFound } from "next/navigation";
+import type { Metadata, Route } from "next";
+import { redirect } from "next/navigation";
 
 import { SidebarProvider, SidebarInset } from "@/components/ui/sidebar";
 import { SiteSidebar } from "@/components/site-sidebar";
@@ -8,6 +8,7 @@ import { getCsrfToken } from "@/infra/csrf";
 import { CsrfProvider } from "@/components/csrf-provider";
 import { ensureAgencyTeamMembership } from "@/server/agency-team";
 import { AuthenticatedAppProviders } from "@/components/providers/authenticated-app-providers";
+import { getAuthRouteHref } from "@/utils/auth-redirect";
 
 export const metadata: Metadata = {
   robots: {
@@ -32,7 +33,7 @@ export default async function WorkspaceLayout({
   const staff = await ensureAgencyTeamMembership(session);
 
   if (!staff) {
-    notFound();
+    redirect(getAuthRouteHref("/agency-setup", `/dashboard/${appId}`) as Route);
   }
 
   return (

@@ -27,5 +27,5 @@ export default async function PendingVerificationPage({
     return redirect(redirectPath as Route);
   }
 
-  return <PendingVerificationClient email={session.user.email ?? ""} />;
+  return <PendingVerificationClient email={session.user.email ?? ""} redirectPath={redirectPath} />;
 }

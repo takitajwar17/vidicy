@@ -88,7 +88,7 @@ const SignInPage = ({ email, redirectPath, isGoogleSSOEnabled }: SignInClientPro
       <Form {...form}>
         <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-5">
           <p className="text-sm leading-6 text-muted-foreground/90">
-            Enter the email your agency added to the review desk.
+            Enter your account email to continue.
           </p>
 
           <FormField

@@ -13,4 +13,5 @@ export * from "./enterprise";
 export * from "./announcement";
 export * from "./agency";
 export * from "./agency-workspace";
+export * from "./agency-invitation";
 export * from "./relations";

@@ -1,17 +1,17 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import type { FormEvent } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useServerAction } from "zsa-react";
 import { toast } from "sonner";
-import { Loader2Icon, SendIcon, UserMinusIcon, UserPlusIcon } from "lucide-react";
+import { Loader2Icon, UserMinusIcon, UserPlusIcon } from "lucide-react";
 
 import {
-  addAgencyStaffAction,
   disableAgencyStaffAction,
   updateAgencyStaffRoleAction,
 } from "@/actions/agency-case.action";
+import { useCsrfToken } from "@/components/csrf-provider";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -23,8 +23,6 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import {
   Select,
   SelectContent,
@@ -35,112 +33,20 @@ import {
 import { AGENCY_STAFF_ROLE } from "@/db/schema";
 
 export function AddStaffDialog({ disabled = false }: { disabled?: boolean }) {
-  const [open, setOpen] = useState(false);
-
-  return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        <Button type="button" disabled={disabled}>
-          <UserPlusIcon className="h-4 w-4" />
-          Add staff
-        </Button>
-      </DialogTrigger>
-      <DialogContent className="sm:max-w-lg">
-        <DialogHeader className="pr-8">
-          <DialogTitle>Add staff</DialogTitle>
-          <DialogDescription>
-            Add a reviewer or admin to the agency team. They can sign in immediately with this
-            email.
-          </DialogDescription>
-        </DialogHeader>
-        <AddStaffForm onSuccess={() => setOpen(false)} />
-      </DialogContent>
-    </Dialog>
-  );
-}
-
-function AddStaffForm({
-  disabled = false,
-  onSuccess,
-}: {
-  disabled?: boolean;
-  onSuccess?: () => void;
-}) {
-  const router = useRouter();
-  const [email, setEmail] = useState("");
-  const [role, setRole] = useState<string>(AGENCY_STAFF_ROLE.MEMBER);
-  const { execute, isPending } = useServerAction(addAgencyStaffAction);
-
-  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const [result, error] = await execute({
-      email,
-      role: role as (typeof AGENCY_STAFF_ROLE)[keyof typeof AGENCY_STAFF_ROLE],
-    });
-
-    if (error) {
-      toast.error(error.message ?? "Could not add staff member.");
-      return;
-    }
-
-    toast.success(
-      result?.emailSent === false
-        ? "Staff member added. Email notification failed."
-        : "Staff member added.",
-    );
-    setEmail("");
-    setRole(AGENCY_STAFF_ROLE.MEMBER);
-    onSuccess?.();
-    router.refresh();
-  }
-
-  return (
-    <form onSubmit={handleSubmit} className="grid gap-4">
-      <div className="grid gap-2">
-        <Label
-          htmlFor="staff-email"
-          className="flex h-5 items-end text-xs font-bold text-muted-foreground"
-        >
-          Work email
-        </Label>
-        <Input
-          id="staff-email"
-          autoComplete="email"
-          className="h-10"
-          value={email}
-          onChange={(event) => setEmail(event.target.value)}
-          type="email"
-          placeholder="reviewer@agency.com"
-          disabled={disabled}
-          required
-        />
-      </div>
-      <div className="grid gap-2">
-        <Label
-          htmlFor="staff-role"
-          className="flex h-5 items-end text-xs font-bold text-muted-foreground"
-        >
-          Role
-        </Label>
-        <Select value={role} onValueChange={setRole} disabled={disabled}>
-          <SelectTrigger id="staff-role" className="h-10 w-full">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value={AGENCY_STAFF_ROLE.MEMBER}>Member</SelectItem>
-            <SelectItem value={AGENCY_STAFF_ROLE.ADMIN}>Admin</SelectItem>
-          </SelectContent>
-        </Select>
-      </div>
-      <Button type="submit" className="h-10 justify-center" disabled={disabled || isPending}>
-        {isPending ? (
-          <Loader2Icon className="h-4 w-4 animate-spin" />
-        ) : (
-          <SendIcon className="h-4 w-4" />
-        )}
-        Add staff
+  if (disabled)
+    return (
+      <Button disabled>
+        <UserPlusIcon className="h-4 w-4" />
+        Invite staff
       </Button>
-    </form>
+    );
+  return (
+    <Button asChild>
+      <Link href="/settings/agency#invitations">
+        <UserPlusIcon className="h-4 w-4" />
+        Invite staff
+      </Link>
+    </Button>
   );
 }
 
@@ -154,6 +60,7 @@ export function StaffRoleSelect({
   disabled?: boolean;
 }) {
   const router = useRouter();
+  const csrfToken = useCsrfToken();
   const [value, setValue] = useState(role);
   const { execute, isPending } = useServerAction(updateAgencyStaffRoleAction);
 
@@ -162,9 +69,11 @@ export function StaffRoleSelect({
   }, [role]);
 
   async function handleChange(nextRole: string) {
+    if (!csrfToken) return;
     setValue(nextRole);
     const [, error] = await execute({
       staffMemberId,
+      csrfToken,
       role: nextRole as (typeof AGENCY_STAFF_ROLE)[keyof typeof AGENCY_STAFF_ROLE],
     });
 
@@ -178,7 +87,11 @@ export function StaffRoleSelect({
   }
 
   return (
-    <Select value={value} onValueChange={handleChange} disabled={disabled || isPending}>
+    <Select
+      value={value}
+      onValueChange={handleChange}
+      disabled={disabled || isPending || !csrfToken}
+    >
       <SelectTrigger aria-label="Staff role" className="h-9 bg-card text-xs">
         <SelectValue />
       </SelectTrigger>
@@ -198,11 +111,13 @@ export function DisableStaffButton({
   disabled?: boolean;
 }) {
   const router = useRouter();
+  const csrfToken = useCsrfToken();
   const { execute, isPending } = useServerAction(disableAgencyStaffAction);
   const [open, setOpen] = useState(false);
 
   async function handleDisable() {
-    const [, error] = await execute({ staffMemberId });
+    if (!csrfToken) return;
+    const [, error] = await execute({ staffMemberId, csrfToken });
     if (error) {
       toast.error(error.message ?? "Could not disable staff member.");
       return;
@@ -215,7 +130,12 @@ export function DisableStaffButton({
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button type="button" size="sm" variant="outline" disabled={disabled || isPending}>
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          disabled={disabled || isPending || !csrfToken}
+        >
           <UserMinusIcon className="h-4 w-4" />
           Disable
         </Button>
@@ -239,7 +159,7 @@ export function DisableStaffButton({
             size="sm"
             variant="destructive"
             onClick={handleDisable}
-            disabled={disabled || isPending}
+            disabled={disabled || isPending || !csrfToken}
           >
             {isPending ? (
               <Loader2Icon className="h-4 w-4 animate-spin" />

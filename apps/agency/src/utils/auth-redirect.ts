@@ -4,7 +4,12 @@ import { PENDING_VERIFICATION_ROUTE, REDIRECT_AFTER_SIGN_IN } from "@/constants"
 export function normalizeRedirectPath(redirectPath?: string | null) {
   const candidate = redirectPath?.trim();
 
-  if (!candidate || !candidate.startsWith("/") || candidate.startsWith("//")) {
+  if (
+    !candidate ||
+    !candidate.startsWith("/") ||
+    candidate.startsWith("//") ||
+    /[\\\u0000-\u001f\u007f]/.test(candidate)
+  ) {
     return REDIRECT_AFTER_SIGN_IN;
   }
 

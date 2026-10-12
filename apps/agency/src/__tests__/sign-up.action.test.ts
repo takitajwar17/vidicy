@@ -124,7 +124,8 @@ vi.mock("@/utils/get-IP", () => ({
   getIP: mockGetIP,
 }));
 
-vi.mock("@/utils/auth-redirect", () => ({
+vi.mock("@/utils/auth-redirect", async (original) => ({
+  ...(await original<typeof import("@/utils/auth-redirect")>()),
   getPostAuthRedirectPath: mockGetPostAuthRedirectPath,
 }));
 
@@ -199,6 +200,7 @@ describe("signUpAction", () => {
         agreeToTerms: true,
         captchaToken: undefined,
         csrfToken: "csrf-token",
+        verifiedRedirectPath: "/agency-setup?code=single-use-code",
       }),
     ).resolves.toEqual({
       success: true,
@@ -213,6 +215,10 @@ describe("signUpAction", () => {
     expect(mockSendNewUserSignupNotificationEmail).toHaveBeenCalledWith({
       email: createdUser.email,
       name: "Jane Doe",
+    });
+    expect(JSON.parse(mockKvPut.mock.calls[0][1])).toMatchObject({
+      userId: createdUser.id,
+      verifiedRedirectPath: "/agency-setup?code=single-use-code",
     });
   });
 });

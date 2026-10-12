@@ -150,8 +150,41 @@ describe("verifyEmailAction behavior", () => {
       token: "token_123",
     });
 
-    expect(result).toEqual({ success: true });
+    expect(result).toEqual({ success: true, redirectTo: "/dashboard" });
     expect(mockRecordMarketingEvent).toHaveBeenCalledTimes(1);
     expect(mockUpdateAllSessionsOfUser).toHaveBeenCalledWith("usr_123");
   });
+
+  it("returns the stored agency invitation after email verification", async () => {
+    const redirectPath = "/agency-setup?code=single-use-code";
+    mockKvGet.mockResolvedValue(
+      JSON.stringify({
+        userId: "usr_123",
+        expiresAt: "2030-01-01T00:00:00.000Z",
+        verifiedRedirectPath: redirectPath,
+      }),
+    );
+
+    await expect(verifyEmailAction({ token: "token_123" })).resolves.toMatchObject({
+      success: true,
+      redirectTo: redirectPath,
+    });
+  });
+
+  it.each(["https://example.com/evil", "//example.com/evil", "/\\example.com/evil"])(
+    "rejects an unsafe stored redirect %s",
+    async (verifiedRedirectPath) => {
+      mockKvGet.mockResolvedValue(
+        JSON.stringify({
+          userId: "usr_123",
+          expiresAt: "2030-01-01T00:00:00.000Z",
+          verifiedRedirectPath,
+        }),
+      );
+      await expect(verifyEmailAction({ token: "token_123" })).resolves.toMatchObject({
+        success: true,
+        redirectTo: "/dashboard",
+      });
+    },
+  );
 });

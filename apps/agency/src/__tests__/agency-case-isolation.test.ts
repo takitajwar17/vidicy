@@ -4,11 +4,11 @@ import { eq } from "drizzle-orm";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { startTestPostgres } from "./helpers/postgres";
 
-const { mockGetDB, mockAgencyContext, mockMarkReady, mockSendAccessEmail } = vi.hoisted(() => ({
+const { mockGetDB, mockAgencyContext, mockMarkReady, mockValidateCsrf } = vi.hoisted(() => ({
   mockGetDB: vi.fn(),
   mockAgencyContext: vi.fn(),
   mockMarkReady: vi.fn(),
-  mockSendAccessEmail: vi.fn(),
+  mockValidateCsrf: vi.fn(async () => true),
 }));
 
 vi.mock("zsa", () => ({
@@ -50,9 +50,8 @@ vi.mock("@/server/client-reports", () => ({
   deliverClientReport: vi.fn(),
   updateClientReportRecipient: vi.fn(),
 }));
-vi.mock("@/utils/email", () => ({ sendAgencyTeamAccessEmail: mockSendAccessEmail }));
 vi.mock("@/infra/logger", () => ({ logger: { error: vi.fn() } }));
-vi.mock("@/infra/csrf", () => ({ validateCsrfToken: vi.fn(async () => true) }));
+vi.mock("@/infra/csrf", () => ({ validateCsrfToken: mockValidateCsrf }));
 
 import { getDB, getDBFromDatabase } from "@/db";
 import {
@@ -64,7 +63,6 @@ import {
   visaApplicationTable,
 } from "@/db/schema";
 import {
-  addAgencyStaffAction,
   addReviewIssueAction,
   assignAgencyCaseAction,
   createAgencyCaseAction,
@@ -242,7 +240,7 @@ describe("agency actions isolate one agency from another", () => {
 
   it("does not change another agency's staff role", async () => {
     await expect(
-      updateAgencyStaffRoleAction({ staffMemberId: memberB, role: "member" }),
+      updateAgencyStaffRoleAction({ staffMemberId: memberB, role: "member", csrfToken: "token" }),
     ).rejects.toThrow("Staff member not found");
     expect(
       await db.query.agencyTeamMemberTable.findFirst({
@@ -252,26 +250,14 @@ describe("agency actions isolate one agency from another", () => {
   });
 
   it("does not disable another agency's staff member", async () => {
-    await expect(disableAgencyStaffAction({ staffMemberId: memberB })).rejects.toThrow(
-      "Staff member not found",
-    );
+    await expect(
+      disableAgencyStaffAction({ staffMemberId: memberB, csrfToken: "token" }),
+    ).rejects.toThrow("Staff member not found");
     expect(
       await db.query.agencyTeamMemberTable.findFirst({
         where: eq(agencyTeamMemberTable.id, memberB),
       }),
     ).toMatchObject({ status: "active", agencyId: agencyB });
-  });
-
-  it("does not move another agency's account through an invitation", async () => {
-    await expect(
-      addAgencyStaffAction({ email: "owner-b@example.com", role: "member" }),
-    ).rejects.toThrow("already belongs to another agency");
-    expect(
-      await db.query.agencyTeamMemberTable.findFirst({
-        where: eq(agencyTeamMemberTable.id, memberB),
-      }),
-    ).toMatchObject({ role: "admin", agencyId: agencyB });
-    expect(mockSendAccessEmail).not.toHaveBeenCalled();
   });
 
   it("creates a case and reuses a client only within the current agency", async () => {
@@ -315,12 +301,152 @@ describe("agency actions isolate one agency from another", () => {
     ).toMatchObject({ agencyId: agencyA, email: "new-client@example.com" });
   });
 
-  it("saves the current agency on a new staff invitation", async () => {
-    await addAgencyStaffAction({ email: "new-member@example.com", role: "member" });
+  it("rejects role and access changes without a valid security token", async () => {
+    mockValidateCsrf.mockResolvedValueOnce(false).mockResolvedValueOnce(false);
+    await expect(
+      updateAgencyStaffRoleAction({ staffMemberId: memberB, role: "member", csrfToken: "bad" }),
+    ).rejects.toThrow("Invalid security token");
+    await expect(
+      disableAgencyStaffAction({ staffMemberId: memberB, csrfToken: "bad" }),
+    ).rejects.toThrow("Invalid security token");
+    expect(mockAgencyContext).not.toHaveBeenCalled();
+  });
+
+  it("protects the owner from another admin", async () => {
+    const [admin] = await db
+      .insert(userTable)
+      .values({ email: "admin@example.com", emailVerified: new Date() })
+      .returning();
+    await db
+      .insert(agencyTeamMemberTable)
+      .values({ agencyId: agencyA, userId: admin.id, email: admin.email, role: "admin" });
+    const owner = await db.query.agencyTeamMemberTable.findFirst({
+      where: eq(agencyTeamMemberTable.userId, userA),
+    });
+    mockAgencyContext.mockResolvedValue({
+      session: { userId: admin.id, user: admin },
+      staff: { agencyId: agencyA, role: "admin", isAdmin: true },
+    });
+    await expect(
+      updateAgencyStaffRoleAction({ staffMemberId: owner!.id, role: "member", csrfToken: "token" }),
+    ).rejects.toThrow("Transfer agency ownership");
+    await expect(
+      disableAgencyStaffAction({ staffMemberId: owner!.id, csrfToken: "token" }),
+    ).rejects.toThrow("Transfer agency ownership");
     expect(
       await db.query.agencyTeamMemberTable.findFirst({
-        where: eq(agencyTeamMemberTable.email, "new-member@example.com"),
+        where: eq(agencyTeamMemberTable.id, owner!.id),
       }),
-    ).toMatchObject({ agencyId: agencyA, userId: null, role: "member", invitedBy: userA });
+    ).toMatchObject({ role: "admin", status: "active" });
+  });
+
+  it("rejects a stale admin context after the caller loses access", async () => {
+    await db
+      .update(agencyTeamMemberTable)
+      .set({ role: "member" })
+      .where(eq(agencyTeamMemberTable.userId, userA));
+    await expect(
+      disableAgencyStaffAction({ staffMemberId: memberB, csrfToken: "token" }),
+    ).rejects.toThrow("Your admin access has changed");
+  });
+
+  it("retains the last admin even if the agency has no owner", async () => {
+    await db.update(agencyTable).set({ ownerUserId: null }).where(eq(agencyTable.id, agencyA));
+    const owner = await db.query.agencyTeamMemberTable.findFirst({
+      where: eq(agencyTeamMemberTable.userId, userA),
+    });
+    await expect(
+      updateAgencyStaffRoleAction({ staffMemberId: owner!.id, role: "member", csrfToken: "token" }),
+    ).rejects.toThrow("Assign another admin");
+    await expect(
+      disableAgencyStaffAction({ staffMemberId: owner!.id, csrfToken: "token" }),
+    ).rejects.toThrow("Assign another admin");
+  });
+
+  it("serializes competing admin changes and checks the waiting caller again", async () => {
+    await db.update(agencyTable).set({ ownerUserId: null }).where(eq(agencyTable.id, agencyA));
+    const [admin] = await db
+      .insert(userTable)
+      .values({ email: "competing@example.com", emailVerified: new Date() })
+      .returning();
+    const [secondMember] = await db
+      .insert(agencyTeamMemberTable)
+      .values({ agencyId: agencyA, userId: admin.id, email: admin.email, role: "admin" })
+      .returning();
+    const firstMember = await db.query.agencyTeamMemberTable.findFirst({
+      where: eq(agencyTeamMemberTable.userId, userA),
+    });
+    const firstUser = await db.query.userTable.findFirst({ where: eq(userTable.id, userA) });
+    mockAgencyContext.mockResolvedValueOnce({
+      session: { userId: userA, user: firstUser },
+      staff: { agencyId: agencyA, role: "admin", isAdmin: true },
+    });
+    mockAgencyContext.mockResolvedValueOnce({
+      session: { userId: admin.id, user: admin },
+      staff: { agencyId: agencyA, role: "admin", isAdmin: true },
+    });
+    const results = await Promise.allSettled([
+      updateAgencyStaffRoleAction({
+        staffMemberId: secondMember.id,
+        role: "member",
+        csrfToken: "token",
+      }),
+      updateAgencyStaffRoleAction({
+        staffMemberId: firstMember!.id,
+        role: "member",
+        csrfToken: "token",
+      }),
+    ]);
+    expect(results.filter((result) => result.status === "fulfilled")).toHaveLength(1);
+    expect(results.filter((result) => result.status === "rejected")).toHaveLength(1);
+    const members = await db.query.agencyTeamMemberTable.findMany({
+      where: eq(agencyTeamMemberTable.agencyId, agencyA),
+    });
+    expect(
+      members.filter((member) => member.role === "admin" && member.status === "active"),
+    ).toHaveLength(1);
+  });
+
+  it("reassigns unfinished work when an admin disables a member", async () => {
+    const [memberUser] = await db
+      .insert(userTable)
+      .values({ email: "worker@example.com", emailVerified: new Date() })
+      .returning();
+    const [member] = await db
+      .insert(agencyTeamMemberTable)
+      .values({ agencyId: agencyA, userId: memberUser.id, email: memberUser.email, role: "member" })
+      .returning();
+    await db
+      .update(visaApplicationTable)
+      .set({ assignedReviewerId: memberUser.id })
+      .where(eq(visaApplicationTable.id, caseA));
+    const [openIssue, closedIssue] = await db
+      .insert(reviewIssueTable)
+      .values([
+        { applicationId: caseA, title: "Open", description: "Work", assignedToId: memberUser.id },
+        {
+          applicationId: caseA,
+          title: "Closed",
+          description: "Done",
+          status: "resolved",
+          assignedToId: memberUser.id,
+        },
+      ])
+      .returning();
+    await disableAgencyStaffAction({ staffMemberId: member.id, csrfToken: "token" });
+    expect(
+      await db.query.agencyTeamMemberTable.findFirst({
+        where: eq(agencyTeamMemberTable.id, member.id),
+      }),
+    ).toMatchObject({ status: "disabled" });
+    expect(
+      await db.query.visaApplicationTable.findFirst({ where: eq(visaApplicationTable.id, caseA) }),
+    ).toMatchObject({ assignedReviewerId: userA });
+    expect(
+      await db.query.reviewIssueTable.findFirst({ where: eq(reviewIssueTable.id, openIssue.id) }),
+    ).toMatchObject({ assignedToId: userA });
+    expect(
+      await db.query.reviewIssueTable.findFirst({ where: eq(reviewIssueTable.id, closedIssue.id) }),
+    ).toMatchObject({ assignedToId: memberUser.id });
   });
 });

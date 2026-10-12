@@ -74,15 +74,9 @@ describe("agency team access", () => {
     expect(provision).not.toHaveBeenCalled();
   });
 
-  it("creates the account's own agency through the provisioning service", async () => {
-    const context = { agencyId: "own_agency", role: "admin", isAdmin: true };
-    provision.mockResolvedValue(context);
-    expect(await ensureAgencyTeamMembership(createSession())).toEqual(context);
-    expect(provision).toHaveBeenCalledWith({
-      userId: "user_1",
-      email: "user@example.com",
-      name: "New Owner's agency",
-    });
+  it("requires a new account to choose Create or Join", async () => {
+    expect(await ensureAgencyTeamMembership(createSession())).toBeNull();
+    expect(provision).not.toHaveBeenCalled();
   });
 
   it("repairs an old membership without an agency", async () => {

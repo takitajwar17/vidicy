@@ -9,10 +9,11 @@ import { sendVerificationEmail } from "@/utils/email";
 import { withRateLimit, RATE_LIMITS } from "@/infra/with-rate-limit";
 import { EMAIL_VERIFICATION_TOKEN_EXPIRATION_SECONDS } from "@/constants";
 import { z } from "zod";
+import { normalizeRedirectPath } from "@/utils/auth-redirect";
 
 export const resendVerificationAction = createServerAction()
-  .input(z.void())
-  .handler(async () => {
+  .input(z.object({ verifiedRedirectPath: z.string().optional() }).optional())
+  .handler(async ({ input }) => {
     return withRateLimit(async () => {
       const session = await getSessionFromCookie();
 
@@ -40,6 +41,7 @@ export const resendVerificationAction = createServerAction()
         JSON.stringify({
           userId: session.user.id,
           expiresAt: expiresAt.toISOString(),
+          verifiedRedirectPath: normalizeRedirectPath(input?.verifiedRedirectPath),
         }),
         {
           expirationTtl: Math.floor((expiresAt.getTime() - Date.now()) / 1000),

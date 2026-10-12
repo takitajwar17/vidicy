@@ -3,8 +3,7 @@ import type { Route } from "next";
 import { getSessionFromCookie } from "@/utils/auth";
 import { redirect } from "next/navigation";
 import VerifyEmailClientComponent from "./verify-email.client";
-import { REDIRECT_AFTER_SIGN_IN } from "@/constants";
-import { getSessionRedirectPath } from "@/utils/auth-redirect";
+import { getSessionRedirectPath, normalizeRedirectPath } from "@/utils/auth-redirect";
 
 export const metadata: Metadata = {
   title: "Verify email",
@@ -14,18 +13,20 @@ export const metadata: Metadata = {
 export default async function VerifyEmailPage({
   searchParams,
 }: {
-  searchParams: Promise<{ token?: string }>;
+  searchParams: Promise<{ token?: string; redirect?: string }>;
 }) {
   const [session, params] = await Promise.all([getSessionFromCookie(), searchParams]);
   const token = params.token;
 
   if (session?.user.emailVerified) {
-    return redirect(REDIRECT_AFTER_SIGN_IN);
+    return redirect(normalizeRedirectPath(params.redirect) as Route);
   }
 
   if (!token) {
     if (session) {
-      return redirect(getSessionRedirectPath({ session }) as Route);
+      return redirect(
+        getSessionRedirectPath({ session, verifiedRedirectPath: params.redirect }) as Route,
+      );
     }
     return redirect("/sign-in");
   }

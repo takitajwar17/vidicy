@@ -26,7 +26,7 @@ import { logger } from "@/infra/logger";
 import { validateCsrfToken } from "@/infra/csrf";
 import { linkApplicantRecordsByEmail } from "@/server/applicant-server";
 import { sendEmailBestEffort } from "@/lib/best-effort-email";
-import { getPostAuthRedirectPath } from "@/utils/auth-redirect";
+import { getPostAuthRedirectPath, normalizeRedirectPath } from "@/utils/auth-redirect";
 
 const signUpActionSchema = signUpSchema.extend({
   verifiedRedirectPath: z.string().optional(),
@@ -121,6 +121,7 @@ export const signUpAction = createServerAction()
           JSON.stringify({
             userId: user.id,
             expiresAt: expiresAt.toISOString(),
+            verifiedRedirectPath: normalizeRedirectPath(input.verifiedRedirectPath),
           }),
           {
             expirationTtl: Math.floor((expiresAt.getTime() - Date.now()) / 1000),

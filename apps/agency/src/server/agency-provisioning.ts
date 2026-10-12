@@ -16,6 +16,7 @@ interface ProvisionAgencyParams {
   userId: string;
   email: string | null;
   name: string;
+  requireNew?: boolean;
 }
 
 function membershipContext({
@@ -35,6 +36,7 @@ export async function provisionAgencyMembership({
   userId,
   email,
   name,
+  requireNew = false,
 }: ProvisionAgencyParams): Promise<AgencyStaffContext | null> {
   const db = getDB();
   return db.withTransaction(async () => {
@@ -44,7 +46,9 @@ export async function provisionAgencyMembership({
     });
     if (membership && membership.status !== AGENCY_STAFF_STATUS.ACTIVE) return null;
     if (membership?.agencyId)
-      return membershipContext({ agencyId: membership.agencyId, role: membership.role });
+      return requireNew
+        ? null
+        : membershipContext({ agencyId: membership.agencyId, role: membership.role });
 
     const invitation =
       !membership && email
@@ -58,22 +62,13 @@ export async function provisionAgencyMembership({
         (invitation.userId && invitation.userId !== userId))
     )
       return null;
+    // An email match is not acceptance. Scoped invitations need a code.
     if (invitation?.agencyId) {
-      const [joined] = await db
-        .update(agencyTeamMemberTable)
-        .set({ userId, joinedAt: new Date(), updatedAt: new Date() })
+      await db
+        .delete(agencyTeamMemberTable)
         .where(
-          and(
-            eq(agencyTeamMemberTable.id, invitation.id),
-            isNull(agencyTeamMemberTable.userId),
-            eq(agencyTeamMemberTable.status, AGENCY_STAFF_STATUS.ACTIVE),
-            eq(agencyTeamMemberTable.agencyId, invitation.agencyId),
-          ),
-        )
-        .returning();
-      return joined?.agencyId
-        ? membershipContext({ agencyId: joined.agencyId, role: joined.role })
-        : null;
+          and(eq(agencyTeamMemberTable.id, invitation.id), isNull(agencyTeamMemberTable.userId)),
+        );
     }
 
     await db
@@ -84,7 +79,7 @@ export async function provisionAgencyMembership({
       where: eq(agencyTable.ownerUserId, userId),
     });
     if (!agency) throw new Error("Failed to create agency");
-    const existing = membership ?? invitation;
+    const existing = membership ?? (invitation?.agencyId ? null : invitation);
     const owner = {
       userId,
       email,

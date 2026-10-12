@@ -1,12 +1,15 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { mockGetSessionFromCookie, mockRequireAdmin, mockRedirect } = vi.hoisted(() => ({
-  mockGetSessionFromCookie: vi.fn(),
-  mockRequireAdmin: vi.fn(),
-  mockRedirect: vi.fn((href: string) => {
-    throw new Error(`REDIRECT:${href}`);
+const { mockGetSessionFromCookie, mockRequireAdmin, mockRedirect, mockMembership } = vi.hoisted(
+  () => ({
+    mockGetSessionFromCookie: vi.fn(),
+    mockRequireAdmin: vi.fn(),
+    mockMembership: vi.fn(),
+    mockRedirect: vi.fn((href: string) => {
+      throw new Error(`REDIRECT:${href}`);
+    }),
   }),
-}));
+);
 
 vi.mock("next/navigation", () => ({
   redirect: mockRedirect,
@@ -17,7 +20,10 @@ vi.mock("@/utils/auth", () => ({
   requireAdmin: mockRequireAdmin,
 }));
 
+vi.mock("@/server/agency-team", () => ({ ensureAgencyTeamMembership: mockMembership }));
+
 import {
+  requireAgencyPageSession,
   requireAdminPageSession,
   requirePageSession,
   requireVerifiedPageSession,
@@ -59,6 +65,29 @@ describe("requireVerifiedPageSession", () => {
     });
 
     await expect(requireVerifiedPageSession()).rejects.toThrow("REDIRECT:/pending-verification");
+  });
+
+  it("preserves the agency invitation through email verification", async () => {
+    mockGetSessionFromCookie.mockResolvedValue({
+      userId: "user_123",
+      user: { id: "user_123", email: "owner@example.com", emailVerified: null },
+    });
+    const target = "/agency-setup?code=single-use-code&redirect=%2Fdashboard%2Fvapp_123";
+
+    await expect(requireVerifiedPageSession(target)).rejects.toThrow(
+      `REDIRECT:/pending-verification?redirect=${encodeURIComponent(target)}`,
+    );
+  });
+
+  it("preserves the case destination through email verification", async () => {
+    mockGetSessionFromCookie.mockResolvedValue({
+      userId: "user_123",
+      user: { id: "user_123", email: "owner@example.com", emailVerified: null },
+    });
+
+    await expect(requireVerifiedPageSession("/dashboard/vapp_123")).rejects.toThrow(
+      "REDIRECT:/pending-verification?redirect=%2Fdashboard%2Fvapp_123",
+    );
   });
 });
 
@@ -119,5 +148,30 @@ describe("requireAdminPageSession", () => {
     mockRequireAdmin.mockResolvedValue(null);
 
     await expect(requireAdminPageSession()).rejects.toThrow("REDIRECT:/");
+  });
+});
+
+describe("requireAgencyPageSession", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockGetSessionFromCookie.mockResolvedValue({
+      user: { id: "user_1", emailVerified: new Date() },
+    });
+  });
+  it("redirects verified users without membership before loading agency data", async () => {
+    mockMembership.mockResolvedValue(null);
+    await expect(requireAgencyPageSession("/dashboard")).rejects.toThrow(
+      "REDIRECT:/agency-setup?redirect=%2Fdashboard",
+    );
+  });
+  it("preserves the requested agency page through setup", async () => {
+    mockMembership.mockResolvedValue(null);
+    await expect(requireAgencyPageSession("/dashboard/reports/one")).rejects.toThrow(
+      "REDIRECT:/agency-setup?redirect=%2Fdashboard%2Freports%2Fone",
+    );
+  });
+  it("returns a verified agency member session", async () => {
+    mockMembership.mockResolvedValue({ agencyId: "agency_1", role: "member", isAdmin: false });
+    await expect(requireAgencyPageSession()).resolves.toMatchObject({ user: { id: "user_1" } });
   });
 });

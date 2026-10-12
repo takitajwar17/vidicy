@@ -12,7 +12,7 @@ import { useSessionStore } from "@/state/session";
 import { useServerAction } from "zsa-react";
 import { resendVerificationAction } from "@/app/(auth)/resend-verification.action";
 import { toast } from "sonner";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { EMAIL_VERIFICATION_TOKEN_EXPIRATION_SECONDS, EMAIL_RESEND_COOLDOWN_MS } from "@/constants";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import isProd from "@/utils/is-prod";
@@ -52,6 +52,12 @@ export function EmailVerificationDialog() {
     },
   });
 
+  useEffect(() => {
+    if (lastResendTime === null) return;
+    const timer = setTimeout(() => setLastResendTime(null), EMAIL_RESEND_COOLDOWN_MS);
+    return () => clearTimeout(timer);
+  }, [lastResendTime]);
+
   // Don't show the dialog if the user is not logged in, if their email is already verified,
   // or if we're on the verify-email page
   if (
@@ -63,7 +69,7 @@ export function EmailVerificationDialog() {
     return null;
   }
 
-  const canResend = !lastResendTime || Date.now() - lastResendTime > EMAIL_RESEND_COOLDOWN_MS;
+  const canResend = lastResendTime === null;
   const isLoading = status === "pending";
 
   return (
@@ -98,7 +104,7 @@ export function EmailVerificationDialog() {
         </DialogHeader>
         <div className="flex flex-col gap-4">
           <Button
-            onClick={() => resendVerification()}
+            onClick={() => resendVerification({ verifiedRedirectPath: pathname })}
             disabled={isLoading || !canResend}
             className="h-11 w-full bg-sidebar text-sm font-semibold tracking-[0.01em] text-sidebar-foreground hover:bg-sidebar/90"
           >

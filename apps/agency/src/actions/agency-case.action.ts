@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { and, desc, eq, isNotNull, isNull, ne, sql } from "drizzle-orm";
+import { and, count, desc, eq, isNotNull, isNull, ne, sql } from "drizzle-orm";
 import { createId } from "@paralleldrive/cuid2";
 import { createServerAction, ZSAError } from "zsa";
 import { z } from "zod";
@@ -18,22 +18,19 @@ import {
   REVIEW_ISSUE_SOURCE,
   REVIEW_ISSUE_STATUS,
   agencyClientTable,
+  agencyTable,
   agencyTeamMemberTable,
   applicantTable,
   clientReportTable,
   documentEvaluationTable,
   reviewIssueTable,
-  userTable,
   visaApplicationTable,
   APPLICANT_RELATIONSHIP,
   APPLICANT_ROLE,
   VISA_APPLICATION_STATUS,
   reviewIssueStatusTuple,
 } from "@/db/schema";
-import { sendEmailBestEffort } from "@/lib/best-effort-email";
 import { isOpenReviewIssueStatus, normalizeReviewIssueStatus } from "@/lib/agency-workflow";
-import { logger } from "@/infra/logger";
-import { sendAgencyTeamAccessEmail } from "@/utils/email";
 import { deliverClientReport, updateClientReportRecipient } from "@/server/client-reports";
 import { validateCsrfToken } from "@/infra/csrf";
 import {
@@ -62,14 +59,6 @@ function normalizeOptionalText(value?: string | null) {
 
 function getCaseNumber() {
   return `VA-${new Date().getFullYear()}-${createId().slice(0, 6).toUpperCase()}`;
-}
-
-function getStaffDisplayName(user: {
-  firstName?: string | null;
-  lastName?: string | null;
-  email?: string | null;
-}) {
-  return `${user.firstName ?? ""} ${user.lastName ?? ""}`.trim() || user.email || "An agency admin";
 }
 
 async function requireAgencyCase({
@@ -659,164 +648,170 @@ export const finalizeReviewAction = createServerAction()
     return { success: true };
   });
 
-export const addAgencyStaffAction = createServerAction()
-  .input(
-    z.object({
-      email: z.string().trim().email(),
-      role: z.enum([AGENCY_STAFF_ROLE.ADMIN, AGENCY_STAFF_ROLE.MEMBER]),
-    }),
-  )
-  .handler(async ({ input }) => {
-    const { session, staff } = await requireAgencyAdmin();
-    const db = getDB();
-    const email = input.email.trim().toLowerCase();
-    const addedByName = getStaffDisplayName(session.user);
-
-    const existingUser = await db.query.userTable.findFirst({
-      where: eq(userTable.email, email),
-      columns: { id: true, firstName: true, lastName: true, email: true },
-    });
-
-    const [existingByEmail, existingByUser] = await Promise.all([
-      db.query.agencyTeamMemberTable.findFirst({
-        where: eq(agencyTeamMemberTable.email, email),
-      }),
-      existingUser
-        ? db.query.agencyTeamMemberTable.findFirst({
-            where: eq(agencyTeamMemberTable.userId, existingUser.id),
-          })
-        : Promise.resolve(null),
-    ]);
-
-    if (existingByEmail && existingByUser && existingByEmail.id !== existingByUser.id) {
-      throw new ZSAError(
-        "CONFLICT",
-        "This email and account are already linked to different staff records.",
-      );
-    }
-
-    const existingMember = existingByEmail ?? existingByUser;
-    if (existingMember && existingMember.agencyId !== staff.agencyId) {
-      throw new ZSAError("CONFLICT", "This account already belongs to another agency.");
-    }
-    const now = new Date();
-    const nextValues = {
-      agencyId: staff.agencyId,
-      email,
-      userId: existingUser?.id ?? existingMember?.userId ?? null,
-      role: input.role,
-      status: AGENCY_STAFF_STATUS.ACTIVE,
-      invitedBy: session.userId,
-      invitedAt: existingMember?.invitedAt ?? now,
-      joinedAt: existingUser
-        ? (existingMember?.joinedAt ?? now)
-        : (existingMember?.joinedAt ?? null),
-      updatedAt: now,
-    };
-
-    if (existingMember) {
-      await db
-        .update(agencyTeamMemberTable)
-        .set(nextValues)
-        .where(
-          and(
-            eq(agencyTeamMemberTable.id, existingMember.id),
-            eq(agencyTeamMemberTable.agencyId, staff.agencyId),
-          ),
-        );
-    } else {
-      await db.insert(agencyTeamMemberTable).values(nextValues);
-    }
-
-    const emailSent = await sendEmailBestEffort({
-      send: () =>
-        sendAgencyTeamAccessEmail({
-          email,
-          addedByName,
-          role: input.role,
-        }),
-      logger,
-      message: "Failed to send agency staff access email",
-      context: { email, role: input.role },
-    });
-
-    revalidatePath("/dashboard/team");
-    return { status: "added" as const, emailSent };
+async function requireStaffMutation({
+  db,
+  agencyId,
+  userId,
+  staffMemberId,
+}: {
+  db: ReturnType<typeof getDB>;
+  agencyId: string;
+  userId: string;
+  staffMemberId: string;
+}) {
+  // All membership changes share this lock, including ownership and departure.
+  await db.execute(sql`select id from ${agencyTable} where id = ${agencyId} for update`);
+  const caller = await db.query.agencyTeamMemberTable.findFirst({
+    where: and(
+      eq(agencyTeamMemberTable.agencyId, agencyId),
+      eq(agencyTeamMemberTable.userId, userId),
+      eq(agencyTeamMemberTable.status, AGENCY_STAFF_STATUS.ACTIVE),
+      eq(agencyTeamMemberTable.role, AGENCY_STAFF_ROLE.ADMIN),
+    ),
   });
+  if (!caller) {
+    throw new ZSAError("FORBIDDEN", "Your admin access has changed. Refresh the page.");
+  }
+  const [agency, member] = await Promise.all([
+    db.query.agencyTable.findFirst({ where: eq(agencyTable.id, agencyId) }),
+    db.query.agencyTeamMemberTable.findFirst({
+      where: and(
+        eq(agencyTeamMemberTable.id, staffMemberId),
+        eq(agencyTeamMemberTable.agencyId, agencyId),
+      ),
+    }),
+  ]);
+  if (!agency || !member) throw new ZSAError("NOT_FOUND", "Staff member not found.");
+  return { agency, member };
+}
+
+async function requireAnotherAdmin({
+  db,
+  agencyId,
+  member,
+}: {
+  db: ReturnType<typeof getDB>;
+  agencyId: string;
+  member: { role: string; status: string };
+}) {
+  if (member.role !== AGENCY_STAFF_ROLE.ADMIN || member.status !== AGENCY_STAFF_STATUS.ACTIVE)
+    return;
+  const [admins] = await db
+    .select({ total: count() })
+    .from(agencyTeamMemberTable)
+    .where(
+      and(
+        eq(agencyTeamMemberTable.agencyId, agencyId),
+        eq(agencyTeamMemberTable.status, AGENCY_STAFF_STATUS.ACTIVE),
+        eq(agencyTeamMemberTable.role, AGENCY_STAFF_ROLE.ADMIN),
+      ),
+    );
+  if (admins.total <= 1)
+    throw new ZSAError("FORBIDDEN", "Assign another admin before removing this admin access.");
+}
 
 export const updateAgencyStaffRoleAction = createServerAction()
   .input(
     z.object({
       staffMemberId: z.string().min(1),
       role: z.enum([AGENCY_STAFF_ROLE.ADMIN, AGENCY_STAFF_ROLE.MEMBER]),
+      csrfToken: z.string().min(1),
     }),
   )
   .handler(async ({ input }) => {
+    if (!(await validateCsrfToken(input.csrfToken)))
+      throw new ZSAError("FORBIDDEN", "Invalid security token. Refresh the page.");
     const { session, staff } = await requireAgencyAdmin();
     const db = getDB();
-
-    const member = await db.query.agencyTeamMemberTable.findFirst({
-      where: and(
-        eq(agencyTeamMemberTable.id, input.staffMemberId),
-        eq(agencyTeamMemberTable.agencyId, staff.agencyId),
-      ),
-      columns: { id: true, userId: true },
+    await db.withTransaction(async () => {
+      const { agency, member } = await requireStaffMutation({
+        db,
+        agencyId: staff.agencyId,
+        userId: session.userId,
+        staffMemberId: input.staffMemberId,
+      });
+      if (input.role !== AGENCY_STAFF_ROLE.ADMIN) {
+        if (member.userId && member.userId === agency.ownerUserId)
+          throw new ZSAError(
+            "FORBIDDEN",
+            "Transfer agency ownership before changing the owner's admin role.",
+          );
+        await requireAnotherAdmin({ db, agencyId: staff.agencyId, member });
+        if (member.userId === session.userId)
+          throw new ZSAError("FORBIDDEN", "You cannot remove your own admin access.");
+      }
+      await db
+        .update(agencyTeamMemberTable)
+        .set({ role: input.role, updatedAt: new Date() })
+        .where(
+          and(
+            eq(agencyTeamMemberTable.id, member.id),
+            eq(agencyTeamMemberTable.agencyId, staff.agencyId),
+          ),
+        );
     });
-
-    if (!member) {
-      throw new ZSAError("NOT_FOUND", "Staff member not found.");
-    }
-
-    if (member.userId === session.userId && input.role !== AGENCY_STAFF_ROLE.ADMIN) {
-      throw new ZSAError("FORBIDDEN", "You cannot remove your own admin access.");
-    }
-
-    await db
-      .update(agencyTeamMemberTable)
-      .set({ role: input.role, updatedAt: new Date() })
-      .where(
-        and(
-          eq(agencyTeamMemberTable.id, input.staffMemberId),
-          eq(agencyTeamMemberTable.agencyId, staff.agencyId),
-        ),
-      );
-
     revalidatePath("/dashboard/team");
+    revalidatePath("/settings/agency");
     return { success: true };
   });
 
 export const disableAgencyStaffAction = createServerAction()
-  .input(z.object({ staffMemberId: z.string().min(1) }))
+  .input(z.object({ staffMemberId: z.string().min(1), csrfToken: z.string().min(1) }))
   .handler(async ({ input }) => {
+    if (!(await validateCsrfToken(input.csrfToken)))
+      throw new ZSAError("FORBIDDEN", "Invalid security token. Refresh the page.");
     const { session, staff } = await requireAgencyAdmin();
     const db = getDB();
-
-    const member = await db.query.agencyTeamMemberTable.findFirst({
-      where: and(
-        eq(agencyTeamMemberTable.id, input.staffMemberId),
-        eq(agencyTeamMemberTable.agencyId, staff.agencyId),
-      ),
-      columns: { id: true, userId: true },
+    await db.withTransaction(async () => {
+      const { agency, member } = await requireStaffMutation({
+        db,
+        agencyId: staff.agencyId,
+        userId: session.userId,
+        staffMemberId: input.staffMemberId,
+      });
+      if (member.userId && member.userId === agency.ownerUserId)
+        throw new ZSAError("FORBIDDEN", "Transfer agency ownership before disabling the owner.");
+      await requireAnotherAdmin({ db, agencyId: staff.agencyId, member });
+      if (member.userId === session.userId)
+        throw new ZSAError("FORBIDDEN", "You cannot disable your own account.");
+      if (member.userId) {
+        await db
+          .update(visaApplicationTable)
+          .set({ assignedReviewerId: session.userId, updatedAt: new Date() })
+          .where(
+            and(
+              eq(visaApplicationTable.agencyId, staff.agencyId),
+              eq(visaApplicationTable.assignedReviewerId, member.userId),
+              isNull(visaApplicationTable.finalSubmissionAt),
+            ),
+          );
+        const agencyCases = db
+          .select({ id: visaApplicationTable.id })
+          .from(visaApplicationTable)
+          .where(eq(visaApplicationTable.agencyId, staff.agencyId));
+        await db
+          .update(reviewIssueTable)
+          .set({ assignedToId: session.userId, updatedAt: new Date() })
+          .where(
+            and(
+              eq(reviewIssueTable.assignedToId, member.userId),
+              sql`${reviewIssueTable.applicationId} in (${agencyCases})`,
+              sql`${reviewIssueTable.status} in (${REVIEW_ISSUE_STATUS.OPEN}, ${REVIEW_ISSUE_STATUS.CLIENT_REQUESTED})`,
+            ),
+          );
+      }
+      await db
+        .update(agencyTeamMemberTable)
+        .set({ status: AGENCY_STAFF_STATUS.DISABLED, updatedAt: new Date() })
+        .where(
+          and(
+            eq(agencyTeamMemberTable.id, member.id),
+            eq(agencyTeamMemberTable.agencyId, staff.agencyId),
+          ),
+        );
     });
-
-    if (!member) {
-      throw new ZSAError("NOT_FOUND", "Staff member not found.");
-    }
-
-    if (member.userId === session.userId) {
-      throw new ZSAError("FORBIDDEN", "You cannot disable your own account.");
-    }
-
-    await db
-      .update(agencyTeamMemberTable)
-      .set({ status: AGENCY_STAFF_STATUS.DISABLED, updatedAt: new Date() })
-      .where(
-        and(
-          eq(agencyTeamMemberTable.id, input.staffMemberId),
-          eq(agencyTeamMemberTable.agencyId, staff.agencyId),
-        ),
-      );
-
     revalidatePath("/dashboard/team");
+    revalidatePath("/settings/agency");
+    revalidatePath("/dashboard");
     return { success: true };
   });

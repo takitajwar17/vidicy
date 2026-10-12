@@ -18,6 +18,7 @@ vi.mock("@/utils/auth", () => ({
   getSessionFromCookie: mockRequireVerifiedEmail,
 }));
 
+import { provisionAgencyMembership } from "@/server/agency-provisioning";
 import { ensureAgencyTeamMembership } from "@/server/agency-team";
 import { hasApplicationPermission } from "@/utils/application-auth";
 
@@ -45,12 +46,20 @@ async function newSession(email: string) {
   return { userId: user.id, user } as unknown as NonNullable<SessionValidationResult>;
 }
 
+async function chooseAgency(session: NonNullable<SessionValidationResult>) {
+  return provisionAgencyMembership({
+    userId: session.user.id,
+    email: session.user.email,
+    name: "Chosen agency",
+  });
+}
+
 describe("separate agencies for new accounts", () => {
   it("creates separate owner agencies and reuses each agency on later sign-ins", async () => {
     const first = await newSession("first@example.test");
     const second = await newSession("second@example.test");
-    const firstStaff = await ensureAgencyTeamMembership(first);
-    const secondStaff = await ensureAgencyTeamMembership(second);
+    const firstStaff = await chooseAgency(first);
+    const secondStaff = await chooseAgency(second);
     expect(firstStaff).toMatchObject({
       role: "admin",
       isAdmin: true,
@@ -71,9 +80,7 @@ describe("separate agencies for new accounts", () => {
 
   it("creates only one agency during simultaneous requests", async () => {
     const session = await newSession("concurrent@example.test");
-    const results = await Promise.all(
-      Array.from({ length: 4 }, () => ensureAgencyTeamMembership(session)),
-    );
+    const results = await Promise.all(Array.from({ length: 4 }, () => chooseAgency(session)));
     expect(new Set(results.map((staff) => staff?.agencyId)).size).toBe(1);
     expect(await database.db.query.agencyTable.findMany()).toHaveLength(1);
     expect(await database.db.query.agencyTeamMemberTable.findMany()).toHaveLength(1);
@@ -123,9 +130,9 @@ describe("separate agencies for new accounts", () => {
     ).toBeNull();
   });
 
-  it("joins only an explicit scoped invitation and does not elevate a platform admin", async () => {
+  it("does not silently accept an email-matched staff record", async () => {
     const owner = await newSession("owner@example.test");
-    const staff = await ensureAgencyTeamMembership(owner);
+    const staff = await chooseAgency(owner);
     const invited = await newSession("invited@example.test");
     invited.user.role = "admin";
     await database.db.insert(schema.agencyTeamMemberTable).values({
@@ -135,11 +142,7 @@ describe("separate agencies for new accounts", () => {
       status: "active",
       invitedBy: owner.user.id,
     });
-    expect(await ensureAgencyTeamMembership(invited)).toEqual({
-      agencyId: staff!.agencyId,
-      role: "member",
-      isAdmin: false,
-    });
+    expect(await ensureAgencyTeamMembership(invited)).toBeNull();
     expect(await database.db.query.agencyTable.findMany()).toHaveLength(1);
   });
 
@@ -158,8 +161,8 @@ describe("separate agencies for new accounts", () => {
   it("denies another new account's case through the real permission resolver", async () => {
     const first = await newSession("case-owner@example.test");
     const second = await newSession("case-outsider@example.test");
-    const firstStaff = await ensureAgencyTeamMembership(first);
-    await ensureAgencyTeamMembership(second);
+    const firstStaff = await chooseAgency(first);
+    await chooseAgency(second);
     const [client] = await database.db
       .insert(schema.agencyClientTable)
       .values({ agencyId: firstStaff!.agencyId, name: "Private client" })

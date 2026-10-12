@@ -34,15 +34,13 @@ export async function seedWorkflowCase({
     .insert(schema.agencyTable)
     .values({ ownerUserId: user.id, name: "Test agency" })
     .returning();
-  await db
-    .insert(schema.agencyTeamMemberTable)
-    .values({
-      agencyId: agency.id,
-      userId: user.id,
-      email: user.email!,
-      role: "admin",
-      status: "active",
-    });
+  await db.insert(schema.agencyTeamMemberTable).values({
+    agencyId: agency.id,
+    userId: user.id,
+    email: user.email!,
+    role: "admin",
+    status: "active",
+  });
   const [client] = await db
     .insert(schema.agencyClientTable)
     .values({

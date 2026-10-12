@@ -1,3 +1,4 @@
+import { requireAgencyPageSession } from "@/utils/auth-page";
 import { Suspense } from "react";
 import type { Metadata } from "next";
 import Link from "next/link";
@@ -14,6 +15,7 @@ import type { DashboardCase } from "@/lib/agency-dashboard-queue";
 export const metadata: Metadata = { title: "Dashboard" };
 
 export default async function DashboardPage() {
+  await requireAgencyPageSession("/dashboard");
   const data = await getAgencyDashboardData();
   const cases: DashboardCase[] = data.cases.map((row) => ({
     id: row.application.id,

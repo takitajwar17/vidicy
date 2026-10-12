@@ -1,3 +1,4 @@
+import { requireAgencyPageSession } from "@/utils/auth-page";
 import { NativeSelect } from "@/components/ui/native-select";
 import type { Metadata } from "next";
 import Link from "next/link";
@@ -76,6 +77,7 @@ export default async function ApplicationsPage({
 }: {
   searchParams: Promise<{ page?: string; q?: string; status?: string; client?: string }>;
 }) {
+  await requireAgencyPageSession("/dashboard/applications");
   const params = await searchParams;
   const query = params.q?.trim() ?? "";
   const client = params.client?.trim() ?? "";

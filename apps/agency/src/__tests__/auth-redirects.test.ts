@@ -15,6 +15,8 @@ describe("auth redirect helpers", () => {
   it("rejects absolute redirect URLs and falls back to the dashboard", () => {
     expect(normalizeRedirectPath("https://example.com/evil")).toBe("/dashboard");
     expect(normalizeRedirectPath("//example.com/evil")).toBe("/dashboard");
+    expect(normalizeRedirectPath("/\\example.com/evil")).toBe("/dashboard");
+    expect(normalizeRedirectPath("/\n/example.com/evil")).toBe("/dashboard");
   });
 
   it("builds auth route hrefs with the requested internal redirect", () => {

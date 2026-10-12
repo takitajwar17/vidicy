@@ -1,3 +1,4 @@
+import { requireAgencyPageSession } from "@/utils/auth-page";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
@@ -44,6 +45,7 @@ export default async function DocumentsPage({
 }: {
   searchParams: Promise<{ page?: string; q?: string }>;
 }) {
+  await requireAgencyPageSession("/dashboard/documents");
   const params = await searchParams;
   const query = params.q?.trim() ?? "";
   const page = parsePage(params.page);

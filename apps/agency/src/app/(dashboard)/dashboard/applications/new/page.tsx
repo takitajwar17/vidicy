@@ -1,9 +1,9 @@
-import { requireVerifiedPageSession } from "@/utils/auth-page";
+import { requireAgencyPageSession } from "@/utils/auth-page";
 import { getActiveAgencyStaffRows } from "@/server/agency-data";
 import { NewApplicationClient } from "./new-application-client";
 
 export default async function Page() {
-  const session = await requireVerifiedPageSession();
+  const session = await requireAgencyPageSession("/dashboard/applications/new");
   const staff = await getActiveAgencyStaffRows();
 
   return (

@@ -13,6 +13,7 @@ import { createServerAction, ZSAError } from "zsa";
 import { logger } from "@/infra/logger";
 import { recordMarketingEvent } from "@/server/marketing/events";
 import { MARKETING_EVENT_TYPE } from "@/db/schema";
+import { normalizeRedirectPath } from "@/utils/auth-redirect";
 
 export const verifyEmailAction = createServerAction()
   .input(verifyEmailSchema)
@@ -39,6 +40,7 @@ export const verifyEmailAction = createServerAction()
       const verificationToken = JSON.parse(verificationTokenStr) as {
         userId: string;
         expiresAt: string;
+        verifiedRedirectPath?: string;
       };
 
       // Check if token is expired (although KV should have auto-deleted it)
@@ -79,7 +81,10 @@ export const verifyEmailAction = createServerAction()
         // Add a small delay to ensure all updates are processed
         await new Promise((resolve) => setTimeout(resolve, 500));
 
-        return { success: true };
+        return {
+          success: true,
+          redirectTo: normalizeRedirectPath(verificationToken.verifiedRedirectPath),
+        };
       } catch (error) {
         logger.error("Verify email error:", { error });
 

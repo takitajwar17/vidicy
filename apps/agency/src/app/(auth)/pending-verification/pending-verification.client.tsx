@@ -14,7 +14,13 @@ import useSignOut from "@/hooks/useSignOut";
 import isProd from "@/utils/is-prod";
 import { AuthShell } from "../_components/auth-shell";
 
-export default function PendingVerificationClient({ email }: { email: string }) {
+export default function PendingVerificationClient({
+  email,
+  redirectPath,
+}: {
+  email: string;
+  redirectPath: string;
+}) {
   const router = useRouter();
   const { signOut } = useSignOut();
   const [lastResendTime, setLastResendTime] = useState<number | null>(null);
@@ -93,7 +99,7 @@ export default function PendingVerificationClient({ email }: { email: string }) 
         <Button
           className="h-11 w-full text-sm"
           disabled={isResending || !canResend}
-          onClick={() => resendVerification()}
+          onClick={() => resendVerification({ verifiedRedirectPath: redirectPath })}
         >
           {isResending
             ? "Sending..."

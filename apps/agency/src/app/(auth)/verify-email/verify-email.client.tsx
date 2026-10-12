@@ -9,7 +9,7 @@ import { useServerAction } from "zsa-react";
 import { verifyEmailAction } from "./verify-email.action";
 import { verifyEmailSchema } from "@/schemas/verify-email.schema";
 import { Spinner } from "@/components/ui/spinner";
-import { REDIRECT_AFTER_SIGN_IN } from "@/constants";
+import { normalizeRedirectPath } from "@/utils/auth-redirect";
 import { useSessionStore } from "@/state/session";
 
 export default function VerifyEmailClientComponent({ token }: { token: string }) {
@@ -28,7 +28,7 @@ export default function VerifyEmailClientComponent({ token }: { token: string })
     onStart: () => {
       toast.loading("Verifying your email...");
     },
-    onSuccess: () => {
+    onSuccess: ({ data }) => {
       toast.dismiss();
       toast.success("Email verified successfully");
 
@@ -48,11 +48,8 @@ export default function VerifyEmailClientComponent({ token }: { token: string })
       // Reconcile with server state as soon as possible.
       sessionStore.fetchSession?.();
 
-      router.refresh();
-
-      setTimeout(() => {
-        router.push(REDIRECT_AFTER_SIGN_IN);
-      }, 500);
+      // Refreshing this token page first can replace the saved invite destination.
+      window.location.replace(normalizeRedirectPath(data.redirectTo));
     },
   });
 

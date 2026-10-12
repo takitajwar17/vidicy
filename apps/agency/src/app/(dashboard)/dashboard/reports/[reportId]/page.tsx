@@ -2,7 +2,7 @@ import type { Metadata, Route } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getClientReport } from "@/server/client-reports";
-import { requireVerifiedPageSession } from "@/utils/auth-page";
+import { requireAgencyPageSession } from "@/utils/auth-page";
 import { ClientReportControls } from "@/components/agency/client-report-controls";
 import {
   CLIENT_REPORT_DELIVERY_STATUS_META,
@@ -24,7 +24,7 @@ export default async function ClientReportPage({
   params: Promise<{ reportId: string }>;
 }) {
   const { reportId } = await params;
-  await requireVerifiedPageSession(`/dashboard/reports/${reportId}`);
+  await requireAgencyPageSession(`/dashboard/reports/${reportId}`);
   const data = await getClientReport({ reportId }).catch((error: unknown) => {
     if (
       error &&
