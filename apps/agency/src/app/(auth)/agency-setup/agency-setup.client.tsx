@@ -3,6 +3,10 @@
 import { useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { useServerAction } from "zsa-react";
+import { Loader2Icon, LogOutIcon } from "lucide-react";
+import { toast } from "sonner";
+import { signOutAction } from "@/actions/sign-out.action";
+import { useSessionStore } from "@/state/session";
 import {
   createAgencyAction,
   joinAgencyAction,
@@ -122,7 +126,35 @@ export default function AgencySetupClient({
   const create = useServerAction(createAgencyAction);
   const check = useServerAction(previewAgencyInviteAction);
   const join = useServerAction(joinAgencyAction);
-  const isPending = create.isPending || check.isPending || join.isPending;
+  const signOut = useServerAction(signOutAction);
+  const clearSession = useSessionStore((state) => state.clearSession);
+  const isPending = create.isPending || check.isPending || join.isPending || signOut.isPending;
+
+  async function handleSignOut() {
+    if (!csrfToken) return;
+    const [, error] = await signOut.execute({ csrfToken });
+    if (error) {
+      toast.error(error.message || "Could not sign out. Try again.");
+      return;
+    }
+    clearSession();
+    window.location.replace("/sign-in");
+  }
+
+  const headerAction = (
+    <Button
+      type="button"
+      variant="ghost"
+      size="sm"
+      className="text-sm text-muted-foreground hover:text-foreground"
+      onClick={handleSignOut}
+      disabled={isPending || !csrfToken}
+      aria-busy={signOut.isPending}
+    >
+      {signOut.isPending ? <Loader2Icon className="animate-spin" /> : <LogOutIcon />}
+      {signOut.isPending ? "Signing out…" : "Sign out"}
+    </Button>
+  );
 
   function openDashboard() {
     // Membership changes invalidate routes visited before the user had access.
@@ -167,14 +199,14 @@ export default function AgencySetupClient({
 
   if (disabledMembership) {
     return (
-      <AuthShell>
+      <AuthShell headerAction={headerAction}>
         <DisabledMembershipNotice membership={disabledMembership} />
       </AuthShell>
     );
   }
 
   return (
-    <AuthShell>
+    <AuthShell headerAction={headerAction}>
       <div className="space-y-2">
         <h1 className="text-2xl font-semibold tracking-tight">Set up your agency</h1>
         <p className="text-sm leading-6 text-muted-foreground">

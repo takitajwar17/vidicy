@@ -32,6 +32,7 @@ import {
 } from "@/db/schema";
 import { isOpenReviewIssueStatus, normalizeReviewIssueStatus } from "@/lib/agency-workflow";
 import { deliverClientReport, updateClientReportRecipient } from "@/server/client-reports";
+import { loadReviewSnapshot } from "@/server/review-context";
 import { validateCsrfToken } from "@/infra/csrf";
 import {
   invalidateAgencyReports,
@@ -177,8 +178,8 @@ export const createAgencyCaseAction = createServerAction()
     const db = getDB();
 
     const assignedReviewerId = input.assignedReviewerId?.trim() || null;
-    const approvedBefore = input.approvedBefore === true;
-    const rejectedBefore = input.rejectedBefore === true;
+    const approvedBefore = input.approvedBefore ?? null;
+    const rejectedBefore = input.rejectedBefore ?? null;
 
     if (assignedReviewerId) {
       const reviewer = await db.query.agencyTeamMemberTable.findFirst({
@@ -504,6 +505,7 @@ export const generateClientReportAction = createServerAction()
       applicationId: input.applicationId,
       agencyId: staff.agencyId,
     });
+    const originalSnapshot = await loadReviewSnapshot({ db, applicationId: input.applicationId });
     await requireCurrentAgencyReview({
       db,
       applicationId: input.applicationId,
@@ -553,13 +555,6 @@ export const generateClientReportAction = createServerAction()
         .update(visaApplicationTable)
         .set({
           clientReportStatus: CLIENT_REPORT_STATUS.READY,
-          ...(actionItems.length > 0
-            ? {
-                agencyStatus: AGENCY_CASE_STATUS.NEEDS_CLIENT,
-                status: VISA_APPLICATION_STATUS.IN_PROGRESS,
-                reviewCompletedAt: null,
-              }
-            : {}),
         })
         .where(
           and(
@@ -574,6 +569,18 @@ export const generateClientReportAction = createServerAction()
           "PRECONDITION_FAILED",
           "The case changed. Run review again before you prepare the report.",
         );
+      const snapshot = await loadReviewSnapshot({ db, applicationId: input.applicationId });
+      if (snapshot.reviewContextHash !== originalSnapshot.reviewContextHash)
+        throw new ZSAError(
+          "PRECONDITION_FAILED",
+          "The case or documents changed. Run review again before you prepare the report.",
+        );
+      await requireCurrentAgencyReview({
+        db,
+        applicationId: input.applicationId,
+        userId: session.userId,
+        syncIssues: false,
+      });
       await db
         .update(clientReportTable)
         .set({ status: CLIENT_REPORT_DELIVERY_STATUS.DRAFT })
@@ -588,6 +595,8 @@ export const generateClientReportAction = createServerAction()
         .values({
           applicationId: input.applicationId,
           status: CLIENT_REPORT_DELIVERY_STATUS.READY,
+          kind: "review",
+          reviewContextHash: originalSnapshot.reviewContextHash,
           summary,
           actionItems,
           createdById: session.userId,
@@ -751,7 +760,7 @@ export const updateAgencyStaffRoleAction = createServerAction()
         );
     });
     revalidatePath("/dashboard/team");
-    revalidatePath("/settings/agency");
+    revalidatePath("/dashboard/agency");
     return { success: true };
   });
 
@@ -811,7 +820,7 @@ export const disableAgencyStaffAction = createServerAction()
         );
     });
     revalidatePath("/dashboard/team");
-    revalidatePath("/settings/agency");
+    revalidatePath("/dashboard/agency");
     revalidatePath("/dashboard");
     return { success: true };
   });

@@ -17,6 +17,7 @@ import {
 } from "@/db/schema";
 import { logger, logAlert } from "@/infra/logger";
 import { getOpenAIClient } from "@/lib/openai";
+import { DOCUMENT_EMBEDDING_MODEL } from "@/lib/review-pipeline-version";
 import { getFromR2, getR2Bucket } from "@/lib/r2";
 import {
   MAX_PDF_PAGE_COUNT,
@@ -876,12 +877,12 @@ export async function indexExtractedDocument({
     for (let i = 0; i < chunks.length; i += EMBEDDING_BATCH_SIZE) {
       const batch = chunks.slice(i, i + EMBEDDING_BATCH_SIZE);
       const response = await measureProviderCall({
-        model: "text-embedding-3-small",
+        model: DOCUMENT_EMBEDDING_MODEL,
         stage: "index_embedding",
         run: () =>
           openai.embeddings.create(
             {
-              model: "text-embedding-3-small",
+              model: DOCUMENT_EMBEDDING_MODEL,
               input: batch.map((chunk) => chunk.content),
             },
             { signal: AbortSignal.timeout(AI_TIMEOUT_EMBEDDING_MS) },

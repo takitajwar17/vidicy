@@ -2,7 +2,11 @@ import { beforeAll, afterAll, beforeEach, afterEach, describe, it, expect, vi } 
 import { eq } from "drizzle-orm";
 import { spawnSync } from "node:child_process";
 import { startTestPostgres } from "./helpers/postgres";
-import { createWorkflowDatabase, seedWorkflowCase } from "./helpers/workflow-fixture";
+import {
+  createWorkflowDatabase,
+  currentReviewMetadata,
+  seedWorkflowCase,
+} from "./helpers/workflow-fixture";
 const state = vi.hoisted(() => ({ db: vi.fn(), enqueue: vi.fn(), evaluate: vi.fn() }));
 vi.mock("@/db", async (original) => ({
   ...(await original<typeof import("@/db")>()),
@@ -16,8 +20,17 @@ import {
   recoverReviewJobs,
   getLatestReviewJob,
 } from "@/server/review-jobs";
+import { loadReviewCheckpoint, saveReviewCheckpoint } from "@/server/review-checkpoints";
+import type { DocumentEvaluationCheckpoint } from "@/services/case-evaluation";
 import { publishAgencyReview } from "@/server/agency-review";
-import { reviewJobTable, agencyTeamMemberTable } from "@/db/schema";
+import {
+  reviewJobTable,
+  agencyTeamMemberTable,
+  applicantTable,
+  checklistItemTable,
+  uploadedDocumentTable,
+  visaApplicationTable,
+} from "@/db/schema";
 
 describe("durable review jobs against private PostgreSQL", () => {
   let cluster: ReturnType<typeof startTestPostgres>;
@@ -39,6 +52,7 @@ describe("durable review jobs against private PostgreSQL", () => {
         ...input,
         completion,
         evaluation: {
+          ...(await currentReviewMetadata({ db: fixture.db, ...input })),
           applicationId: input.applicationId,
           applicantId: input.applicantId,
           reviewStatus: "complete",
@@ -60,11 +74,164 @@ describe("durable review jobs against private PostgreSQL", () => {
     await fixture.close();
   });
 
+  function checkpoint(itemId = input.itemId): DocumentEvaluationCheckpoint {
+    return {
+      versionKey: "doc:model:version:hash",
+      evaluation: {
+        checklistItemId: itemId,
+        documentName: "Passport",
+        isRequired: true,
+        hasDocument: true,
+        hasContent: true,
+        status: "ok",
+        score: 100,
+        issues: [],
+        strengths: [],
+        feedback: "Readable",
+        confidence: 90,
+        confidenceReason: "Readable",
+        contentExcerpt: "Passport",
+        extractedFields: {
+          holderName: null,
+          expiryDate: null,
+          documentNumber: null,
+          issuingAuthority: null,
+          language: "en",
+          dateRange: null,
+        },
+      },
+    };
+  }
+
+  async function claimJob() {
+    const job = await requestReviewJob(input);
+    await fixture.db
+      .update(reviewJobTable)
+      .set({ status: "running", claimToken: "owner", leaseUntil: new Date(Date.now() + 60_000) })
+      .where(eq(reviewJobTable.id, job.id));
+    return {
+      jobId: job.id,
+      token: "owner",
+      applicationId: input.applicationId,
+      applicantId: input.applicantId,
+    };
+  }
+
+  it("refuses new reviews and stops queued reviews after submission", async () => {
+    const job = await requestReviewJob(input);
+    await fixture.db
+      .update(visaApplicationTable)
+      .set({ finalSubmissionAt: new Date() })
+      .where(eq(visaApplicationTable.id, input.applicationId));
+    await expect(requestReviewJob(input)).rejects.toThrow(/submitted/i);
+    await processReviewJob({ jobId: job.id });
+    expect(state.evaluate).not.toHaveBeenCalled();
+    expect(await getLatestReviewJob(input)).toMatchObject({ status: "failed" });
+  });
+
+  it("merges parallel document checkpoints and resets them for changed case facts", async () => {
+    const claim = await claimJob();
+    await Promise.all(
+      ["one", "two"].map((itemId) =>
+        saveReviewCheckpoint({
+          ...claim,
+          contextHash: "context-one",
+          checkpoint: checkpoint(itemId),
+        }),
+      ),
+    );
+    expect(
+      Object.keys((await loadReviewCheckpoint({ ...claim, contextHash: "context-one" }))!),
+    ).toEqual(expect.arrayContaining(["one", "two"]));
+    expect(await loadReviewCheckpoint({ ...claim, contextHash: "new-context" })).toBeUndefined();
+    await saveReviewCheckpoint({
+      ...claim,
+      contextHash: "new-context",
+      checkpoint: checkpoint("three"),
+    });
+    expect(
+      Object.keys((await loadReviewCheckpoint({ ...claim, contextHash: "new-context" }))!),
+    ).toEqual(["three"]);
+    expect(await fixture.db.query.documentEvaluationTable.findMany()).toHaveLength(0);
+    expect(await getLatestReviewJob(input)).not.toHaveProperty("checkpoint");
+  });
+
+  it("rejects checkpoint writes and reads from expired or replaced worker claims", async () => {
+    const claim = await claimJob();
+    await saveReviewCheckpoint({ ...claim, contextHash: "context", checkpoint: checkpoint() });
+    for (const patch of [
+      { claimToken: "replacement" },
+      { claimToken: "owner", leaseUntil: new Date(0) },
+      { status: "queued" as const },
+    ]) {
+      await fixture.db.update(reviewJobTable).set(patch).where(eq(reviewJobTable.id, claim.jobId));
+      await expect(
+        saveReviewCheckpoint({ ...claim, contextHash: "context", checkpoint: checkpoint() }),
+      ).rejects.toThrow();
+      await expect(loadReviewCheckpoint({ ...claim, contextHash: "context" })).rejects.toThrow();
+    }
+  });
+
+  it("keeps checkpoints after failure and carries them into a manual retry", async () => {
+    const claim = await claimJob();
+    await saveReviewCheckpoint({ ...claim, contextHash: "context", checkpoint: checkpoint() });
+    await fixture.db
+      .update(reviewJobTable)
+      .set({ status: "failed", claimToken: null, leaseUntil: null })
+      .where(eq(reviewJobTable.id, claim.jobId));
+    const retry = await requestReviewJob(input);
+    expect(retry.id).not.toBe(claim.jobId);
+    const retryRow = await fixture.db.query.reviewJobTable.findFirst({
+      where: eq(reviewJobTable.id, retry.id),
+    });
+    expect(retryRow?.checkpoint?.documents[input.itemId]).toEqual(checkpoint());
+    await processReviewJob({ jobId: retry.id });
+    const complete = await fixture.db.query.reviewJobTable.findFirst({
+      where: eq(reviewJobTable.id, retry.id),
+    });
+    expect(complete).toMatchObject({ status: "succeeded", checkpoint: null });
+  });
+
   it("saves one job for simultaneous requests and acknowledges accepted delivery", async () => {
     const jobs = await Promise.all(Array.from({ length: 8 }, () => requestReviewJob(input)));
     expect(new Set(jobs.map((job) => job.id)).size).toBe(1);
     expect(await fixture.db.query.reviewJobTable.findMany()).toHaveLength(1);
     expect(state.evaluate).not.toHaveBeenCalled();
+  });
+  it("blocks a separate applicant without personal or shared evidence", async () => {
+    const [child] = await fixture.db
+      .insert(applicantTable)
+      .values({
+        applicationId: input.applicationId,
+        name: "Child with shared evidence",
+        relationship: "child",
+      })
+      .returning();
+    await expect(requestReviewJob({ ...input, applicantId: child.id })).rejects.toThrow(
+      "checklist",
+    );
+  });
+  it("does not queue a review without uploaded documents", async () => {
+    await fixture.db.delete(uploadedDocumentTable);
+    await expect(requestReviewJob(input)).rejects.toThrow("Upload");
+    expect(await fixture.db.query.reviewJobTable.findMany()).toEqual([]);
+    expect(state.enqueue).not.toHaveBeenCalled();
+  });
+  it("does not queue a review while its only file is processing", async () => {
+    await fixture.db
+      .update(uploadedDocumentTable)
+      .set({ extractionStatus: "extracting", textContent: null });
+    await expect(requestReviewJob(input)).rejects.toThrow("processing");
+  });
+  it("allows partial evidence without waiting for every requirement", async () => {
+    await fixture.db.insert(checklistItemTable).values({
+      applicationId: input.applicationId,
+      applicantId: input.applicantId,
+      documentName: "Funding",
+      description: "Funding evidence",
+      isRequired: true,
+    });
+    await expect(requestReviewJob(input)).resolves.toMatchObject({ status: "queued" });
   });
   it("publishes and completes once despite duplicate task delivery", async () => {
     const job = await requestReviewJob(input);

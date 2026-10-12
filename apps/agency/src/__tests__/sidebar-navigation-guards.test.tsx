@@ -89,7 +89,16 @@ function expectOrderedTitles(markup: string, titles: string[]) {
 }
 
 describe("sidebar navigation guards", () => {
-  it("keeps admin, support, help, and announcements together in AppSidebar content", () => {
+  it("places the agency identity above the account menu and omits it without a name", () => {
+    const user = { name: "Taki Khan", email: "taki@example.com", avatar: "" };
+    const markup = renderToStaticMarkup(<AppSidebar user={user} agencyName="Northstar Visas" />);
+    const footer = getSection(markup, '<footer data-sidebar-footer="true">', "</footer>");
+    expectOrderedTitles(footer, ["Current agency", "Northstar Visas", "Taki Khan"]);
+    expect(footer).toContain('href="/dashboard/agency"');
+    expect(renderToStaticMarkup(<AppSidebar user={user} />)).not.toContain("Current agency");
+  });
+
+  it("keeps settings with admin, support, help, and announcements in the bottom group", () => {
     const markup = renderToStaticMarkup(
       <AppSidebar
         isAdmin
@@ -104,7 +113,19 @@ describe("sidebar navigation guards", () => {
     );
     const footerSection = getSection(markup, '<footer data-sidebar-footer="true">', "</footer>");
 
-    expectOrderedTitles(contentSection, ["Admin", "Support Inbox", "Get Help", "Announcements"]);
+    const secondarySection = getSection(
+      contentSection,
+      '<nav data-nav-secondary="mt-auto">',
+      "</nav>",
+    );
+    expectOrderedTitles(secondarySection, [
+      "Admin",
+      "Support Inbox",
+      "Settings",
+      "Get Help",
+      "Announcements",
+    ]);
+    expect(secondarySection).not.toContain("Agency");
     expect(footerSection).not.toContain("Announcements");
   });
 
@@ -118,16 +139,13 @@ describe("sidebar navigation guards", () => {
       "</section>",
     );
 
-    expectOrderedTitles(contentSection, [
-      "Dashboard",
-      "Applications",
-      "Issues",
-      "Clients",
-      "Documents",
-      "Team",
-      "Reports",
-      "Settings",
-    ]);
+    const mainSection = getSection(contentSection, '<nav data-nav-main="main">', "</nav>");
+    expectOrderedTitles(mainSection, ["Dashboard", "Applications", "Clients", "Team", "Reports"]);
+    expect(mainSection).not.toContain("Settings");
+    expect(mainSection).not.toContain("Agency");
+    expect(contentSection).not.toContain("Issues");
+    expect(contentSection).not.toContain("Documents");
+    expectOrderedTitles(contentSection, ["Settings", "Get Help", "Announcements"]);
   });
 });
 
@@ -136,6 +154,8 @@ describe("active sidebar route", () => {
     { url: "/dashboard" },
     { url: "/dashboard/applications" },
     { url: "/dashboard/reports" },
+    { url: "/dashboard/agency" },
+    { url: "/settings" },
     { url: "/admin" },
     { url: "/admin/support" },
   ];
@@ -144,6 +164,8 @@ describe("active sidebar route", () => {
     ["/dashboard/applications/new", "/dashboard/applications"],
     ["/dashboard/case-123", "/dashboard/applications"],
     ["/dashboard/reports/report-123", "/dashboard/reports"],
+    ["/dashboard/agency", "/dashboard/agency"],
+    ["/settings/security", "/settings"],
     ["/admin/support", "/admin/support"],
     ["/admin/users/user-123", "/admin"],
     ["/dashboard/support", undefined],

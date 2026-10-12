@@ -1,10 +1,15 @@
+import { getReviewFindingText } from "@/lib/review-findings";
 /**
  * Automated evaluation metrics — no external dependencies.
  *
  * Every metric returns a score in [0, 1] and a pass/fail flag.
  */
 
-import type { EvalMetric, ChecklistItemOutput, OrchestratorEvalOutput } from "./types";
+import type { EvalMetric, ChecklistItemOutput, OrchestratorEvalOutput, MetricScore } from "./types";
+
+function unmeasured(name: string, detail: string): MetricScore {
+  return { name, score: 0, passed: false, measured: false, detail };
+}
 
 interface ReviewReferenceLabels {
   expectedItemStatuses?: Record<string, string>;
@@ -31,7 +36,11 @@ export function redFlagCoverage(): EvalMetric<OrchestratorEvalOutput, ReviewRefe
     threshold: 1,
     score({ output, expected }) {
       const labels = expected?.expectedRedFlags ?? [];
-      const missing = missingFindingLabels({ labels, text: output.redFlags.join(" ") });
+      if (!labels.length) return unmeasured("redFlagDetection", "No red-flag labels supplied");
+      const missing = missingFindingLabels({
+        labels,
+        text: output.redFlags.map(getReviewFindingText).join(" "),
+      });
       return {
         name: "redFlagDetection",
         score: labels.length ? (labels.length - missing.length) / labels.length : 1,
@@ -79,12 +88,7 @@ export function itemStatusAgreement(): EvalMetric<OrchestratorEvalOutput, Review
     score({ output, expected }) {
       const labels = Object.entries(expected?.expectedItemStatuses ?? {});
       if (!labels.length)
-        return {
-          name: "itemStatusAgreement",
-          score: 1,
-          passed: true,
-          detail: "No item-status labels supplied",
-        };
+        return unmeasured("itemStatusAgreement", "No item-status labels supplied");
       const mismatches = labels.filter(
         ([id, status]) => output.itemFeedback[id]?.status !== status,
       );
@@ -116,12 +120,7 @@ export function recommendationCoverage(): EvalMetric<
     score({ output, expected }) {
       const labels = expected?.expectedRecommendations ?? [];
       if (!labels.length)
-        return {
-          name: "recommendationCoverage",
-          score: 1,
-          passed: true,
-          detail: "No recommendation labels supplied",
-        };
+        return unmeasured("recommendationCoverage", "No recommendation labels supplied");
       const missing = missingFindingLabels({ labels, text: output.recommendations.join(" ") });
       return {
         name: "recommendationCoverage",
@@ -328,8 +327,8 @@ export function containsKeywords(keywords: string[], threshold = 0.8): EvalMetri
  * Validates checklist item count is within [min, max].
  */
 export function checklistItemCount(
-  min = 5,
-  max = 18,
+  min = 1,
+  max = Number.POSITIVE_INFINITY,
   threshold = 1.0,
 ): EvalMetric<ChecklistItemOutput[]> {
   return {
@@ -443,28 +442,17 @@ export function checklistRequiredDocs(
 // ---------------------------------------------------------------------------
 
 /**
- * Validates that risk level is consistent with overall score.
+ * Historical metric retained for old report readers. Evidence coverage does not define risk.
  */
 export function riskLevelConsistency(threshold = 1.0): EvalMetric<OrchestratorEvalOutput> {
   return {
     name: "riskLevelConsistency",
     threshold,
-    score({ output }) {
-      const { overallScore, riskLevel } = output;
-      let expectedRisk: "low" | "medium" | "high";
-      if (overallScore >= 80) expectedRisk = "low";
-      else if (overallScore >= 65) expectedRisk = "medium";
-      else expectedRisk = "high";
-
-      const consistent = riskLevel === expectedRisk;
-      return {
-        name: "riskLevelConsistency",
-        score: consistent ? 1 : 0,
-        passed: consistent,
-        detail: consistent
-          ? undefined
-          : `Score ${overallScore} → expected "${expectedRisk}" but got "${riskLevel}"`,
-      };
+    score() {
+      return unmeasured(
+        "riskLevelConsistency",
+        "Historical score-to-risk bands are not part of the current evidence contract",
+      );
     },
   };
 }

@@ -8,6 +8,7 @@ import type { Route } from "next";
 
 interface AuthShellProps {
   children: React.ReactNode;
+  headerAction?: React.ReactNode;
   /** Testimonial quote shown in the left panel */
   testimonial?: {
     quote: string;
@@ -23,6 +24,7 @@ interface AuthShellProps {
  */
 export function AuthShell({
   children,
+  headerAction,
   testimonial = {
     quote:
       "We moved first-pass reviews from hours to minutes and sent clients clear fixes the same day.",
@@ -65,23 +67,30 @@ export function AuthShell({
           <Link href={"/" as Route} aria-label="Home">
             <Logo className="h-7 w-auto" />
           </Link>
-          <Link
-            href={"/" as Route}
-            className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
-          >
-            Home
-          </Link>
+          <nav aria-label="Page navigation" className="flex items-center gap-4">
+            <Link
+              href={"/" as Route}
+              className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
+            >
+              Home
+            </Link>
+            {headerAction}
+          </nav>
         </div>
 
         {/* Desktop top-right Home link */}
-        <div className="hidden items-center justify-end p-6 lg:flex">
+        <nav
+          aria-label="Page navigation"
+          className="hidden items-center justify-end gap-4 p-6 lg:flex"
+        >
           <Link
             href={"/" as Route}
             className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
           >
             Home
           </Link>
-        </div>
+          {headerAction}
+        </nav>
 
         {/* Centered form content */}
         <div className="flex flex-1 items-center justify-center px-4 py-8 sm:px-8">

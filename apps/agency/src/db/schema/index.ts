@@ -6,6 +6,7 @@ export * from "./applicant";
 export * from "./checklist";
 export * from "./document";
 export * from "./review-job";
+export * from "./checklist-job";
 export * from "./chat";
 export * from "./collaboration";
 export * from "./support";

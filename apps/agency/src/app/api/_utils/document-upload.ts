@@ -3,7 +3,8 @@ import "server-only";
 import { readFormBody } from "@/app/api/_utils/request-body";
 
 import { NextResponse } from "next/server";
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
+import { ZSAError } from "zsa";
 import { getRuntimeContext } from "@/infra/runtime-context";
 
 import { authorizeApplicationRouteAccess } from "@/app/api/_utils/application-route-auth";
@@ -12,6 +13,7 @@ import { getDB } from "@/db";
 import { getAgencyReviewInvalidationQueries } from "@/server/agency-review";
 import {
   applicantTable,
+  visaApplicationTable,
   uploadedDocumentTable,
   checklistItemTable,
   CHECKLIST_ITEM_STATUS,
@@ -158,6 +160,12 @@ export async function handleDocumentUploadRoute({
 
     const { session: verifiedSession } = applicationAccess;
     const db = getDB();
+    const application = await db.query.visaApplicationTable.findFirst({
+      where: eq(visaApplicationTable.id, applicationIdValue),
+      columns: { finalSubmissionAt: true, trashedAt: true },
+    });
+    if (!application || application.finalSubmissionAt || application.trashedAt)
+      return NextResponse.json({ error: "This case is closed for uploads." }, { status: 409 });
 
     if (applicantId) {
       const applicant = await db.query.applicantTable.findFirst({
@@ -181,10 +189,10 @@ export async function handleDocumentUploadRoute({
         eq(checklistItemTable.id, checklistItemIdValue),
         eq(checklistItemTable.applicationId, applicationIdValue),
       ),
-      columns: { id: true, applicantId: true },
+      columns: { id: true, applicantId: true, removedAt: true },
     });
 
-    if (!checklistItem) {
+    if (!checklistItem || checklistItem.removedAt) {
       return NextResponse.json(
         { error: "Invalid checklistItemId for this application" },
         { status: 400 },
@@ -261,34 +269,77 @@ export async function handleDocumentUploadRoute({
       metadata: { applicationId: applicationIdValue, mimeType: normalizedMimeType },
     });
 
-    const [[insertedDocument]] = await db.batch([
-      db
-        .insert(uploadedDocumentTable)
-        .values({
-          applicationId: applicationIdValue,
-          applicantId: applicantId || null,
-          checklistItemId: checklistItemIdValue,
-          fileName: file.name,
-          fileKey,
-          fileSize: file.size,
-          mimeType: normalizedMimeType,
-          chunkCount: 0,
-          extractionStatus: DOCUMENT_EXTRACTION_STATUS.QUEUED,
-          indexingStatus: DOCUMENT_INDEXING_STATUS.QUEUED,
-          pageCount: pdfPageValidation.pageCount,
-        })
-        .returning(),
-      db
-        .update(checklistItemTable)
-        .set({ status: CHECKLIST_ITEM_STATUS.UPLOADED })
-        .where(
-          and(
+    let insertedDocument;
+    try {
+      insertedDocument = await db.withTransaction(async () => {
+        await db.execute(
+          sql`SELECT id FROM visa_application WHERE id = ${applicationIdValue} FOR UPDATE`,
+        );
+        const currentApplication = await db.query.visaApplicationTable.findFirst({
+          where: eq(visaApplicationTable.id, applicationIdValue),
+          columns: { finalSubmissionAt: true, trashedAt: true },
+        });
+        const currentItem = await db.query.checklistItemTable.findFirst({
+          where: and(
             eq(checklistItemTable.id, checklistItemIdValue),
             eq(checklistItemTable.applicationId, applicationIdValue),
           ),
-        ),
-      ...getAgencyReviewInvalidationQueries({ db, applicationId: applicationIdValue }),
-    ]);
+          columns: { applicantId: true, removedAt: true },
+        });
+        if (
+          !currentApplication ||
+          currentApplication.finalSubmissionAt ||
+          currentApplication.trashedAt ||
+          !currentItem ||
+          currentItem.removedAt ||
+          (currentItem.applicantId ?? null) !== checklistItemApplicantId
+        )
+          throw new ZSAError(
+            "CONFLICT",
+            "The case or checklist item changed. Refresh the case before upload.",
+          );
+        const [document] = await db
+          .insert(uploadedDocumentTable)
+          .values({
+            applicationId: applicationIdValue,
+            applicantId: applicantId || null,
+            checklistItemId: checklistItemIdValue,
+            fileName: file.name,
+            fileKey,
+            fileSize: file.size,
+            mimeType: normalizedMimeType,
+            chunkCount: 0,
+            extractionStatus: DOCUMENT_EXTRACTION_STATUS.QUEUED,
+            indexingStatus: DOCUMENT_INDEXING_STATUS.QUEUED,
+            pageCount: pdfPageValidation.pageCount,
+          })
+          .returning();
+        await db
+          .update(checklistItemTable)
+          .set({ status: CHECKLIST_ITEM_STATUS.UPLOADED })
+          .where(
+            and(
+              eq(checklistItemTable.id, checklistItemIdValue),
+              eq(checklistItemTable.applicationId, applicationIdValue),
+            ),
+          );
+        for (const write of getAgencyReviewInvalidationQueries({
+          db,
+          applicationId: applicationIdValue,
+        }))
+          await write;
+        return document;
+      });
+    } catch (error) {
+      try {
+        await env.R2.delete(fileKey);
+      } catch (cleanupError) {
+        logger.error("Failed to remove rejected upload", { error: cleanupError, fileKey });
+      }
+      if (error instanceof ZSAError && error.code === "CONFLICT")
+        return NextResponse.json({ error: error.message }, { status: 409 });
+      throw error;
+    }
 
     await enqueueDocumentExtraction({ documentId: insertedDocument.id });
     ctx.waitUntil(

@@ -5,6 +5,12 @@ import { and, desc, eq, sql } from "drizzle-orm";
 import { ZSAError } from "zsa";
 import { getDB } from "@/db";
 import {
+  getChecklistRequirement,
+  getReviewAvailability,
+  isDocumentUsable,
+  type ReviewDocumentInput,
+} from "@/lib/checklist-state";
+import {
   AGENCY_CASE_STATUS,
   CLIENT_REPORT_STATUS,
   CLIENT_REPORT_DELIVERY_STATUS,
@@ -21,6 +27,13 @@ import {
   visaApplicationTable,
 } from "@/db/schema";
 import { isOpenReviewIssueStatus } from "@/lib/agency-workflow";
+import { reviewFindingSchema, reviewFindingTitleSchema } from "@/lib/review-findings";
+import {
+  canMarkCaseReady,
+  isRouteAssessmentCurrent,
+  type ReviewRouteContext,
+} from "@/lib/review-rubric";
+import { buildReviewRouteContext, loadReviewSnapshot } from "@/server/review-context";
 
 interface ReviewContext {
   db: ReturnType<typeof getDB>;
@@ -42,32 +55,63 @@ export function isEvaluationCurrent({
   evaluation,
   checklistItems,
   documents,
+  reviewContextHash,
+  routeContext,
 }: {
   evaluation:
     | Pick<
         typeof documentEvaluationTable.$inferSelect,
-        "applicantId" | "docSnapshots" | "itemFeedback" | "reviewStatus"
+        | "applicantId"
+        | "docSnapshots"
+        | "itemFeedback"
+        | "reviewStatus"
+        | "routeAssessment"
+        | "reviewContextHash"
       >
     | null
     | undefined;
-  checklistItems: Pick<typeof checklistItemTable.$inferSelect, "id" | "applicantId">[];
+  checklistItems: (Pick<typeof checklistItemTable.$inferSelect, "id" | "applicantId"> &
+    Partial<Pick<typeof checklistItemTable.$inferSelect, "applicability">>)[];
   // Documents must be ordered newest first, including the upload sequence above.
-  documents: Pick<typeof uploadedDocumentTable.$inferSelect, "id" | "checklistItemId">[];
+  documents: ReviewDocumentInput[];
+  reviewContextHash?: string;
+  routeContext?: ReviewRouteContext;
 }) {
   if (
     evaluation?.reviewStatus !== "complete" ||
     !evaluation.docSnapshots ||
-    !evaluation.itemFeedback
+    typeof evaluation.docSnapshots !== "object" ||
+    Array.isArray(evaluation.docSnapshots) ||
+    !evaluation.itemFeedback ||
+    typeof evaluation.itemFeedback !== "object" ||
+    Array.isArray(evaluation.itemFeedback) ||
+    !reviewContextHash ||
+    evaluation.reviewContextHash !== reviewContextHash ||
+    !evaluation.routeAssessment ||
+    !routeContext ||
+    !isRouteAssessmentCurrent({
+      assessment: evaluation.routeAssessment,
+      context: routeContext,
+      asOfDate: new Date().toISOString().slice(0, 10),
+    })
   )
     return false;
-  const items = checklistItems.filter((item) => item.applicantId === evaluation.applicantId);
-  if (!items.length || Object.keys(evaluation.docSnapshots).length !== items.length) return false;
+  const items = checklistItems.filter(
+    (item) =>
+      item.applicability !== "does_not_apply" &&
+      (item.applicantId === evaluation.applicantId || item.applicantId === null),
+  );
+  if (!items.length) return false;
+  if (Object.keys(evaluation.docSnapshots).length !== items.length) return false;
   return items.every((item) => {
     const document = documents.find((candidate) => candidate.checklistItemId === item.id);
     const version = evaluation.docSnapshots?.[item.id];
     return (
-      Boolean(evaluation.itemFeedback?.[item.id]) &&
-      (document ? version?.split(":")[0] === document.id : version === "missing")
+      typeof evaluation.itemFeedback?.[item.id] === "object" &&
+      evaluation.itemFeedback[item.id] !== null &&
+      !Array.isArray(evaluation.itemFeedback[item.id]) &&
+      typeof version === "string" &&
+      (document ? version.split(":")[0] === document.id : version === "missing")
     );
   });
 }
@@ -127,18 +171,18 @@ async function getAgencyReviewIssueChanges({
 }: ReviewContext & {
   evaluation: Pick<
     typeof documentEvaluationTable.$inferSelect,
-    "applicantId" | "docSnapshots" | "itemFeedback" | "redFlags" | "reviewStatus"
+    | "applicantId"
+    | "docSnapshots"
+    | "itemFeedback"
+    | "redFlags"
+    | "reviewStatus"
+    | "routeAssessment"
+    | "reviewContextHash"
   >;
   userId: string;
 }) {
-  const [items, documents, existingIssues] = await Promise.all([
-    db.query.checklistItemTable.findMany({
-      where: eq(checklistItemTable.applicationId, applicationId),
-    }),
-    db.query.uploadedDocumentTable.findMany({
-      where: eq(uploadedDocumentTable.applicationId, applicationId),
-      orderBy: newestDocumentOrder,
-    }),
+  const [snapshot, existingIssues] = await Promise.all([
+    loadReviewSnapshot({ db, applicationId }),
     db.query.reviewIssueTable.findMany({
       where: and(
         eq(reviewIssueTable.applicationId, applicationId),
@@ -146,13 +190,29 @@ async function getAgencyReviewIssueChanges({
       ),
     }),
   ]);
-  if (!isEvaluationCurrent({ evaluation, checklistItems: items, documents })) {
+  const { checklistItems: items, documents, reviewContextHash } = snapshot;
+  const routeContext = evaluation.applicantId
+    ? buildReviewRouteContext({ ...snapshot, applicantId: evaluation.applicantId })
+    : undefined;
+  if (
+    !isEvaluationCurrent({
+      evaluation,
+      checklistItems: items,
+      documents,
+      reviewContextHash,
+      routeContext,
+    })
+  ) {
     throw new ZSAError("PRECONDITION_FAILED", "The documents changed. Run review again.");
   }
 
   const findings: (typeof reviewIssueTable.$inferInsert)[] = [];
   const documentFindings = new Set<string>();
-  for (const item of items.filter((item) => item.applicantId === evaluation.applicantId)) {
+  for (const item of items.filter(
+    (item) =>
+      item.applicability !== "does_not_apply" &&
+      (item.applicantId === evaluation.applicantId || item.applicantId === null),
+  )) {
     const feedback = evaluation.itemFeedback?.[item.id];
     if (!feedback) continue;
     const missing = feedback.status === "missing" || feedback.hasDocument === false;
@@ -170,17 +230,24 @@ async function getAgencyReviewIssueChanges({
       applicantId: item.applicantId,
       checklistItemId: item.id,
       documentId: documents.find((document) => document.checklistItemId === item.id)?.id ?? null,
-      title:
-        `${missing ? "Missing " : ""}${item.documentName}${missing ? "" : " needs review"}`.slice(
-          0,
-          255,
-        ),
-      description: (feedback.issues?.join("\n") || feedback.feedback || item.description).slice(
-        0,
-        2000,
-      ),
+      title: feedback.title
+        ? reviewFindingTitleSchema.parse(feedback.title)
+        : `${missing ? "Missing " : ""}${item.documentName}${missing ? "" : " needs review"}`.slice(
+            0,
+            255,
+          ),
+      description: feedback.title
+        ? [
+            feedback.feedback,
+            ...(feedback.issues ?? []).filter((issue) => !feedback.feedback?.includes(issue)),
+          ]
+            .filter(Boolean)
+            .join("\n") || item.description
+        : (feedback.issues?.join("\n") || feedback.feedback || item.description).slice(0, 2000),
       recommendation: (
-        feedback.feedback || `Ask the client for a corrected ${item.documentName}.`
+        feedback.recommendation ||
+        feedback.feedback ||
+        `Ask the client for a corrected ${item.documentName}.`
       ).slice(0, 2000),
       category: missing ? "missing_document" : "document_quality",
       severity:
@@ -192,8 +259,13 @@ async function getAgencyReviewIssueChanges({
       confidence: feedback.confidence ?? null,
     });
   }
-  for (const flag of new Set(evaluation.redFlags.map((flag) => flag.trim()).filter(Boolean))) {
-    if (documentFindings.has(flag.toLowerCase())) continue;
+  const seenFlags = new Set<string>();
+  for (const savedFlag of evaluation.redFlags) {
+    const flag =
+      typeof savedFlag === "string" ? savedFlag.trim() : reviewFindingSchema.parse(savedFlag);
+    const details = typeof flag === "string" ? flag : flag.details;
+    if (!details || documentFindings.has(details.toLowerCase()) || seenFlags.has(details)) continue;
+    seenFlags.add(details);
     findings.push({
       applicationId,
       applicantId: evaluation.applicantId,
@@ -205,10 +277,13 @@ async function getAgencyReviewIssueChanges({
               item.applicantId === evaluation.applicantId && item.id === document.checklistItemId,
           ),
         )?.id ?? null,
-      title: flag.slice(0, 255),
-      description: flag.slice(0, 2000),
+      title: typeof flag === "string" ? flag.slice(0, 255) : flag.title,
+      description: details,
       category: "cross_document",
-      recommendation: "Check this finding against the current documents.",
+      recommendation:
+        typeof flag === "string"
+          ? "Check this finding against the current documents."
+          : flag.recommendation,
       severity: "medium",
     });
   }
@@ -220,10 +295,10 @@ async function getAgencyReviewIssueChanges({
     const existing = existingIssues.find(
       (issue) =>
         !retainedIds.has(issue.id) &&
-        issue.applicantId === evaluation.applicantId &&
+        issue.applicantId === finding.applicantId &&
         (finding.checklistItemId
           ? issue.checklistItemId === finding.checklistItemId
-          : !issue.checklistItemId && issue.title === finding.title),
+          : !issue.checklistItemId && issue.description === finding.description),
     );
     if (existing) {
       retainedIds.add(existing.id);
@@ -268,7 +343,7 @@ async function getAgencyReviewIssueChanges({
   }
   for (const issue of existingIssues) {
     if (
-      issue.applicantId === evaluation.applicantId &&
+      (issue.applicantId === evaluation.applicantId || issue.applicantId === null) &&
       !retainedIds.has(issue.id) &&
       isOpenReviewIssueStatus(issue.status)
     ) {
@@ -328,6 +403,8 @@ export async function publishAgencyReview({
     reviewStatus: evaluation.reviewStatus,
     docSnapshots: evaluation.docSnapshots ?? null,
     itemFeedback: evaluation.itemFeedback ?? null,
+    routeAssessment: evaluation.routeAssessment ?? null,
+    reviewContextHash: evaluation.reviewContextHash ?? null,
   };
   const { changes } = await getAgencyReviewIssueChanges({
     db,
@@ -342,7 +419,7 @@ export async function publishAgencyReview({
     ...changes,
     db
       .update(applicantTable)
-      .set({ readinessScore: evaluation.overallScore, riskLevel: evaluation.riskLevel })
+      .set({ readinessScore: null, riskLevel: null })
       .where(
         and(
           eq(applicantTable.id, evaluation.applicantId),
@@ -352,8 +429,8 @@ export async function publishAgencyReview({
     db
       .update(visaApplicationTable)
       .set({
-        readinessScore: evaluation.overallScore,
-        riskLevel: evaluation.riskLevel,
+        readinessScore: null,
+        riskLevel: null,
         status: VISA_APPLICATION_STATUS.IN_PROGRESS,
         agencyStatus: AGENCY_CASE_STATUS.IN_REVIEW,
         reviewCompletedAt: null,
@@ -362,6 +439,42 @@ export async function publishAgencyReview({
     ...getAgencyReportInvalidationQueries({ db, applicationId }),
   ] as const;
   const savedEvaluation = await db.withTransaction(async () => {
+    await db
+      .select({ id: visaApplicationTable.id })
+      .from(visaApplicationTable)
+      .where(eq(visaApplicationTable.id, applicationId))
+      .for("update");
+    const initialSnapshot = await loadReviewSnapshot({ db, applicationId });
+    if (initialSnapshot.application.finalSubmissionAt)
+      throw new ZSAError(
+        "PRECONDITION_FAILED",
+        "This case was submitted. A new review cannot be saved.",
+      );
+    if (
+      !getReviewAvailability({
+        applicantId: evaluation.applicantId,
+        items: initialSnapshot.checklistItems,
+        documents: initialSnapshot.documents,
+      }).canReview
+    )
+      throw new ZSAError(
+        "PRECONDITION_FAILED",
+        "Upload usable document evidence for this applicant before review.",
+      );
+    if (
+      !isEvaluationCurrent({
+        evaluation: review,
+        ...initialSnapshot,
+        routeContext: buildReviewRouteContext({
+          ...initialSnapshot,
+          applicantId: evaluation.applicantId,
+        }),
+      })
+    )
+      throw new ZSAError(
+        "PRECONDITION_FAILED",
+        "The case or documents changed during review. Run review again.",
+      );
     if (completion) {
       // Updating the claim locks its row through publication. A stale worker
       // cannot publish after recovery assigns a different token.
@@ -378,7 +491,7 @@ export async function publishAgencyReview({
             sql`${reviewJobTable.leaseUntil} > now()`,
           ),
         )
-        .returning();
+        .returning({ id: reviewJobTable.id });
       if (!claimed.length)
         throw new ZSAError(
           "PRECONDITION_FAILED",
@@ -387,16 +500,14 @@ export async function publishAgencyReview({
     }
     const [saved] = await writes[0];
     for (const write of writes.slice(1)) await write;
-    const [checklistItems, documents] = await Promise.all([
-      db.query.checklistItemTable.findMany({
-        where: eq(checklistItemTable.applicationId, applicationId),
-      }),
-      db.query.uploadedDocumentTable.findMany({
-        where: eq(uploadedDocumentTable.applicationId, applicationId),
-        orderBy: newestDocumentOrder,
-      }),
-    ]);
-    if (!isEvaluationCurrent({ evaluation: saved, checklistItems, documents })) {
+    const snapshot = await loadReviewSnapshot({ db, applicationId });
+    if (
+      !isEvaluationCurrent({
+        evaluation: saved,
+        ...snapshot,
+        routeContext: buildReviewRouteContext({ ...snapshot, applicantId: evaluation.applicantId }),
+      })
+    ) {
       throw new ZSAError(
         "PRECONDITION_FAILED",
         "The documents changed during review. Run review again.",
@@ -407,6 +518,7 @@ export async function publishAgencyReview({
         .update(reviewJobTable)
         .set({
           status: "succeeded",
+          checkpoint: null,
           evaluationId: saved.id,
           claimToken: null,
           leaseUntil: null,
@@ -423,7 +535,7 @@ export async function publishAgencyReview({
             sql`${reviewJobTable.leaseUntil} > now()`,
           ),
         )
-        .returning();
+        .returning({ id: reviewJobTable.id });
       if (!completed.length) throw new Error("Review claim expired before publication");
     }
     return saved;
@@ -435,7 +547,8 @@ export async function requireCurrentAgencyReview({
   db,
   applicationId,
   userId,
-}: ReviewContext & { userId: string }) {
+  syncIssues = true,
+}: ReviewContext & { userId: string; syncIssues?: boolean }) {
   const pending = await db.query.reviewJobTable.findFirst({
     where: and(
       eq(reviewJobTable.applicationId, applicationId),
@@ -447,41 +560,120 @@ export async function requireCurrentAgencyReview({
       "PRECONDITION_FAILED",
       "Wait for the current review to finish before you prepare a report or mark the case ready.",
     );
-  const [items, documents, evaluations] = await Promise.all([
-    db.query.checklistItemTable.findMany({
-      where: eq(checklistItemTable.applicationId, applicationId),
-    }),
-    db.query.uploadedDocumentTable.findMany({
-      where: eq(uploadedDocumentTable.applicationId, applicationId),
-      orderBy: newestDocumentOrder,
-    }),
-    db.query.documentEvaluationTable.findMany({
-      where: eq(documentEvaluationTable.applicationId, applicationId),
-      orderBy: newestEvaluationOrder,
-    }),
-  ]);
+  const snapshot = await loadReviewSnapshot({ db, applicationId });
+  const evaluations = await db.query.documentEvaluationTable.findMany({
+    where: eq(documentEvaluationTable.applicationId, applicationId),
+    orderBy: newestEvaluationOrder,
+  });
+  const { checklistItems: items, documents, applicants, reviewContextHash } = snapshot;
   if (!items.length)
     throw new ZSAError("PRECONDITION_FAILED", "Generate the document checklist first.");
-  for (const applicantId of new Set(items.map((item) => item.applicantId))) {
+  if (!applicants.length)
+    throw new ZSAError("PRECONDITION_FAILED", "Add an applicant before review.");
+  for (const applicant of applicants) {
+    if (!getReviewAvailability({ applicantId: applicant.id, items, documents }).canReview)
+      throw new ZSAError(
+        "PRECONDITION_FAILED",
+        "Review the current documents after uploading usable evidence for every applicant.",
+      );
+    const applicantId = applicant.id;
     const evaluation = evaluations.find((evaluation) => evaluation.applicantId === applicantId);
-    if (!isEvaluationCurrent({ evaluation, checklistItems: items, documents })) {
+    if (
+      !isEvaluationCurrent({
+        evaluation,
+        checklistItems: items,
+        documents,
+        reviewContextHash,
+        routeContext: buildReviewRouteContext({ ...snapshot, applicantId }),
+      })
+    ) {
       throw new ZSAError(
         "PRECONDITION_FAILED",
         "Complete a review of the current documents first.",
       );
     }
     // Also covers cases reviewed before automatic issue tracking was added.
-    await syncAgencyReviewIssues({ db, applicationId, evaluation: evaluation!, userId });
+    if (syncIssues)
+      await syncAgencyReviewIssues({ db, applicationId, evaluation: evaluation!, userId });
   }
-  return { items, documents };
+  return {
+    items,
+    documents,
+    evaluations: applicants.map(
+      (applicant) => evaluations.find((evaluation) => evaluation.applicantId === applicant.id)!,
+    ),
+  };
 }
 
 export async function requireSubmissionReady({
   db,
   applicationId,
   userId,
-}: ReviewContext & { userId: string }) {
-  const { items, documents } = await requireCurrentAgencyReview({ db, applicationId, userId });
+  syncIssues = true,
+}: ReviewContext & { userId: string; syncIssues?: boolean }) {
+  const snapshot = await loadReviewSnapshot({ db, applicationId });
+  if (snapshot.application.finalSubmissionAt)
+    throw new ZSAError(
+      "PRECONDITION_FAILED",
+      "This case was submitted. Its submission state cannot be reset.",
+    );
+  if (snapshot.checklistItems.some((item) => getChecklistRequirement(item).unresolved))
+    throw new ZSAError(
+      "PRECONDITION_FAILED",
+      "Complete the case details or edit the unresolved checklist requirements first.",
+    );
+  if (
+    snapshot.checklistItems.some(
+      (item) =>
+        item.isRequired &&
+        !isDocumentUsable(
+          snapshot.documents.find((document) => document.checklistItemId === item.id) ?? {
+            id: "missing",
+            checklistItemId: item.id,
+          },
+        ),
+    )
+  )
+    throw new ZSAError("PRECONDITION_FAILED", "Upload usable required documents first.");
+  if (
+    snapshot.checklistItems.length &&
+    snapshot.applicants.some(
+      (applicant) =>
+        !getReviewAvailability({
+          applicantId: applicant.id,
+          items: snapshot.checklistItems,
+          documents: snapshot.documents,
+        }).canReview,
+    )
+  )
+    throw new ZSAError(
+      "PRECONDITION_FAILED",
+      "Upload usable document evidence for every applicant before marking ready.",
+    );
+  const { items, documents, evaluations } = await requireCurrentAgencyReview({
+    db,
+    applicationId,
+    userId,
+    syncIssues,
+  });
+  for (const evaluation of evaluations) {
+    const availability = getReviewAvailability({
+      applicantId: evaluation.applicantId!,
+      items,
+      documents,
+    });
+    if (!availability.canReview)
+      throw new ZSAError(
+        "PRECONDITION_FAILED",
+        "Upload usable document evidence for every applicant before marking ready.",
+      );
+  }
+  if (items.some((item) => getChecklistRequirement(item).unresolved))
+    throw new ZSAError(
+      "PRECONDITION_FAILED",
+      "Complete the case details or edit the unresolved checklist requirements first.",
+    );
+
   const missing = items.filter(
     (item) =>
       item.isRequired && !documents.some((document) => document.checklistItemId === item.id),
@@ -500,6 +692,32 @@ export async function requireSubmissionReady({
       "Resolve or dismiss all open issues before you mark this case ready.",
     );
   }
+  if (
+    items.some(
+      (item) =>
+        item.isRequired &&
+        evaluations.some(
+          (evaluation) =>
+            (item.applicantId === null || item.applicantId === evaluation.applicantId) &&
+            (evaluation.itemFeedback?.[item.id]?.hasDocument !== true ||
+              evaluation.itemFeedback?.[item.id]?.hasContent !== true),
+        ),
+    )
+  )
+    throw new ZSAError(
+      "PRECONDITION_FAILED",
+      "Review usable required documents before marking ready.",
+    );
+  if (
+    evaluations.some(
+      (evaluation) => !evaluation.routeAssessment || !canMarkCaseReady(evaluation.routeAssessment),
+    )
+  ) {
+    throw new ZSAError(
+      "PRECONDITION_FAILED",
+      "Complete the outstanding route checks for every applicant before you mark this case ready.",
+    );
+  }
 }
 
 export async function markAgencyCaseReady({
@@ -514,20 +732,28 @@ export async function markAgencyCaseReady({
   if (!application) throw new ZSAError("NOT_FOUND", "Case not found.");
   await requireSubmissionReady({ db, applicationId, userId });
   // An upload or another case change must not be overwritten after these checks.
-  const updated = await db
-    .update(visaApplicationTable)
-    .set({
-      agencyStatus: AGENCY_CASE_STATUS.READY_TO_SUBMIT,
-      status: VISA_APPLICATION_STATUS.READY,
-      reviewCompletedAt: new Date(),
-    })
-    .where(
-      and(
-        eq(visaApplicationTable.id, applicationId),
-        sql`${visaApplicationTable.updateCounter} IS NOT DISTINCT FROM ${application.updateCounter}`,
-      ),
-    )
-    .returning({ id: visaApplicationTable.id });
+  const updated = await db.withTransaction(async () => {
+    await db
+      .select({ id: visaApplicationTable.id })
+      .from(visaApplicationTable)
+      .where(eq(visaApplicationTable.id, applicationId))
+      .for("update");
+    await requireSubmissionReady({ db, applicationId, userId, syncIssues: false });
+    return db
+      .update(visaApplicationTable)
+      .set({
+        agencyStatus: AGENCY_CASE_STATUS.READY_TO_SUBMIT,
+        status: VISA_APPLICATION_STATUS.READY,
+        reviewCompletedAt: new Date(),
+      })
+      .where(
+        and(
+          eq(visaApplicationTable.id, applicationId),
+          sql`${visaApplicationTable.updateCounter} IS NOT DISTINCT FROM ${application.updateCounter}`,
+        ),
+      )
+      .returning({ id: visaApplicationTable.id });
+  });
   if (!updated.length)
     throw new ZSAError(
       "PRECONDITION_FAILED",

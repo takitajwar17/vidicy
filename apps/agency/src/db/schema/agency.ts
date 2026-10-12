@@ -202,6 +202,10 @@ export const clientReportTable = pgTable(
       .default(CLIENT_REPORT_DELIVERY_STATUS.DRAFT)
       .notNull(),
     summary: text().notNull(),
+    kind: text({ enum: ["review", "collection"] })
+      .default("review")
+      .notNull(),
+    reviewContextHash: text(),
     actionItems: jsonb().notNull().$type<ClientReportActionItem[]>(),
     createdById: text().references(() => userTable.id, { onDelete: "set null" }),
     sentAt: timestamp({ withTimezone: true, mode: "date", precision: 3 }),

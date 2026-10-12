@@ -31,6 +31,20 @@ const caseRow: DashboardCase = {
 };
 
 describe("dashboard action queue", () => {
+  it("does not suggest a review when an optional-only checklist has no evidence", () => {
+    expect(
+      getDashboardNextAction({
+        ...caseRow,
+        reviewState: "not_started",
+        requiredCount: 0,
+        uploadedRequiredCount: 0,
+        usableDocumentCount: 0,
+      }).label,
+    ).toBe("Upload documents");
+    expect(
+      needsReadinessCheck({ ...caseRow, status: "ready_to_submit", usableDocumentCount: 0 }),
+    ).toBe(true);
+  });
   it("uses the same overdue rule for attention counts and due-date warnings", () => {
     const past = { ...caseRow, dueDate: "2026-10-20" };
     expect(isDashboardCaseOverdue({ row: past, today })).toBe(true);

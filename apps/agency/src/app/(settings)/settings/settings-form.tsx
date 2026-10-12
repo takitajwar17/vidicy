@@ -17,11 +17,10 @@ import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
 import { updateUserProfileAction } from "./settings.action";
 import { useEffect } from "react";
-import { useSessionStore } from "@/state/session";
+import type { SessionValidationResult } from "@/types";
 import { userSettingsSchema } from "@/schemas/settings.schema";
 import { useServerAction } from "zsa-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Skeleton } from "@/components/ui/skeleton";
 import { useRouter } from "next/navigation";
 import { useCsrfToken } from "@/components/csrf-provider";
 
@@ -45,7 +44,14 @@ function saveUserProfile(
   ) as ReturnType<typeof updateUserProfileAction>;
 }
 
-export function SettingsForm() {
+interface SettingsFormProps {
+  user: Pick<
+    NonNullable<SessionValidationResult>["user"],
+    "id" | "firstName" | "lastName" | "email"
+  >;
+}
+
+export function SettingsForm({ user }: SettingsFormProps) {
   const router = useRouter();
   const csrfToken = useCsrfToken();
 
@@ -64,60 +70,21 @@ export function SettingsForm() {
     },
   });
 
-  const session = useSessionStore((state) => state.session);
-  const isLoading = useSessionStore((state) => state.isLoading);
   const form = useForm<z.infer<typeof userSettingsSchema>>({
     resolver: zodResolver(userSettingsSchema),
     defaultValues: {
-      firstName: "",
-      lastName: "",
+      firstName: user.firstName ?? "",
+      lastName: user.lastName ?? "",
     },
   });
 
   useEffect(() => {
-    form.reset({
-      firstName: session?.user.firstName ?? "",
-      lastName: session?.user.lastName ?? "",
-    });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [session]);
-
-  if (!session || isLoading) {
-    return (
-      <Card className={SETTINGS_CARD_CLASS}>
-        <CardHeader>
-          <div className="space-y-2">
-            <Skeleton className="h-8 w-[200px]" />
-            <Skeleton className="h-4 w-[300px]" />
-          </div>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-6">
-            <div className="grid gap-6 sm:grid-cols-2">
-              <div className="space-y-2">
-                <Skeleton className="h-4 w-[100px]" />
-                <Skeleton className="h-10 w-full" />
-              </div>
-              <div className="space-y-2">
-                <Skeleton className="h-4 w-[100px]" />
-                <Skeleton className="h-10 w-full" />
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <Skeleton className="h-4 w-[100px]" />
-              <Skeleton className="h-10 w-full" />
-              <Skeleton className="h-4 w-[200px]" />
-            </div>
-
-            <div className="flex justify-end">
-              <Skeleton className="h-10 w-[100px]" />
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+    // A refreshed page can update saved values without replacing an unsaved draft.
+    form.reset(
+      { firstName: user.firstName ?? "", lastName: user.lastName ?? "" },
+      { keepDirtyValues: true },
     );
-  }
+  }, [form, user.id, user.firstName, user.lastName]);
 
   async function onSubmit(values: z.infer<typeof userSettingsSchema>) {
     await updateUserProfile({ ...values, csrfToken });
@@ -164,7 +131,7 @@ export function SettingsForm() {
             <FormItem>
               <FormLabel>Email</FormLabel>
               <FormControl>
-                <Input type="email" disabled value={session.user.email ?? ""} />
+                <Input type="email" disabled value={user.email ?? ""} />
               </FormControl>
               <FormDescription>This is the email your agency uses for access.</FormDescription>
               <FormMessage />

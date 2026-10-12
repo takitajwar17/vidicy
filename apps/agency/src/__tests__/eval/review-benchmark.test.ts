@@ -1,3 +1,4 @@
+import { getReviewFindingText } from "@/lib/review-findings";
 import { describe, expect, it } from "vitest";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
@@ -67,6 +68,8 @@ describe.skipIf(process.env.RUN_REVIEW_BENCHMARK !== "true")("Production review 
       const sourceSha256 = createHash("sha256")
         .update(await readFile("src/services/case-evaluation.ts"))
         .update(await readFile("src/lib/gemini-evaluation.ts"))
+        .update(await readFile("src/lib/review-rubric.ts"))
+        .update(await readFile("src/lib/visa-route-catalog.ts"))
         .update(await readFile("src/__tests__/eval/datasets/prepare-evaluation-input.ts"))
         .digest("hex");
       const metricSourceSha256 = createHash("sha256")
@@ -104,7 +107,7 @@ describe.skipIf(process.env.RUN_REVIEW_BENCHMARK !== "true")("Production review 
           const text = output
             ? [
                 output.evaluationData.summary,
-                ...output.evaluationData.redFlags,
+                ...output.evaluationData.redFlags.map(getReviewFindingText),
                 ...Object.values(output.evaluationData.itemFeedback).flatMap(
                   (item) => item.issues ?? [],
                 ),
@@ -118,20 +121,23 @@ describe.skipIf(process.env.RUN_REVIEW_BENCHMARK !== "true")("Production review 
             diagnostics: output?.diagnostics ?? null,
             score: output?.evaluationData.overallScore ?? null,
             riskLevel: output?.evaluationData.riskLevel ?? null,
-            referenceLabelChecks: output
-              ? await Promise.all([
-                  itemStatusAgreement().score({ output: output.evaluationData, expected }),
-                  recommendationCoverage().score({ output: output.evaluationData, expected }),
-                  redFlagCoverage().score({ output: output.evaluationData, expected }),
-                ])
-              : null,
-            scoreInReferenceRange:
-              !!output &&
-              output.evaluationData.overallScore >= expected.scoreRange.min &&
-              output.evaluationData.overallScore <= expected.scoreRange.max,
-            riskMatchesReference: expected.expectedRiskLevel
-              ? !!output && output.evaluationData.riskLevel === expected.expectedRiskLevel
-              : null,
+            referenceLabelChecks:
+              output && modelCompleted
+                ? await Promise.all([
+                    itemStatusAgreement().score({ output: output.evaluationData, expected }),
+                    recommendationCoverage().score({ output: output.evaluationData, expected }),
+                    redFlagCoverage().score({ output: output.evaluationData, expected }),
+                  ])
+                : null,
+            coverageScoreInReferenceRange:
+              output && expected.scoreRange
+                ? output.evaluationData.overallScore >= expected.scoreRange.min &&
+                  output.evaluationData.overallScore <= expected.scoreRange.max
+                : null,
+            riskMatchesReference:
+              expected.expectedRiskLevel && output
+                ? output.evaluationData.riskLevel === expected.expectedRiskLevel
+                : null,
             referenceFlags: (expected.expectedRedFlags ?? []).map((flag) => ({
               flag,
               matched: (Array.isArray(flag) ? flag : [flag]).some((term) =>
@@ -171,7 +177,7 @@ describe.skipIf(process.env.RUN_REVIEW_BENCHMARK !== "true")("Production review 
         ? costs.reduce<number>((sum, cost) => sum + (cost ?? 0), 0)
         : null;
       const report = {
-        formatVersion: 1,
+        formatVersion: 2,
         scope:
           "Production prepared-evidence Gemini review core; excludes upload, extraction, retrieval services, SQL publication, HTTP capacity, and email.",
         method:
@@ -199,6 +205,22 @@ describe.skipIf(process.env.RUN_REVIEW_BENCHMARK !== "true")("Production review 
         documentConcurrency,
         repeats,
         summary,
+        operationalMeaning:
+          "summary.succeeded counts completed model stages only. It is not a quality or legal-accuracy pass count.",
+        quality: {
+          provenance: dataset.provenance,
+          measuredReferenceChecks: runs
+            .flatMap((run) => run.value?.referenceLabelChecks ?? [])
+            .filter((check) => check.measured !== false).length,
+          unmeasuredReferenceChecks: runs
+            .flatMap((run) => run.value?.referenceLabelChecks ?? [])
+            .filter((check) => check.measured === false).length,
+          failedMeasuredReferenceChecks: runs
+            .flatMap((run) => run.value?.referenceLabelChecks ?? [])
+            .filter((check) => check.measured !== false && !check.passed).length,
+          limitation:
+            "Developer or caller-supplied reference checks are not independently verified legal labels. Missing labels and failed provider answers are unmeasured quality. Evidence coverage is not approval probability.",
+        },
         scoreComparisons,
         cost: {
           totalModelCostUsd,

@@ -4,6 +4,27 @@ import { resolve } from "node:path";
 import { getDBFromDatabase, type getDB } from "@/db";
 import * as schema from "@/db/schema";
 import { startTestPostgres } from "./postgres";
+import { buildRouteAssessment } from "@/lib/review-rubric";
+import { buildReviewRouteContext, loadReviewSnapshot } from "@/server/review-context";
+
+export async function currentReviewMetadata({
+  db,
+  applicationId,
+  applicantId,
+}: {
+  db: ReturnType<typeof getDB>;
+  applicationId: string;
+  applicantId: string;
+}) {
+  const snapshot = await loadReviewSnapshot({ db, applicationId });
+  return {
+    reviewContextHash: snapshot.reviewContextHash,
+    routeAssessment: buildRouteAssessment({
+      context: buildReviewRouteContext({ ...snapshot, applicantId }),
+      asOfDate: new Date().toISOString().slice(0, 10),
+    }),
+  };
+}
 
 export async function createWorkflowDatabase(cluster: ReturnType<typeof startTestPostgres>) {
   const name = `workflow_${randomUUID().replaceAll("-", "")}`;
@@ -86,6 +107,8 @@ export async function seedWorkflowCase({
       mimeType: "application/pdf",
       fileSize: 100,
       fileKey: "synthetic/passport",
+      extractionStatus: "completed",
+      textContent: "Readable synthetic passport evidence",
     });
   return {
     agencyId: agency.id,

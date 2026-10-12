@@ -1,6 +1,13 @@
 import { randomUUID } from "node:crypto";
+import * as reviewPipeline from "@/lib/review-pipeline-version";
 import { eq } from "drizzle-orm";
 import { startTestPostgres } from "./helpers/postgres";
+import { currentReviewMetadata } from "./helpers/workflow-fixture";
+import {
+  buildReviewContextHash,
+  buildReviewRouteContext,
+  loadReviewSnapshot,
+} from "@/server/review-context";
 import { readFileSync, readdirSync } from "node:fs";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -13,6 +20,8 @@ const {
   mockStorageHead,
   mockStorageDelete,
   mockExtractTextFromPdf,
+  mockChecklistCacheGet,
+  mockChecklistCachePut,
 } = vi.hoisted(() => ({
   mockGetDB: vi.fn(),
   mockPermission: vi.fn(),
@@ -22,6 +31,8 @@ const {
   mockStorageHead: vi.fn(),
   mockStorageDelete: vi.fn(),
   mockExtractTextFromPdf: vi.fn(),
+  mockChecklistCacheGet: vi.fn(),
+  mockChecklistCachePut: vi.fn(),
 }));
 vi.mock("zsa", () => ({
   ZSAError: class extends Error {
@@ -89,7 +100,11 @@ vi.mock("@/lib/openai", () => ({
   getOpenAIClient: () => ({ chat: { completions: { create: mockOpenAI } } }),
   getPerplexityClient: () => ({ chat: { completions: { create: mockPerplexity } } }),
 }));
-vi.mock("@/infra/runtime-context", () => ({ getRuntimeContext: () => ({ env: {} }) }));
+vi.mock("@/infra/runtime-context", () => ({
+  getRuntimeContext: () => ({
+    env: { APP_KV: { get: mockChecklistCacheGet, put: mockChecklistCachePut } },
+  }),
+}));
 vi.mock("@/db", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/db")>()),
   getDB: mockGetDB,
@@ -109,7 +124,8 @@ import {
 } from "@/actions/agency-case.action";
 vi.mock("@/lib/gemini-evaluation", () => ({ createGeminiEvaluation: mockGemini }));
 import { runAgencyEvaluation } from "@/services/agency-evaluation";
-import { generateChecklistAction } from "@/actions/checklist.action";
+import { processReviewJob } from "@/server/review-jobs";
+import { generateChecklist as generateChecklistAction } from "@/services/checklist-generation";
 import { getDBFromDatabase } from "@/db";
 import {
   agencyTable,
@@ -183,6 +199,16 @@ async function createDatabase({ lastMigration }: { lastMigration?: string } = {}
       await pool.query(readFileSync(new URL(file, migrationDirectory), "utf8"));
     }
   }
+  // The historical tests isolate other migration contracts; current checklist
+  // columns are still needed by the current ORM used by those fixtures.
+  if (lastMigration && lastMigration < "0011")
+    await pool.query(
+      readFileSync(new URL("0011_checklist_workflow_states.sql", migrationDirectory), "utf8"),
+    );
+  if (lastMigration && lastMigration < "0012")
+    await pool.query(
+      readFileSync(new URL("0012_client_request_states.sql", migrationDirectory), "utf8"),
+    );
   return {
     db: getDBFromDatabase(pool),
     pool,
@@ -210,6 +236,8 @@ describe("agency review workflow with the real database driver", () => {
 
   beforeEach(async () => {
     vi.stubEnv("DB_SQL_LOG", "false");
+    mockChecklistCacheGet.mockReset().mockResolvedValue(null);
+    mockChecklistCachePut.mockReset().mockResolvedValue(undefined);
     lastEvaluationTime = 0;
     fixture = await createDatabase();
     const { db } = fixture;
@@ -240,7 +268,7 @@ describe("agency review workflow with the real database driver", () => {
         homeCountry: "Bangladesh",
         currentCountry: "Bangladesh",
         destinationCountry: "Japan",
-        visaType: "Tourist",
+        visaType: "Short-Stay Tourist",
         embassy: "Dhaka",
       })
       .returning();
@@ -269,6 +297,8 @@ describe("agency review workflow with the real database driver", () => {
         checklistItemId: itemId,
         fileName: "passport.pdf",
         fileKey: "passport",
+        extractionStatus: "completed",
+        textContent: "Readable synthetic passport evidence",
         fileSize: 100,
         mimeType: "application/pdf",
         uploadedAt: new Date("2026-09-19T00:00:00Z"),
@@ -279,6 +309,7 @@ describe("agency review workflow with the real database driver", () => {
   });
   afterEach(async () => {
     await fixture?.close();
+    vi.restoreAllMocks();
     vi.unstubAllEnvs();
   });
 
@@ -292,6 +323,7 @@ describe("agency review workflow with the real database driver", () => {
       .values({
         applicationId,
         applicantId,
+        ...(await currentReviewMetadata({ db: fixture.db, applicationId, applicantId })),
         overallScore: 95,
         reviewStatus: "complete",
         riskLevel: "low",
@@ -318,6 +350,252 @@ describe("agency review workflow with the real database driver", () => {
   }
   function context() {
     return { db: fixture.db, applicationId, userId };
+  }
+
+  it("marks a current case ready without a separate rule-approval block", async () => {
+    await markAgencyCaseReady(context());
+    expect(await fixture.db.query.visaApplicationTable.findFirst()).toMatchObject({
+      agencyStatus: "ready_to_submit",
+      status: "ready",
+    });
+  });
+
+  it("keeps legacy scores hidden while allowing current reviews to be marked ready", async () => {
+    await fixture.db.update(visaApplicationTable).set({
+      agencyStatus: "ready_to_submit",
+      status: "ready",
+      readinessScore: 99,
+      riskLevel: "low",
+    });
+    await fixture.db.update(applicantTable).set({ readinessScore: 99, riskLevel: "low" });
+    const [row] = await getAgencyCaseRows();
+    expect(row.application).toMatchObject({
+      readinessScore: null,
+      riskLevel: null,
+      agencyStatus: "ready_to_submit",
+    });
+    expect(row.primaryApplicant?.readinessScore).toBeNull();
+    expect(row.canSubmit).toBe(true);
+    const detail = await getAgencyCaseDetail(applicationId);
+    expect(detail.application.agencyStatus).toBe("ready_to_submit");
+    expect(detail.canSubmit).toBe(true);
+    expect(detail.primaryApplicant?.readinessScore).toBeNull();
+    expect(detail.applicants[0].readinessScore).toBeNull();
+  });
+
+  it("treats malformed stored evidence version JSON as stale", async () => {
+    await fixture.pool.query(
+      'UPDATE document_evaluation SET "docSnapshots" = jsonb_build_object($1::text, 7)',
+      [itemId],
+    );
+    await expect(getAgencyCaseDetail(applicationId)).resolves.toMatchObject({
+      latestEvaluation: null,
+      isReviewStale: true,
+    });
+  });
+
+  it("requires a current review for an applicant with no personal checklist rows", async () => {
+    await fixture.db.insert(applicantTable).values({
+      applicationId,
+      name: "Dependent child",
+      relationship: "child",
+      nationality: "India",
+    });
+    await expect(generateClientReportAction({ applicationId })).rejects.toThrow(/current/i);
+  });
+
+  it("rejects publication after a person's visa history changes", async () => {
+    await fixture.db.update(applicantTable).set({ rejectedBefore: true, rejectedYear: "2025" });
+    await expect(
+      publishAgencyReview({ ...context(), evaluation: evaluationInput() }),
+    ).rejects.toThrow(/changed/i);
+  });
+
+  it("rejects publication after extraction changes without a replacement upload", async () => {
+    await fixture.db.update(uploadedDocumentTable).set({ textContent: "Corrected extraction" });
+    await expect(
+      publishAgencyReview({ ...context(), evaluation: evaluationInput() }),
+    ).rejects.toThrow(/changed/i);
+  });
+
+  it("checks route facts for a dependent with no personal checklist or upload", async () => {
+    const [child] = await fixture.db
+      .insert(applicantTable)
+      .values({
+        applicationId,
+        name: "Dependent",
+        relationship: "child",
+        nationality: "India",
+        dateOfBirth: "2016-04-03",
+        rejectedBefore: true,
+        rejectedYear: "2025",
+      })
+      .returning();
+    evaluation = await saveEvaluation();
+    mockGemini.mockReset().mockResolvedValueOnce(
+      JSON.stringify({
+        overallScore: 0,
+        riskLevel: "medium",
+        summary: "No personal evidence supplied",
+        redFlags: [],
+        strengths: [],
+        recommendations: [],
+        itemFeedback: {},
+      }),
+    );
+    await expect(
+      runAgencyEvaluation({ applicationId, applicantId: child.id, userId }),
+    ).rejects.toThrow("checklist");
+    expect(mockGemini).not.toHaveBeenCalled();
+    await expect(generateClientReportAction({ applicationId })).rejects.toThrow();
+  });
+
+  it("tracks shared checklist obligations and avoids duplicate shared issues", async () => {
+    const [shared] = await fixture.db
+      .insert(checklistItemTable)
+      .values({
+        applicationId,
+        applicantId: null,
+        documentName: "Shared itinerary",
+        description: "Party itinerary",
+        isRequired: true,
+      })
+      .returning();
+    evaluation = await saveEvaluation({
+      docSnapshots: { [itemId]: `${documentId}:1:0`, [shared.id]: "missing" },
+      itemFeedback: {
+        ...evaluation.itemFeedback,
+        [shared.id]: { status: "missing", hasDocument: false, feedback: "Supply shared itinerary" },
+      },
+    });
+    await sync();
+    await sync();
+    const issues = await fixture.db.query.reviewIssueTable.findMany();
+    expect(issues).toHaveLength(1);
+    expect(issues[0]).toMatchObject({ applicantId: null, checklistItemId: shared.id });
+    await expect(markAgencyCaseReady(context())).rejects.toThrow("required documents");
+  });
+
+  it("rolls back publication when a person's facts change inside the publication transaction", async () => {
+    fixture.setBeforeQuery(async (query) => {
+      if (!query.startsWith('insert into "document_evaluation"')) return;
+      fixture.setBeforeQuery();
+      await fixture.pool.query("UPDATE applicant SET nationality = $1 WHERE id = $2", [
+        "India",
+        applicantId,
+      ]);
+    });
+    await expect(
+      publishAgencyReview({ ...context(), evaluation: evaluationInput() }),
+    ).rejects.toThrow(/changed/i);
+    expect(await fixture.db.query.documentEvaluationTable.findMany()).toHaveLength(1);
+    expect(await fixture.db.query.reviewIssueTable.findMany()).toHaveLength(0);
+  });
+
+  it("uses each person's recorded facts and hashes the complete party and evidence", async () => {
+    await fixture.db.update(applicantTable).set({ nationality: "India", rejectedBefore: true });
+    await fixture.db.update(visaApplicationTable).set({
+      settings: JSON.stringify({
+        routeReview: { facts: { nationality: "Canada", customPredicate: false } },
+      }),
+    });
+    const snapshot = await loadReviewSnapshot({ db: fixture.db, applicationId });
+    const routeContext = buildReviewRouteContext({ ...snapshot, applicantId });
+    expect(routeContext.facts).toMatchObject({
+      nationality: "India",
+      rejectedBefore: true,
+      customPredicate: false,
+      partySize: 1,
+    });
+    expect(
+      buildReviewContextHash({ ...snapshot, documents: [...snapshot.documents].reverse() }),
+    ).toBe(snapshot.reviewContextHash);
+    expect(
+      buildReviewContextHash({
+        ...snapshot,
+        applicants: snapshot.applicants.map((person) => ({ ...person, rejectedBefore: false })),
+      }),
+    ).not.toBe(snapshot.reviewContextHash);
+    expect(
+      buildReviewContextHash({
+        ...snapshot,
+        application: { ...snapshot.application, trashedAt: new Date() },
+      }),
+    ).not.toBe(snapshot.reviewContextHash);
+    expect(
+      buildReviewContextHash({
+        ...snapshot,
+        application: { ...snapshot.application, agencyId: "different-agency" },
+      }),
+    ).not.toBe(snapshot.reviewContextHash);
+    expect(
+      buildReviewContextHash({
+        ...snapshot,
+        checklistItems: snapshot.checklistItems.map((item) => ({
+          ...item,
+          requirementType: "recommended" as const,
+          isRequired: false,
+        })),
+      }),
+    ).not.toBe(snapshot.reviewContextHash);
+    expect(
+      buildReviewContextHash({
+        ...snapshot,
+        documents: snapshot.documents.map((document) => ({
+          ...document,
+          extractionPayload: { version: "new" },
+        })),
+      }),
+    ).not.toBe(snapshot.reviewContextHash);
+  });
+
+  it("retains the saved sponsor relationship without replacing the person's party relationship", async () => {
+    const snapshot = await loadReviewSnapshot({ db: fixture.db, applicationId });
+    const legacy = buildReviewRouteContext({
+      ...snapshot,
+      application: {
+        ...snapshot.application,
+        settings: JSON.stringify({ routeReview: { facts: { relationship: "civil partner" } } }),
+      },
+      applicantId,
+    });
+    expect(legacy.facts).toMatchObject({
+      relationship: "primary",
+      relationshipToSponsor: "civil partner",
+      applicant: { relationship: "primary" },
+    });
+    const renamed = buildReviewRouteContext({
+      ...snapshot,
+      application: {
+        ...snapshot.application,
+        settings: JSON.stringify({
+          routeReview: { facts: { relationship: "old value", relationshipToSponsor: "spouse" } },
+        }),
+      },
+      applicantId,
+    });
+    expect(renamed.facts).toMatchObject({
+      relationship: "primary",
+      relationshipToSponsor: "spouse",
+    });
+  });
+
+  it("invalidates saved review snapshots when the review pipeline semantics change", async () => {
+    const snapshot = await loadReviewSnapshot({ db: fixture.db, applicationId });
+    const baseline = buildReviewContextHash(snapshot);
+    const identity = reviewPipeline.getReviewPipelineIdentity();
+    vi.spyOn(reviewPipeline, "getReviewPipelineIdentity").mockReturnValue({
+      ...identity,
+      prompts: "route-evidence-prompts-next",
+    });
+    expect(buildReviewContextHash(snapshot)).not.toBe(baseline);
+    expect((await getAgencyCaseDetail(applicationId)).latestEvaluation).toBeNull();
+    await expect(generateClientReportAction({ applicationId })).rejects.toThrow(
+      /current documents/,
+    );
+  });
+  async function markReadyForTransactionTest() {
+    await markAgencyCaseReady(context());
   }
   async function sync() {
     return syncAgencyReviewIssues({ ...context(), evaluation });
@@ -346,6 +624,69 @@ describe("agency review workflow with the real database driver", () => {
       choices: [{ message: { content: JSON.stringify({ items }) } }],
     });
   }
+  async function refreshGeneratedItems(names: string[]) {
+    mockOpenAI.mockResolvedValueOnce({
+      choices: [
+        {
+          message: {
+            content: JSON.stringify({
+              items: names.map((documentName) => ({
+                documentName,
+                requirement: "required",
+                applicability: "applies",
+              })),
+            }),
+          },
+        },
+      ],
+    });
+    return generateChecklistAction({ applicationId, applicantId, refreshResearch: true });
+  }
+
+  it("retires obsolete legacy generated requirements using saved research IDs", async () => {
+    await prepareChecklistGeneration([
+      { documentName: "Old evidence", requirement: "required", applicability: "applies" },
+    ]);
+    await generateChecklistAction({ applicationId, applicantId });
+    const original = await fixture.db.query.checklistItemTable.findFirst();
+    await fixture.db
+      .update(checklistItemTable)
+      .set({ origin: null, requirementType: null, applicability: null, isRequired: false });
+    await refreshGeneratedItems(["New evidence"]);
+    expect(
+      (await loadReviewSnapshot({ db: fixture.db, applicationId })).checklistItems.map(
+        (item) => item.documentName,
+      ),
+    ).toEqual(["New evidence"]);
+    expect(
+      await fixture.db.query.checklistItemTable.findFirst({
+        where: eq(checklistItemTable.id, original!.id),
+      }),
+    ).toMatchObject({ origin: "generated", removedAt: expect.any(Date) });
+  });
+
+  it("restores an automatically retired generated requirement with the same ID", async () => {
+    await prepareChecklistGeneration([
+      { documentName: "Passport", requirement: "required", applicability: "applies" },
+    ]);
+    await generateChecklistAction({ applicationId, applicantId });
+    const original = await fixture.db.query.checklistItemTable.findFirst();
+    await refreshGeneratedItems(["Funding"]);
+    await refreshGeneratedItems(["Passport"]);
+    expect(
+      (await loadReviewSnapshot({ db: fixture.db, applicationId })).checklistItems,
+    ).toMatchObject([{ id: original!.id, documentName: "Passport", removedAt: null }]);
+  });
+
+  it("does not restore a requirement removed by staff", async () => {
+    await prepareChecklistGeneration([{ documentName: "Passport" }]);
+    await generateChecklistAction({ applicationId, applicantId });
+    await fixture.db.update(checklistItemTable).set({ origin: "staff", removedAt: new Date() });
+    await refreshGeneratedItems(["Passport"]);
+    expect((await loadReviewSnapshot({ db: fixture.db, applicationId })).checklistItems).toEqual(
+      [],
+    );
+  });
 
   it("filters cases by client and uses the most recent activity across their cases", async () => {
     const [client] = await fixture.db
@@ -368,7 +709,7 @@ describe("agency review workflow with the real database driver", () => {
       homeCountry: "Bangladesh",
       currentCountry: "Bangladesh",
       destinationCountry: "Japan",
-      visaType: "Tourist",
+      visaType: "Short-Stay Tourist",
       embassy: "Dhaka",
     };
     await fixture.db.insert(visaApplicationTable).values([
@@ -388,6 +729,9 @@ describe("agency review workflow with the real database driver", () => {
   });
 
   it("keeps successful extraction when a concurrent attempt fails later", async () => {
+    await fixture.db
+      .update(uploadedDocumentTable)
+      .set({ textContent: null, extractionStatus: "queued" });
     let finishSuccess!: (value: { success: boolean; text: string }) => void;
     let finishFailure!: (value: { success: boolean; text: string; error: string }) => void;
     let startedBoth!: () => void;
@@ -434,7 +778,7 @@ describe("agency review workflow with the real database driver", () => {
     homeCountry: "Bangladesh",
     currentCountry: "Bangladesh",
     destinationCountry: "Japan",
-    visaType: "Tourist",
+    visaType: "Short-Stay Tourist",
     embassy: "Dhaka",
     priority: "normal" as const,
   };
@@ -516,6 +860,14 @@ describe("agency review workflow with the real database driver", () => {
     expect(await fixture.db.query.supportMessageTable.findMany()).toHaveLength(1);
   });
 
+  it("loads case pages with the database schema from before checkpoints", async () => {
+    await fixture.pool.query('ALTER TABLE "review_job" DROP COLUMN "checkpoint"');
+    const detail = await getAgencyCaseDetail(applicationId);
+    expect(detail.application.id).toBe(applicationId);
+    const rows = await getAgencyCaseRows();
+    expect(rows.some((row) => row.application.id === applicationId)).toBe(true);
+  });
+
   it("blocks reports and readiness while a newer review is pending", async () => {
     await fixture.db.insert(reviewJobTable).values({ applicationId, applicantId, userId });
     await expect(generateClientReportAction({ applicationId })).rejects.toThrow(
@@ -558,7 +910,10 @@ describe("agency review workflow with the real database driver", () => {
     const saved = await fixture.db.query.documentEvaluationTable.findMany();
     expect(saved).toHaveLength(2);
     const result = saved.find((row) => row.id !== evaluation.id)!;
-    expect(result.overallScore).toBe(98);
+    expect(result.overallScore).toBe(100);
+    expect(result.routeAssessment?.status).toBe("review_required");
+    expect(result.reviewContextHash).toMatch(/^[a-f0-9]{64}$/);
+    expect((await fixture.db.query.visaApplicationTable.findFirst())?.readinessScore).toBeNull();
     expect(result.reviewStatus).toBe("complete");
     expect(result.itemFeedback?.[itemId]).toMatchObject({
       status: "ok",
@@ -596,7 +951,95 @@ describe("agency review workflow with the real database driver", () => {
     expect(mockGemini).toHaveBeenCalledTimes(2);
   });
 
-  it("does not publish a primary score when the required second pass fails", async () => {
+  it("resumes four saved document checks after a combined timeout and publishes once", async () => {
+    await fixture.db
+      .update(uploadedDocumentTable)
+      .set({ textContent: "Passport evidence", extractionStatus: "completed" });
+    for (let index = 0; index < 3; index++) {
+      const [item] = await fixture.db
+        .insert(checklistItemTable)
+        .values({
+          applicationId,
+          applicantId,
+          documentName: `Evidence ${index}`,
+          description: "Supporting evidence",
+          isRequired: true,
+        })
+        .returning();
+      await fixture.db.insert(uploadedDocumentTable).values({
+        applicationId,
+        applicantId,
+        checklistItemId: item.id,
+        fileName: `evidence-${index}.pdf`,
+        fileKey: `evidence-${index}`,
+        fileSize: 100,
+        mimeType: "application/pdf",
+        textContent: `Evidence ${index}`,
+        extractionStatus: "completed",
+      });
+    }
+    const [job] = await fixture.db
+      .insert(reviewJobTable)
+      .values({ applicationId, applicantId, userId })
+      .returning();
+    let combinedFailed = false;
+    mockGemini.mockReset().mockImplementation(async ({ schemaName }: { schemaName: string }) => {
+      if (schemaName === "per_document_evaluation")
+        return JSON.stringify({
+          status: "ok",
+          feedback: "Readable evidence",
+          confidence: 90,
+          issues: [],
+          strengths: [],
+          extractedFields: { holderName: "Applicant", language: "en" },
+        });
+      if (!combinedFailed) {
+        combinedFailed = true;
+        throw Object.assign(new Error("Deadline exceeded"), { status: 504 });
+      }
+      return JSON.stringify({
+        overallScore: 100,
+        riskLevel: "low",
+        summary: "Review complete",
+        redFlags: [],
+        strengths: [],
+        recommendations: [],
+        itemFeedback: {},
+      });
+    });
+    await expect(processReviewJob({ jobId: job.id })).rejects.toThrow("another attempt");
+    const failedAttempt = await fixture.db.query.reviewJobTable.findFirst({
+      where: eq(reviewJobTable.id, job.id),
+    });
+    expect(failedAttempt).toMatchObject({ status: "queued", attempts: 1, evaluationId: null });
+    expect(Object.keys(failedAttempt!.checkpoint!.documents)).toHaveLength(4);
+    expect(await fixture.db.query.documentEvaluationTable.findMany()).toEqual([evaluation]);
+    await expect(generateClientReportAction({ applicationId })).rejects.toThrow(
+      "Wait for the current review",
+    );
+    await expect(finalizeReviewAction({ applicationId })).rejects.toThrow(
+      "Wait for the current review",
+    );
+    expect(mockGemini).toHaveBeenCalledTimes(5);
+
+    await processReviewJob({ jobId: job.id });
+    const completed = await fixture.db.query.reviewJobTable.findFirst({
+      where: eq(reviewJobTable.id, job.id),
+    });
+    expect(completed).toMatchObject({
+      status: "succeeded",
+      attempts: 2,
+      checkpoint: null,
+      evaluationId: expect.any(String),
+    });
+    expect(mockGemini).toHaveBeenCalledTimes(6);
+    expect(mockGemini.mock.calls[5][0].schemaName).toBe("orchestrator_evaluation");
+    expect(await fixture.db.query.documentEvaluationTable.findMany()).toHaveLength(2);
+    await processReviewJob({ jobId: job.id });
+    expect(mockGemini).toHaveBeenCalledTimes(6);
+  });
+
+  it("does not use a borderline quality score to trigger an eligibility pass", async () => {
     await fixture.db
       .update(uploadedDocumentTable)
       .set({ textContent: "Passport evidence", extractionStatus: "completed" });
@@ -622,16 +1065,14 @@ describe("agency review workflow with the real database driver", () => {
         itemFeedback: {},
       }),
     );
-    mockGemini.mockRejectedValueOnce(new Error("Adversarial pass unavailable"));
-    const before = await fixture.db.query.visaApplicationTable.findFirst();
-    await expect(runAgencyEvaluation({ applicationId, applicantId, userId })).rejects.toThrow(
-      "second review did not complete",
-    );
-    expect(await fixture.db.query.documentEvaluationTable.findMany()).toEqual([evaluation]);
-    expect(await fixture.db.query.visaApplicationTable.findFirst()).toEqual(before);
-    expect(mockGemini).toHaveBeenCalledTimes(3);
-    expect(mockGemini.mock.calls[2][0].userContent).toBe(mockGemini.mock.calls[1][0].userContent);
-    expect(mockGemini.mock.calls[2][0].systemPrompt).toContain("skeptical");
+    await runAgencyEvaluation({ applicationId, applicantId, userId });
+    expect(mockGemini).toHaveBeenCalledTimes(2);
+    const saved = (await fixture.db.query.documentEvaluationTable.findMany()).find(
+      (row) => row.id !== evaluation.id,
+    )!;
+    expect(saved.routeAssessment?.status).toBe("review_required");
+    expect(saved.routeAssessment?.support).not.toBe("active");
+    expect((await fixture.db.query.visaApplicationTable.findFirst())?.readinessScore).toBeNull();
   });
 
   it("rejects incomplete reviews and retries the documents after a provider failure", async () => {
@@ -724,7 +1165,7 @@ describe("agency review workflow with the real database driver", () => {
 
   it("saves the full checklist in order", async () => {
     await prepareChecklistGeneration(
-      Array.from({ length: 25 }, (_, index) => ({
+      Array.from({ length: 30 }, (_, index) => ({
         documentName: `Document ${index}`,
         description: "Requirement",
         commonMistakes: "Check validity",
@@ -735,13 +1176,12 @@ describe("agency review workflow with the real database driver", () => {
     const items = await fixture.db.query.checklistItemTable.findMany({
       orderBy: checklistItemTable.sortOrder,
     });
-    expect(items).toHaveLength(25);
+    expect(items).toHaveLength(30);
     expect(items.map((item) => item.sortOrder)).toEqual(
-      Array.from({ length: 25 }, (_, index) => index + 1),
+      Array.from({ length: 30 }, (_, index) => index + 1),
     );
-    expect(items[0].isRequired).toBe(true);
-    expect(items[24].isRequired).toBe(false);
-    expect(mockPermission).toHaveBeenCalledWith(applicationId, "access_application");
+    expect(items.every((item) => item.isRequired === false)).toBe(true);
+    expect(items[29].isRequired).toBe(false);
   });
 
   it("saves one checklist when generation requests overlap", async () => {
@@ -783,6 +1223,31 @@ describe("agency review workflow with the real database driver", () => {
     expect(await fixture.db.query.checklistItemTable.findMany()).toHaveLength(3);
     // The action wrapper is mocked to return the handler data directly.
     expect(first).toEqual(second);
+  });
+
+  it("refreshes matching generated items without duplicating them", async () => {
+    const items = [
+      {
+        documentName: "Passport",
+        description: "Valid passport",
+        requirement: "required",
+        applicability: "applies",
+      },
+    ];
+    await prepareChecklistGeneration(items);
+    await generateChecklistAction({ applicationId, applicantId });
+    const original = await fixture.db.query.checklistItemTable.findFirst();
+    mockOpenAI.mockResolvedValueOnce({
+      choices: [{ message: { content: JSON.stringify({ items }) } }],
+    });
+    await generateChecklistAction({ applicationId, applicantId, refreshResearch: true });
+    const active = (await loadReviewSnapshot({ db: fixture.db, applicationId })).checklistItems;
+    expect(active).toHaveLength(1);
+    expect(active[0]).toMatchObject({
+      id: original!.id,
+      isRequired: true,
+      requirementType: "required",
+    });
   });
 
   it("keeps the saved citations when a slower generation loses the save", async () => {
@@ -846,7 +1311,125 @@ describe("agency review workflow with the real database driver", () => {
     expect(await fixture.db.query.uploadedDocumentTable.findMany()).toHaveLength(1);
   });
 
-  it("rejects a checklist that has fewer than three distinct requirements", async () => {
+  it("refreshes checklist research after a visitor-to-PR route change without changing saved rows or files", async () => {
+    mockPerplexity.mockClear();
+    mockChecklistCacheGet.mockClear();
+    const originalItems = await fixture.db.query.checklistItemTable.findMany();
+    const originalFiles = await fixture.db.query.uploadedDocumentTable.findMany();
+    mockOpenAI.mockResolvedValueOnce({
+      choices: [
+        {
+          message: {
+            content: JSON.stringify({
+              items: [{ documentName: "Visitor itinerary", requirement: "recommended" }],
+            }),
+          },
+        },
+      ],
+    });
+    await generateChecklistAction({ applicationId, applicantId, refreshResearch: true });
+    const visitorApplication = await fixture.db.query.visaApplicationTable.findFirst();
+    const visitorResearch = JSON.parse(visitorApplication!.settings).checklistResearch[applicantId];
+    expect(visitorResearch.candidates).toHaveLength(1);
+    const visitorItems = await fixture.db.query.checklistItemTable.findMany();
+    await fixture.db
+      .update(visaApplicationTable)
+      .set({
+        destinationCountry: "Canada",
+        visaType: "Express Entry",
+        agencyStatus: "ready_to_submit",
+        clientReportStatus: "ready",
+      })
+      .where(eq(visaApplicationTable.id, applicationId));
+    mockOpenAI.mockResolvedValueOnce({
+      choices: [
+        {
+          message: {
+            content: JSON.stringify({
+              items: [
+                {
+                  documentName: "Programme evidence",
+                  requirement: "required",
+                  applicability: "unknown",
+                },
+              ],
+            }),
+          },
+        },
+      ],
+    });
+    const result = await generateChecklistAction({
+      applicationId,
+      applicantId,
+      refreshResearch: true,
+    });
+    const saved = await fixture.db.query.visaApplicationTable.findFirst();
+    const research = JSON.parse(saved!.settings).checklistResearch[applicantId];
+    const items = await fixture.db.query.checklistItemTable.findMany();
+    expect(items).toHaveLength(3);
+    expect(result).toHaveLength(2);
+    for (const item of visitorItems)
+      expect(items.find((row) => row.id === item.id)).toMatchObject({
+        ...item,
+        ...(item.origin === "generated"
+          ? {
+              removedAt: expect.any(Date),
+              updatedAt: expect.any(Date),
+              updateCounter: (item.updateCounter ?? 0) + 1,
+            }
+          : {}),
+      });
+    expect(items.find((row) => row.id === originalItems[0].id)?.isRequired).toBe(true);
+    expect(items.find((row) => row.documentName === "Programme evidence")).toMatchObject({
+      isRequired: false,
+    });
+    expect(await fixture.db.query.uploadedDocumentTable.findMany()).toEqual(originalFiles);
+    expect(research.contextHash).not.toBe(visitorResearch.contextHash);
+    expect(research.activeCandidateIds).toEqual(
+      research.candidates.map(
+        (candidate: { checklistItemId: string }) => candidate.checklistItemId,
+      ),
+    );
+    expect(research.previousResearch).toEqual([visitorResearch]);
+    expect(research.route).toMatchObject({
+      destinationCountry: "Canada",
+      visaType: "Express Entry",
+    });
+    expect(saved).toMatchObject({ agencyStatus: "in_review", clientReportStatus: "draft" });
+    expect(mockPerplexity).toHaveBeenCalledTimes(2);
+    expect(mockChecklistCacheGet).not.toHaveBeenCalled();
+  });
+
+  it("rejects a late explicit checklist refresh and keeps saved rows and uploads", async () => {
+    const originalItems = await fixture.db.query.checklistItemTable.findMany();
+    const originalFiles = await fixture.db.query.uploadedDocumentTable.findMany();
+    mockOpenAI.mockImplementationOnce(async () => {
+      await fixture.db
+        .update(visaApplicationTable)
+        .set({ destinationCountry: "Canada", visaType: "Express Entry" })
+        .where(eq(visaApplicationTable.id, applicationId));
+      return {
+        choices: [
+          {
+            message: {
+              content: JSON.stringify({ items: [{ documentName: "Late visitor candidate" }] }),
+            },
+          },
+        ],
+      };
+    });
+    await expect(
+      generateChecklistAction({ applicationId, applicantId, refreshResearch: true }),
+    ).rejects.toThrow(/changed/i);
+    expect(await fixture.db.query.checklistItemTable.findMany()).toEqual(originalItems);
+    expect(await fixture.db.query.uploadedDocumentTable.findMany()).toEqual(originalFiles);
+    expect(
+      JSON.parse((await fixture.db.query.visaApplicationTable.findFirst())!.settings)
+        .checklistResearch,
+    ).toBeUndefined();
+  });
+
+  it("keeps one useful draft without padding it to an arbitrary minimum", async () => {
     await prepareChecklistGeneration(
       Array.from({ length: 3 }, () => ({
         documentName: "Passport",
@@ -854,10 +1437,302 @@ describe("agency review workflow with the real database driver", () => {
         isRequired: true,
       })),
     );
+    await generateChecklistAction({ applicationId, applicantId });
+    expect(await fixture.db.query.checklistItemTable.findMany()).toMatchObject([
+      { documentName: "Passport", isRequired: false },
+    ]);
+  });
+
+  it("saves per-applicant draft provenance without treating a cited model claim as reviewed law", async () => {
+    await prepareChecklistGeneration([
+      {
+        documentName: "Passport",
+        description: "Valid passport",
+        isRequired: true,
+        requirement: "required",
+        applicability: "applies",
+        sources: [
+          {
+            url: "https://example.gov/a",
+            claim: "A passport is required",
+            quotation: "Bring your passport",
+          },
+        ],
+      },
+    ]);
+    await fixture.db.update(visaApplicationTable).set({
+      settings: JSON.stringify({
+        keep: "existing",
+        checklistResearch: { other: { status: "draft_pending_review" } },
+      }),
+    });
+    mockPerplexity.mockResolvedValueOnce({
+      choices: [{ message: { content: "Draft research" } }],
+      citations: ["https://example.gov/a", "javascript:alert(1)"],
+    });
+    await generateChecklistAction({ applicationId, applicantId });
+    const application = await fixture.db.query.visaApplicationTable.findFirst();
+    const settings = JSON.parse(application!.settings);
+    expect(settings.keep).toBe("existing");
+    expect(settings.checklistResearch.other).toEqual({ status: "draft_pending_review" });
+    expect(settings.checklistResearch[applicantId]).toMatchObject({
+      status: "generated",
+      source: "live_search",
+      candidates: [
+        {
+          requirement: "required",
+          applicability: "applies",
+          reviewStatus: "unreviewed",
+          sources: [
+            {
+              url: "https://example.gov/a",
+              claim: "A passport is required",
+              quotation: "Bring your passport",
+              reviewStatus: "unverified",
+            },
+          ],
+        },
+      ],
+    });
+    expect(await fixture.db.query.checklistItemTable.findFirst()).toMatchObject({
+      isRequired: true,
+      description: "Valid passport",
+    });
+  });
+
+  it("uses the dependent's own nationality and history in the generation request", async () => {
+    await prepareChecklistGeneration([{ documentName: "Passport" }]);
+    await fixture.db
+      .update(applicantTable)
+      .set({
+        rejectedBefore: true,
+        rejectedReason: "Primary-only refusal",
+        nationality: "Bangladesh",
+      })
+      .where(eq(applicantTable.id, applicantId));
+    await fixture.db.update(visaApplicationTable).set({
+      settings: JSON.stringify({
+        rejectedBefore: true,
+        rejectedReason: "Legacy primary refusal",
+      }),
+    });
+    const [dependent] = await fixture.db
+      .insert(applicantTable)
+      .values({
+        applicationId,
+        name: "Child",
+        relationship: "child",
+        nationality: "Canada",
+        dateOfBirth: "2010-01-01",
+        rejectedBefore: false,
+      })
+      .returning();
+    await generateChecklistAction({ applicationId, applicantId: dependent.id });
+    const prompts = JSON.stringify(mockOpenAI.mock.calls[0][0].messages);
+    expect(prompts).toContain("Canada");
+    expect(prompts).toContain("2010-01-01");
+    expect(prompts).not.toContain("Primary-only refusal");
+    expect(prompts).not.toContain("Legacy primary refusal");
+    expect(prompts).not.toContain("MANDATORY EXTRA DOCUMENTS");
+  });
+
+  it("reuses only matching cached draft research and keeps its original retrieval date", async () => {
+    await prepareChecklistGeneration([{ documentName: "Passport" }]);
+    await generateChecklistAction({ applicationId, applicantId });
+    const [key, value] = mockChecklistCachePut.mock.calls[0];
+    const cached = JSON.parse(value);
+    mockChecklistCacheGet.mockResolvedValue(cached);
+    mockPerplexity.mockClear();
+    await fixture.db.delete(checklistItemTable);
+    await generateChecklistAction({ applicationId, applicantId });
+    expect(mockChecklistCacheGet).toHaveBeenLastCalledWith(key, "json");
+    expect(mockPerplexity).not.toHaveBeenCalled();
+    const application = await fixture.db.query.visaApplicationTable.findFirst();
+    expect(JSON.parse(application!.settings).checklistResearch[applicantId]).toMatchObject({
+      source: "cached",
+      retrievedAt: cached.retrievedAt,
+      status: "generated",
+    });
+  });
+
+  it("does not reuse a cache payload from different route facts", async () => {
+    await prepareChecklistGeneration([{ documentName: "Passport" }]);
+    await generateChecklistAction({ applicationId, applicantId });
+    const [key, value] = mockChecklistCachePut.mock.calls[0];
+    mockChecklistCacheGet.mockResolvedValue(JSON.parse(value));
+    mockPerplexity.mockClear();
+    await fixture.db.delete(checklistItemTable);
+    const application = await fixture.db.query.visaApplicationTable.findFirst();
+    await fixture.db.update(visaApplicationTable).set({
+      settings: JSON.stringify({
+        ...JSON.parse(application!.settings),
+        routeFacts: { applicationDate: "2026-12-01", stage: "extension" },
+      }),
+    });
+    await generateChecklistAction({ applicationId, applicantId });
+    expect(mockChecklistCacheGet.mock.calls.at(-1)![0]).not.toBe(key);
+    expect(mockPerplexity).toHaveBeenCalledTimes(1);
+  });
+
+  it("labels the model-only fallback as a draft with no retrieved source claims", async () => {
+    await prepareChecklistGeneration([
+      {
+        documentName: "Passport",
+        isRequired: true,
+        sources: [{ url: "https://example.gov/a", claim: "Required" }],
+      },
+    ]);
+    mockPerplexity.mockRejectedValueOnce(new Error("Search unavailable"));
+    await generateChecklistAction({ applicationId, applicantId });
+    const application = await fixture.db.query.visaApplicationTable.findFirst();
+    expect(application?.checklistSource).toBe("draft_model_knowledge");
+    expect(JSON.parse(application!.settings).checklistResearch[applicantId]).toMatchObject({
+      source: "model_knowledge",
+      retrievedAt: null,
+      candidates: [{ isRequired: false, sources: [] }],
+    });
+    expect(JSON.stringify(mockOpenAI.mock.calls[0][0].messages)).not.toContain(
+      "OFFICIAL REQUIREMENTS",
+    );
+  });
+
+  it("rejects late checklist results after route dates change", async () => {
+    await prepareChecklistGeneration([{ documentName: "Passport" }]);
+    mockOpenAI.mockImplementationOnce(async () => {
+      await fixture.db
+        .update(visaApplicationTable)
+        .set({ settings: JSON.stringify({ routeFacts: { applicationDate: "2027-01-01" } }) });
+      return {
+        choices: [
+          { message: { content: JSON.stringify({ items: [{ documentName: "Passport" }] }) } },
+        ],
+      };
+    });
     await expect(generateChecklistAction({ applicationId, applicantId })).rejects.toThrow(
-      /checklist/i,
+      /changed/i,
     );
     expect(await fixture.db.query.checklistItemTable.findMany()).toHaveLength(0);
+  });
+
+  it("rejects late checklist results after applicant facts change", async () => {
+    await prepareChecklistGeneration([
+      { documentName: "Passport" },
+      { documentName: "Photo" },
+      { documentName: "Form" },
+    ]);
+    const response = {
+      choices: [
+        { message: { content: JSON.stringify({ items: [{ documentName: "Passport" }] }) } },
+      ],
+    };
+    mockOpenAI.mockImplementationOnce(async () => {
+      await fixture.db
+        .update(applicantTable)
+        .set({ nationality: "Canada" })
+        .where(eq(applicantTable.id, applicantId));
+      return response;
+    });
+    await expect(generateChecklistAction({ applicationId, applicantId })).rejects.toThrow(
+      /changed/i,
+    );
+    expect(await fixture.db.query.checklistItemTable.findMany()).toHaveLength(0);
+    expect(
+      (await fixture.db.query.visaApplicationTable.findFirst())?.checklistGeneratedAt,
+    ).toBeNull();
+  });
+
+  it("rolls back checklist rows if provenance cannot be saved", async () => {
+    await prepareChecklistGeneration([
+      { documentName: "Passport" },
+      { documentName: "Photo" },
+      { documentName: "Form" },
+    ]);
+    fixture.setBeforeQuery((query) => {
+      if (query.startsWith('update "visa_application"')) throw new Error("metadata write failed");
+    });
+    await expect(generateChecklistAction({ applicationId, applicantId })).rejects.toThrow();
+    fixture.setBeforeQuery();
+    expect(await fixture.db.query.checklistItemTable.findMany()).toHaveLength(0);
+  });
+
+  it("uses a strict checklist schema with separate requirement and applicability values", async () => {
+    await prepareChecklistGeneration([
+      {
+        documentName: "Sponsor letter",
+        requirement: "conditional",
+        applicability: "unknown",
+        condition: "If a sponsor pays for the trip",
+      },
+    ]);
+    await generateChecklistAction({ applicationId, applicantId });
+    const request = mockOpenAI.mock.calls[0][0];
+    expect(request.response_format).toMatchObject({
+      type: "json_schema",
+      json_schema: {
+        strict: true,
+        schema: {
+          type: "object",
+          additionalProperties: false,
+          required: ["items"],
+          properties: {
+            items: {
+              type: "array",
+              items: {
+                type: "object",
+                additionalProperties: false,
+                required: [
+                  "documentName",
+                  "description",
+                  "commonMistakes",
+                  "requirement",
+                  "condition",
+                  "applicability",
+                  "sources",
+                ],
+                properties: {
+                  requirement: { enum: ["required", "recommended", "conditional", "unknown"] },
+                  applicability: { enum: ["applies", "does_not_apply", "unknown"] },
+                  sources: {
+                    type: "array",
+                    items: {
+                      type: "object",
+                      additionalProperties: false,
+                      required: ["url", "claim", "quotation", "scope", "effectiveDate"],
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    });
+    expect(JSON.stringify(request.response_format.json_schema.schema)).not.toContain('"default":');
+    expect(request.messages[0].content).toContain("conditional belongs in requirement");
+    expect(await fixture.db.query.checklistItemTable.findMany()).toMatchObject([
+      {
+        documentName: "Sponsor letter",
+        requirementType: "conditional",
+        applicability: "unknown",
+        isRequired: false,
+      },
+    ]);
+  });
+
+  it("rejects conditional applicability on all five items before saving a checklist", async () => {
+    await prepareChecklistGeneration(
+      Array.from({ length: 5 }, (_, index) => ({
+        documentName: `Document ${index}`,
+        requirement: "conditional",
+        applicability: "conditional",
+      })),
+    );
+    await expect(generateChecklistAction({ applicationId, applicantId })).rejects.toThrow(
+      /invalid checklist/i,
+    );
+    expect(await fixture.db.query.checklistItemTable.findMany()).toHaveLength(0);
+    const application = await fixture.db.query.visaApplicationTable.findFirst();
+    expect(application?.checklistGeneratedAt).toBeNull();
   });
 
   it("rejects malformed AI requirements before it saves anything", async () => {
@@ -889,6 +1764,18 @@ describe("agency review workflow with the real database driver", () => {
     return { ...values, applicantId };
   }
 
+  it("does not publish a review after the case is submitted", async () => {
+    const previous = await fixture.db.query.documentEvaluationTable.findMany();
+    await fixture.db
+      .update(visaApplicationTable)
+      .set({ finalSubmissionAt: new Date() })
+      .where(eq(visaApplicationTable.id, applicationId));
+    await expect(
+      publishAgencyReview({ ...context(), evaluation: evaluationInput() }),
+    ).rejects.toThrow(/submitted/i);
+    expect(await fixture.db.query.documentEvaluationTable.findMany()).toEqual(previous);
+  });
+
   it("publishes review results, tracked issues, scores, and report state together", async () => {
     await fixture.db
       .insert(clientReportTable)
@@ -902,11 +1789,11 @@ describe("agency review workflow with the real database driver", () => {
       "Name does not match",
     );
     expect(await fixture.db.query.visaApplicationTable.findFirst()).toMatchObject({
-      readinessScore: 60,
+      readinessScore: null,
       agencyStatus: "in_review",
       clientReportStatus: "draft",
     });
-    expect((await fixture.db.query.applicantTable.findFirst())?.readinessScore).toBe(60);
+    expect((await fixture.db.query.applicantTable.findFirst())?.readinessScore).toBeNull();
     expect((await fixture.db.query.clientReportTable.findFirst())?.status).toBe("draft");
   });
 
@@ -987,10 +1874,35 @@ describe("agency review workflow with the real database driver", () => {
   it("generates a current report without silently marking the case ready", async () => {
     await publishAgencyReview({ ...context(), evaluation: evaluationInput() });
     await generateClientReportAction({ applicationId });
+    const correctionReport = await fixture.db.query.clientReportTable.findFirst();
+    expect(correctionReport?.summary).not.toContain("requirements still need approval");
     expect((await fixture.db.query.clientReportTable.findFirst())?.status).toBe("ready");
     expect((await fixture.db.query.visaApplicationTable.findFirst())?.agencyStatus).toBe(
       "in_review",
     );
+  });
+  it("does not mark a case waiting for the client when a correction report is only prepared", async () => {
+    await publishAgencyReview({
+      ...context(),
+      evaluation: { ...evaluationInput(), redFlags: ["Provide the missing statement pages"] },
+    });
+    await generateClientReportAction({ applicationId });
+    expect((await fixture.db.query.visaApplicationTable.findFirst())?.agencyStatus).toBe(
+      "in_review",
+    );
+  });
+
+  it("rejects a report when person facts change at report publication without a case counter change", async () => {
+    fixture.setBeforeQuery(async (query) => {
+      if (!query.startsWith('update "visa_application"')) return;
+      fixture.setBeforeQuery();
+      await fixture.pool.query("UPDATE applicant SET nationality = $1 WHERE id = $2", [
+        "India",
+        applicantId,
+      ]);
+    });
+    await expect(generateClientReportAction({ applicationId })).rejects.toThrow(/changed|current/i);
+    expect(await fixture.db.query.clientReportTable.findMany()).toHaveLength(0);
   });
 
   it("rejects report generation when a replacement arrives after review validation", async () => {
@@ -1011,7 +1923,7 @@ describe("agency review workflow with the real database driver", () => {
       });
       await invalidateAgencyReview({ db: fixture.db, applicationId });
     });
-    await expect(generateClientReportAction({ applicationId })).rejects.toThrow("case changed");
+    await expect(generateClientReportAction({ applicationId })).rejects.toThrow(/changed|current/);
     expect(await fixture.db.query.clientReportTable.findMany()).toHaveLength(0);
     expect((await fixture.db.query.visaApplicationTable.findFirst())?.clientReportStatus).toBe(
       "draft",
@@ -1044,7 +1956,7 @@ describe("agency review workflow with the real database driver", () => {
   });
 
   it("does not save a new issue if clearing readiness fails", async () => {
-    await markAgencyCaseReady(context());
+    await markReadyForTransactionTest();
     fixture.setBeforeQuery((query) => {
       if (query.startsWith('update "visa_application"')) throw new Error("case write failed");
     });
@@ -1066,7 +1978,7 @@ describe("agency review workflow with the real database driver", () => {
 
   it("does not reopen an issue if clearing readiness fails", async () => {
     const issue = await addIssue({ status: "dismissed" });
-    await markAgencyCaseReady(context());
+    await markReadyForTransactionTest();
     fixture.setBeforeQuery((query) => {
       if (query.startsWith('update "visa_application"')) throw new Error("case write failed");
     });
@@ -1077,10 +1989,10 @@ describe("agency review workflow with the real database driver", () => {
     expect((await fixture.db.query.reviewIssueTable.findFirst())?.status).toBe("dismissed");
   });
 
-  it("marks a complete case ready", async () => {
+  it("records completion for a current document-complete case using approved route guidance", async () => {
     await markAgencyCaseReady(context());
     const application = await fixture.db.query.visaApplicationTable.findFirst();
-    expect(application).toMatchObject({ agencyStatus: "ready_to_submit", status: "ready" });
+    expect(application?.agencyStatus).toBe("ready_to_submit");
     expect(application?.reviewCompletedAt).toBeInstanceOf(Date);
   });
 
@@ -1149,10 +2061,38 @@ describe("agency review workflow with the real database driver", () => {
     expect((await getAgencyCaseRows())[0].reviewState).toBe("not_started");
   });
 
+  it("does not return a submitted case to ready for submission", async () => {
+    await fixture.db
+      .update(visaApplicationTable)
+      .set({ finalSubmissionAt: new Date() })
+      .where(eq(visaApplicationTable.id, applicationId));
+    await expect(markAgencyCaseReady(context())).rejects.toThrow(/submitted/i);
+  });
+
   it("blocks an empty checklist", async () => {
     await fixture.db.delete(uploadedDocumentTable);
     await fixture.db.delete(checklistItemTable);
     await expect(markAgencyCaseReady(context())).rejects.toThrow("checklist first");
+  });
+
+  it("blocks readiness with zero evidence even when every item is optional", async () => {
+    await fixture.db.delete(uploadedDocumentTable);
+    await fixture.db.update(checklistItemTable).set({ isRequired: false });
+    evaluation = await saveEvaluation({
+      docSnapshots: { [itemId]: "missing" },
+      itemFeedback: {
+        [itemId]: { status: "missing", hasDocument: false, feedback: "Missing file" },
+      },
+    });
+    await expect(markAgencyCaseReady(context())).rejects.toThrow("usable");
+  });
+
+  it("blocks readiness for an unresolved requirement", async () => {
+    await fixture.db
+      .update(checklistItemTable)
+      .set({ requirementType: "conditional", applicability: "unknown" });
+    evaluation = await saveEvaluation();
+    await expect(markAgencyCaseReady(context())).rejects.toThrow("requirements");
   });
 
   it("blocks missing review results", async () => {
@@ -1234,11 +2174,74 @@ describe("agency review workflow with the real database driver", () => {
     await expect(markAgencyCaseReady(context())).rejects.toThrow("all open issues");
   });
 
+  it("stores the model title, details, and recommendation in separate finding fields", async () => {
+    const finding = {
+      title: "Financial evidence missing",
+      details: "The uploaded file is a curriculum vitae rather than financial evidence.",
+      recommendation: "Provide financial evidence for the trip.",
+    };
+    evaluation = await saveEvaluation({ redFlags: [finding] });
+    expect(await sync()).toEqual({ createdCount: 1 });
+    const [issue] = await fixture.db.query.reviewIssueTable.findMany();
+    expect(issue).toMatchObject({
+      title: finding.title,
+      description: finding.details,
+      recommendation: finding.recommendation,
+    });
+    await fixture.db.update(reviewIssueTable).set({ status: "dismissed", resolvedAt: new Date() });
+    evaluation = await saveEvaluation({
+      redFlags: [{ ...finding, title: "Wrong financial document" }],
+    });
+    expect(await sync()).toEqual({ createdCount: 0 });
+    expect(await fixture.db.query.reviewIssueTable.findFirst()).toMatchObject({
+      id: issue.id,
+      title: "Wrong financial document",
+      status: "dismissed",
+    });
+  });
+
+  it("uses model-written titles and next actions for document findings", async () => {
+    evaluation = await saveEvaluation({
+      itemFeedback: {
+        [itemId]: {
+          status: "needs_review",
+          title: "Passport page unreadable",
+          feedback: "The passport page is blurred and its text cannot be checked.",
+          issues: ["The expiry date cannot be read."],
+          recommendation: "Upload a clear scan of the passport page.",
+          hasDocument: true,
+          hasContent: false,
+        },
+      },
+    });
+    await sync();
+    expect(await fixture.db.query.reviewIssueTable.findFirst()).toMatchObject({
+      title: "Passport page unreadable",
+      description:
+        "The passport page is blurred and its text cannot be checked.\nThe expiry date cannot be read.",
+      recommendation: "Upload a clear scan of the passport page.",
+    });
+  });
+
+  it("rejects an invalid structured title before it can be saved as a tracked issue", async () => {
+    evaluation = await saveEvaluation({
+      redFlags: [
+        {
+          title: "A".repeat(101),
+          details: "The file is not financial evidence.",
+          recommendation: "Provide financial evidence.",
+        },
+      ],
+    });
+    await expect(sync()).rejects.toThrow();
+    expect(await fixture.db.query.reviewIssueTable.findMany()).toHaveLength(0);
+  });
+
   it("preserves a reviewer decision for unchanged evidence", async () => {
     evaluation = await saveEvaluation({ redFlags: ["Check name spelling"] });
     await sync();
     await fixture.db.update(reviewIssueTable).set({ status: "dismissed", resolvedAt: new Date() });
-    await markAgencyCaseReady(context());
+    await markReadyForTransactionTest();
     expect((await fixture.db.query.reviewIssueTable.findFirst())?.status).toBe("dismissed");
   });
 
@@ -1277,7 +2280,7 @@ describe("agency review workflow with the real database driver", () => {
     await sync();
     const issue = await fixture.db.query.reviewIssueTable.findFirst();
     await updateReviewIssueStatusAction({ issueId: issue!.id, status: "resolved" });
-    await markAgencyCaseReady(context());
+    await markReadyForTransactionTest();
     expect((await fixture.db.query.reviewIssueTable.findFirst())?.status).toBe("resolved");
   });
 
@@ -1331,11 +2334,11 @@ describe("agency review workflow with the real database driver", () => {
     ).toBe(false);
     expect((await getAgencyCaseDetail(applicationId)).latestEvaluation).toBeNull();
     expect((await getAgencyCaseRows())[0].latestEvaluation).toBeNull();
-    await expect(markAgencyCaseReady(context())).rejects.toThrow("current documents");
+    await expect(markAgencyCaseReady(context())).rejects.toThrow("required documents");
   });
 
   it("clears readiness and marks an old report out of date", async () => {
-    await markAgencyCaseReady(context());
+    await markReadyForTransactionTest();
     await fixture.db
       .insert(clientReportTable)
       .values({ applicationId, status: "ready", summary: "Ready", actionItems: [] });
@@ -1371,7 +2374,7 @@ describe("agency review workflow with the real database driver", () => {
   });
 
   it("rolls back invalidation if one database write fails", async () => {
-    await markAgencyCaseReady(context());
+    await markReadyForTransactionTest();
     await fixture.db
       .update(visaApplicationTable)
       .set({ readinessScore: 95, riskLevel: "low", clientReportStatus: "ready" });

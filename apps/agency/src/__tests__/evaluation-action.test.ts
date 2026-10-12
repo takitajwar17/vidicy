@@ -148,7 +148,7 @@ describe("Vertex AI evaluation", () => {
     });
   });
 
-  it.each([429, 503])(
+  it.each([429, 500, 502, 503, 504])(
     "retries a transient provider status once and records both attempts: %s",
     async (status) => {
       vi.useFakeTimers();
@@ -220,7 +220,23 @@ describe("Vertex AI evaluation", () => {
     }
   });
 
-  it.each([400, 401, 403, 504])(
+  it("does not start a short retry after a late provider timeout", async () => {
+    vi.useFakeTimers();
+    try {
+      generateContent.mockImplementationOnce(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 116_000));
+        throw Object.assign(new Error("Deadline exceeded"), { status: 504 });
+      });
+      const outcome = createGeminiEvaluation(input).catch((error: unknown) => error);
+      await vi.runAllTimersAsync();
+      expect(await outcome).toMatchObject({ status: 504 });
+      expect(generateContent).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it.each([400, 401, 403])(
     "does not retry a permanent error or a timed-out attempt: %s",
     async (status) => {
       generateContent.mockRejectedValue(Object.assign(new Error("Failed"), { status }));

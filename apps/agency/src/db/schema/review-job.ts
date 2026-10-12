@@ -30,6 +30,10 @@ export const reviewJobTable = pgTable(
     leaseUntil: timestamp({ withTimezone: true, mode: "date", precision: 3 }),
     evaluationId: text().references(() => documentEvaluationTable.id, { onDelete: "set null" }),
     error: text(),
+    checkpoint: jsonb().$type<{
+      contextHash: string;
+      documents: Record<string, import("@/services/case-evaluation").DocumentEvaluationCheckpoint>;
+    }>(),
     metrics: jsonb().$type<{
       durationMs: number;
       calls: import("@/infra/evaluation-metrics").EvaluationCallMetric[];

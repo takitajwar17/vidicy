@@ -5,6 +5,8 @@ import type { FormEvent, ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { useServerAction } from "zsa-react";
 import { toast } from "sonner";
+import { createCollectionRequestAction } from "@/actions/collection-request.action";
+import { useCsrfToken } from "@/components/csrf-provider";
 import {
   BrainCircuitIcon,
   CheckCircle2Icon,
@@ -42,6 +44,15 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { cn } from "@/lib/utils";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 import {
   AGENCY_CASE_STATUS_OPTIONS,
   CASE_STATUS_META,
@@ -64,22 +75,27 @@ interface StaffOption {
 export function AgencyCaseToolbar({
   applicationId,
   hasEvaluation,
-  blockedReason,
+  hasChecklist = false,
+  expectedHash,
   children,
 }: {
   applicationId: string;
   hasEvaluation: boolean;
-  blockedReason: string | null;
+  hasChecklist?: boolean;
+  expectedHash?: string;
   children?: ReactNode;
 }) {
   const router = useRouter();
+  const csrfToken = useCsrfToken();
+  const { execute: requestDocuments, isPending: requesting } = useServerAction(
+    createCollectionRequestAction,
+  );
   const { execute: syncIssues, isPending: syncing } = useServerAction(
     syncReviewIssuesFromEvaluationAction,
   );
   const { execute: generateReport, isPending: reporting } = useServerAction(
     generateClientReportAction,
   );
-  const { execute: finalize, isPending: finalizing } = useServerAction(finalizeReviewAction);
 
   async function handleSyncIssues() {
     const [result, error] = await syncIssues({ applicationId });
@@ -94,7 +110,17 @@ export function AgencyCaseToolbar({
   }
 
   async function handleGenerateReport() {
-    const [report, error] = await generateReport({ applicationId });
+    if (!hasEvaluation && (!csrfToken || !expectedHash)) {
+      toast.error("Reload the page before preparing a document request.");
+      return;
+    }
+    const [report, error] = hasEvaluation
+      ? await generateReport({ applicationId })
+      : await requestDocuments({
+          applicationId,
+          expectedHash: expectedHash!,
+          csrfToken: csrfToken!,
+        });
     if (error) {
       toast.error(error.message ?? "Could not generate client report.");
       return;
@@ -104,47 +130,19 @@ export function AgencyCaseToolbar({
     router.refresh();
   }
 
-  async function handleFinalize() {
-    const [, error] = await finalize({ applicationId });
-    if (error) {
-      toast.error(error.message || "Could not finalize review.");
-      return;
-    }
-    toast.success("Case marked ready to submit.");
-    router.refresh();
-  }
-
   return (
-    <div className={styles.footerActions}>
+    <div className={styles.caseActions}>
       <Button
         type="button"
         size="sm"
         variant="outline"
         onClick={handleGenerateReport}
-        disabled={!hasEvaluation || reporting}
+        disabled={(!hasEvaluation && !hasChecklist) || reporting || requesting}
       >
-        {reporting ? <Loader2Icon className="animate-spin" /> : <FileTextIcon />}Client report
+        {reporting || requesting ? <Loader2Icon className="animate-spin" /> : <FileTextIcon />}
+        {hasEvaluation ? "Client report" : "Request documents"}
       </Button>
       {children}
-      <div className={styles.finalize}>
-        <Button
-          type="button"
-          size="sm"
-          onClick={handleFinalize}
-          disabled={Boolean(blockedReason) || finalizing}
-          aria-describedby={blockedReason ? "finalize-blocked-reason" : undefined}
-        >
-          {finalizing ? (
-            <Loader2Icon className="animate-spin" />
-          ) : blockedReason ? (
-            <LockKeyholeIcon />
-          ) : (
-            <CheckCircle2Icon />
-          )}
-          Finalize review
-        </Button>
-        {blockedReason ? <small id="finalize-blocked-reason">{blockedReason}</small> : null}
-      </div>
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <Button type="button" variant="ghost" size="icon" aria-label="Review options">
@@ -159,6 +157,49 @@ export function AgencyCaseToolbar({
         </DropdownMenuContent>
       </DropdownMenu>
     </div>
+  );
+}
+
+export function AgencyCaseReadiness({
+  applicationId,
+  blockedReason,
+}: {
+  applicationId: string;
+  blockedReason: string | null;
+}) {
+  const router = useRouter();
+  const { execute, isPending } = useServerAction(finalizeReviewAction);
+
+  async function handleMarkReady() {
+    const [, error] = await execute({ applicationId });
+    if (error) {
+      toast.error(error.message || "Could not mark the case ready.");
+      return;
+    }
+    toast.success("Case marked ready to submit.");
+    router.refresh();
+  }
+
+  return (
+    <section className={styles.readiness} aria-label="Review readiness">
+      <Button
+        type="button"
+        size="sm"
+        onClick={handleMarkReady}
+        disabled={Boolean(blockedReason) || isPending}
+        aria-describedby={blockedReason ? "readiness-blocked-reason" : undefined}
+      >
+        {isPending ? (
+          <Loader2Icon className="animate-spin" />
+        ) : blockedReason ? (
+          <LockKeyholeIcon />
+        ) : (
+          <CheckCircle2Icon />
+        )}
+        {isPending ? "Marking ready…" : "Mark ready to submit"}
+      </Button>
+      {blockedReason ? <p id="readiness-blocked-reason">{blockedReason}</p> : null}
+    </section>
   );
 }
 
@@ -264,10 +305,12 @@ export function ReviewIssueStatusSelect({
   issueId,
   status,
   showDismiss = false,
+  compact = false,
 }: {
   issueId: string;
   status: string;
   showDismiss?: boolean;
+  compact?: boolean;
 }) {
   const router = useRouter();
   const [value, setValue] = useState(normalizeReviewIssueStatus(status));
@@ -299,13 +342,17 @@ export function ReviewIssueStatusSelect({
       <Select value={value} onValueChange={handleChange} disabled={isPending}>
         <SelectTrigger
           aria-label="Issue status"
-          className="h-8 min-w-36 rounded-md bg-card text-xs"
+          className={cn("h-8 min-w-36 rounded-md bg-card", compact && "text-xs")}
         >
           <SelectValue />
         </SelectTrigger>
         <SelectContent>
           {REVIEW_ISSUE_STATUS_OPTIONS.map((issueStatus) => (
-            <SelectItem key={issueStatus} value={issueStatus}>
+            <SelectItem
+              key={issueStatus}
+              value={issueStatus}
+              className={compact ? "text-xs" : undefined}
+            >
               {ISSUE_STATUS_META[issueStatus].label}
             </SelectItem>
           ))}
@@ -326,16 +373,47 @@ export function ReviewIssueStatusSelect({
   );
 }
 
-export function AddReviewIssueForm({ applicationId }: { applicationId: string }) {
+export function AddReviewIssueDialog({ applicationId }: { applicationId: string }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        <Button size="sm">
+          <PlusIcon />
+          Add issue
+        </Button>
+      </DialogTrigger>
+      <DialogContent className="max-h-[calc(100dvh-2rem)] w-[calc(100%-2rem)] overflow-y-auto sm:max-w-lg">
+        <DialogHeader>
+          <DialogTitle>Add issue</DialogTitle>
+          <DialogDescription>
+            Record a finding and the action needed to resolve it.
+          </DialogDescription>
+        </DialogHeader>
+        <AddReviewIssueForm applicationId={applicationId} onSuccess={() => setOpen(false)} />
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+export function AddReviewIssueForm({
+  applicationId,
+  onSuccess,
+}: {
+  applicationId: string;
+  onSuccess?: () => void;
+}) {
   const router = useRouter();
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [recommendation, setRecommendation] = useState("");
   const [severity, setSeverity] = useState<string>(REVIEW_ISSUE_SEVERITY.MEDIUM);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const { execute, isPending } = useServerAction(addReviewIssueAction);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    setErrorMessage(null);
     const [result, error] = await execute({
       applicationId,
       title,
@@ -346,6 +424,9 @@ export function AddReviewIssueForm({ applicationId }: { applicationId: string })
     });
 
     if (error || !result) {
+      setErrorMessage(
+        error?.message ?? "Could not add review issue. Your changes are still in this form.",
+      );
       toast.error(error?.message ?? "Could not add review issue.");
       return;
     }
@@ -356,14 +437,13 @@ export function AddReviewIssueForm({ applicationId }: { applicationId: string })
     setSeverity(REVIEW_ISSUE_SEVERITY.MEDIUM);
     toast.success("Issue added.");
     router.refresh();
+    onSuccess?.();
   }
 
   return (
     <form onSubmit={handleSubmit} className="space-y-3">
       <div className="grid gap-2">
-        <Label htmlFor="review-issue-title" className="text-xs font-bold text-muted-foreground">
-          Reviewer issue
-        </Label>
+        <Label htmlFor="review-issue-title">Reviewer issue</Label>
         <Input
           id="review-issue-title"
           value={title}
@@ -373,12 +453,7 @@ export function AddReviewIssueForm({ applicationId }: { applicationId: string })
         />
       </div>
       <div className="grid gap-2">
-        <Label
-          htmlFor="review-issue-description"
-          className="text-xs font-bold text-muted-foreground"
-        >
-          Description
-        </Label>
+        <Label htmlFor="review-issue-description">Description</Label>
         <Textarea
           id="review-issue-description"
           value={description}
@@ -388,12 +463,7 @@ export function AddReviewIssueForm({ applicationId }: { applicationId: string })
         />
       </div>
       <div className="grid gap-2">
-        <Label
-          htmlFor="review-issue-recommendation"
-          className="text-xs font-bold text-muted-foreground"
-        >
-          Client action
-        </Label>
+        <Label htmlFor="review-issue-recommendation">Client action</Label>
         <Textarea
           id="review-issue-recommendation"
           value={recommendation}
@@ -402,9 +472,7 @@ export function AddReviewIssueForm({ applicationId }: { applicationId: string })
         />
       </div>
       <div className="grid gap-2">
-        <Label htmlFor="review-issue-severity" className="text-xs font-bold text-muted-foreground">
-          Severity
-        </Label>
+        <Label htmlFor="review-issue-severity">Severity</Label>
         <Select value={severity} onValueChange={setSeverity}>
           <SelectTrigger id="review-issue-severity" className="h-10 bg-card">
             <SelectValue />
@@ -418,6 +486,11 @@ export function AddReviewIssueForm({ applicationId }: { applicationId: string })
           </SelectContent>
         </Select>
       </div>
+      {errorMessage ? (
+        <p role="alert" className="text-sm text-destructive">
+          {errorMessage}
+        </p>
+      ) : null}
       <Button type="submit" className="w-full" disabled={isPending}>
         {isPending ? (
           <Loader2Icon className="h-4 w-4 animate-spin" />

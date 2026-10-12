@@ -150,7 +150,7 @@ import {
   summarizeBenchmark,
 } from "./framework/benchmark";
 import { eq } from "drizzle-orm";
-import { reviewJobTable } from "@/db/schema";
+import { reviewJobTable, visaApplicationTable } from "@/db/schema";
 
 const actors = new AsyncLocalStorage<{ userId: string }>();
 let cluster: ReturnType<typeof startTestPostgres>;
@@ -324,6 +324,9 @@ it.skipIf(process.env.RUN_WORKFLOW_BENCHMARK !== "true")(
       "src/services/agency-evaluation.ts",
       "src/server/review-jobs.ts",
       "src/services/case-evaluation.ts",
+      "src/lib/review-rubric.ts",
+      "src/lib/visa-route-catalog.ts",
+      "src/server/review-context.ts",
       "src/services/document-pipeline.ts",
       "src/services/pdf-parser.ts",
       "src/lib/gemini-evaluation.ts",
@@ -408,7 +411,15 @@ it.skipIf(process.env.RUN_WORKFLOW_BENCHMARK !== "true")(
           }
           try {
             const input = await seedWorkflowCase({ db: database.db, document: false });
-            await actors.run({ userId: input.userId }, async () =>
+            await database.db
+              .update(visaApplicationTable)
+              .set({
+                destinationCountry: "Japan",
+                visaType: "Short-Stay Tourist",
+                settings: JSON.stringify({ routeReview: { stage: "initial", subtype: "tourism" } }),
+              })
+              .where(eq(visaApplicationTable.id, input.applicationId));
+            await actors.run({ userId: input.userId, agencyId: input.agencyId }, async () =>
               withEvaluationMetrics({
                 calls: outerCalls,
                 run: async () => {
@@ -553,6 +564,11 @@ it.skipIf(process.env.RUN_WORKFLOW_BENCHMARK !== "true")(
           globalGeminiConcurrency: Number(process.env.GEMINI_GLOBAL_CONCURRENCY ?? 4),
           providerLocation: process.env.GOOGLE_CLOUD_LOCATION ?? "global",
           documentsPerCase: 1,
+          legalQuality: {
+            status: "unmeasured",
+            reason:
+              "No approved rule pack or independent legal reference labels are supplied. Workflow success measures operational completion only.",
+          },
           openAiExtractionFallback: !["0", "false"].includes(
             process.env.OPENAI_DOCUMENT_EXTRACTION_FALLBACK ?? "true",
           ),

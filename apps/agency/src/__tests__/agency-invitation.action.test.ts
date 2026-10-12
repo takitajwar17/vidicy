@@ -96,6 +96,6 @@ describe.each(operations)("$name agency invitation action", ({ name, run, handle
       }),
     );
     expect(handler).toHaveBeenCalledTimes(1);
-    expect(mocks.revalidate).toHaveBeenCalledWith("/settings/agency");
+    expect(mocks.revalidate).toHaveBeenCalledWith("/dashboard/agency");
   });
 });

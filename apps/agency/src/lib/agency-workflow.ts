@@ -13,12 +13,9 @@ import {
 export const AGENCY_NAV_ITEMS = [
   { title: "Dashboard", url: "/dashboard" as Route },
   { title: "Applications", url: "/dashboard/applications" as Route },
-  { title: "Issues", url: "/dashboard/issues" as Route },
   { title: "Clients", url: "/dashboard/clients" as Route },
-  { title: "Documents", url: "/dashboard/documents" as Route },
   { title: "Team", url: "/dashboard/team" as Route },
   { title: "Reports", url: "/dashboard/reports" as Route },
-  { title: "Settings", url: "/settings" as Route },
 ] as const;
 
 export const CASE_STATUS_META = {

@@ -1,33 +1,23 @@
 "use client";
 
-import { useServerAction } from "zsa-react";
-import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Loader2Icon, LayoutListIcon } from "lucide-react";
-import { generateChecklistAction } from "@/actions/checklist.action";
-import { toast } from "sonner";
+import { useChecklistJob } from "@/hooks/use-checklist-job";
 
 interface ChecklistGeneratorProps {
   applicationId: string;
   applicantId: string;
   applicantName: string;
+  showApplicantName?: boolean;
 }
 
 export function ChecklistGenerator({
   applicationId,
   applicantId,
   applicantName,
+  showApplicantName = true,
 }: ChecklistGeneratorProps) {
-  const router = useRouter();
-  const { execute, isPending: loading } = useServerAction(generateChecklistAction, {
-    onSuccess: () => router.refresh(),
-    onError: ({ err }) =>
-      toast.error(err.message ?? "Checklist generation failed. Please try again."),
-  });
-
-  async function handleGenerate() {
-    await execute({ applicationId, applicantId });
-  }
+  const { job, loading, start, error } = useChecklistJob({ applicationId, applicantId });
 
   return (
     <div className="flex flex-col items-center gap-5 py-16 px-4 text-center">
@@ -36,17 +26,19 @@ export function ChecklistGenerator({
         <LayoutListIcon className="h-10 w-10 text-primary relative z-10" />
       </div>
       <div className="space-y-2 max-w-sm">
-        <p className="text-lg font-semibold">No checklist for {applicantName} yet</p>
+        <p className="text-lg font-semibold">
+          {showApplicantName ? `No checklist for ${applicantName} yet` : "No checklist yet"}
+        </p>
         <p className="text-sm text-muted-foreground leading-relaxed">
           Generate a personalized document checklist based on your visa type, embassy, and
           application details.
         </p>
       </div>
-      <Button onClick={handleGenerate} disabled={loading} className="gap-2">
+      <Button onClick={() => void start()} disabled={loading} className="gap-2">
         {loading ? (
           <>
             <Loader2Icon className="h-4 w-4 animate-spin" />
-            Generating checklist...
+            {job?.status === "queued" ? "Checklist queued" : "Generating checklist..."}
           </>
         ) : (
           <>
@@ -55,6 +47,11 @@ export function ChecklistGenerator({
           </>
         )}
       </Button>
+      {error ? (
+        <p role="alert" className="text-sm text-destructive">
+          {error}
+        </p>
+      ) : null}
     </div>
   );
 }

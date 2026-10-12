@@ -20,6 +20,8 @@ import { drizzle } from "drizzle-orm/node-postgres";
 import { eq } from "drizzle-orm";
 import * as schema from "../src/db/schema";
 import { startTestPostgres } from "../src/__tests__/helpers/postgres";
+import { buildReviewContextHash, buildReviewRouteContext } from "../src/lib/review-context-data";
+import { buildRouteAssessment } from "../src/lib/review-rubric";
 
 const require = createRequire(import.meta.url);
 let postgres: ReturnType<typeof startTestPostgres>;
@@ -33,9 +35,39 @@ let staffCookie: string;
 let adminCookie: string;
 let outsiderCookie: string;
 let applicationId: string;
+let agencyId: string;
 let mailLog: string;
 let control: string;
 let serverLog: string;
+
+async function refreshCurrentReviewMetadata(targetApplicationId = applicationId) {
+  const db = drizzle(pool, { schema });
+  const application = await db.query.visaApplicationTable.findFirst({
+    where: eq(schema.visaApplicationTable.id, targetApplicationId),
+  });
+  if (!application) throw new Error("Missing isolated case");
+  const applicants = await db.query.applicantTable.findMany({
+    where: eq(schema.applicantTable.applicationId, targetApplicationId),
+  });
+  const checklistItems = await db.query.checklistItemTable.findMany({
+    where: eq(schema.checklistItemTable.applicationId, targetApplicationId),
+  });
+  const documents = await db.query.uploadedDocumentTable.findMany({
+    where: eq(schema.uploadedDocumentTable.applicationId, targetApplicationId),
+  });
+  const snapshot = { application, applicants, checklistItems, documents };
+  for (const applicant of applicants)
+    await db
+      .update(schema.documentEvaluationTable)
+      .set({
+        reviewContextHash: buildReviewContextHash(snapshot),
+        routeAssessment: buildRouteAssessment({
+          context: buildReviewRouteContext({ ...snapshot, applicantId: applicant.id }),
+          asOfDate: new Date().toISOString().slice(0, 10),
+        }),
+      })
+      .where(eq(schema.documentEvaluationTable.applicantId, applicant.id));
+}
 
 interface DropdownSpacingOptions {
   page: Page;
@@ -110,17 +142,23 @@ test.beforeAll(async () => {
     .insert(schema.userTable)
     .values({ email: "outsider@example.test", emailVerified: new Date() })
     .returning();
+  const [agency] = await db
+    .insert(schema.agencyTable)
+    .values({ ownerUserId: staff.id, name: "Isolated Test Agency" })
+    .returning();
+  agencyId = agency.id;
   await db
     .insert(schema.agencyTeamMemberTable)
-    .values({ userId: staff.id, email: staff.email!, role: "admin", status: "active" });
+    .values({ agencyId, userId: staff.id, email: staff.email!, role: "admin", status: "active" });
   const [client] = await db
     .insert(schema.agencyClientTable)
-    .values({ name: "Synthetic Client", email: "client@example.test" })
+    .values({ agencyId, name: "Synthetic Client", email: "client@example.test" })
     .returning();
   const [application] = await db
     .insert(schema.visaApplicationTable)
     .values({
       userId: staff.id,
+      agencyId,
       clientId: client.id,
       clientName: client.name,
       clientEmail: null,
@@ -182,6 +220,7 @@ test.beforeAll(async () => {
       },
     },
   });
+  await refreshCurrentReviewMetadata();
   directory = mkdtempSync("/tmp/vidicy-browser-");
   socket = join(directory, "redis.sock");
   mailLog = join(directory, "mail.jsonl");
@@ -369,6 +408,76 @@ test.afterAll(async () => {
   if (directory) rmSync(directory, { recursive: true, force: true });
 });
 
+test("profile is ready before session refresh and keeps drafts during slow or failed refreshes", async ({
+  page,
+  context,
+}, info) => {
+  await context.addCookies([
+    { name: "session", value: staffCookie, url: base },
+    { name: "csrf-token", value: "isolated-browser-csrf-token", url: base },
+  ]);
+  // Check the initial HTML before any client session store or effects can run.
+  const initial = await context.request.get(base + "/settings");
+  expect(initial.status()).toBe(200);
+  expect(await initial.text()).toContain("Profile Settings");
+
+  let requests = 0;
+  let fail = false;
+  let release!: () => void;
+  const held = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  await page.route("**/api/get-session", async (route) => {
+    requests++;
+    if (fail) {
+      await route.fulfill({ status: 503, json: { error: "Temporary session refresh failure" } });
+      return;
+    }
+    await held;
+    await route.continue();
+  });
+  try {
+    await page.goto(base + "/settings");
+    await expect
+      .poll(async () => {
+        // Wait for the provider's focus listener, not a fixed hydration delay.
+        await page.evaluate(() => window.dispatchEvent(new Event("focus")));
+        return requests;
+      })
+      .toBeGreaterThan(0);
+    const firstName = page.getByRole("textbox", { name: "First Name", exact: true });
+    await expect(firstName).toBeVisible();
+    await expect(firstName).toHaveValue("Test");
+    await firstName.fill("Unsaved profile draft");
+    await expect(page.getByRole("button", { name: "Save changes", exact: true })).toBeVisible();
+    const refreshed = page.waitForResponse((response) =>
+      response.url().endsWith("/api/get-session"),
+    );
+    release();
+    await refreshed;
+    await expect(firstName).toHaveValue("Unsaved profile draft");
+
+    fail = true;
+    const failed = page.waitForResponse(
+      (response) => response.url().endsWith("/api/get-session") && response.status() === 503,
+    );
+    await page.evaluate(() => window.dispatchEvent(new Event("focus")));
+    await failed;
+    await expect(firstName).toBeVisible();
+    await expect(firstName).toHaveValue("Unsaved profile draft");
+    await page.setViewportSize({ width: 390, height: 900 });
+    await expect(firstName).toBeVisible();
+    await page.screenshot({
+      path: info.outputPath("profile-ready-with-failed-session-refresh.png"),
+      fullPage: true,
+      animations: "disabled",
+    });
+  } finally {
+    release();
+    await page.unrouteAll({ behavior: "wait" });
+  }
+});
+
 test("generate, view, export, and deliver with real auth and a private provider stub", async ({
   page,
   context,
@@ -488,6 +597,22 @@ test("generate, view, export, and deliver with real auth and a private provider 
   ).toHaveCount(0);
   await context.clearCookies();
   await context.addCookies([{ name: "session", value: outsiderCookie, url: base }]);
+  expect((await context.request.get(`${base}/api/client-reports/${reportId}`)).status()).toBe(403);
+  const beforeAcceptance = await pool.query(
+    'SELECT id FROM agency_team_member WHERE "userId" = $1',
+    [outsiderCookie.split(":")[0]],
+  );
+  expect(beforeAcceptance.rows).toEqual([]);
+  // Explicit fixture membership represents acceptance; a report request cannot enroll users.
+  await drizzle(pool, { schema })
+    .insert(schema.agencyTeamMemberTable)
+    .values({
+      agencyId,
+      userId: outsiderCookie.split(":")[0],
+      email: "outsider@example.test",
+      role: "member",
+      status: "active",
+    });
   expect((await context.request.get(`${base}/api/client-reports/${reportId}`)).status()).toBe(200);
   const joined = await pool.query(
     'SELECT role, status FROM agency_team_member WHERE "userId" = $1',
@@ -495,7 +620,7 @@ test("generate, view, export, and deliver with real auth and a private provider 
   );
   expect(joined.rows).toEqual([{ role: "member", status: "active" }]);
   await pool.query('UPDATE agency_team_member SET status = $1 WHERE "userId" = $2', [
-    "suspended",
+    "disabled",
     outsiderCookie.split(":")[0],
   ]);
   expect((await context.request.get(`${base}/api/client-reports/${reportId}`)).status()).toBe(403);
@@ -539,9 +664,7 @@ test("review status survives reloads and shows completion and failure", async ({
       .set({ status: "failed", error: "Review failed" })
       .where(eq(schema.reviewJobTable.id, job.id));
     await page.reload();
-    await expect(
-      page.getByRole("alert").filter({ hasText: "Review failed. Run it again." }),
-    ).toBeVisible();
+    await expect(page.getByRole("alert").filter({ hasText: "Review failed" })).toBeVisible();
     await expect(page.getByRole("button", { name: "Re-run Review", exact: true })).toBeEnabled();
   } finally {
     await db.delete(schema.reviewJobTable).where(eq(schema.reviewJobTable.id, job.id));
@@ -654,6 +777,7 @@ test("review workspace links findings to evidence and keeps actions usable at sm
       ),
     })
     .where(eq(schema.documentEvaluationTable.applicationId, applicationId));
+  await refreshCurrentReviewMetadata();
   const [destination] = await db
     .insert(schema.reviewIssueTable)
     .values({
@@ -768,9 +892,14 @@ test("review workspace links findings to evidence and keeps actions usable at sm
     }),
   ).toEqual(sharedSidebar);
   const table = page.getByRole("table", { name: "Review issues" });
+  await expect(page.getByRole("region", { name: "Selected issue" })).not.toContainText(
+    "AI finding",
+  );
   await expect(page.getByRole("heading", { name: "Alex Morgan", exact: true })).toBeVisible();
   await expect(table.getByRole("row")).toHaveCount(13);
-  await expect(page.getByRole("button", { name: "Finalize review", exact: true })).toBeDisabled();
+  await expect(
+    page.getByRole("button", { name: "Mark ready to submit", exact: true }),
+  ).toBeDisabled();
   await expect(
     page.getByRole("region", { name: "Supporting evidence" }).getByRole("combobox"),
   ).toHaveValue(itinerary.id);
@@ -825,11 +954,92 @@ test("review workspace links findings to evidence and keeps actions usable at sm
   await page.getByRole("tab", { name: "Checklist", exact: true }).click();
   await expect(page.getByText("Required files uploaded", { exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "Upload", exact: true })).toBeVisible();
-  await page.getByRole("tab", { name: "Notes", exact: true }).click();
-  await expect(page.getByRole("heading", { name: "Add issue", exact: true })).toBeVisible();
-  await page.getByRole("tab", { name: "Activity", exact: true }).click();
+  const passportFiles = page.getByRole("list", {
+    name: "Uploaded files for Passport",
+    exact: true,
+  });
+  const previewPassport = passportFiles.getByRole("button", {
+    name: `Preview document: ${passport.fileName}`,
+    exact: true,
+  });
+  await expect(previewPassport).toBeVisible();
+  await expect(passportFiles).not.toContainText(itinerary.fileName);
+  const checklistOutput = join(output, "checklist-files");
+  mkdirSync(checklistOutput, { recursive: true });
+  for (const width of [1586, 390, 320]) {
+    await page.setViewportSize({ width, height: 992 });
+    await expect(previewPassport).toBeVisible();
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
+      true,
+    );
+    await page.screenshot({
+      path: join(checklistOutput, `checklist-${width}.png`),
+      fullPage: true,
+    });
+  }
+  await page.setViewportSize({ width: 1586, height: 992 });
+  await previewPassport.focus();
+  await previewPassport.press("Enter");
+  const filePreview = page.getByRole("dialog", { name: passport.fileName, exact: true });
+  await expect(filePreview).toBeVisible();
+  await expect(filePreview.locator("canvas")).toHaveCount(2);
+  const downloadPromise = page.waitForEvent("download");
+  await filePreview.getByRole("link", { name: "Download", exact: true }).click();
+  expect((await downloadPromise).suggestedFilename()).toBe(passport.fileName);
+  await page.keyboard.press("Escape");
+  await expect(filePreview).toHaveCount(0);
+  const previewUrl = `${base}/api/document-preview/${passport.id}`;
+  await page.route(previewUrl, (route) => route.fulfill({ status: 503 }));
+  await previewPassport.focus();
+  await previewPassport.press("Space");
+  await expect(filePreview.getByText("Preview unavailable", { exact: true })).toBeVisible();
+  await expect(filePreview.getByRole("link", { name: "Download", exact: true })).toBeVisible();
+  await page.keyboard.press("Escape");
+  await page.unroute(previewUrl);
+  await previewPassport.click();
+  await expect(filePreview.locator("canvas")).toHaveCount(2);
+  await page.keyboard.press("Escape");
+  await page.getByRole("tab", { name: "Details", exact: true }).click();
+  await expect(page.getByRole("tablist", { name: "Case sections" }).getByRole("tab")).toHaveText([
+    "Review",
+    "Checklist",
+    "Details",
+  ]);
+  await expect(page.getByRole("heading", { name: "Applicant records", exact: true })).toBeVisible();
+  await expect(page.getByRole("region", { name: "Supporting evidence" })).toHaveCount(0);
+  await expect(page.getByRole("combobox", { name: "Severity", exact: true })).toHaveCount(0);
+  await expect(page).toHaveURL(/tab=details/);
+  for (const width of [1586, 390, 320]) {
+    await page.setViewportSize({ width, height: 1000 });
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
+      true,
+    );
+    await expect(page.getByRole("tab", { name: "Details", exact: true })).toBeInViewport();
+    await page.screenshot({
+      path: join(checklistOutput, `case-details-${width}.png`),
+      fullPage: true,
+      animations: "disabled",
+    });
+  }
+  await page.getByRole("tab", { name: "Details", exact: true }).click();
+  await expect(page.getByRole("tab", { name: "Details", exact: true })).toHaveAttribute(
+    "aria-selected",
+    "true",
+  );
   await expect(page.getByText("Case created", { exact: true })).toBeVisible();
+  await expect(page.getByRole("region", { name: "Supporting evidence" })).toHaveCount(0);
+  await expect(page.getByRole("table", { name: "Review issues" })).toHaveCount(0);
+  await expect(page.getByText("Tracked issues", { exact: true })).toHaveCount(0);
+  await page.screenshot({
+    path: join(checklistOutput, "activity-320.png"),
+    fullPage: true,
+    animations: "disabled",
+  });
   await page.getByRole("tab", { name: "Review", exact: true }).click();
+  await page.getByRole("button", { name: "Add issue", exact: true }).click();
+  await expect(page.getByRole("dialog", { name: "Add issue", exact: true })).toBeVisible();
+  await expect(page.getByRole("combobox", { name: "Severity", exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Close", exact: true }).click();
   await page.getByRole("combobox", { name: "Filter issue status" }).selectOption("open");
   await page
     .getByRole("button", { name: "Review issue: Health insurance missing", exact: true })
@@ -837,18 +1047,20 @@ test("review workspace links findings to evidence and keeps actions usable at sm
   await expect(page).toHaveURL(new RegExp(`issue=${missingIssue.id}`));
   for (const width of [1024, 390]) {
     await page.setViewportSize({ width, height: 900 });
-    await expect(page.getByRole("heading", { name: "Needs attention", exact: true })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Review issues", exact: true })).toBeVisible();
     expect(
       await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
     ).toBe(true);
     if (width < 900) {
-      const detail = await page.getByRole("region", { name: "Selected issue" }).boundingBox();
+      const review = await page
+        .getByRole("tabpanel", { name: "Review", exact: true })
+        .boundingBox();
       const evidence = await page
         .getByRole("region", { name: "Supporting evidence" })
         .boundingBox();
-      expect(detail).not.toBeNull();
+      expect(review).not.toBeNull();
       expect(evidence).not.toBeNull();
-      expect(evidence!.y).toBeGreaterThanOrEqual(detail!.y + detail!.height);
+      expect(evidence!.y).toBeGreaterThanOrEqual(review!.y + review!.height);
     }
     await page.screenshot({ path: join(output, `case-workspace-${width}.png`), fullPage: true });
   }
@@ -888,10 +1100,30 @@ test("review workspace links findings to evidence and keeps actions usable at sm
       await statusControl.screenshot({ path: join(output, `case-status-${status}-${width}.png`) });
     }
   }
+  await page.getByRole("button", { name: "Add issue", exact: true }).click();
+  await page.getByLabel("Reviewer issue", { exact: true }).fill("Check invitation letter");
+  await page.getByLabel("Description", { exact: true }).fill("The invitation needs a signature.");
+  await page.getByLabel("Client action", { exact: true }).fill("Upload a signed invitation.");
+  await page
+    .getByRole("dialog", { name: "Add issue", exact: true })
+    .getByRole("button", { name: "Add issue", exact: true })
+    .click();
+  await expect(page.getByRole("dialog", { name: "Add issue", exact: true })).toHaveCount(0);
+  await expect(page.getByText("Issue added.", { exact: true })).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Review issue: Check invitation letter", exact: true }),
+  ).toBeVisible();
+  await page.reload();
+  await expect(
+    page.getByRole("button", { name: "Review issue: Check invitation letter", exact: true }),
+  ).toBeVisible();
   expect(errors).toEqual([]);
 });
 
-test("long review findings can scroll above the bottom bar", async ({ page, context }) => {
+test("long review findings scroll while the left readiness bar stays fixed", async ({
+  page,
+  context,
+}) => {
   const errors: string[] = [];
   page.on("pageerror", (error) => errors.push(error.message));
   const db = drizzle(pool, { schema });
@@ -928,11 +1160,21 @@ test("long review findings can scroll above the bottom bar", async ({ page, cont
   ]) {
     await page.setViewportSize({ width, height });
     await page.goto(`${base}/dashboard/${applicationId}?issue=${issue.id}`);
-    const panel = page.getByRole("tabpanel", { name: "Review", exact: true });
+    const pane = page.getByRole("tabpanel", { name: "Review", exact: true });
+    const panel = page.getByLabel("Review findings", { exact: true });
+    const readiness = page.getByRole("region", { name: "Review readiness", exact: true });
     const detail = page.getByRole("region", { name: "Selected issue" });
     const dismiss = detail.getByRole("button", { name: "Dismiss issue", exact: true });
     await expect(panel).toHaveCSS("scrollbar-width", "none");
     await expect(detail.getByRole("heading", { name: title, exact: true })).toBeAttached();
+    await readiness.scrollIntoViewIfNeeded();
+    const before = await readiness.boundingBox();
+    const paneBounds = await pane.boundingBox();
+    expect(before!.x).toBe(paneBounds!.x);
+    expect(before!.width).toBe(paneBounds!.width);
+    expect(Math.abs(before!.y + before!.height - paneBounds!.y - paneBounds!.height)).toBeLessThan(
+      2,
+    );
     if (width >= 900) {
       const bounds = await panel.boundingBox();
       if (!bounds) throw new Error("Review panel is not visible");
@@ -943,11 +1185,17 @@ test("long review findings can scroll above the bottom bar", async ({ page, cont
       await dismiss.scrollIntoViewIfNeeded();
     }
     await expect(dismiss).toBeInViewport({ ratio: 1 });
+    const after = await readiness.boundingBox();
+    expect(after!.y).toBeCloseTo(before!.y, 0);
     await expect(
-      detail.getByText("Upload all supporting evidence before submission.", {
-        exact: false,
-      }),
+      readiness.getByRole("button", { name: "Mark ready to submit", exact: true }),
     ).toBeInViewport();
+    const recommendation = detail.getByText("Upload all supporting evidence before submission.", {
+      exact: false,
+    });
+    await recommendation.scrollIntoViewIfNeeded();
+    await expect(recommendation).toBeInViewport();
+    await dismiss.scrollIntoViewIfNeeded();
     await dismiss.hover();
     await page.screenshot({ path: join(output, `review-scroll-${width}x${height}.png`) });
   }
@@ -968,12 +1216,17 @@ test("dashboard uses real coverage, attention filters, next actions, and respons
   yesterday.setUTCDate(yesterday.getUTCDate() - 1);
   const nextWeek = new Date(`${today}T00:00:00Z`);
   nextWeek.setUTCDate(nextWeek.getUTCDate() + 3);
+  const clients = await db
+    .insert(schema.agencyClientTable)
+    .values(Array.from({ length: 9 }, (_, index) => ({ agencyId, name: `Queue Client ${index}` })))
+    .returning();
   const fixtureRows = await db
     .insert(schema.visaApplicationTable)
     .values(
       Array.from({ length: 9 }, (_, index) => ({
         userId: staffId,
-        clientId: `dashboard-client-${index}`,
+        agencyId,
+        clientId: clients[index].id,
         clientName: `Queue Client ${index}`,
         caseNumber: `QUEUE-${index}`,
         destinationCountry: "Germany",
@@ -1024,6 +1277,7 @@ test("dashboard uses real coverage, attention filters, next actions, and respons
       mimeType: "application/pdf",
       fileSize: 100,
       extractionStatus: "completed" as const,
+      textContent: "Readable synthetic passport evidence",
     })),
   );
   await db
@@ -1066,15 +1320,15 @@ test("dashboard uses real coverage, attention filters, next actions, and respons
   await expect(page).toHaveURL(/attention=overdue/);
   const row = queue.getByRole("row").filter({ hasText: "QUEUE-0" });
   await expect(row).toContainText("1 / 2");
-  await expect(row.getByRole("link", { name: "Add missing files", exact: true })).toHaveAttribute(
-    "href",
-    `/dashboard/${fixtureRows[0].id}?tab=checklist`,
-  );
-  await row.getByRole("link", { name: "Add missing files", exact: true }).click();
-  await expect(page.getByRole("tab", { name: "Checklist", exact: true })).toHaveAttribute(
+  await expect(
+    row.getByRole("link", { name: "Review available documents", exact: true }),
+  ).toHaveAttribute("href", `/dashboard/${fixtureRows[0].id}?tab=review`);
+  await row.getByRole("link", { name: "Review available documents", exact: true }).click();
+  await expect(page.getByRole("tab", { name: "Review", exact: true })).toHaveAttribute(
     "data-state",
     "active",
   );
+  await page.getByRole("tab", { name: "Checklist", exact: true }).click();
   await expect(page.getByText("Funding evidence", { exact: true }).first()).toBeVisible();
   await page.goBack();
   await expect(queue).toContainText("QUEUE-0");
@@ -1180,14 +1434,13 @@ test("shared styles work across pages, forms, menus, and themes", async ({ page,
       await page.keyboard.press("Escape");
       await expect(page.locator('[data-sidebar="sidebar"][data-mobile="true"]')).not.toBeVisible();
     }
-    await page.getByRole("button", { name: "Add staff", exact: true }).click();
-    const dialog = page.getByRole("dialog");
-    await expect(dialog).toBeVisible();
-    await dialog.getByRole("combobox").click();
-    await expect(page.getByRole("listbox")).toBeVisible();
-    await page.keyboard.press("Escape");
-    await dialog.getByRole("button", { name: "Close", exact: true }).click();
-    await expect(dialog).not.toBeVisible();
+    await page.getByRole("link", { name: "Invite staff", exact: true }).click();
+    await expect(page).toHaveURL(/\/dashboard\/agency#invitations$/);
+    await expect(page.getByLabel("Email address (optional)", { exact: true })).toBeVisible();
+    await expect(
+      page.getByRole("button", { name: "Create invitation", exact: true }),
+    ).toBeEnabled();
+    await expectDropdownSpacing({ page });
   }
   await page.setViewportSize({ width: 1440, height: 960 });
   await page.evaluate(() => localStorage.setItem("theme", "dark"));
@@ -1535,7 +1788,8 @@ test.describe("UI audit regression", () => {
       "outline-style",
       "solid",
     );
-    await page.getByRole("tab", { name: "Notes", exact: true }).click();
+    await page.getByRole("tab", { name: "Review", exact: true }).click();
+    await page.getByRole("button", { name: "Add issue", exact: true }).click();
     await expect(page.getByRole("combobox", { name: "Severity", exact: true })).toBeVisible();
     await expect(page.getByRole("combobox", { name: "Severity", exact: true })).toHaveCSS(
       "border-radius",
@@ -1554,16 +1808,22 @@ test.describe("UI audit regression", () => {
     await expect(page).toHaveURL(new RegExp(`client=${client!.id}`));
     await expect(page.getByText("Showing cases for the selected client.")).toBeVisible();
     await page.goto(base + "/dashboard/team");
-    await page.getByRole("button", { name: "Add staff", exact: true }).click();
-    await expect(page.getByRole("combobox", { name: "Role", exact: true })).toBeVisible();
-    await page.keyboard.press("Escape");
+    await expect(page.getByRole("link", { name: "Invite staff", exact: true })).toHaveAttribute(
+      "href",
+      "/dashboard/agency#invitations",
+    );
     await expect(page.getByRole("combobox", { name: "Staff role", exact: true })).toHaveCSS(
       "border-radius",
       "5px",
     );
     const [member] = await db
       .insert(schema.agencyTeamMemberTable)
-      .values({ email: "another-reviewer@example.test", role: "member", status: "active" })
+      .values({
+        agencyId,
+        email: "another-reviewer@example.test",
+        role: "member",
+        status: "active",
+      })
       .returning();
     await page.reload();
     await page
@@ -1702,4 +1962,876 @@ test.describe("UI audit regression", () => {
     await expect(page.getByText("All systems operational", { exact: true })).toHaveCount(0);
     expect(errors).toEqual([]);
   });
+});
+
+test("route details preserve drafts, cover all applicants, and require a current review", async ({
+  page,
+  context,
+}) => {
+  const db = drizzle(pool, { schema });
+  const original = await db.query.visaApplicationTable.findFirst({
+    where: eq(schema.visaApplicationTable.id, applicationId),
+  });
+  if (!original) throw new Error("Missing isolated case");
+  const [application] = await db
+    .insert(schema.visaApplicationTable)
+    .values({
+      userId: original.userId,
+      agencyId,
+      clientId: original.clientId,
+      clientName: "Route test family",
+      homeCountry: "Bangladesh",
+      currentCountry: "Canada",
+      destinationCountry: "Canada",
+      visaType: "Express Entry",
+      embassy: "IRCC",
+      settings: JSON.stringify({ preserveMe: "existing value" }),
+    })
+    .returning();
+  const people = await db
+    .insert(schema.applicantTable)
+    .values([
+      { applicationId: application.id, name: "Route parent", relationship: "primary" },
+      { applicationId: application.id, name: "Route child", relationship: "child" },
+    ])
+    .returning();
+  await context.addCookies([
+    { name: "session", value: staffCookie, url: base },
+    { name: "csrf-token", value: "isolated-browser-csrf-token", url: base },
+  ]);
+  const errors: string[] = [];
+  page.on("pageerror", (error) => errors.push(error.message));
+  await page.goto(`${base}/dashboard/${application.id}?tab=notes`);
+  await expect(page.getByRole("tab", { name: "Details", exact: true })).toHaveAttribute(
+    "aria-selected",
+    "true",
+  );
+  await expect(page.getByRole("region", { name: "Supporting evidence" })).toHaveCount(0);
+  const guidance = page.locator('details[aria-label="Route guidance and official sources"]');
+  await expect(guidance).not.toHaveAttribute("open");
+  await guidance.locator("summary").focus();
+  await guidance.locator("summary").press("Enter");
+  await expect(
+    page.getByRole("heading", { name: "Route requirements", exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("region", { name: "Case details for this route", exact: true }),
+  ).toBeVisible();
+  await page.getByRole("tab", { name: "Checklist", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Checklist sources", exact: true })).toHaveCount(
+    0,
+  );
+  await expect(page.getByRole("button", { name: "Refresh checklist", exact: true })).toHaveCount(0);
+  await expect(page.getByText("Required files uploaded", { exact: true })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: /Generate.*checklist/i }).first()).toBeVisible();
+  // Store the first generated rows without calling a live model in this browser test.
+  await db.insert(schema.checklistItemTable).values(
+    people.map((person) => ({
+      applicationId: application.id,
+      applicantId: person.id,
+      documentName: "Supporting evidence",
+      description:
+        "Draft — staff must confirm this document and its applicability. First checklist evidence",
+      isRequired: false,
+    })),
+  );
+  await page.reload();
+  await page.getByRole("tab", { name: "Checklist", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Checklist sources", exact: true })).toBeVisible();
+  await expect(page.getByText("0/2 checklist items have files.", { exact: true })).toBeVisible();
+  await expect(page.locator("p").filter({ hasText: /^First checklist evidence$/ })).toHaveCount(2);
+  await expect(
+    page.getByText(/Draft — staff must confirm|requirement not confirmed|0\/0 required documents/),
+  ).toHaveCount(0);
+  const checklistOutput = resolve("output/verification/checklist-wording");
+  mkdirSync(checklistOutput, { recursive: true });
+  await page.screenshot({ path: join(checklistOutput, "checklist.png"), animations: "disabled" });
+  await page.getByRole("tab", { name: "Details", exact: true }).click();
+  await guidance.locator("summary").click();
+  await expect(
+    page.getByRole("heading", { name: "Route requirements", exact: true }),
+  ).toBeVisible();
+  await expect(page.getByRole("button", { name: "Mark ready to submit", exact: true })).toHaveCount(
+    0,
+  );
+  await page.getByRole("tab", { name: "Review", exact: true }).click();
+  await expect(
+    page.getByRole("button", { name: "Mark ready to submit", exact: true }),
+  ).toBeDisabled();
+  await expect(page.getByText("Readiness score", { exact: true })).toHaveCount(0);
+  const reviews = page.getByRole("button", { name: "Upload usable documents", exact: true });
+  await expect(reviews).toHaveCount(2);
+  await expect(reviews.nth(0)).toBeDisabled();
+  await expect(reviews.nth(1)).toBeDisabled();
+  await page.getByRole("tab", { name: "Details", exact: true }).click();
+  await page.getByLabel("Process stage", { exact: true }).selectOption("application");
+  await page.getByLabel("Exact category or legal basis", { exact: true }).fill("CEC");
+  await page
+    .getByLabel("Application date or planned filing date", { exact: true })
+    .fill("2026-10-22");
+  for (const person of people) {
+    await page.locator(`#nationality-${person.id}`).fill("Bangladesh");
+    await page
+      .locator(`#dob-${person.id}`)
+      .fill(person.relationship === "primary" ? "1990-01-01" : "2015-01-01");
+  }
+  await page.getByRole("button", { name: "Save case details", exact: true }).click();
+  await expect(
+    page.getByText("Case details saved. Run review again for the current details.", {
+      exact: true,
+    }),
+  ).toBeVisible();
+  const saved = await db.query.visaApplicationTable.findFirst({
+    where: eq(schema.visaApplicationTable.id, application.id),
+  });
+  expect(JSON.parse(saved!.settings)).toMatchObject({
+    preserveMe: "existing value",
+    routeReview: { subtype: "CEC", stage: "application" },
+  });
+  expect(saved!.readinessScore).toBeNull();
+  const savedPeople = await db.query.applicantTable.findMany({
+    where: eq(schema.applicantTable.applicationId, application.id),
+  });
+  expect(savedPeople.every((person) => person.nationality === "Bangladesh")).toBe(true);
+  await db
+    .update(schema.applicantTable)
+    .set({ name: "Updated elsewhere" })
+    .where(eq(schema.applicantTable.id, people[1].id));
+  await page.getByLabel("Exact category or legal basis", { exact: true }).fill("Unsaved FSW draft");
+  await page.getByRole("button", { name: "Save case details", exact: true }).click();
+  await expect(page.getByRole("alert").filter({ hasText: "case changed" })).toBeVisible();
+  await expect(page.getByLabel("Exact category or legal basis", { exact: true })).toHaveValue(
+    "Unsaved FSW draft",
+  );
+  expect(
+    JSON.parse(
+      (await db.query.visaApplicationTable.findFirst({
+        where: eq(schema.visaApplicationTable.id, application.id),
+      }))!.settings,
+    ).routeReview.subtype,
+  ).toBe("CEC");
+  await page.getByRole("button", { name: "Load saved details", exact: true }).click();
+  await expect(page.getByLabel("Exact category or legal basis", { exact: true })).toHaveValue(
+    "CEC",
+  );
+  await page.getByLabel("Exact category or legal basis", { exact: true }).fill("FSW");
+  await page.getByRole("button", { name: "Save case details", exact: true }).click();
+  await expect
+    .poll(
+      async () =>
+        JSON.parse(
+          (await db.query.visaApplicationTable.findFirst({
+            where: eq(schema.visaApplicationTable.id, application.id),
+          }))!.settings,
+        ).routeReview.subtype,
+    )
+    .toBe("FSW");
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page
+    .getByRole("button", { name: "Save case details", exact: true })
+    .scrollIntoViewIfNeeded();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(
+    true,
+  );
+  const output = resolve("output/verification/dynamic-rubric");
+  mkdirSync(output, { recursive: true });
+  await page.screenshot({ path: join(output, "route-details-390.png"), animations: "disabled" });
+  expect(errors).toEqual([]);
+});
+
+test("expert-approved guidance allows a complete current case to be marked ready", async ({
+  page,
+  context,
+}) => {
+  const db = drizzle(pool, { schema });
+  const original = await db.query.visaApplicationTable.findFirst({
+    where: eq(schema.visaApplicationTable.id, applicationId),
+  });
+  const sourceDocument = await db.query.uploadedDocumentTable.findFirst();
+  if (!original || !sourceDocument) throw new Error("Missing isolated fixture");
+  const [application] = await db
+    .insert(schema.visaApplicationTable)
+    .values({
+      userId: original.userId,
+      agencyId,
+      clientId: original.clientId,
+      clientName: "Approved route client",
+      homeCountry: "Bangladesh",
+      currentCountry: "Bangladesh",
+      destinationCountry: "Japan",
+      visaType: "Short-Stay Tourist",
+      embassy: "Dhaka",
+      agencyStatus: "in_review",
+    })
+    .returning();
+  const [person] = await db
+    .insert(schema.applicantTable)
+    .values({
+      applicationId: application.id,
+      name: "Approved route applicant",
+      relationship: "primary",
+    })
+    .returning();
+  const [item] = await db
+    .insert(schema.checklistItemTable)
+    .values({
+      applicationId: application.id,
+      applicantId: person.id,
+      documentName: "Passport",
+      description: "Passport evidence",
+      isRequired: true,
+    })
+    .returning();
+  const [document] = await db
+    .insert(schema.uploadedDocumentTable)
+    .values({
+      applicationId: application.id,
+      applicantId: person.id,
+      checklistItemId: item.id,
+      fileName: "approved-passport.pdf",
+      fileKey: sourceDocument.fileKey,
+      fileSize: sourceDocument.fileSize,
+      mimeType: "application/pdf",
+      extractionStatus: "completed",
+      textContent: "Complete passport evidence",
+    })
+    .returning();
+  await db.insert(schema.documentEvaluationTable).values({
+    applicationId: application.id,
+    applicantId: person.id,
+    overallScore: 100,
+    riskLevel: "low",
+    reviewStatus: "complete",
+    summary: "Required evidence reviewed",
+    redFlags: [],
+    strengths: [],
+    recommendations: [],
+    docSnapshots: { [item.id]: `${document.id}:1:0` },
+    itemFeedback: {
+      [item.id]: {
+        status: "ok",
+        hasDocument: true,
+        hasContent: true,
+        feedback: "Complete passport evidence",
+        issues: [],
+        score: 100,
+      },
+    },
+  });
+  await refreshCurrentReviewMetadata(application.id);
+  await context.addCookies([
+    { name: "session", value: staffCookie, url: base },
+    { name: "csrf-token", value: "isolated-browser-csrf-token", url: base },
+  ]);
+  await page.goto(`${base}/dashboard/${application.id}?tab=details`);
+  await expect(page.getByText("Approved route guidance", { exact: true })).toBeVisible();
+  await expect(
+    page.getByText(/requirements need approval|not yet have a complete approved rule set/),
+  ).toHaveCount(0);
+  await page.getByRole("tab", { name: "Review", exact: true }).click();
+  const finalize = page.getByRole("button", { name: "Mark ready to submit", exact: true });
+  await expect(finalize).toBeEnabled();
+  await finalize.click();
+  await expect
+    .poll(
+      async () =>
+        (
+          await db.query.visaApplicationTable.findFirst({
+            where: eq(schema.visaApplicationTable.id, application.id),
+          })
+        )?.agencyStatus,
+    )
+    .toBe("ready_to_submit");
+  await page.reload();
+  await expect(page.getByRole("combobox", { name: "Case status", exact: true })).toHaveText(
+    "Ready to Submit",
+  );
+});
+
+test("long visa labels stay inside the Case details form at desktop and mobile widths", async ({
+  page,
+  context,
+}) => {
+  await context.addCookies([
+    { name: "session", value: staffCookie, url: base },
+    { name: "csrf-token", value: "isolated-browser-csrf-token", url: base },
+  ]);
+  await page.goto(`${base}/dashboard/${applicationId}?tab=details`);
+  await page.getByLabel("Destination", { exact: true }).selectOption("France");
+  const visa = page.getByLabel("Visa route", { exact: true });
+  const form = page.locator("form").filter({ has: visa });
+  const output = resolve("output/verification/notes-layout");
+  mkdirSync(output, { recursive: true });
+  for (const route of ["National Study (Type D)", "National Work (Type D)"]) {
+    await visa.selectOption(route);
+    for (const width of [1440, 1280, 1024, 768, 390]) {
+      await page.setViewportSize({ width, height: 900 });
+      await visa.evaluate((element) => element.scrollIntoView({ block: "center" }));
+      await visa.focus();
+      const bounds = await form.evaluate((element) => {
+        const parent = element.getBoundingClientRect();
+        return {
+          scrollWidth: element.scrollWidth,
+          clientWidth: element.clientWidth,
+          controlsFit: [...element.querySelectorAll("input, select")].every((control) => {
+            const box = control.getBoundingClientRect();
+            return box.left >= parent.left - 1 && box.right <= parent.right + 1;
+          }),
+        };
+      });
+      expect(bounds.controlsFit, `${route} at ${width}px`).toBe(true);
+      expect(bounds.scrollWidth, `${route} form at ${width}px`).toBeLessThanOrEqual(
+        bounds.clientWidth + 1,
+      );
+      expect(
+        await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
+      ).toBe(true);
+      if (route === "National Study (Type D)" && [1440, 390].includes(width)) {
+        await page.screenshot({ path: join(output, `notes-${width}.png`), animations: "disabled" });
+      }
+    }
+  }
+});
+
+test("staff can manage a checklist and request documents before the first review", async ({
+  page,
+  context,
+}) => {
+  const db = drizzle(pool, { schema });
+  const original = await db.query.visaApplicationTable.findFirst({
+    where: eq(schema.visaApplicationTable.id, applicationId),
+  });
+  if (!original) throw new Error("Missing isolated fixture");
+  const [application] = await db
+    .insert(schema.visaApplicationTable)
+    .values({
+      userId: original.userId,
+      agencyId,
+      clientId: original.clientId,
+      clientName: "Checklist workflow client",
+      clientEmail: "client@example.test",
+      homeCountry: "Egypt",
+      currentCountry: "Egypt",
+      destinationCountry: "United States",
+      visaType: "B1/B2 Visitor",
+      embassy: "Cairo",
+      agencyStatus: "intake",
+    })
+    .returning();
+  const [person] = await db
+    .insert(schema.applicantTable)
+    .values({ applicationId: application.id, name: "Checklist applicant", relationship: "primary" })
+    .returning();
+  await context.addCookies([
+    { name: "session", value: staffCookie, url: base },
+    { name: "csrf-token", value: "isolated-browser-csrf-token", url: base },
+  ]);
+  await page.goto(`${base}/dashboard/${application.id}?tab=checklist`);
+  await expect(
+    page.getByRole("button", { name: "Generate checklist first", exact: true }),
+  ).toBeDisabled();
+  await page.getByText("Add checklist item", { exact: true }).click();
+  const addForm = page
+    .locator("form")
+    .filter({ has: page.getByRole("textbox", { name: "Document name", exact: true }) });
+  await addForm
+    .getByRole("textbox", { name: "Document name", exact: true })
+    .fill("Workflow passport");
+  await addForm
+    .getByRole("textbox", { name: "What to provide", exact: true })
+    .fill("Provide a readable passport.");
+  await addForm.getByRole("button", { name: "Save item", exact: true }).click();
+  await expect(page.getByText("Workflow passport", { exact: true })).toBeVisible();
+  await page.getByRole("tab", { name: "Review", exact: true }).click();
+  const reviewStatus = page.getByRole("status", { name: "Review status", exact: true });
+  await expect(reviewStatus).toContainText("1 required file missing");
+  const statusBounds = await reviewStatus.boundingBox();
+  const reviewBounds = await page
+    .getByRole("tabpanel", { name: "Review", exact: true })
+    .boundingBox();
+  expect(statusBounds!.x).toBe(reviewBounds!.x);
+  expect(statusBounds!.width).toBe(reviewBounds!.width);
+  await expect(page.getByRole("region", { name: "Review readiness", exact: true })).toContainText(
+    "Upload usable evidence",
+  );
+  await reviewStatus.getByRole("button", { name: /Open checklist/ }).click();
+  await expect(page.getByRole("tab", { name: "Checklist", exact: true })).toHaveAttribute(
+    "data-state",
+    "active",
+  );
+  await expect(reviewStatus).toHaveCount(0);
+  await expect(
+    page.getByRole("button", { name: "Upload usable documents", exact: true }),
+  ).toBeDisabled();
+  await page.getByRole("button", { name: "Request documents", exact: true }).click();
+  await expect(page).toHaveURL(/\/dashboard\/reports\//);
+  await expect(
+    page.getByRole("heading", { name: "Client document request", exact: true }),
+  ).toBeVisible();
+  expect(
+    await db.query.documentEvaluationTable.findMany({
+      where: eq(schema.documentEvaluationTable.applicationId, application.id),
+    }),
+  ).toHaveLength(0);
+  expect(
+    (
+      await db.query.visaApplicationTable.findFirst({
+        where: eq(schema.visaApplicationTable.id, application.id),
+      })
+    )?.agencyStatus,
+  ).not.toBe("needs_client");
+  const item = await db.query.checklistItemTable.findFirst({
+    where: eq(schema.checklistItemTable.applicationId, application.id),
+  });
+  if (!item) throw new Error("Missing added item");
+  const [file] = await db
+    .insert(schema.uploadedDocumentTable)
+    .values({
+      applicationId: application.id,
+      applicantId: person.id,
+      checklistItemId: item.id,
+      fileName: "saved-passport.txt",
+      fileKey: "private-test-only/saved-passport",
+      fileSize: 20,
+      mimeType: "text/plain",
+      textContent: "Synthetic readable passport",
+      extractionStatus: "completed",
+    })
+    .returning();
+  await page.goto(`${base}/dashboard/${application.id}?tab=checklist`);
+  await page.getByRole("button", { name: "Edit item", exact: true }).click();
+  const editForm = page
+    .locator("form")
+    .filter({ has: page.getByRole("textbox", { name: "Document name", exact: true }) })
+    .last();
+  await editForm
+    .getByRole("textbox", { name: "Document name", exact: true })
+    .fill("Updated workflow passport");
+  await editForm.getByRole("button", { name: "Save item", exact: true }).click();
+  await expect(page.getByText("Updated workflow passport", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Edit item", exact: true }).click();
+  await page
+    .getByRole("dialog", { name: "Edit checklist item", exact: true })
+    .getByRole("button", { name: "Remove item", exact: true })
+    .click();
+  await expect(page.getByText("Updated workflow passport", { exact: true })).toHaveCount(0);
+  expect(
+    (
+      await db.query.checklistItemTable.findFirst({
+        where: eq(schema.checklistItemTable.id, item.id),
+      })
+    )?.removedAt,
+  ).toBeTruthy();
+  expect(
+    await db.query.uploadedDocumentTable.findFirst({
+      where: eq(schema.uploadedDocumentTable.id, file.id),
+    }),
+  ).toBeTruthy();
+});
+
+test("case tabs use visible sections and an issue dialog at desktop and phone widths", async ({
+  page,
+  context,
+}) => {
+  await context.addCookies([
+    { name: "session", value: staffCookie, url: base },
+    { name: "csrf-token", value: "isolated-browser-csrf-token", url: base },
+  ]);
+  const output = resolve("output/verification/case-redesign");
+  mkdirSync(output, { recursive: true });
+  const errors: string[] = [];
+  page.on("pageerror", (error) => errors.push(error.message));
+  for (const width of [1440, 390]) {
+    await page.setViewportSize({ width, height: 1000 });
+    await page.goto(`${base}/dashboard/${applicationId}?tab=review`);
+    const workspace = page.getByLabel("Application review workspace", { exact: true });
+    await expect(workspace.locator("footer")).toHaveCount(0);
+    const actions = page.getByRole("group", { name: "Case actions", exact: true });
+    await expect(actions.getByRole("button", { name: "Client report", exact: true })).toBeVisible();
+    const tabs = page.getByRole("tablist", { name: "Case sections", exact: true });
+    const actionsBounds = await actions.boundingBox();
+    const tabsBounds = await tabs.boundingBox();
+    if (width >= 900) {
+      expect(actionsBounds!.x).toBeGreaterThan(tabsBounds!.x);
+      expect(Math.abs(actionsBounds!.y - tabsBounds!.y)).toBeLessThan(10);
+    } else {
+      expect(actionsBounds!.y).toBeGreaterThan(tabsBounds!.y);
+    }
+    const status = page.getByRole("status", { name: "Review status", exact: true });
+    if (await status.count()) {
+      const statusBounds = await status.boundingBox();
+      const paneBounds = await page
+        .getByRole("tabpanel", { name: "Review", exact: true })
+        .boundingBox();
+      expect(statusBounds!.x).toBe(paneBounds!.x);
+      expect(statusBounds!.width).toBe(paneBounds!.width);
+    }
+    const add = page.getByRole("button", { name: "Add issue", exact: true });
+    const heading = page.getByRole("heading", { name: "Review issues", exact: true });
+    const titleBounds = await heading.boundingBox();
+    const actionBounds = await add.boundingBox();
+    expect(actionBounds!.x).toBeGreaterThan(titleBounds!.x);
+    expect(Math.abs(actionBounds!.y - titleBounds!.y)).toBeLessThan(8);
+    await add.click();
+    const dialog = page.getByRole("dialog", { name: "Add issue", exact: true });
+    await expect(dialog).toBeVisible();
+    await expect(dialog.getByLabel("Reviewer issue", { exact: true })).toBeFocused();
+    await expect
+      .poll(async () => {
+        const position = await dialog.boundingBox();
+        return Boolean(position && position.x >= 8 && position.x + position.width <= width - 8);
+      })
+      .toBe(true);
+    const bounds = await dialog.boundingBox();
+    expect(bounds!.x).toBeGreaterThanOrEqual(8);
+    expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(width - 8);
+    await page.screenshot({ path: join(output, `add-issue-${width}.png`), animations: "disabled" });
+    await page.keyboard.press("Escape");
+    await expect(dialog).toHaveCount(0);
+    await expect(add).toBeFocused();
+    for (const name of ["Review", "Checklist", "Details"]) {
+      await page.getByRole("tab", { name, exact: true }).click();
+      await expect(workspace.locator("details")).toHaveCount(name === "Details" ? 1 : 0);
+      await expect(page.getByRole("tab", { name: "Activity", exact: true })).toHaveCount(0);
+      if (name === "Details")
+        await expect(
+          page.getByRole("heading", { name: "Case activity", exact: true }),
+        ).toBeVisible();
+      expect(
+        await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
+      ).toBe(true);
+      await page.screenshot({
+        path: join(output, `${name.toLowerCase()}-${width}.png`),
+        fullPage: true,
+        animations: "disabled",
+      });
+    }
+  }
+  expect(errors).toEqual([]);
+});
+
+test("Details groups the form beside case records and activity and stacks on small screens", async ({
+  page,
+  context,
+}) => {
+  await context.addCookies([
+    { name: "session", value: staffCookie, url: base },
+    { name: "csrf-token", value: "isolated-browser-csrf-token", url: base },
+  ]);
+  const errors: string[] = [];
+  page.on("pageerror", (error) => errors.push(error.message));
+  await page.goto(`${base}/dashboard/${applicationId}?tab=details`);
+  const panel = page.getByRole("tabpanel", { name: "Details", exact: true });
+  const form = panel.getByRole("region", { name: "Case details for this route", exact: true });
+  const sidebar = panel.getByRole("complementary", { name: "Case information", exact: true });
+  const guidance = panel.locator('details[aria-label="Route guidance and official sources"]');
+  await expect(form.getByRole("group", { name: "Visa route", exact: true })).toBeVisible();
+  await expect(form.getByRole("group", { name: "Applicants", exact: true })).toBeVisible();
+  await expect(
+    sidebar.getByRole("region", { name: "Applicant records", exact: true }),
+  ).toBeVisible();
+  await expect(sidebar.getByRole("region", { name: "Case activity", exact: true })).toBeVisible();
+  await expect(guidance).not.toHaveAttribute("open");
+  await expect(
+    panel.getByRole("heading", { name: "Route requirements", exact: true }),
+  ).not.toBeVisible();
+  await guidance.locator("summary").focus();
+  await guidance.locator("summary").press("Space");
+  await expect(guidance).toHaveAttribute("open", "");
+  await expect(
+    guidance.getByRole("heading", { name: "Route requirements", exact: true }),
+  ).toBeVisible();
+  await guidance.locator("summary").press("Space");
+  await expect(guidance).not.toHaveAttribute("open");
+  const output = resolve("output/verification/details-redesign");
+  mkdirSync(output, { recursive: true });
+  for (const width of [1440, 1280, 1024, 768, 390, 320]) {
+    await page.setViewportSize({ width, height: 1000 });
+    await form
+      .getByRole("heading", { name: "Application details", exact: true })
+      .scrollIntoViewIfNeeded();
+    const formBounds = await form.boundingBox();
+    const sidebarBounds = await sidebar.boundingBox();
+    const guidanceBounds = await guidance.boundingBox();
+    expect(formBounds).not.toBeNull();
+    expect(sidebarBounds).not.toBeNull();
+    expect(guidanceBounds).not.toBeNull();
+    if (width >= 1200) {
+      expect(sidebarBounds!.x).toBeGreaterThanOrEqual(formBounds!.x + formBounds!.width + 20);
+      expect(Math.abs(sidebarBounds!.y - formBounds!.y)).toBeLessThan(2);
+    } else {
+      expect(sidebarBounds!.y).toBeGreaterThanOrEqual(
+        guidanceBounds!.y + guidanceBounds!.height + 15,
+      );
+    }
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
+      true,
+    );
+    await page.screenshot({
+      path: join(output, `details-${width}.png`),
+      fullPage: true,
+      animations: "disabled",
+    });
+    const save = form.getByRole("button", { name: "Save case details", exact: true });
+    await save.scrollIntoViewIfNeeded();
+    await expect(save).toBeInViewport({ ratio: 1 });
+    await save.hover();
+    await sidebar
+      .getByRole("heading", { name: "Case activity", exact: true })
+      .scrollIntoViewIfNeeded();
+    await expect(sidebar.getByText("Case created", { exact: true })).toBeVisible();
+  }
+  expect(errors).toEqual([]);
+});
+
+test("checklist sources stay compact and show full evidence in a modal", async ({
+  page,
+  context,
+}) => {
+  const db = drizzle(pool, { schema });
+  const original = await db.query.visaApplicationTable.findFirst({
+    where: eq(schema.visaApplicationTable.id, applicationId),
+  });
+  if (!original) throw new Error("Missing isolated case");
+  const [application] = await db
+    .insert(schema.visaApplicationTable)
+    .values({
+      userId: original.userId,
+      agencyId,
+      clientId: original.clientId,
+      clientName: "Sources client",
+      homeCountry: "Austria",
+      currentCountry: "Austria",
+      destinationCountry: "France",
+      visaType: "National Study (Type D)",
+      embassy: "Vienna",
+    })
+    .returning();
+  const [person] = await db
+    .insert(schema.applicantTable)
+    .values({ applicationId: application.id, name: "Sources applicant", relationship: "primary" })
+    .returning();
+  const [item] = await db
+    .insert(schema.checklistItemTable)
+    .values({
+      applicationId: application.id,
+      applicantId: person.id,
+      documentName: "Passport",
+      description: "Provide a passport.",
+      isRequired: false,
+    })
+    .returning();
+  const titles = [
+    "Visa requirement",
+    "Admission letter",
+    "Funding evidence",
+    "Passport",
+    "Personalized checklist",
+  ];
+  const candidates = titles.map((documentName, index) => ({
+    checklistItemId: index === 3 ? item.id : `source-item-${index}`,
+    documentName,
+    description: "Saved document reference.",
+    commonMistakes: "",
+    requirement: "conditional",
+    applicability: "unknown",
+    condition: "If the visa route applies.",
+    sources: [
+      {
+        url: "https://www.service-public.gouv.fr/particuliers/vosdroits/F2231",
+        claim: `Saved source note for ${documentName}.`,
+        quotation: "Saved supporting text from the reference.",
+        scope: "Student applicants",
+        effectiveDate: "2026-10-08",
+      },
+    ],
+  }));
+  await db
+    .update(schema.visaApplicationTable)
+    .set({
+      settings: JSON.stringify({
+        checklistResearch: {
+          [person.id]: {
+            status: "generated",
+            contextHash: "0".repeat(64),
+            sourceVersion: "saved-test-version",
+            referenceDate: "2026-10-22",
+            generatedAt: "2026-10-22T13:33:51.000Z",
+            retrievedAt: "2026-10-22T13:33:44.000Z",
+            source: "live_search",
+            route: { destinationCountry: "France", visaType: "National Study (Type D)" },
+            citations: ["https://www.service-public.gouv.fr/particuliers/vosdroits/F2231"],
+            candidates,
+            activeCandidateIds: candidates.map((candidate) => candidate.checklistItemId),
+          },
+        },
+      }),
+    })
+    .where(eq(schema.visaApplicationTable.id, application.id));
+  await context.addCookies([
+    { name: "session", value: staffCookie, url: base },
+    { name: "csrf-token", value: "isolated-browser-csrf-token", url: base },
+  ]);
+  const output = resolve("output/verification/checklist-sources");
+  mkdirSync(output, { recursive: true });
+  for (const width of [1440, 390]) {
+    await page.setViewportSize({ width, height: 900 });
+    await page.goto(`${base}/dashboard/${application.id}?tab=checklist`);
+    const summary = page.getByRole("region", { name: "Checklist sources", exact: true });
+    await summary.scrollIntoViewIfNeeded();
+    await expect(summary).toContainText("Checked Oct 22, 2026");
+    await expect(summary).not.toContainText("Out of date");
+    await expect(summary).not.toContainText("Saved source note");
+    await expect(
+      summary.getByRole("button", { name: "Refresh checklist", exact: true }),
+    ).toBeEnabled();
+    const viewSources = summary.getByRole("button", { name: "View sources", exact: true });
+    await page.screenshot({ path: join(output, `summary-${width}.png`), animations: "disabled" });
+    await viewSources.click();
+    const dialog = page.getByRole("dialog", { name: "Checklist sources", exact: true });
+    await expect(dialog).toBeVisible();
+    await expect
+      .poll(async () => {
+        const rect = await dialog.boundingBox();
+        return Boolean(
+          rect &&
+          rect.x >= 8 &&
+          rect.x + rect.width <= width - 8 &&
+          rect.y >= 8 &&
+          rect.y + rect.height <= 900 - 8,
+        );
+      })
+      .toBe(true);
+    for (const title of titles)
+      await expect(dialog.getByRole("heading", { name: title, exact: true })).toBeAttached();
+    await expect(
+      dialog.getByText("Saved source note for Visa requirement.", { exact: true }),
+    ).toBeVisible();
+    await expect(dialog.getByRole("link")).toHaveCount(5);
+    await expect(dialog.locator("blockquote")).toHaveCount(5);
+    const finalClaim = dialog.getByText("Saved source note for Personalized checklist.", {
+      exact: true,
+    });
+    await finalClaim.scrollIntoViewIfNeeded();
+    await expect(finalClaim).toBeInViewport();
+    await dialog
+      .getByRole("heading", { name: "Latest sources", exact: true })
+      .scrollIntoViewIfNeeded();
+    await page.screenshot({ path: join(output, `sources-${width}.png`), animations: "disabled" });
+    await page.keyboard.press("Escape");
+    await expect(dialog).toHaveCount(0);
+    await expect(viewSources).toBeFocused();
+    expect(
+      await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
+    ).toBe(true);
+  }
+});
+
+test("checklist generation status survives navigation and reload and shows saved results", async ({
+  page,
+  context,
+}) => {
+  await context.addCookies([{ name: "session", value: staffCookie, url: base }]);
+  const db = drizzle(pool, { schema });
+  const original = await db.query.visaApplicationTable.findFirst({
+    where: eq(schema.visaApplicationTable.id, applicationId),
+  });
+  const staff = await db.query.agencyTeamMemberTable.findFirst({
+    where: eq(schema.agencyTeamMemberTable.status, "active"),
+  });
+  const [application] = await db
+    .insert(schema.visaApplicationTable)
+    .values({
+      userId: original!.userId,
+      agencyId,
+      clientId: original!.clientId,
+      clientName: "Background checklist client",
+      homeCountry: "Bangladesh",
+      currentCountry: "Bangladesh",
+      destinationCountry: "Japan",
+      visaType: "Tourist",
+      embassy: "Dhaka",
+    })
+    .returning();
+  const [applicant] = await db
+    .insert(schema.applicantTable)
+    .values({
+      applicationId: application.id,
+      name: "Background checklist applicant",
+      relationship: "primary",
+    })
+    .returning();
+  const [job] = await db
+    .insert(schema.checklistJobTable)
+    .values({
+      applicationId: application.id,
+      applicantId: applicant.id,
+      userId: staff!.userId!,
+      contextHash: "a".repeat(64),
+      status: "queued",
+    })
+    .returning();
+  try {
+    await page.goto(`${base}/dashboard/${application.id}?tab=checklist`);
+    await expect(
+      page.getByRole("button", { name: "Checklist queued", exact: true }),
+    ).toBeDisabled();
+    await page.reload();
+    await expect(
+      page.getByRole("button", { name: "Checklist queued", exact: true }),
+    ).toBeDisabled();
+    await page.getByRole("tab", { name: "Details", exact: true }).click();
+    await page.getByRole("tab", { name: "Checklist", exact: true }).click();
+    await expect(
+      page.getByRole("button", { name: "Checklist queued", exact: true }),
+    ).toBeDisabled();
+    await db
+      .update(schema.checklistJobTable)
+      .set({ status: "running" })
+      .where(eq(schema.checklistJobTable.id, job.id));
+    await expect(
+      page.getByRole("button", { name: "Generating checklist...", exact: true }),
+    ).toBeDisabled();
+    await db.insert(schema.checklistItemTable).values({
+      applicationId: application.id,
+      applicantId: applicant.id,
+      documentName: "Generated passport",
+      description: "Provide a readable passport.",
+      isRequired: true,
+    });
+    await db
+      .update(schema.checklistJobTable)
+      .set({ status: "succeeded" })
+      .where(eq(schema.checklistJobTable.id, job.id));
+    await expect(page.getByText("Generated passport", { exact: true })).toBeVisible();
+    const [refreshJob] = await db
+      .insert(schema.checklistJobTable)
+      .values({
+        applicationId: application.id,
+        applicantId: applicant.id,
+        userId: staff!.userId!,
+        contextHash: "b".repeat(64),
+        refreshResearch: true,
+        status: "queued",
+      })
+      .returning();
+    await page.reload();
+    await expect(
+      page.getByRole("button", { name: "Checklist queued", exact: true }),
+    ).toBeDisabled();
+    await db
+      .update(schema.checklistJobTable)
+      .set({ status: "failed", error: "Checklist generation failed. Please try again." })
+      .where(eq(schema.checklistJobTable.id, refreshJob.id));
+    await expect(
+      page.getByRole("alert").filter({ hasText: "Checklist generation failed. Please try again." }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("button", { name: "Refresh checklist", exact: true }),
+    ).toBeEnabled();
+  } finally {
+    await db
+      .delete(schema.visaApplicationTable)
+      .where(eq(schema.visaApplicationTable.id, application.id));
+  }
 });

@@ -14,43 +14,6 @@ import { DangerZoneCard } from "@/components/settings/danger-zone-card";
 
 const SETTINGS_CARD_CLASS = "rounded-md border-border";
 
-function SettingsFormSkeleton() {
-  return (
-    <Card className={SETTINGS_CARD_CLASS}>
-      <CardHeader>
-        <div className="space-y-2">
-          <Skeleton className="h-8 w-[200px]" />
-          <Skeleton className="h-4 w-[300px]" />
-        </div>
-      </CardHeader>
-      <CardContent>
-        <div className="space-y-6">
-          <div className="grid gap-6 sm:grid-cols-2">
-            <div className="space-y-2">
-              <Skeleton className="h-4 w-[100px]" />
-              <Skeleton className="h-10 w-full" />
-            </div>
-            <div className="space-y-2">
-              <Skeleton className="h-4 w-[100px]" />
-              <Skeleton className="h-10 w-full" />
-            </div>
-          </div>
-
-          <div className="space-y-2">
-            <Skeleton className="h-4 w-[100px]" />
-            <Skeleton className="h-10 w-full" />
-            <Skeleton className="h-4 w-[200px]" />
-          </div>
-
-          <div className="flex justify-end">
-            <Skeleton className="h-10 w-[100px]" />
-          </div>
-        </div>
-      </CardContent>
-    </Card>
-  );
-}
-
 function AccountDetailsSkeleton() {
   return (
     <Card className={SETTINGS_CARD_CLASS}>
@@ -70,7 +33,7 @@ function AccountDetailsSkeleton() {
 }
 
 export default async function SettingsPage() {
-  await requireVerifiedPageSession();
+  const session = await requireVerifiedPageSession();
 
   return (
     <div className="flex flex-col gap-4 md:gap-6">
@@ -82,9 +45,7 @@ export default async function SettingsPage() {
       </div>
 
       <div className="grid gap-4 md:gap-6 md:grid-cols-2">
-        <Suspense fallback={<SettingsFormSkeleton />}>
-          <SettingsForm />
-        </Suspense>
+        <SettingsForm user={session.user} />
         <Suspense fallback={<AccountDetailsSkeleton />}>
           <AccountDetailsCard />
         </Suspense>

@@ -18,14 +18,12 @@ export function SessionRefreshProvider({
 }: SessionRefreshProviderProps) {
   const setSession = useSessionStore((store) => store.setSession);
   const setConfig = useConfigStore((store) => store.setConfig);
-  const refetchSession = useSessionStore((store) => store.refetchSession);
   const clearSession = useSessionStore((store) => store.clearSession);
 
   const doFetchSession = useCallback(async () => {
     try {
-      refetchSession();
-
       const response = await fetch("/api/get-session");
+      if (!response.ok) throw new Error("Session refresh request failed");
       const sessionWithConfig = (await response.json()) as {
         session: SessionValidationResult;
         config: Awaited<ReturnType<typeof getConfig>>;
@@ -39,10 +37,11 @@ export function SessionRefreshProvider({
         clearSession();
       }
     } catch (error) {
+      // Keep the last verified session on a temporary connection failure.
+      // A successful response with no session still clears it above.
       console.error("Failed to fetch session:", error);
-      clearSession();
     }
-  }, [clearSession, refetchSession, setConfig, setSession]);
+  }, [clearSession, setConfig, setSession]);
 
   const doFetchSessionRef = useRef(doFetchSession);
 

@@ -180,7 +180,7 @@ ${params.criteria}`;
  * Wraps pointwise LLM-as-judge into an EvalMetric compatible with the runner.
  *
  * The metric score is the mean of the requested dimensions, normalised to [0, 1].
- * When `RUN_LLM_JUDGE` is not enabled, returns a skip result with score = 1.
+ * When disabled, the judge is unmeasured and does not count as a quality pass.
  */
 export function llmJudgeMetric(
   dimensions: JudgeDimension[],
@@ -193,8 +193,9 @@ export function llmJudgeMetric(
       if (!isLlmJudgeEnabled()) {
         return {
           name: `llmJudge(${dimensions.join(",")})`,
-          score: 1,
-          passed: true,
+          score: 0,
+          passed: false,
+          measured: false,
           detail: "Skipped (RUN_LLM_JUDGE not enabled)",
         };
       }

@@ -21,7 +21,7 @@ async function checkCsrf(token: string) {
 }
 function refreshAgencyPages() {
   revalidatePath("/dashboard", "layout");
-  revalidatePath("/settings/agency");
+  revalidatePath("/dashboard/agency");
   revalidatePath("/agency-setup");
 }
 

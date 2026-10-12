@@ -42,7 +42,7 @@ export function AddStaffDialog({ disabled = false }: { disabled?: boolean }) {
     );
   return (
     <Button asChild>
-      <Link href="/settings/agency#invitations">
+      <Link href="/dashboard/agency#invitations">
         <UserPlusIcon className="h-4 w-4" />
         Invite staff
       </Link>

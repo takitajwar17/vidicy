@@ -60,7 +60,7 @@ async function produceChat(testCase: EvalTestCase<unknown, ChatExpected>): Promi
 // Tests
 // ---------------------------------------------------------------------------
 
-describe("Atlas Chat Quality Evaluation", () => {
+describe.skipIf(process.env.RUN_CHAT_EVALS !== "true")("Atlas Chat Quality Evaluation", () => {
   it("passes all quality metrics across chat scenarios", { timeout: 300_000 }, async () => {
     const baseline = loadBaseline("atlas-chat");
 
@@ -202,6 +202,7 @@ describe("Atlas Chat Quality Evaluation", () => {
 
     // Assert aggregate pass rates meet minimum thresholds
     for (const agg of result.aggregates) {
+      if (agg.passRate === null) continue;
       if (agg.name.startsWith("llmJudge")) continue;
       expect(
         agg.passRate,

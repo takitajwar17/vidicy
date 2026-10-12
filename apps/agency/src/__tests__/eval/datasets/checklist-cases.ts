@@ -1,5 +1,5 @@
 /**
- * Golden test cases for checklist generation evaluation.
+ * Developer-authored document proposal examples; not official mandatory checklists.
  *
  * Each case simulates a visa application scenario with expected
  * checklist characteristics — we don't hardcode exact outputs since
@@ -32,11 +32,11 @@ export interface ChecklistInput {
 }
 
 export interface ChecklistExpected {
-  /** Minimum number of items */
-  minItems: number;
-  /** Maximum number of items */
-  maxItems: number;
-  /** Document names that MUST appear (case-insensitive substring match) */
+  /** Historical external metadata only; no production count constraint. */
+  minItems?: number;
+  /** Historical external metadata only; no production count constraint. */
+  maxItems?: number;
+  /** Developer candidate-name examples, not verified legal requirements. */
   requiredDocNames: string[];
   /** Document names that should NOT appear */
   excludedDocNames?: string[];
@@ -53,15 +53,13 @@ export const checklistCases: EvalTestCase<ChecklistInput, ChecklistExpected>[] =
     id: "us-tourist-b1b2-bd",
     description: "US B1/B2 tourist visa from Bangladesh — first-time applicant",
     input: {
-      visaType: "Tourist / Visitor (B1/B2)",
+      visaType: "B1/B2 Visitor",
       homeCountry: "Bangladesh",
       destinationCountry: "United States",
       embassy: "US Embassy Dhaka",
       applicantName: "Rashid Ahmed",
     },
     expected: {
-      minItems: 6,
-      maxItems: 18,
       requiredDocNames: ["passport", "photo", "ds-160"],
       expectedKeywords: ["validity", "6 months"],
     },
@@ -71,15 +69,13 @@ export const checklistCases: EvalTestCase<ChecklistInput, ChecklistExpected>[] =
     id: "uk-student-tier4-in",
     description: "UK Student visa (Tier 4) from India — first-time student",
     input: {
-      visaType: "Student (Tier 4 / Student Route)",
+      visaType: "Student",
       homeCountry: "India",
       destinationCountry: "United Kingdom",
       embassy: "UK Visa Application Centre New Delhi",
       applicantName: "Priya Sharma",
     },
     expected: {
-      minItems: 7,
-      maxItems: 18,
       requiredDocNames: ["passport", "cas", "english"],
       expectedKeywords: ["CAS", "ATAS", "financial", "maintenance"],
     },
@@ -89,15 +85,13 @@ export const checklistCases: EvalTestCase<ChecklistInput, ChecklistExpected>[] =
     id: "schengen-tourist-ng",
     description: "Schengen tourist visa from Nigeria",
     input: {
-      visaType: "Tourist / Visitor (Schengen)",
+      visaType: "Schengen Visitor (Type C)",
       homeCountry: "Nigeria",
       destinationCountry: "France",
       embassy: "French Embassy Lagos",
       applicantName: "Chidi Okonkwo",
     },
     expected: {
-      minItems: 7,
-      maxItems: 18,
       requiredDocNames: ["passport", "photo", "insurance"],
       expectedKeywords: ["travel insurance", "itinerary", "hotel"],
     },
@@ -107,15 +101,13 @@ export const checklistCases: EvalTestCase<ChecklistInput, ChecklistExpected>[] =
     id: "canada-work-ph",
     description: "Canada work permit from Philippines",
     input: {
-      visaType: "Work Permit",
+      visaType: "Employer-specific Work Permit",
       homeCountry: "Philippines",
       destinationCountry: "Canada",
       embassy: "Canadian Embassy Manila",
       applicantName: "Maria Santos",
     },
     expected: {
-      minItems: 7,
-      maxItems: 18,
       requiredDocNames: ["passport", "lmia", "offer"],
       expectedKeywords: ["LMIA", "employer", "job offer"],
     },
@@ -132,8 +124,6 @@ export const checklistCases: EvalTestCase<ChecklistInput, ChecklistExpected>[] =
       applicantName: "Wei Zhang",
     },
     expected: {
-      minItems: 8,
-      maxItems: 18,
       requiredDocNames: ["passport", "skills assessment", "english"],
       expectedKeywords: ["points", "skills", "IELTS", "PTE"],
     },
@@ -143,7 +133,7 @@ export const checklistCases: EvalTestCase<ChecklistInput, ChecklistExpected>[] =
     id: "us-tourist-rejected-eg",
     description: "US tourist visa from Egypt — previously rejected, reapplying",
     input: {
-      visaType: "Tourist / Visitor (B1/B2)",
+      visaType: "B1/B2 Visitor",
       homeCountry: "Egypt",
       destinationCountry: "United States",
       embassy: "US Embassy Cairo",
@@ -154,8 +144,6 @@ export const checklistCases: EvalTestCase<ChecklistInput, ChecklistExpected>[] =
       rejectedReason: "Insufficient ties to home country",
     },
     expected: {
-      minItems: 7,
-      maxItems: 18,
       requiredDocNames: ["passport", "photo", "ds-160"],
       expectedKeywords: ["ties", "employment", "property"],
     },
@@ -165,7 +153,7 @@ export const checklistCases: EvalTestCase<ChecklistInput, ChecklistExpected>[] =
     id: "uk-family-dependent-pk",
     description: "UK Family/Dependent visa from Pakistan — spouse dependent",
     input: {
-      visaType: "Family / Dependent",
+      visaType: "Family - Dependant",
       homeCountry: "Pakistan",
       destinationCountry: "United Kingdom",
       embassy: "UK Visa Application Centre Islamabad",
@@ -173,8 +161,6 @@ export const checklistCases: EvalTestCase<ChecklistInput, ChecklistExpected>[] =
       isDependent: true,
     },
     expected: {
-      minItems: 6,
-      maxItems: 18,
       requiredDocNames: ["passport", "relationship", "sponsor"],
       expectedKeywords: ["relationship", "financial", "sponsor", "accommodation"],
     },

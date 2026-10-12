@@ -112,20 +112,26 @@ function createUploadDbMock({
   });
   const update = vi.fn(() => ({ set: updateSet }));
 
-  return {
-    db: {
-      query: {
-        applicantTable: {
-          findFirst: vi.fn(async () => ({ id: "applicant_123" })),
-        },
-        checklistItemTable: {
-          findFirst: vi.fn(async () => ({ id: "item_123", applicantId: "applicant_123" })),
-        },
+  const db = {
+    query: {
+      visaApplicationTable: {
+        findFirst: vi.fn(async () => ({ id: "app_123", finalSubmissionAt: null, trashedAt: null })),
       },
-      insert,
-      update,
-      batch: vi.fn(async (queries: Promise<unknown>[]) => Promise.all(queries)),
+      applicantTable: {
+        findFirst: vi.fn(async () => ({ id: "applicant_123" })),
+      },
+      checklistItemTable: {
+        findFirst: vi.fn(async () => ({ id: "item_123", applicantId: "applicant_123" })),
+      },
     },
+    insert,
+    update,
+    batch: vi.fn(async (queries: Promise<unknown>[]) => Promise.all(queries)),
+    execute: vi.fn(async () => ({ rows: [{ id: "app_123" }] })),
+    withTransaction: vi.fn(async (operation: () => Promise<unknown>) => operation()),
+  };
+  return {
+    db,
     insertValuesCalls,
     checklistStatusUpdates,
   };
@@ -390,7 +396,46 @@ describe("document upload routes", () => {
 });
 
 describe("upload workflow consistency", () => {
-  it("saves the selected document type and resets readiness in one batch", async () => {
+  it.each(["removed", "submitted"])(
+    "rejects a case change during storage upload: %s",
+    async (change) => {
+      const { db } = createUploadDbMock();
+      const deleteBlob = vi.fn().mockResolvedValue(undefined);
+      mockGetDB.mockReturnValue(db);
+      mockRequireRouteSession.mockResolvedValue({ session: { user: { id: "user_123" } } });
+      mockAuthorizeApplicationRouteAccess.mockResolvedValue({
+        session: { user: { id: "user_123" } },
+      });
+      mockGetRuntimeContext.mockResolvedValue({
+        env: { R2: { delete: deleteBlob } },
+        ctx: { waitUntil: vi.fn() },
+      });
+      mockUploadToR2.mockImplementationOnce(async () => {
+        if (change === "removed")
+          db.query.checklistItemTable.findFirst.mockResolvedValueOnce(null as never);
+        else
+          db.query.visaApplicationTable.findFirst.mockResolvedValueOnce({
+            id: "app_123",
+            finalSubmissionAt: new Date(),
+            trashedAt: null,
+          } as never);
+      });
+      mockEnqueueDocumentExtraction.mockClear();
+      const form = new FormData();
+      form.set("file", new File(["image"], "passport.png", { type: "image/png" }));
+      form.set("applicationId", "app_123");
+      form.set("checklistItemId", "item_123");
+      const response = await uploadImagePOST(
+        new Request("http://localhost/api/documents/upload/image", { method: "POST", body: form }),
+      );
+      expect(response.status).toBe(409);
+      expect(db.insert).not.toHaveBeenCalled();
+      expect(mockEnqueueDocumentExtraction).not.toHaveBeenCalled();
+      expect(deleteBlob).toHaveBeenCalledWith("file-key");
+    },
+  );
+
+  it("saves the selected document type and resets readiness in one transaction", async () => {
     const { db, insertValuesCalls, checklistStatusUpdates } = createUploadDbMock();
     mockGetDB.mockReturnValue(db);
     mockRequireRouteSession.mockResolvedValue({ session: { user: { id: "user_123" } } });
@@ -411,7 +456,7 @@ describe("upload workflow consistency", () => {
       }),
     );
     expect(response.status).toBe(200);
-    expect(db.batch).toHaveBeenCalledTimes(1);
+    expect(db.withTransaction).toHaveBeenCalledTimes(1);
     expect(insertValuesCalls[0].checklistItemId).toBe("bank_statement_item");
     expect(checklistStatusUpdates).toContainEqual(
       expect.objectContaining({

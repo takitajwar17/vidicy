@@ -20,6 +20,7 @@ export function getActiveNavigationUrl({
       "reports",
       "support",
       "announcements",
+      "agency",
     ]).has(pathname.split("/")[2])
       ? "/dashboard/applications"
       : pathname;

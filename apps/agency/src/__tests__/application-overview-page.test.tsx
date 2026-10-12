@@ -56,14 +56,25 @@ vi.mock("@/components/ui/sidebar", () => ({
 
 vi.mock("@/components/agency/agency-case-actions", () => ({
   AgencyCaseToolbar: () => <div>Agency toolbar</div>,
+  AgencyCaseReadiness: () => <section aria-label="Review readiness">Mark ready to submit</section>,
   AgencyCaseStatusSelect: () => <div>Case status select</div>,
   AgencyCaseAssignmentSelect: () => <div>Reviewer assignment</div>,
   ReviewIssueStatusSelect: () => <div>Issue status select</div>,
   AddReviewIssueForm: () => <div>Add issue form</div>,
+  AddReviewIssueDialog: () => <button>Add issue</button>,
 }));
 
 vi.mock("@/components/visa/checklist-generator", () => ({
   ChecklistGenerator: () => <div>Generate checklist</div>,
+}));
+vi.mock("@/components/agency/checklist-research-details", () => ({
+  ChecklistResearchDetails: () => <div>Checklist sources</div>,
+}));
+vi.mock("@/components/agency/route-review-details", () => ({
+  RouteReviewDetails: () => <div>Case details for this route</div>,
+}));
+vi.mock("@/components/agency/checklist-item-editor", () => ({
+  ChecklistItemEditor: () => <div>Checklist item controls</div>,
 }));
 
 vi.mock("@/components/visa/document-upload", () => ({
@@ -72,21 +83,6 @@ vi.mock("@/components/visa/document-upload", () => ({
 
 vi.mock("@/components/visa/evaluation-trigger", () => ({
   EvaluationTrigger: () => <button>Run Review</button>,
-}));
-
-vi.mock("@/components/visa/document-preview-drawer", () => ({
-  DocumentPreviewDrawer: ({
-    children,
-    fileName,
-  }: {
-    children?: React.ReactNode;
-    fileName: string;
-  }) => (
-    <div>
-      {fileName}
-      {children}
-    </div>
-  ),
 }));
 
 vi.mock("@/components/visa/delete-document-button", () => ({
@@ -370,12 +366,183 @@ describe("agency application pages", () => {
 
     expect(markup).toContain("Case VA-2026-ABC123");
     expect(markup).toContain("Review");
-    expect(markup).toContain("Readiness score");
-    expect(markup).toContain("Needs attention");
+    expect(markup).toContain('aria-label="Case actions"');
+    expect(markup).toContain('aria-label="Review readiness"');
+    expect(markup).not.toContain("<footer");
+    expect(markup).not.toContain("Readiness score");
+    expect(markup).not.toContain("Case route.");
+    expect(markup).toContain("Review issues");
     expect(markup).toContain('aria-label="Review issues"');
     expect(markup).toContain("Bank statement needs review");
+    expect(markup).not.toContain("AI finding");
     expect(markup).not.toContain("Atlas");
     expect(markup).not.toContain("Checkout");
+  });
+
+  it("shows uploaded file rows under their checklist item, including older versions", async () => {
+    const detail = await mockGetAgencyCaseDetail("vapp_123");
+    mockGetAgencyCaseDetail.mockResolvedValue({
+      ...detail,
+      checklistItems: [
+        ...detail.checklistItems,
+        { ...detail.checklistItems[0], id: "c2", documentName: "Bank statement" },
+        {
+          ...detail.checklistItems[0],
+          id: "c3",
+          documentName: "Admission letter",
+          isRequired: false,
+        },
+      ],
+      documents: [
+        detail.documents[0],
+        {
+          ...detail.documents[0],
+          id: "udoc_old",
+          fileName: "passport-previous.pdf",
+          uploadedAt: new Date("2026-10-10T00:00:00Z"),
+        },
+        {
+          ...detail.documents[0],
+          id: "udoc_bank",
+          checklistItemId: "c2",
+          fileName: "bank-statement.png",
+          mimeType: "image/png",
+        },
+      ],
+    });
+    const markup = renderMarkup(
+      <NuqsTestingAdapter searchParams="?tab=checklist">
+        {await ApplicationDetailPage({ params: Promise.resolve({ appId: "vapp_123" }) })}
+      </NuqsTestingAdapter>,
+    );
+    expect(markup).toContain('aria-label="Uploaded files for Passport"');
+    const passportFiles = markup
+      .split('aria-label="Uploaded files for Passport"')[1]
+      ?.split("</ul>")[0];
+    expect(passportFiles).toContain('aria-label="Preview document: passport.pdf"');
+    expect(passportFiles).toContain('aria-label="Preview document: passport-previous.pdf"');
+    expect(passportFiles).toContain("1.0 KB");
+    expect(passportFiles).toContain("In use");
+    expect(passportFiles).toContain("Older");
+    expect(passportFiles).not.toContain("bank-statement.png");
+    const bankFiles = markup
+      .split('aria-label="Uploaded files for Bank statement"')[1]
+      ?.split("</ul>")[0];
+    expect(bankFiles).toContain('aria-label="Preview document: bank-statement.png"');
+    expect(bankFiles).not.toContain("passport.pdf");
+    expect(markup).not.toContain('aria-label="Uploaded files for Admission letter"');
+    expect(markup.indexOf("Required files uploaded")).toBeLessThan(
+      markup.indexOf('aria-label="Uploaded files for Passport"'),
+    );
+    expect(markup.indexOf("Checklist sources")).toBeLessThan(
+      markup.indexOf("Required files uploaded"),
+    );
+  });
+
+  it("keeps a single applicant name in the header without repeating it on checklist rows", async () => {
+    const markup = renderMarkup(
+      <NuqsTestingAdapter searchParams="?tab=checklist">
+        {await ApplicationDetailPage({ params: Promise.resolve({ appId: "vapp_123" }) })}
+      </NuqsTestingAdapter>,
+    );
+    expect(markup.split(primaryApplicant.name)).toHaveLength(2);
+  });
+
+  it("keeps issue actions and the latest client report in Review", async () => {
+    const markup = renderToStaticMarkup(
+      await ApplicationDetailPage({ params: Promise.resolve({ appId: "vapp_123" }) }),
+    );
+    expect(markup).toContain(">Add issue<");
+    expect(markup).toContain('href="/dashboard/reports/crep_1"');
+    expect(markup).toContain("Open client report");
+    expect(markup).not.toContain("Record case details and check the sources");
+    expect(markup).not.toContain(">Notes<");
+  });
+
+  it.each(["details", "notes", "activity"])(
+    "shows case facts in %s without issue actions or evidence",
+    async (tab) => {
+      const markup = renderMarkup(
+        <NuqsTestingAdapter searchParams={`?tab=${tab}`}>
+          {await ApplicationDetailPage({ params: Promise.resolve({ appId: "vapp_123" }) })}
+        </NuqsTestingAdapter>,
+      );
+      expect(markup).toContain("Case details for this route");
+      expect(markup).toContain("Route requirements");
+      expect(markup).toContain("Previous approvals:");
+      expect(markup).toContain("Case activity");
+      expect(markup).toContain('data-state="active"');
+      expect(markup).not.toContain(">Activity<");
+      expect(markup).not.toContain(">Add issue<");
+      expect(markup).not.toContain("Open client report");
+      expect(markup).not.toContain("Supporting evidence");
+      expect(markup.indexOf("Case details for this route")).toBeLessThan(
+        markup.indexOf("Route requirements"),
+      );
+    },
+  );
+
+  it("keeps all applicant records and activity beside the form, with source guidance in a disclosure", async () => {
+    const detail = await mockGetAgencyCaseDetail("vapp_123");
+    mockGetAgencyCaseDetail.mockResolvedValue({
+      ...detail,
+      applicants: [
+        primaryApplicant,
+        {
+          ...primaryApplicant,
+          id: "appl_child",
+          name: "Case child",
+          relationship: "child",
+          passportNumber: "TEST-CHILD-001",
+        },
+      ],
+    });
+    const markup = renderMarkup(
+      <NuqsTestingAdapter searchParams="?tab=details">
+        {await ApplicationDetailPage({ params: Promise.resolve({ appId: "vapp_123" }) })}
+      </NuqsTestingAdapter>,
+    );
+    const sidebar = markup.split('<aside aria-label="Case information"')[1]?.split("</aside>")[0];
+    expect(sidebar).toContain("Case child");
+    expect(sidebar).toContain("TEST-CHILD-001");
+    expect(sidebar).toContain("Reviewer");
+    expect(sidebar).toContain("Case activity");
+    expect(sidebar).not.toContain("Nationality:");
+    expect(markup).toContain('<details aria-label="Route guidance and official sources"');
+    expect(markup.indexOf("Case details for this route")).toBeLessThan(markup.indexOf("<aside"));
+  });
+
+  it("shows recorded case milestones after the case details", async () => {
+    const markup = renderMarkup(
+      <NuqsTestingAdapter searchParams="?tab=details">
+        {await ApplicationDetailPage({ params: Promise.resolve({ appId: "vapp_123" }) })}
+      </NuqsTestingAdapter>,
+    );
+    expect(markup).toContain("Case created");
+    expect(markup).toContain("Client submitted files");
+    expect(markup.indexOf("Route requirements")).toBeLessThan(markup.indexOf("Case activity"));
+    expect(markup).not.toContain("Review completed");
+    expect(markup).not.toContain("Tracked issues");
+    expect(markup).not.toContain("Issue status select");
+    expect(markup).not.toContain(">Add issue<");
+    expect(markup).not.toContain("Supporting evidence");
+  });
+
+  it("shows the most recent recorded milestone first", async () => {
+    const detail = await mockGetAgencyCaseDetail("vapp_123");
+    mockGetAgencyCaseDetail.mockResolvedValue({
+      ...detail,
+      application: {
+        ...detail.application,
+        reviewCompletedAt: new Date("2026-10-18T00:00:00Z"),
+      },
+    });
+    const markup = renderMarkup(
+      <NuqsTestingAdapter searchParams="?tab=activity">
+        {await ApplicationDetailPage({ params: Promise.resolve({ appId: "vapp_123" }) })}
+      </NuqsTestingAdapter>,
+    );
+    expect(markup.indexOf("Review completed")).toBeLessThan(markup.indexOf("Case created"));
   });
 
   it("shows checklist generation as the first step for an empty case", async () => {
@@ -394,6 +561,39 @@ describe("agency application pages", () => {
     expect(markup).toContain("Generate checklist");
     expect(markup).not.toContain("Upload More");
     expect(markup).not.toContain('type="file"');
+    expect(markup).not.toContain("Checklist sources");
+    expect(markup).not.toContain("Required files uploaded");
+    expect(markup).not.toContain("Record case details and check the sources");
+    const detailsMarkup = renderMarkup(
+      <NuqsTestingAdapter searchParams="?tab=details">
+        {await ApplicationDetailPage({ params: Promise.resolve({ appId: "vapp_123" }) })}
+      </NuqsTestingAdapter>,
+    );
+    expect(detailsMarkup).toContain("Previous approvals:");
+    expect(detailsMarkup).toContain("Route requirements");
+    expect(detailsMarkup).toContain("Case details for this route");
+  });
+
+  it("shows file coverage without a zero required-document total for supporting items", async () => {
+    const detail = await mockGetAgencyCaseDetail("vapp_123");
+    mockGetAgencyCaseDetail.mockResolvedValue({
+      ...detail,
+      checklistItems: detail.checklistItems.map((item: { isRequired: boolean }) => ({
+        ...item,
+        isRequired: false,
+      })),
+      documents: [],
+      latestEvaluation: null,
+      issues: [],
+    });
+    const markup = renderToStaticMarkup(
+      await ApplicationDetailPage({ params: Promise.resolve({ appId: "vapp_123" }) }),
+    );
+    expect(markup).toContain("Checklist files");
+    expect(markup).toContain("0/1");
+    expect(markup).toContain("checklist items have files.");
+    expect(markup).not.toContain("0 / 0");
+    expect(markup).not.toContain("required files missing");
   });
 
   it("shows saved issues with status controls instead of a separate AI flag list", async () => {
@@ -427,6 +627,7 @@ describe("agency application pages", () => {
     );
     expect(markup).toContain("incomplete or no longer matches the documents");
     expect(markup).toContain("previous review");
-    expect(markup).toContain("Pending");
+    expect(markup).not.toContain("Required files uploaded");
+    expect(markup).not.toContain("82 / 100");
   });
 });

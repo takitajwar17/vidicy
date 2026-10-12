@@ -134,12 +134,14 @@ export async function runEvalSuite<TOutput, TExpected>(
 
     if (lastError) {
       caseResults.push({
+        executionStatus: "failed",
         caseId: testCase.id,
         description: testCase.description,
         scores: evalMetrics.map((m) => ({
           name: m.name,
           score: 0,
           passed: false,
+          measured: false,
           detail: `Producer error: ${lastError instanceof Error ? lastError.message : String(lastError)}`,
         })),
         passed: false,
@@ -148,12 +150,14 @@ export async function runEvalSuite<TOutput, TExpected>(
       if (stopOnProducerError) {
         for (const pendingCase of cases.slice(i + 1)) {
           caseResults.push({
+            executionStatus: "not_run",
             caseId: pendingCase.id,
             description: pendingCase.description,
             scores: evalMetrics.map((metric) => ({
               name: metric.name,
               score: 0,
               passed: false,
+              measured: false,
               detail: "Not measured after an unrecovered producer failure",
             })),
             passed: false,
@@ -177,9 +181,11 @@ export async function runEvalSuite<TOutput, TExpected>(
       ),
     );
 
-    const allPassed = scores.every((s) => s.passed);
+    const measuredScores = scores.filter((score) => score.measured !== false);
+    const allPassed = measuredScores.length > 0 && measuredScores.every((score) => score.passed);
 
     caseResults.push({
+      executionStatus: "completed",
       caseId: testCase.id,
       description: testCase.description,
       scores,
@@ -194,6 +200,12 @@ export async function runEvalSuite<TOutput, TExpected>(
   const overallPassed = caseResults.every((c) => c.passed);
 
   const result: EvalRunResult = {
+    operational: {
+      attempted: caseResults.filter((item) => item.executionStatus !== "not_run").length,
+      completed: caseResults.filter((item) => item.executionStatus === "completed").length,
+      failed: caseResults.filter((item) => item.executionStatus === "failed").length,
+      notRun: caseResults.filter((item) => item.executionStatus === "not_run").length,
+    },
     suiteName,
     timestamp: new Date().toISOString(),
     caseResults,
@@ -218,23 +230,20 @@ function aggregateMetrics(
   evalMetrics: EvalMetric<unknown, unknown>[],
 ): MetricAggregate[] {
   return evalMetrics.map((metric) => {
-    const scores = caseResults
-      .flatMap((c) => c.scores)
-      .filter((s) => s.name === metric.name)
-      .map((s) => s.score);
-
-    const passed = caseResults
-      .flatMap((c) => c.scores)
-      .filter((s) => s.name === metric.name)
-      .filter((s) => s.passed).length;
+    const allScores = caseResults.flatMap((c) => c.scores).filter((s) => s.name === metric.name);
+    const measured = allScores.filter((score) => score.measured !== false);
+    const scores = measured.map((score) => score.score);
+    const passed = measured.filter((score) => score.passed).length;
 
     return {
       name: metric.name,
-      mean: mean(scores),
-      min: scores.length ? Math.min(...scores) : 0,
-      max: scores.length ? Math.max(...scores) : 0,
-      stdDev: stdDev(scores),
-      passRate: scores.length ? passed / scores.length : 0,
+      measuredCount: measured.length,
+      unmeasuredCount: allScores.length - measured.length,
+      mean: scores.length ? mean(scores) : null,
+      min: scores.length ? Math.min(...scores) : null,
+      max: scores.length ? Math.max(...scores) : null,
+      stdDev: scores.length ? stdDev(scores) : null,
+      passRate: scores.length ? passed / scores.length : null,
     };
   });
 }
@@ -252,7 +261,7 @@ function detectRegressions(
 
   for (const curr of current) {
     const base = baseline.find((b) => b.name === curr.name);
-    if (!base) continue;
+    if (!base || base.mean === null || curr.mean === null) continue;
 
     const delta = base.mean - curr.mean; // positive = regression
     if (base.mean > 0 && delta / base.mean > thresholdPct) {

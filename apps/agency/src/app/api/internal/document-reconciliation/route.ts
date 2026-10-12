@@ -13,6 +13,7 @@ import { verifyInternalGoogleRequest } from "@/infra/google/internal-auth";
 import { cleanDeletedVectorMetadata } from "@/infra/google/vector-search";
 import { logger } from "@/infra/logger";
 import { recoverReviewJobs } from "@/server/review-jobs";
+import { recoverChecklistJobs } from "@/server/checklist-jobs";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -82,6 +83,9 @@ export async function POST(request: Request): Promise<Response> {
       .limit(30);
     let enqueued = 0;
     let failed = 0;
+    const checklists = await recoverChecklistJobs();
+    enqueued += checklists.enqueued;
+    failed += checklists.failed;
     const reviews = await recoverReviewJobs();
     enqueued += reviews.enqueued;
     failed += reviews.failed;

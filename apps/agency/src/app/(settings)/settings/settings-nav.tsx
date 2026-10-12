@@ -3,7 +3,7 @@
 import type { Route } from "next";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { User, Smartphone, Lock, KeyRound, Building2 } from "lucide-react";
+import { User, Smartphone, Lock, KeyRound } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
@@ -14,7 +14,6 @@ interface SettingsNavItem {
 }
 
 const settingsNavItems: SettingsNavItem[] = [
-  { title: "Agency", href: "/settings/agency", icon: Building2 },
   {
     title: "Profile",
     href: "/settings",
@@ -39,7 +38,7 @@ export function SettingsNav() {
     <div className="w-full flex flex-col items-stretch justify-between gap-3 sm:flex-row sm:items-center">
       <div className="min-w-0">
         <Tabs value={pathname}>
-          <TabsList className="grid w-full grid-cols-4 gap-1 sm:flex sm:gap-5">
+          <TabsList className="grid w-full grid-cols-3 gap-1 sm:flex sm:gap-5">
             {settingsNavItems.map((item) => (
               <TabsTrigger key={item.href} value={item.href} asChild>
                 <Link href={item.href} className="flex items-center gap-2">

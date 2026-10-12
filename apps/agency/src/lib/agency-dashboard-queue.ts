@@ -14,6 +14,8 @@ export interface DashboardCase {
   requiredCount: number;
   uploadedRequiredCount: number;
   hasChecklist: boolean;
+  usableDocumentCount?: number;
+  unresolvedRequirementCount?: number;
   reviewState: "not_started" | "outdated" | "current";
   openIssueCount: number;
   finalSubmissionAt: string | null;
@@ -40,6 +42,8 @@ export function needsReadinessCheck(row: DashboardCase) {
   return (
     row.status === "ready_to_submit" &&
     (!row.hasChecklist ||
+      row.usableDocumentCount === 0 ||
+      (row.unresolvedRequirementCount ?? 0) > 0 ||
       row.reviewState !== "current" ||
       row.uploadedRequiredCount < row.requiredCount ||
       row.openIssueCount > 0)
@@ -106,7 +110,25 @@ export function getDashboardNextAction(row: DashboardCase): {
     return { label: "Assign reviewer", detail: "No reviewer assigned", tab: "review" };
   if (!row.hasChecklist)
     return { label: "Generate checklist", detail: "Set the required documents", tab: "checklist" };
+  if (row.usableDocumentCount === 0)
+    return {
+      label: "Upload documents",
+      detail: "No usable evidence is available for review",
+      tab: "checklist",
+    };
+  if ((row.unresolvedRequirementCount ?? 0) > 0 && row.reviewState === "current")
+    return {
+      label: "Complete case details",
+      detail: "Some checklist requirements are not determined",
+      tab: "checklist",
+    };
   const missing = row.requiredCount - row.uploadedRequiredCount;
+  if (missing > 0 && row.reviewState === "not_started" && (row.usableDocumentCount ?? 0) > 0)
+    return {
+      label: "Review available documents",
+      detail: `${missing} required files are still missing`,
+      tab: "review",
+    };
   if (missing > 0)
     return {
       label: "Add missing files",

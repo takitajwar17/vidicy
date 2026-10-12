@@ -1,7 +1,7 @@
 import "server-only";
 
 import { cache } from "react";
-import { count, eq } from "drizzle-orm";
+import { and, count, eq } from "drizzle-orm";
 import { ZSAError } from "zsa";
 import { getDB } from "@/db";
 import {
@@ -64,6 +64,22 @@ export async function ensureAgencyTeamMembership(
 export const getAgencyStaffContextForSession = cache(
   async (session: NonNullable<SessionValidationResult>) => ensureAgencyTeamMembership(session),
 );
+
+export async function getAgencyNameForSession(session: NonNullable<SessionValidationResult>) {
+  if (!session.user.emailVerified) return null;
+  const [agency] = await getDB()
+    .select({ name: agencyTable.name })
+    .from(agencyTeamMemberTable)
+    .innerJoin(agencyTable, eq(agencyTable.id, agencyTeamMemberTable.agencyId))
+    .where(
+      and(
+        eq(agencyTeamMemberTable.userId, session.user.id),
+        eq(agencyTeamMemberTable.status, AGENCY_STAFF_STATUS.ACTIVE),
+      ),
+    )
+    .limit(1);
+  return agency?.name ?? null;
+}
 
 export const requireAgencyStaff = cache(async () => {
   const session = await requireVerifiedEmail();

@@ -19,7 +19,7 @@ vi.mock("@/utils/auth", () => ({
 }));
 
 import { provisionAgencyMembership } from "@/server/agency-provisioning";
-import { ensureAgencyTeamMembership } from "@/server/agency-team";
+import { ensureAgencyTeamMembership, getAgencyNameForSession } from "@/server/agency-team";
 import { hasApplicationPermission } from "@/utils/application-auth";
 
 let cluster: ReturnType<typeof startTestPostgres>;
@@ -55,6 +55,41 @@ async function chooseAgency(session: NonNullable<SessionValidationResult>) {
 }
 
 describe("separate agencies for new accounts", () => {
+  it("loads only the signed-in user's agency name and reflects a name change", async () => {
+    const first = await newSession("sidebar-first@example.test");
+    const second = await newSession("sidebar-second@example.test");
+    const firstStaff = await chooseAgency(first);
+    await chooseAgency(second);
+    await database.db
+      .update(schema.agencyTable)
+      .set({ name: "First agency" })
+      .where(eq(schema.agencyTable.id, firstStaff!.agencyId));
+    expect(await getAgencyNameForSession(first)).toBe("First agency");
+    expect(await getAgencyNameForSession(second)).toBe("Chosen agency");
+    await database.db
+      .update(schema.agencyTable)
+      .set({ name: "Renamed agency" })
+      .where(eq(schema.agencyTable.id, firstStaff!.agencyId));
+    expect(await getAgencyNameForSession(first)).toBe("Renamed agency");
+  });
+
+  it("hides agency identity without active membership and does not create membership", async () => {
+    const owner = await newSession("sidebar-owner@example.test");
+    const newcomer = await newSession("sidebar-new@example.test");
+    await chooseAgency(owner);
+    expect(await getAgencyNameForSession(newcomer)).toBeNull();
+    expect(
+      await getAgencyNameForSession({ ...owner, user: { ...owner.user, emailVerified: null } }),
+    ).toBeNull();
+    await database.db
+      .update(schema.agencyTeamMemberTable)
+      .set({ status: "disabled" })
+      .where(eq(schema.agencyTeamMemberTable.userId, owner.user.id));
+    expect(await getAgencyNameForSession(owner)).toBeNull();
+    expect(await database.db.query.agencyTable.findMany()).toHaveLength(1);
+    expect(await database.db.query.agencyTeamMemberTable.findMany()).toHaveLength(1);
+  });
+
   it("creates separate owner agencies and reuses each agency on later sign-ins", async () => {
     const first = await newSession("first@example.test");
     const second = await newSession("second@example.test");

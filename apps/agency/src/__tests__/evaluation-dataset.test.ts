@@ -12,6 +12,7 @@ import {
 } from "./eval/framework/metrics";
 import type { OrchestratorEvalOutput } from "./eval/framework/types";
 import { runEvalSuite } from "./eval/framework/runner";
+import { resolveReviewRoute } from "@/lib/review-rubric";
 
 let temporaryDirectory: string | undefined;
 afterEach(async () => {
@@ -66,7 +67,7 @@ describe("evaluation datasets", () => {
     { scoreRange: { min: 40, max: 72 }, expectedRiskLevel: "medium" },
     { scoreRange: { min: 30, max: 78 }, expectedRiskLevel: "high" },
   ])(
-    "rejects score ranges that conflict with the supplied risk level: $expectedRiskLevel",
+    "does not impose historical score bands on supplied evidence-state labels: $expectedRiskLevel",
     async (expected) => {
       const dataset = await loadEvaluationCases({});
       temporaryDirectory = await mkdtemp(join(tmpdir(), "vidicy-dataset-"));
@@ -75,7 +76,7 @@ describe("evaluation datasets", () => {
         path,
         JSON.stringify({ ...dataset, cases: [{ ...dataset.cases[0], expected }] }),
       );
-      await expect(loadEvaluationCases({ path })).rejects.toThrow("score range conflicts");
+      await expect(loadEvaluationCases({ path })).resolves.toMatchObject({ cases: [{ expected }] });
     },
   );
 
@@ -96,8 +97,31 @@ describe("evaluation datasets", () => {
           JSON.stringify(document) !== JSON.stringify(base.input.documents[index]),
       );
       expect(changed).toHaveLength(1);
-      expect(variant.expected.lowerScoreThanCaseId).toBe(base.id);
+      expect(variant.expected.lowerScoreThanCaseId).toBeUndefined();
     }
+  });
+
+  it("prepares exact catalog routes without obsolete aliases or substring inference", async () => {
+    const dataset = await loadEvaluationCases({});
+    for (const testCase of dataset.cases) {
+      const prepared = prepareEvaluationInput({ input: testCase.input });
+      expect(prepared.routeContext).toMatchObject({
+        destinationCountry: testCase.input.destinationCountry,
+        visaType: testCase.input.visaType,
+      });
+      expect(resolveReviewRoute(prepared.routeContext!).status).toBe("research_draft");
+      expect(testCase.expected.scoreRange).toBeUndefined();
+      expect(testCase.expected.expectedRiskLevel).toBeUndefined();
+    }
+  });
+
+  it("rejects mismatched route context instead of silently changing the case route", async () => {
+    const dataset = await loadEvaluationCases({});
+    const input = {
+      ...dataset.cases[0].input,
+      routeContext: { destinationCountry: "Canada", visaType: "Visitor" },
+    };
+    expect(() => prepareEvaluationInput({ input })).toThrow(/route context/i);
   });
 
   it("rejects duplicate checklist identifiers before provider work", async () => {
@@ -242,11 +266,13 @@ describe("evaluation reference labels", () => {
   });
   it("makes cases without supplied labels explicit", async () => {
     expect(await itemStatusAgreement().score({ output: reviewOutput })).toMatchObject({
-      passed: true,
+      measured: false,
+      passed: false,
       detail: "No item-status labels supplied",
     });
     expect(await recommendationCoverage().score({ output: reviewOutput })).toMatchObject({
-      passed: true,
+      measured: false,
+      passed: false,
       detail: "No recommendation labels supplied",
     });
   });
@@ -288,10 +314,11 @@ describe("evaluation provider failures", () => {
     expect(producer).toHaveBeenCalledTimes(1);
     expect(result.caseResults[1].scores[0].detail).toContain("Not measured");
     expect(result.caseResults[1].passed).toBe(false);
-    expect(result.aggregates[0].passRate).toBe(0);
+    expect(result.aggregates[0].passRate).toBeNull();
+    expect(result.operational).toEqual({ attempted: 1, completed: 0, failed: 1, notRun: 1 });
   });
 
-  it("keeps rate-limited cases in the pass-rate denominator", async () => {
+  it("records provider failures operationally without treating them as labelled model answers", async () => {
     const { result } = await runEvalSuite({
       suiteName: "provider-failures",
       cases: [
@@ -307,21 +334,33 @@ describe("evaluation provider failures", () => {
       delayBetweenCasesMs: 0,
     });
     expect(result.caseResults).toHaveLength(2);
-    expect(result.aggregates[0].passRate).toBe(0.5);
+    expect(result.aggregates[0].passRate).toBeNull();
+    expect(result.operational).toEqual({ attempted: 2, completed: 1, failed: 1, notRun: 0 });
     expect(result.overallPassed).toBe(false);
   });
 
   it.each([true, false])("bounds rate-limit retries (recovery: %s)", async (recovers) => {
     vi.useFakeTimers();
     try {
-      const producer = vi.fn().mockRejectedValueOnce(new Error("Provider rate limit 429"));
+      const producer = vi
+        .fn<() => Promise<OrchestratorEvalOutput>>()
+        .mockRejectedValueOnce(new Error("Provider rate limit 429"));
       if (recovers) producer.mockResolvedValue(reviewOutput);
       else producer.mockRejectedValue(new Error("Provider rate limit 429"));
       const pending = runEvalSuite({
         suiteName: "provider-retry",
         cases: [{ id: "case", description: "Retry case", input: {} }],
         producer,
-        metrics: [itemStatusAgreement()],
+        metrics: [
+          {
+            ...itemStatusAgreement(),
+            score: ({ output }) =>
+              itemStatusAgreement().score({
+                output,
+                expected: { expectedItemStatuses: { passport: "ok" } },
+              }),
+          },
+        ],
         maxRetries: 1,
         delayBetweenCasesMs: 0,
       });
@@ -329,7 +368,7 @@ describe("evaluation provider failures", () => {
       const { result } = await pending;
       expect(producer).toHaveBeenCalledTimes(2);
       expect(result.overallPassed).toBe(recovers);
-      expect(result.aggregates[0].passRate).toBe(recovers ? 1 : 0);
+      expect(result.aggregates[0].passRate).toBe(recovers ? 1 : null);
     } finally {
       vi.useRealTimers();
     }

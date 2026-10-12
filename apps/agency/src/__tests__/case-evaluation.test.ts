@@ -1,8 +1,11 @@
 import { describe, expect, it, vi } from "vitest";
+import * as reviewRubric from "@/lib/review-rubric";
 import {
   runCaseEvaluation,
   type EvaluationEvidence,
   type EvaluationChecklistItem,
+  type EvaluationProvider,
+  type DocumentEvaluationCheckpoint,
 } from "@/services/case-evaluation";
 
 const documentResult = {
@@ -51,7 +54,7 @@ function fixture(count = 1) {
   };
 }
 
-function overall(score: number) {
+function overall(score: number, count = 1) {
   return JSON.stringify({
     overallScore: score,
     riskLevel: score >= 80 ? "low" : score >= 65 ? "medium" : "high",
@@ -59,21 +62,283 @@ function overall(score: number) {
     redFlags: [],
     strengths: [],
     recommendations: [],
-    itemFeedback: {},
+    itemFeedback: Object.fromEntries(
+      Array.from({ length: count }, (_, index) => [
+        `item-${index}`,
+        {
+          status: "ok",
+          title: "Passport evidence needs review",
+          recommendation: "Provide the relevant passport evidence.",
+          feedback: "Synthetic evidence review.",
+        },
+      ]),
+    ),
   });
 }
 
 describe("production case evaluation core", () => {
+  const finding = {
+    title: "Financial evidence missing",
+    details: "The uploaded file is a curriculum vitae rather than financial evidence.",
+    recommendation: "Provide evidence of the funds available for the trip.",
+  };
+
+  it("asks the model for separate short titles, details, and recommendations", async () => {
+    const evaluate = vi.fn(async (request: Parameters<EvaluationProvider>[0]) =>
+      request.schemaName === "per_document_evaluation"
+        ? JSON.stringify(documentResult)
+        : JSON.stringify({ ...JSON.parse(overall(90)), redFlags: [finding] }),
+    );
+    const result = await runCaseEvaluation({ ...fixture(), evaluate });
+    expect(result.evaluationData.redFlags).toEqual([finding]);
+    const request = evaluate.mock.calls[1][0];
+    expect(request.userContent).toContain("8 words");
+    expect(request.userContent).toContain("80 characters");
+    expect(request.userContent).toContain('"title"');
+    expect(request.userContent).toContain('"details"');
+    expect(request.userContent).toContain('"recommendation"');
+    const properties = (
+      request.schema as {
+        properties: { redFlags: { items: { properties: { title: { maxLength: number } } } } };
+      }
+    ).properties;
+    expect(properties.redFlags.items.properties.title.maxLength).toBe(100);
+  });
+
   it.each([
-    { names: ["PRIYA SHARMA", "Ms. Priya Sharma"], hasMismatch: false },
-    { names: ["PRIYA SHARMA", " Dr. Priya Sharma "], hasMismatch: false },
-    { names: ["Priya Sharma", "Ananya Sharma"], hasMismatch: true },
-    { names: ["নাফিস ইসলাম", "সাদিক ইসলাম"], hasMismatch: true },
-    { names: ["李明", "王芳"], hasMismatch: true },
-    { names: [" José Alvarez ", "ALVAREZ JOSÉ"], hasMismatch: false },
-  ])("checks document holder identities: $names", async ({ names, hasMismatch }) => {
+    "A".repeat(81),
+    "A".repeat(100),
+    "One two three four five six seven eight nine",
+    "One two three four five six seven eight nine ten",
+  ])("accepts a title within the buffer without repair: %s", async (title) => {
+    const evaluate = vi.fn(async (request: Parameters<EvaluationProvider>[0]) => {
+      if (request.schemaName === "per_document_evaluation") return JSON.stringify(documentResult);
+      const response = JSON.parse(overall(90));
+      return JSON.stringify({
+        ...response,
+        redFlags: [{ ...finding, title }],
+        itemFeedback: {
+          "item-0": { ...response.itemFeedback["item-0"], title },
+        },
+      });
+    });
+    const result = await runCaseEvaluation({ ...fixture(), evaluate });
+    expect(result.evaluationData.redFlags).toEqual([{ ...finding, title }]);
+    expect(result.evaluationData.itemFeedback["item-0"].title).toBe(title);
+    expect(evaluate).toHaveBeenCalledTimes(3);
+    expect(
+      evaluate.mock.calls.every(
+        ([request]) =>
+          !(
+            typeof request.userContent === "string" && request.userContent.includes("TITLE REPAIR")
+          ),
+      ),
+    ).toBe(true);
+  });
+
+  it.each([
+    "A".repeat(101),
+    "One two three four five six seven eight nine ten eleven",
+    "Review citem_dghhw7heorfrjhgrvtkyktvs evidence",
+    "resume.pdf",
+  ])("asks the model to repair an invalid title: %s", async (title) => {
+    let combinedCalls = 0;
+    const evaluate = vi.fn(async (request: Parameters<EvaluationProvider>[0]) => {
+      if (request.schemaName === "per_document_evaluation") return JSON.stringify(documentResult);
+      combinedCalls++;
+      return JSON.stringify({
+        ...JSON.parse(overall(90)),
+        redFlags: [{ ...finding, title: combinedCalls === 1 ? title : finding.title }],
+      });
+    });
+    const result = await runCaseEvaluation({ ...fixture(), evaluate });
+    expect(result.evaluationData.redFlags).toEqual([finding]);
+    expect(combinedCalls).toBe(3);
+    expect(evaluate.mock.calls[2][0].userContent).toContain("TITLE REPAIR");
+    expect(evaluate.mock.calls[2][0].userContent).toContain(finding.details);
+  });
+
+  it("rejects a finding when its title is still invalid after one repair attempt", async () => {
+    const evaluate = vi.fn(async (request: Parameters<EvaluationProvider>[0]) =>
+      request.schemaName === "per_document_evaluation"
+        ? JSON.stringify(documentResult)
+        : JSON.stringify({
+            ...JSON.parse(overall(90)),
+            redFlags: [{ ...finding, title: "A".repeat(101) }],
+          }),
+    );
+    await expect(runCaseEvaluation({ ...fixture(), evaluate })).rejects.toThrow(
+      "combined review did not complete",
+    );
+    expect(evaluate).toHaveBeenCalledTimes(3);
+  });
+
+  it("does not accept a title repair that removes the original concern", async () => {
+    let combinedCalls = 0;
+    const evaluate = vi.fn(async (request: Parameters<EvaluationProvider>[0]) => {
+      if (request.schemaName === "per_document_evaluation") return JSON.stringify(documentResult);
+      return JSON.stringify({
+        ...JSON.parse(overall(90)),
+        redFlags: ++combinedCalls === 1 ? [{ ...finding, title: "A".repeat(101) }] : [],
+      });
+    });
+    await expect(runCaseEvaluation({ ...fixture(), evaluate })).rejects.toThrow(
+      "combined review did not complete",
+    );
+    expect(evaluate).toHaveBeenCalledTimes(3);
+  });
+
+  it("repairs a document title while keeping its complete explanation and next action", async () => {
+    let combinedCalls = 0;
+    const evaluate = vi.fn(async (request: Parameters<EvaluationProvider>[0]) => {
+      if (request.schemaName === "per_document_evaluation") return JSON.stringify(documentResult);
+      return JSON.stringify({
+        ...JSON.parse(overall(90)),
+        itemFeedback: {
+          "item-0": {
+            status: "needs_review",
+            title: ++combinedCalls === 1 ? "A".repeat(101) : finding.title,
+            feedback: finding.details,
+            recommendation: finding.recommendation,
+          },
+        },
+      });
+    });
+    const result = await runCaseEvaluation({ ...fixture(), evaluate });
+    expect(result.evaluationData.itemFeedback["item-0"]).toMatchObject({
+      title: finding.title,
+      feedback: finding.details,
+      recommendation: finding.recommendation,
+    });
+    expect(combinedCalls).toBe(3);
+  });
+
+  it("rejects an invalid second-pass title after its one repair attempt", async () => {
+    let combinedCalls = 0;
+    const evaluate = vi.fn(async (request: Parameters<EvaluationProvider>[0]) => {
+      if (request.schemaName === "per_document_evaluation") return JSON.stringify(documentResult);
+      return JSON.stringify({
+        ...JSON.parse(overall(90)),
+        redFlags: [
+          {
+            ...finding,
+            title: ++combinedCalls === 1 ? finding.title : "A".repeat(101),
+          },
+        ],
+      });
+    });
+    await expect(runCaseEvaluation({ ...fixture(), evaluate })).rejects.toThrow(
+      "second review did not complete",
+    );
+    expect(evaluate).toHaveBeenCalledTimes(4);
+  });
+
+  it("excludes non-applicable items and supplies the requirement condition", async () => {
+    const input = fixture(2);
+    Object.assign(input.checklistItems[0], { applicability: "does_not_apply" });
+    Object.assign(input.checklistItems[1], {
+      requirementType: "conditional",
+      applicability: "applies",
+      requirementCondition: "Only when the employer pays",
+    });
+    const evaluate = vi.fn(async ({ schemaName }: Parameters<EvaluationProvider>[0]) =>
+      schemaName === "per_document_evaluation" ? JSON.stringify(documentResult) : overall(100),
+    );
+    const result = await runCaseEvaluation({ ...input, evaluate });
+    expect(result.perDocumentEvaluations.map((item) => item.checklistItemId)).toEqual(["item-1"]);
+    expect(JSON.stringify(evaluate.mock.calls[0][0].userContent)).toContain(
+      "Only when the employer pays",
+    );
+  });
+  it("does not call a model for an empty checklist or absent evidence", async () => {
+    const evaluate = vi.fn().mockResolvedValue(overall(0));
+    await expect(runCaseEvaluation({ ...fixture(0), evaluate })).rejects.toThrow("checklist");
+    const input = fixture();
+    input.evidence.docByChecklistItem.clear();
+    await expect(runCaseEvaluation({ ...input, evaluate })).rejects.toThrow("usable");
+    expect(evaluate).not.toHaveBeenCalled();
+  });
+  it("resumes saved document checks after the combined review fails", async () => {
+    const saved: Record<string, DocumentEvaluationCheckpoint> = {};
+    const onDocumentEvaluated = vi.fn(async (checkpoint: DocumentEvaluationCheckpoint) => {
+      saved[checkpoint.evaluation.checklistItemId] = checkpoint;
+    });
+    const evaluate = vi
+      .fn()
+      .mockResolvedValueOnce(JSON.stringify(documentResult))
+      .mockRejectedValueOnce(new Error("Deadline exceeded"));
+    const input = { ...fixture(), evaluate, onDocumentEvaluated };
+    await expect(runCaseEvaluation(input)).rejects.toThrow();
+    expect(onDocumentEvaluated).toHaveBeenCalledTimes(1);
+    expect(saved["item-0"].evaluation.status).toBe("ok");
+
+    evaluate.mockReset().mockResolvedValue(overall(100));
+    const result = await runCaseEvaluation({ ...input, resumeDocuments: saved });
+    expect(evaluate).toHaveBeenCalledTimes(1);
+    expect(evaluate.mock.calls[0][0].schemaName).toBe("orchestrator_evaluation");
+    expect(result.perDocumentEvaluations[0]).toMatchObject({ status: "ok", reused: true });
+
+    // Changed case facts must require a fresh document check.
+    evaluate
+      .mockReset()
+      .mockResolvedValueOnce(JSON.stringify(documentResult))
+      .mockResolvedValueOnce(overall(100));
+    await runCaseEvaluation({
+      ...input,
+      applicationContext: "Changed applicant",
+      resumeDocuments: saved,
+    });
+    expect(evaluate).toHaveBeenCalledTimes(2);
+  });
+
+  it("saves an active document check even when another document fails", async () => {
+    const saved = vi.fn();
+    const evaluate = vi.fn(async (request: Parameters<EvaluationProvider>[0]) => {
+      if (request.schemaName !== "per_document_evaluation") throw new Error("Must not combine");
+      if (String(request.userContent).includes("file-0.pdf")) throw new Error("Timeout");
+      await new Promise((resolve) => setTimeout(resolve, 5));
+      return JSON.stringify(documentResult);
+    });
+    const input = fixture(2);
+    input.evidence.docByChecklistItem.get("item-0")!.fileName = "file-0.pdf";
+    await expect(
+      runCaseEvaluation({ ...input, evaluate, onDocumentEvaluated: saved }),
+    ).rejects.toThrow();
+    expect(saved).toHaveBeenCalledTimes(1);
+    expect(saved.mock.calls[0][0].evaluation.checklistItemId).toBe("item-1");
+    expect(evaluate).toHaveBeenCalledTimes(2);
+  });
+
+  it("ignores malformed saved results and stops when saving a result fails", async () => {
+    const evaluate = vi.fn().mockResolvedValueOnce(JSON.stringify(documentResult));
+    const checkpoints: Record<string, DocumentEvaluationCheckpoint> = {};
+    await expect(
+      runCaseEvaluation({
+        ...fixture(),
+        evaluate,
+        onDocumentEvaluated: async (checkpoint) => {
+          checkpoints["item-0"] = checkpoint;
+          throw new Error("Database unavailable");
+        },
+      }),
+    ).rejects.toThrow("Database unavailable");
+    expect(evaluate).toHaveBeenCalledTimes(1);
+    const corrupted = { ...checkpoints["item-0"], evaluation: { status: "ok" } };
+    evaluate
+      .mockReset()
+      .mockResolvedValueOnce(JSON.stringify(documentResult))
+      .mockResolvedValueOnce(overall(100));
+    await runCaseEvaluation({
+      ...fixture(),
+      evaluate,
+      resumeDocuments: { "item-0": corrupted as DocumentEvaluationCheckpoint },
+    });
+    expect(evaluate).toHaveBeenCalledTimes(2);
+  });
+
+  it("keeps different document subjects as observations until their roles are known", async () => {
     const evaluate = vi.fn();
-    for (const holderName of names) {
+    for (const holderName of ["Applicant Example", "Sponsor Example"]) {
       evaluate.mockResolvedValueOnce(
         JSON.stringify({
           ...documentResult,
@@ -81,48 +346,191 @@ describe("production case evaluation core", () => {
         }),
       );
     }
-    evaluate.mockResolvedValueOnce(overall(40));
+    evaluate.mockResolvedValueOnce(overall(99));
     await runCaseEvaluation({ ...fixture(2), evaluate });
-    const combinedPrompt = evaluate.mock.calls[2][0].userContent;
-    expect(combinedPrompt.includes("Name mismatch:")).toBe(hasMismatch);
+    const prompt = evaluate.mock.calls[2][0].userContent;
+    expect(prompt).not.toContain("Name mismatch:");
+    expect(prompt).toContain("Applicant Example");
+    expect(prompt).toContain("Sponsor Example");
+    expect(prompt).toContain("expected subject");
+    expect(prompt).toContain("name-change or alias evidence");
   });
 
-  it("uses production schemas, individual review, combined review and the skeptical pass", async () => {
+  it("uses route-aware evidence review without weighted approval scoring or score averaging", async () => {
     const evaluate = vi
       .fn()
       .mockResolvedValueOnce(JSON.stringify(documentResult))
-      .mockResolvedValueOnce(overall(80))
-      .mockResolvedValueOnce(overall(60));
-    const result = await runCaseEvaluation({ ...fixture(), evaluate });
+      .mockResolvedValueOnce(overall(1));
+    const result = await runCaseEvaluation({
+      ...fixture(),
+      routeContext: {
+        destinationCountry: "Switzerland",
+        visaType: "student",
+        stage: "initial application",
+        facts: { sponsorName: "Sponsor Example" },
+      },
+      evaluate,
+    });
     expect(evaluate.mock.calls.map(([request]) => request.schemaName)).toEqual([
       "per_document_evaluation",
       "orchestrator_evaluation",
-      "orchestrator_evaluation",
     ]);
-    expect(evaluate.mock.calls[0][0].systemPrompt).toContain(
-      "senior visa agency review specialist",
-    );
-    expect(evaluate.mock.calls[1][0].userContent).toContain(
-      "5-DIMENSION AGENCY READINESS SCORING FRAMEWORK",
-    );
-    expect(evaluate.mock.calls[2][0].systemPrompt).toContain("highly skeptical");
-    expect(evaluate.mock.calls[2][0].userContent).toBe(evaluate.mock.calls[1][0].userContent);
-    expect(evaluate.mock.calls[2][0].systemPrompt).not.toMatch(
-      /assume the worst|deliberate omissions/i,
-    );
-    expect(result.evaluationData.overallScore).toBe(70);
-    expect(result.evaluationData.riskLevel).toBe("medium");
-    expect(result.scoreConfidence).toBe("low");
-    expect(result.diagnostics).toMatchObject({
-      orchestratorFallback: false,
-      skepticalAttempted: true,
+    for (const [request] of evaluate.mock.calls) {
+      expect(request.userContent).toContain("ROUTE REVIEW CONTEXT");
+      expect(request.userContent).toContain("Switzerland");
+      expect(request.userContent).toContain("Sponsor Example");
+      expect(request.systemPrompt).toContain("Do not invent mandatory");
+      expect(request.userContent).not.toMatch(
+        /5-DIMENSION|OVERSTAY RISK DIMENSION|Ties to Home Country \(25 pts\)/,
+      );
+    }
+    expect(result.routeAssessment).toBeDefined();
+    expect(result.evaluationData.overallScore).toBe(100);
+    expect(result.evaluationData.riskLevel).toBe("low");
+    expect(result.scoreConfidence).toBeNull();
+    expect(result.ensembleDivergence).toBeNull();
+    expect(result.diagnostics).toMatchObject({ skepticalAttempted: false });
+  });
+
+  it("includes selected route guidance in both prompt stages", async () => {
+    const route = reviewRubric.resolveReviewRoute({
+      destinationCountry: "Switzerland",
+      visaType: "student",
     });
+    const selectedRoute = vi
+      .spyOn(reviewRubric, "resolveReviewRoute")
+      .mockReturnValue({ ...route, guidance: ["Selected route guidance marker"] });
+    try {
+      const evaluate = vi.fn(async ({ schemaName }: Parameters<EvaluationProvider>[0]) =>
+        schemaName === "per_document_evaluation" ? JSON.stringify(documentResult) : overall(99),
+      );
+      await runCaseEvaluation({
+        ...fixture(),
+        routeContext: { destinationCountry: "Switzerland", visaType: "student" },
+        evaluate,
+      });
+      for (const [request] of evaluate.mock.calls) {
+        expect(request.userContent).toContain("Selected route guidance marker");
+      }
+    } finally {
+      selectedRoute.mockRestore();
+    }
+  });
+
+  it("reviews uncertain evidence again without promoting model agreement to confidence", async () => {
+    const evaluate = vi
+      .fn()
+      .mockResolvedValueOnce(
+        JSON.stringify({
+          ...documentResult,
+          status: "needs_review",
+          issues: ["The relationship to the named sponsor is not established"],
+        }),
+      )
+      .mockResolvedValueOnce(overall(99))
+      .mockResolvedValueOnce(overall(99));
+    const result = await runCaseEvaluation({ ...fixture(), evaluate });
+    expect(evaluate).toHaveBeenCalledTimes(3);
+    expect(evaluate.mock.calls[2][0].systemPrompt).toContain("unresolved evidence");
+    expect(result.evaluationData.overallScore).toBe(0);
+    expect(result.evaluationData.riskLevel).toBe("medium");
+    expect(result.scoreConfidence).toBeNull();
+    expect(result.ensembleDivergence).toBeNull();
+    expect(result.evaluationData.itemFeedback["item-0"].status).toBe("needs_review");
+    expect(result.diagnostics).toMatchObject({
+      skepticalAttempted: true,
+      skepticalSucceeded: true,
+    });
+  });
+
+  it("calculates coverage from supported readable required items and excludes optional items", async () => {
+    const input = fixture(3);
+    input.checklistItems[2].isRequired = false;
+    input.evidence.docByChecklistItem.delete("item-1");
+    input.evidence.docByChecklistItem.delete("item-2");
+    const evaluate = vi.fn(async ({ schemaName }: Parameters<EvaluationProvider>[0]) =>
+      schemaName === "per_document_evaluation"
+        ? JSON.stringify({ ...documentResult, score: 2 })
+        : overall(99, 3),
+    );
+    const result = await runCaseEvaluation({ ...input, evaluate });
+    expect(result.evaluationData.overallScore).toBe(50);
+    expect(result.evaluationData.riskLevel).toBe("high");
+    expect(result.evaluationData.itemFeedback["item-1"].status).toBe("missing");
+  });
+
+  it("does not count a present but unreadable file as supported", async () => {
+    const input = fixture(2);
+    input.evidence.textByDocId.delete("doc-item-0");
+    const evaluate = vi.fn(async ({ schemaName }: Parameters<EvaluationProvider>[0]) =>
+      schemaName === "per_document_evaluation" ? JSON.stringify(documentResult) : overall(99),
+    );
+    const result = await runCaseEvaluation({ ...input, evaluate });
+    expect(result.evaluationData.overallScore).toBe(50);
+    expect(result.evaluationData.itemFeedback["item-0"].status).toBe("needs_review");
+    expect(result.evaluationData.riskLevel).toBe("high");
+  });
+
+  it("does not infer authenticity from PDF metadata or apparent formatting", async () => {
+    const input = fixture();
+    input.evidence.metadataByDocId.set("doc-item-0", {
+      creator: null,
+      producer: null,
+      creationDate: null,
+      modDate: null,
+      isModified: false,
+      modificationGapDays: null,
+      creationInFuture: true,
+      hasNoMetadata: true,
+      pageCount: 1,
+    });
+    const evaluate = vi.fn(async ({ schemaName }: Parameters<EvaluationProvider>[0]) =>
+      schemaName === "per_document_evaluation" ? JSON.stringify(documentResult) : overall(40),
+    );
+    await runCaseEvaluation({ ...input, evaluate });
+    const prompt = evaluate.mock.calls[0][0].userContent;
+    expect(prompt).not.toMatch(/impossible for a genuine document|deliberately stripped/);
+    expect(prompt).toContain("do not establish fraud");
+    expect(prompt).toContain("issuer verification");
+  });
+
+  it("does not clear a combined evidence concern because its status says ok", async () => {
+    const combined = JSON.stringify({
+      ...JSON.parse(overall(99)),
+      itemFeedback: {
+        "item-0": {
+          title: "Sponsor relationship not established",
+          recommendation: "Provide evidence of the sponsor relationship.",
+          status: "ok",
+          feedback: "Relationship unclear",
+          issues: ["Sponsor relationship needs evidence"],
+        },
+      },
+    });
+    const evaluate = vi
+      .fn()
+      .mockResolvedValueOnce(JSON.stringify(documentResult))
+      .mockResolvedValueOnce(combined)
+      .mockResolvedValueOnce(overall(99));
+    const result = await runCaseEvaluation({ ...fixture(), evaluate });
+    expect(evaluate).toHaveBeenCalledTimes(3);
+    expect(result.evaluationData.itemFeedback["item-0"].status).toBe("needs_review");
+    expect(result.evaluationData.itemFeedback["item-0"].issues).toContain(
+      "Sponsor relationship needs evidence",
+    );
+    expect(result.evaluationData.overallScore).toBe(0);
+  });
+
+  it("blocks a party review without a checklist or evidence", async () => {
+    const evaluate = vi.fn();
+    await expect(runCaseEvaluation({ ...fixture(0), evaluate })).rejects.toThrow("checklist");
+    expect(evaluate).not.toHaveBeenCalled();
   });
 
   it("bounds concurrent document calls and preserves checklist order", async () => {
     let active = 0;
     let peak = 0;
-    const evaluate = vi.fn(async ({ schemaName }: { schemaName: string }) => {
+    const evaluate = vi.fn(async ({ schemaName }: Parameters<EvaluationProvider>[0]) => {
       if (schemaName !== "per_document_evaluation") return overall(40);
       active += 1;
       peak = Math.max(peak, active);
@@ -221,7 +629,7 @@ describe("production case evaluation core", () => {
     async (failure) => {
       const evaluate = vi
         .fn()
-        .mockResolvedValueOnce(JSON.stringify(documentResult))
+        .mockResolvedValueOnce(JSON.stringify({ ...documentResult, status: "needs_review" }))
         .mockResolvedValueOnce(overall(80));
       if (failure === "provider") evaluate.mockRejectedValueOnce(new Error("Provider unavailable"));
       else evaluate.mockResolvedValueOnce(failure === "json" ? "not JSON" : "{}");
@@ -232,9 +640,9 @@ describe("production case evaluation core", () => {
     },
   );
 
-  it("uses the same reference date for prompts and deterministic expiry checks", async () => {
+  it("keeps printed expiry dates separate from route-specific validity requirements", async () => {
     for (const asOfDate of ["2026-09-19", "2026-10-18"]) {
-      const evaluate = vi.fn(async ({ schemaName }: { schemaName: string }) =>
+      const evaluate = vi.fn(async ({ schemaName }: Parameters<EvaluationProvider>[0]) =>
         schemaName === "per_document_evaluation"
           ? JSON.stringify({
               ...documentResult,
@@ -247,13 +655,13 @@ describe("production case evaluation core", () => {
       const combinedPrompt = evaluate.mock.calls[1][0] as { userContent?: string };
       expect(documentPrompt.userContent).toContain(`Review date: ${asOfDate}`);
       expect(combinedPrompt.userContent).toContain(`Review date: ${asOfDate}`);
-      expect(combinedPrompt.userContent?.includes("Expired document:")).toBe(
-        asOfDate === "2026-10-18",
-      );
+      expect(combinedPrompt.userContent).not.toContain("Expired document:");
+      expect(combinedPrompt.userContent).toContain("2026-10-01");
+      expect(combinedPrompt.userContent).toMatch(/printed dates do not establish invalidity/i);
     }
   });
 
-  it("keeps identity, expiry and language checks after saved feedback is reused", async () => {
+  it("keeps uncertain subject, date and language observations after saved feedback is reused", async () => {
     const input = fixture(2);
     const fields = [
       {
@@ -289,9 +697,13 @@ describe("production case evaluation core", () => {
       fields,
     );
     const prompt = reviewAgain.mock.calls[0][0].userContent;
-    expect(prompt).toContain("Name mismatch:");
-    expect(prompt).toContain("Expired document:");
-    expect(prompt).toContain("FOREIGN LANGUAGE DOCUMENTS DETECTED");
+    expect(prompt).not.toMatch(
+      /Name mismatch:|Expired document:|FOREIGN LANGUAGE DOCUMENTS DETECTED|treat as facts/,
+    );
+    expect(prompt).toContain("ANANYA SHARMA");
+    expect(prompt).toContain("2026-10-01");
+    expect(prompt).toContain('"language":"fr"');
+    expect(prompt).toContain("accepted languages and translation exceptions");
   });
 
   it("reviews legacy feedback again when extracted fields were not saved", async () => {
@@ -333,6 +745,7 @@ describe("production case evaluation core", () => {
     "retrieved text",
     "image bytes",
     "PDF metadata",
+    "route context",
   ])("refreshes saved document findings after a change to %s", async (change) => {
     const input = { ...fixture(), asOfDate: "2026-10-18" };
     const docId = "doc-item-0";
@@ -366,6 +779,10 @@ describe("production case evaluation core", () => {
         changed.asOfDate = "2026-10-19";
         break;
       case "document identity":
+        changed.evidence.textByDocId.set(
+          "replacement-document",
+          changed.evidence.textByDocId.get(doc.id)!,
+        );
         doc.id = "replacement-document";
         break;
       case "file name":
@@ -383,6 +800,15 @@ describe("production case evaluation core", () => {
       case "image bytes":
         changed.evidence.visionDataByDocId.set(docId, ["data:image/png;base64,BBBB"]);
         break;
+      case "route context":
+        Object.assign(changed, {
+          routeContext: {
+            destinationCountry: "Canada",
+            visaType: "permanent residence",
+            facts: { sponsorName: "Different Sponsor" },
+          },
+        });
+        break;
       case "PDF metadata":
         changed.evidence.metadataByDocId.set(docId, {
           creator: "Changed authoring tool",
@@ -397,7 +823,7 @@ describe("production case evaluation core", () => {
         });
         break;
     }
-    const evaluate = vi.fn(async ({ schemaName }: { schemaName: string }) =>
+    const evaluate = vi.fn(async ({ schemaName }: Parameters<EvaluationProvider>[0]) =>
       schemaName === "per_document_evaluation"
         ? JSON.stringify({ ...documentResult, issues: ["New evidence needs review"] })
         : overall(40),
@@ -413,6 +839,7 @@ describe("production case evaluation core", () => {
     expect(evaluate.mock.calls.map(([request]) => request.schemaName)).toEqual([
       "per_document_evaluation",
       "orchestrator_evaluation",
+      "orchestrator_evaluation",
     ]);
     expect(result.perDocumentEvaluations[0].reused).not.toBe(true);
     expect(result.perDocumentEvaluations[0].issues).toContain("New evidence needs review");
@@ -426,7 +853,7 @@ describe("production case evaluation core", () => {
     const input = { ...fixture(), asOfDate: "2026-10-18" };
     input.evidence.textByDocId.set("doc-item-0", "");
     input.evidence.translatedTextByDocId.set("doc-item-0", "Original translated text");
-    const evaluate = vi.fn(async ({ schemaName }: { schemaName: string }) =>
+    const evaluate = vi.fn(async ({ schemaName }: Parameters<EvaluationProvider>[0]) =>
       schemaName === "per_document_evaluation" ? JSON.stringify(documentResult) : overall(40),
     );
     const first = await runCaseEvaluation({ ...input, evaluate });
@@ -452,7 +879,7 @@ describe("production case evaluation core", () => {
       const texts =
         kind === "source" ? input.evidence.textByDocId : input.evidence.translatedTextByDocId;
       texts.set("doc-item-0", "A".repeat(9000) + "Original ending");
-      const evaluate = vi.fn(async ({ schemaName }: { schemaName: string }) =>
+      const evaluate = vi.fn(async ({ schemaName }: Parameters<EvaluationProvider>[0]) =>
         schemaName === "per_document_evaluation" ? JSON.stringify(documentResult) : overall(40),
       );
       const first = await runCaseEvaluation({ ...input, evaluate });
@@ -472,9 +899,11 @@ describe("production case evaluation core", () => {
   );
 
   it("recomputes missing document findings when the requirement changes", async () => {
-    const input = { ...fixture(), asOfDate: "2026-10-18" };
-    input.evidence.docByChecklistItem.clear();
-    const evaluate = vi.fn().mockResolvedValue(overall(40));
+    const input = { ...fixture(2), asOfDate: "2026-10-18" };
+    input.evidence.docByChecklistItem.delete("item-0");
+    const evaluate = vi.fn(async ({ schemaName }: Parameters<EvaluationProvider>[0]) =>
+      schemaName === "per_document_evaluation" ? JSON.stringify(documentResult) : overall(40),
+    );
     const first = await runCaseEvaluation({ ...input, evaluate });
     input.checklistItems[0].isRequired = false;
     input.checklistItems[0].documentName = "Optional evidence";
@@ -492,13 +921,14 @@ describe("production case evaluation core", () => {
     ]);
     expect(second.perDocumentEvaluations[0].feedback).toContain("Optional evidence");
     expect(
-      evaluate.mock.calls.every(([request]) => request.schemaName === "orchestrator_evaluation"),
-    ).toBe(true);
+      evaluate.mock.calls.filter(([request]) => request.schemaName === "per_document_evaluation")
+        .length,
+    ).toBe(1);
   });
 
   it("refreshes only the changed document and rejects old snapshot keys", async () => {
     const input = { ...fixture(2), asOfDate: "2026-10-18" };
-    const evaluate = vi.fn(async ({ schemaName }: { schemaName: string }) =>
+    const evaluate = vi.fn(async ({ schemaName }: Parameters<EvaluationProvider>[0]) =>
       schemaName === "per_document_evaluation" ? JSON.stringify(documentResult) : overall(40),
     );
     const first = await runCaseEvaluation({ ...input, evaluate });

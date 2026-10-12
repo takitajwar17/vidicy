@@ -29,6 +29,16 @@ const caseSchema = z.object({
     embassy: z.string().optional(),
     applicantName: z.string().optional(),
     relationship: z.string().optional(),
+    routeContext: z
+      .object({
+        destinationCountry: z.string().min(1),
+        visaType: z.string().min(1),
+        stage: z.string().optional(),
+        subtype: z.string().optional(),
+        applicationDate: z.string().date().optional(),
+        facts: z.record(z.unknown()).optional(),
+      })
+      .optional(),
     documents: z
       .array(documentSchema)
       .min(1)
@@ -43,20 +53,15 @@ const caseSchema = z.object({
     .object({
       scoreRange: z
         .object({ min: z.number().min(0).max(100), max: z.number().min(0).max(100) })
-        .refine((range) => range.min <= range.max, "Score range must have min <= max"),
+        .refine((range) => range.min <= range.max, "Score range must have min <= max")
+        .optional(),
       expectedRiskLevel: z.enum(["low", "medium", "high"]).optional(),
       lowerScoreThanCaseId: z.string().min(1).optional(),
       expectedRedFlags: z.array(findingLabelSchema).optional(),
       expectedRecommendations: z.array(findingLabelSchema).optional(),
       expectedItemStatuses: z.record(z.enum(["ok", "missing", "needs_review"])).optional(),
     })
-    .refine((expected) => {
-      const { min, max } = expected.scoreRange;
-      if (expected.expectedRiskLevel === "low") return min >= 80;
-      if (expected.expectedRiskLevel === "medium") return min >= 65 && max < 80;
-      if (expected.expectedRiskLevel === "high") return max < 65;
-      return true;
-    }, "Expected score range conflicts with the supplied risk level"),
+    .default({}),
   context: z.string().optional(),
   metadata: z.record(z.unknown()).optional(),
 });
@@ -102,7 +107,7 @@ export async function loadEvaluationCases({ path }: { path?: string }): Promise<
     return datasetSchema.parse({
       provenance: {
         kind: "synthetic",
-        version: "synthetic-review-v5",
+        version: "synthetic-evidence-v6",
         description:
           "Synthetic documents and developer-authored expected findings; not an expert-labelled accuracy study.",
       },

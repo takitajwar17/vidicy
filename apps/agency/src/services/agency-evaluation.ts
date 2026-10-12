@@ -3,10 +3,14 @@ import "server-only";
 
 import { ZSAError } from "zsa";
 import type OpenAI from "openai";
-import { eq, and, asc } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
 import { getRuntimeContext } from "@/infra/runtime-context";
 import { getDB } from "@/db";
 import { getOpenAIClient } from "@/lib/openai";
+import {
+  DOCUMENT_EMBEDDING_MODEL,
+  EVALUATION_TRANSLATION_MODEL,
+} from "@/lib/review-pipeline-version";
 import { queryDocumentChunksFromVectorize } from "@/lib/vectorize-query";
 import {
   AI_MAX_TOKENS_LARGE,
@@ -25,22 +29,22 @@ import { ensureDocumentExtraction } from "@/services/document-pipeline";
 import { runCaseEvaluation } from "@/services/case-evaluation";
 import { sanitizeForPrompt } from "@/services/atlas-prompt";
 import {
-  visaApplicationTable,
-  applicantTable,
+  buildReviewContextHash,
+  buildReviewRouteContext,
+  loadReviewSnapshot,
+} from "@/server/review-context";
+import {
   checklistItemTable,
   uploadedDocumentTable,
   documentEvaluationTable,
   DOCUMENT_INDEXING_STATUS,
   MARKETING_EVENT_TYPE,
 } from "@/db/schema";
-import {
-  newestDocumentOrder,
-  newestEvaluationOrder,
-  publishAgencyReview,
-} from "@/server/agency-review";
+import { newestEvaluationOrder, publishAgencyReview } from "@/server/agency-review";
+import { loadReviewCheckpoint, saveReviewCheckpoint } from "@/server/review-checkpoints";
 import { recordMarketingEvent } from "@/server/marketing/events";
+import { getReviewAvailability } from "@/lib/checklist-state";
 
-const EVALUATION_TRANSLATION_MODEL = "gpt-4.1-mini";
 interface EvaluationEvidenceInput {
   applicationId: string;
   checklistItems: (typeof checklistItemTable.$inferSelect)[];
@@ -207,12 +211,12 @@ async function loadEvaluationEvidence({
           (item) => `${item.documentName}: ${(item.description ?? "").slice(0, 400)}`,
         );
         const embedResp = await measureProviderCall({
-          model: "text-embedding-3-small",
+          model: DOCUMENT_EMBEDDING_MODEL,
           stage: "retrieval_embedding",
           run: () =>
             openai.embeddings.create(
               {
-                model: "text-embedding-3-small",
+                model: DOCUMENT_EMBEDDING_MODEL,
                 input: queryTexts,
               },
               { signal: AbortSignal.timeout(AI_TIMEOUT_EMBEDDING_MS) },
@@ -331,73 +335,46 @@ export async function runAgencyEvaluation(input: AgencyEvaluationInput) {
   // Load application, applicant, checklist items, and uploaded documents
   // ---------------------------------------------------------------------------
 
-  const [application, applicant] = await Promise.all([
-    db.query.visaApplicationTable.findFirst({
-      where: eq(visaApplicationTable.id, input.applicationId),
-    }),
-    db.query.applicantTable.findFirst({
-      where: and(
-        eq(applicantTable.id, input.applicantId),
-        eq(applicantTable.applicationId, input.applicationId),
-      ),
-    }),
-  ]);
-
-  if (!application) {
-    throw new ZSAError("NOT_FOUND", "Application not found");
-  }
-
-  if (!applicant) {
-    throw new ZSAError("NOT_FOUND", "Applicant not found");
-  }
-
-  // Reads can be parallelised safely — also fetch the previous evaluation for incremental reuse
-  const [checklistItems, uploadedDocuments, previousEvaluation] = await Promise.all([
-    db.query.checklistItemTable.findMany({
-      where: and(
-        eq(checklistItemTable.applicationId, application.id),
-        eq(checklistItemTable.applicantId, input.applicantId),
-      ),
-      orderBy: [asc(checklistItemTable.sortOrder)],
-    }),
-    db.query.uploadedDocumentTable.findMany({
-      where: and(
-        eq(uploadedDocumentTable.applicationId, application.id),
-        eq(uploadedDocumentTable.applicantId, input.applicantId),
-      ),
-      orderBy: newestDocumentOrder,
-    }),
-    db.query.documentEvaluationTable.findFirst({
-      where: and(
-        eq(documentEvaluationTable.applicationId, application.id),
-        eq(documentEvaluationTable.applicantId, input.applicantId),
-      ),
-      orderBy: newestEvaluationOrder,
-    }),
-  ]);
-
-  if (checklistItems.length === 0) {
-    throw new ZSAError("NOT_FOUND", "No checklist items exist to evaluate for this application.");
-  }
-
-  if (uploadedDocuments.length === 0) {
+  const snapshot = await loadReviewSnapshot({ db, applicationId: input.applicationId });
+  if (snapshot.application.finalSubmissionAt)
     throw new ZSAError(
       "PRECONDITION_FAILED",
-      "Please upload at least one document before running an evaluation.",
+      "This case was submitted. A new review cannot start.",
     );
-  }
+  const availability = getReviewAvailability({
+    applicantId: input.applicantId,
+    items: snapshot.checklistItems,
+    documents: snapshot.documents,
+  });
+  if (!availability.canReview) throw new ZSAError("PRECONDITION_FAILED", availability.reason!);
+  const { application } = snapshot;
+  const routeContext = buildReviewRouteContext({ ...snapshot, applicantId: input.applicantId });
+  const checklistItems = snapshot.checklistItems
+    .filter(
+      (item) =>
+        item.applicability !== "does_not_apply" &&
+        (item.applicantId === input.applicantId || item.applicantId === null),
+    )
+    .sort((a, b) => a.sortOrder - b.sortOrder || a.id.localeCompare(b.id));
+  const itemIds = new Set(checklistItems.map((item) => item.id));
+  const uploadedDocuments = snapshot.documents.filter(
+    (document) => document.checklistItemId && itemIds.has(document.checklistItemId),
+  );
+  const previousEvaluation = await db.query.documentEvaluationTable.findFirst({
+    where: and(
+      eq(documentEvaluationTable.applicationId, application.id),
+      eq(documentEvaluationTable.applicantId, input.applicantId),
+    ),
+    orderBy: newestEvaluationOrder,
+  });
 
   const openai = getOpenAIClient();
 
   // ---------------------------------------------------------------------------
   // Application context string — injected into every per-document prompt
   // ---------------------------------------------------------------------------
-  const applicationContext = `Visa type: ${application.visaType}
-Applicant country (passport): ${application.homeCountry}
-Currently residing in: ${application.currentCountry}
-Destination country: ${application.destinationCountry}
-Embassy: ${application.embassy}
-Applicant name: ${sanitizeForPrompt(applicant.name, 200)} (${applicant.relationship})`;
+  const applicationContext = `Review this applicant using their own passport and history. Unknown fields are not proof of compliance.
+Case and full party context: ${sanitizeForPrompt(JSON.stringify(routeContext), 30000)}`;
 
   const evidence = await loadEvaluationEvidence({
     applicationId: application.id,
@@ -406,13 +383,59 @@ Applicant name: ${sanitizeForPrompt(applicant.name, 200)} (${applicant.relations
     previousEvaluation,
     openai,
   });
-  const { evaluationData, docSnapshots, scoreConfidence, ensembleDivergence } =
+  if (
+    ![...evidence.docByChecklistItem.values()].some(
+      (document) =>
+        evidence.textByDocId.get(document.id)?.trim() ||
+        evidence.visionDataByDocId.get(document.id)?.length,
+    )
+  ) {
+    throw new ZSAError(
+      "PRECONDITION_FAILED",
+      "No usable document evidence. Retry processing or replace the files.",
+    );
+  }
+  const preparedSnapshot = await loadReviewSnapshot({ db, applicationId: application.id });
+  if (
+    buildReviewContextHash({ ...snapshot, documents: preparedSnapshot.documents }) !==
+      preparedSnapshot.reviewContextHash ||
+    [...evidence.docByChecklistItem.values()].some((document) => {
+      const current = preparedSnapshot.documents.find(
+        (candidate) => candidate.checklistItemId === document.checklistItemId,
+      );
+      return (
+        current?.id !== document.id ||
+        (current?.textContent ?? "") !== (evidence.textByDocId.get(document.id) ?? "")
+      );
+    })
+  ) {
+    throw new ZSAError(
+      "PRECONDITION_FAILED",
+      "The case or documents changed while evidence was prepared. Run review again.",
+    );
+  }
+  const checkpointClaim = input.completion
+    ? {
+        jobId: input.completion.jobId,
+        token: input.completion.token,
+        applicationId: input.applicationId,
+        applicantId: input.applicantId,
+        contextHash: preparedSnapshot.reviewContextHash,
+      }
+    : undefined;
+  const resumeDocuments = checkpointClaim ? await loadReviewCheckpoint(checkpointClaim) : undefined;
+  const { evaluationData, docSnapshots, scoreConfidence, ensembleDivergence, routeAssessment } =
     await runCaseEvaluation({
       checklistItems,
       evidence,
       previousEvaluation,
+      resumeDocuments,
+      onDocumentEvaluated: checkpointClaim
+        ? (checkpoint) => saveReviewCheckpoint({ ...checkpointClaim, checkpoint })
+        : undefined,
       applicationContext,
       visaType: application.visaType,
+      routeContext,
     });
 
   // ---------------------------------------------------------------------------
@@ -438,6 +461,8 @@ Applicant name: ${sanitizeForPrompt(applicant.name, 200)} (${applicant.relations
       docSnapshots,
       scoreConfidence,
       ensembleDivergence,
+      routeAssessment,
+      reviewContextHash: preparedSnapshot.reviewContextHash,
     },
   });
 

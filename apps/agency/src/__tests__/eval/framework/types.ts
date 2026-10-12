@@ -1,3 +1,4 @@
+import type { StoredReviewFinding } from "@/lib/review-findings";
 /**
  * Core types for the LLM evaluation framework.
  */
@@ -27,6 +28,8 @@ export interface EvalTestCase<TInput = unknown, TExpected = unknown> {
 
 /** Score returned by a single metric for a single test case */
 export interface MetricScore {
+  /** False means no reference label or no completed model answer; never a quality pass. */
+  measured?: boolean;
   /** Metric name */
   name: string;
   /** Numeric score – convention: 0.0 (worst) → 1.0 (best) */
@@ -58,6 +61,7 @@ export interface EvalMetric<TOutput = unknown, TExpected = unknown> {
 
 /** Result for a single test case */
 export interface CaseResult {
+  executionStatus?: "completed" | "failed" | "not_run";
   caseId: string;
   description: string;
   scores: MetricScore[];
@@ -69,15 +73,18 @@ export interface CaseResult {
 /** Aggregated stats for one metric across all cases */
 export interface MetricAggregate {
   name: string;
-  mean: number;
-  min: number;
-  max: number;
-  stdDev: number;
-  passRate: number;
+  mean: number | null;
+  min: number | null;
+  max: number | null;
+  stdDev: number | null;
+  passRate: number | null;
+  measuredCount?: number;
+  unmeasuredCount?: number;
 }
 
 /** Full evaluation run result */
 export interface EvalRunResult {
+  operational?: { attempted: number; completed: number; failed: number; notRun: number };
   suiteName: string;
   timestamp: string;
   caseResults: CaseResult[];
@@ -181,7 +188,7 @@ export interface OrchestratorEvalOutput {
   overallScore: number;
   riskLevel: "low" | "medium" | "high";
   summary: string;
-  redFlags: string[];
+  redFlags: StoredReviewFinding[];
   strengths: string[];
   recommendations: string[];
   itemFeedback: Record<string, ItemFeedback>;

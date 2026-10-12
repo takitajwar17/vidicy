@@ -4,6 +4,13 @@ import type { EvaluationInput } from "./evaluation-cases";
 
 /** Supplies recorded evidence to the production core; extraction and retrieval are not measured. */
 export function prepareEvaluationInput({ input }: { input: EvaluationInput }): CaseEvaluationInput {
+  if (
+    input.routeContext &&
+    (input.routeContext.destinationCountry !== input.destinationCountry ||
+      input.routeContext.visaType !== input.visaType)
+  ) {
+    throw new Error("Recorded route context does not match the case destination and visa type.");
+  }
   const evidence: EvaluationEvidence = {
     docByChecklistItem: new Map(),
     textByDocId: new Map(),
@@ -28,6 +35,18 @@ export function prepareEvaluationInput({ input }: { input: EvaluationInput }): C
   }
   return {
     asOfDate: input.asOfDate,
+    routeContext: {
+      ...input.routeContext,
+      destinationCountry: input.destinationCountry,
+      visaType: input.visaType,
+      facts: {
+        nationality: input.homeCountry,
+        currentCountry: input.currentCountry ?? input.homeCountry,
+        applicantName: input.applicantName ?? null,
+        relationship: input.relationship ?? "primary",
+        ...input.routeContext?.facts,
+      },
+    },
     checklistItems: input.documents.map((document) => ({
       id: document.checklistItemId,
       documentName: document.documentName,

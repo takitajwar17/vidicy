@@ -36,6 +36,13 @@ import {
   newestDocumentOrder,
   newestEvaluationOrder,
 } from "@/server/agency-review";
+import { buildReviewContextHash, buildReviewRouteContext } from "@/server/review-context";
+import { canMarkCaseReady, canSubmitRouteAssessment } from "@/lib/review-rubric";
+import {
+  resolveChecklistItems,
+  getReviewAvailability,
+  getChecklistRequirement,
+} from "@/lib/checklist-state";
 
 type VisaApplicationRow = typeof visaApplicationTable.$inferSelect;
 type ApplicantRow = typeof applicantTable.$inferSelect;
@@ -65,12 +72,15 @@ export interface AgencyCaseRow {
   reviewer: AgencyStaffRow["user"] | null;
   latestEvaluation: EvaluationRow | null;
   documentCount: number;
+  usableDocumentCount?: number;
+  unresolvedRequirementCount?: number;
   openIssueCount: number;
   highIssueCount: number;
   requiredDocumentCount: number;
   uploadedRequiredDocumentCount: number;
   hasChecklist: boolean;
   reviewState: "not_started" | "outdated" | "current";
+  canSubmit: boolean;
 }
 
 function getAgencyCaseFilters(agencyId: string) {
@@ -298,20 +308,14 @@ export async function getAgencyCaseRows({
     new Set(applications.map((application) => application.assignedReviewerId).filter(Boolean)),
   ) as string[];
 
-  const [applicants, documents, issues, evaluations, reviewers, checklistItems] = await Promise.all(
-    [
+  const [applicants, documents, issues, evaluations, reviewers, checklistItems, activeReviews] =
+    await Promise.all([
       db.query.applicantTable.findMany({
         where: inArray(applicantTable.applicationId, applicationIds),
         orderBy: [desc(applicantTable.createdAt)],
       }),
       db.query.uploadedDocumentTable.findMany({
         where: inArray(uploadedDocumentTable.applicationId, applicationIds),
-        columns: {
-          id: true,
-          applicationId: true,
-          fileSize: true,
-          checklistItemId: true,
-        },
         orderBy: newestDocumentOrder,
       }),
       db.query.reviewIssueTable.findMany({
@@ -342,8 +346,14 @@ export async function getAgencyCaseRows({
       db.query.checklistItemTable.findMany({
         where: inArray(checklistItemTable.applicationId, applicationIds),
       }),
-    ],
-  );
+      db.query.reviewJobTable.findMany({
+        columns: { applicationId: true },
+        where: and(
+          inArray(reviewJobTable.applicationId, applicationIds),
+          inArray(reviewJobTable.status, ["queued", "running"]),
+        ),
+      }),
+    ]);
 
   const primaryApplicantByApp = getPrimaryApplicantByApplication(applicants);
 
@@ -382,41 +392,97 @@ export async function getAgencyCaseRows({
   const reviewerById = new Map(reviewers.map((reviewer) => [reviewer.id, reviewer]));
 
   return applications.map((application) => {
-    const caseItems = checklistItems.filter((item) => item.applicationId === application.id);
+    const caseItems = resolveChecklistItems({
+      items: checklistItems.filter((item) => item.applicationId === application.id),
+      settings: application.settings,
+    });
     const caseDocuments = documents.filter((document) => document.applicationId === application.id);
     const caseEvaluations = evaluations.filter(
       (evaluation) => evaluation.applicationId === application.id,
     );
+    const caseApplicants = applicants.filter(
+      (applicant) => applicant.applicationId === application.id,
+    );
+    const snapshot = {
+      application,
+      applicants: caseApplicants,
+      checklistItems: caseItems,
+      documents: caseDocuments,
+    };
+    const reviewContextHash = buildReviewContextHash(snapshot);
     const requiredItems = caseItems.filter((item) => item.isRequired);
     const hasCurrentReviews =
+      !activeReviews.some((job) => job.applicationId === application.id) &&
       caseItems.length > 0 &&
-      [...new Set(caseItems.map((item) => item.applicantId))].every((applicantId) =>
-        isEvaluationCurrent({
-          evaluation: caseEvaluations.find((evaluation) => evaluation.applicantId === applicantId),
-          checklistItems: caseItems,
-          documents: caseDocuments,
-        }),
+      caseApplicants.length > 0 &&
+      caseApplicants.every(
+        ({ id: applicantId }) =>
+          getReviewAvailability({ applicantId, items: caseItems, documents: caseDocuments })
+            .canReview &&
+          isEvaluationCurrent({
+            evaluation: caseEvaluations.find(
+              (evaluation) => evaluation.applicantId === applicantId,
+            ),
+            checklistItems: caseItems,
+            documents: caseDocuments,
+            reviewContextHash,
+            routeContext: buildReviewRouteContext({ ...snapshot, applicantId }),
+          }),
       );
     const evaluation = latestEvaluationByApp.get(application.id) ?? null;
-    const currentEvaluation = isEvaluationCurrent({
-      evaluation,
-      checklistItems: checklistItems.filter((item) => item.applicationId === application.id),
-      documents: documents.filter((document) => document.applicationId === application.id),
-    })
-      ? evaluation
-      : null;
+    const currentEvaluation =
+      hasCurrentReviews &&
+      isEvaluationCurrent({
+        evaluation,
+        checklistItems: checklistItems.filter((item) => item.applicationId === application.id),
+        documents: documents.filter((document) => document.applicationId === application.id),
+        reviewContextHash,
+        routeContext:
+          evaluation?.applicantId &&
+          caseApplicants.some((applicant) => applicant.id === evaluation.applicantId)
+            ? buildReviewRouteContext({ ...snapshot, applicantId: evaluation.applicantId })
+            : undefined,
+      })
+        ? evaluation
+        : null;
+    const submissionSupported =
+      hasCurrentReviews &&
+      caseApplicants.every((applicant) =>
+        canSubmitRouteAssessment(
+          caseEvaluations.find((review) => review.applicantId === applicant.id)?.routeAssessment,
+        ),
+      );
+    const primaryApplicant = primaryApplicantByApp.get(application.id);
     return {
       application: {
         ...application,
-        readinessScore: currentEvaluation?.overallScore ?? null,
-        riskLevel: currentEvaluation?.riskLevel ?? null,
+        readinessScore:
+          submissionSupported && currentEvaluation ? currentEvaluation.overallScore : null,
+        riskLevel: submissionSupported && currentEvaluation ? currentEvaluation.riskLevel : null,
       },
-      primaryApplicant: primaryApplicantByApp.get(application.id) ?? null,
+      primaryApplicant: primaryApplicant
+        ? {
+            ...primaryApplicant,
+            readinessScore: submissionSupported ? primaryApplicant.readinessScore : null,
+            riskLevel: submissionSupported ? primaryApplicant.riskLevel : null,
+          }
+        : null,
       reviewer: application.assignedReviewerId
         ? (reviewerById.get(application.assignedReviewerId) ?? null)
         : null,
       latestEvaluation: currentEvaluation,
       documentCount: documentCountByApp.get(application.id) ?? 0,
+      usableDocumentCount: caseApplicants.filter(
+        (applicant) =>
+          getReviewAvailability({
+            applicantId: applicant.id,
+            items: caseItems,
+            documents: caseDocuments,
+          }).canReview,
+      ).length,
+      unresolvedRequirementCount: caseItems.filter(
+        (item) => getChecklistRequirement(item).unresolved,
+      ).length,
       openIssueCount: openIssueCountByApp.get(application.id) ?? 0,
       highIssueCount: highIssueCountByApp.get(application.id) ?? 0,
       requiredDocumentCount: requiredItems.length,
@@ -424,9 +490,18 @@ export async function getAgencyCaseRows({
         caseDocuments.some((document) => document.checklistItemId === item.id),
       ).length,
       hasChecklist: caseItems.length > 0,
+      canSubmit:
+        hasCurrentReviews &&
+        caseApplicants.every((applicant) =>
+          canMarkCaseReady(
+            caseEvaluations.find((review) => review.applicantId === applicant.id)?.routeAssessment,
+          ),
+        ),
       reviewState: hasCurrentReviews
         ? "current"
-        : caseEvaluations.length
+        : caseEvaluations.some((review) =>
+              Object.values(review.docSnapshots ?? {}).some((version) => version !== "missing"),
+            )
           ? "outdated"
           : "not_started",
     };
@@ -638,9 +713,9 @@ export async function getAgencyCaseDetail(appId: string) {
 
   const [
     applicants,
-    checklistItems,
+    rawChecklistItems,
     documents,
-    latestEvaluation,
+    evaluations,
     issues,
     reports,
     staff,
@@ -658,7 +733,7 @@ export async function getAgencyCaseDetail(appId: string) {
       where: eq(uploadedDocumentTable.applicationId, appId),
       orderBy: newestDocumentOrder,
     }),
-    db.query.documentEvaluationTable.findFirst({
+    db.query.documentEvaluationTable.findMany({
       where: eq(documentEvaluationTable.applicationId, appId),
       orderBy: newestEvaluationOrder,
     }),
@@ -672,6 +747,7 @@ export async function getAgencyCaseDetail(appId: string) {
     }),
     getActiveAgencyStaffRows(),
     db.query.reviewJobTable.findFirst({
+      columns: { id: true },
       where: and(
         eq(reviewJobTable.applicationId, appId),
         inArray(reviewJobTable.status, ["queued", "running"]),
@@ -679,25 +755,71 @@ export async function getAgencyCaseDetail(appId: string) {
     }),
   ]);
 
+  const checklistItems = resolveChecklistItems({
+    items: rawChecklistItems,
+    settings: application.settings,
+  });
+  const latestEvaluation = evaluations[0];
+  const snapshot = { application, applicants, checklistItems, documents };
+  const reviewContextHash = buildReviewContextHash(snapshot);
   const hasCurrentEvaluation =
     !activeReview &&
-    isEvaluationCurrent({
-      evaluation: latestEvaluation,
-      checklistItems,
-      documents,
-    });
+    applicants.length > 0 &&
+    applicants.every(
+      (applicant) =>
+        getReviewAvailability({ applicantId: applicant.id, items: checklistItems, documents })
+          .canReview &&
+        isEvaluationCurrent({
+          evaluation: evaluations.find((evaluation) => evaluation.applicantId === applicant.id),
+          checklistItems,
+          documents,
+          reviewContextHash,
+          routeContext: buildReviewRouteContext({ ...snapshot, applicantId: applicant.id }),
+        }),
+    );
+  const submissionSupported =
+    hasCurrentEvaluation &&
+    applicants.every((applicant) =>
+      canSubmitRouteAssessment(
+        evaluations.find((review) => review.applicantId === applicant.id)?.routeAssessment,
+      ),
+    );
+  const displayApplicants = applicants.map((applicant) => ({
+    ...applicant,
+    readinessScore: submissionSupported ? applicant.readinessScore : null,
+    riskLevel: submissionSupported ? applicant.riskLevel : null,
+  }));
 
   return {
-    application,
-    applicants,
+    application: {
+      ...application,
+      readinessScore: submissionSupported ? application.readinessScore : null,
+      riskLevel: submissionSupported ? application.riskLevel : null,
+    },
+    canSubmit:
+      hasCurrentEvaluation &&
+      applicants.every((applicant) =>
+        canMarkCaseReady(
+          evaluations.find((review) => review.applicantId === applicant.id)?.routeAssessment,
+        ),
+      ),
+    applicants: displayApplicants,
     primaryApplicant:
-      applicants.find((applicant) => applicant.relationship === APPLICANT_RELATIONSHIP.PRIMARY) ??
-      applicants[0] ??
+      displayApplicants.find(
+        (applicant) => applicant.relationship === APPLICANT_RELATIONSHIP.PRIMARY,
+      ) ??
+      displayApplicants[0] ??
       null,
     checklistItems,
     documents,
     latestEvaluation: hasCurrentEvaluation ? latestEvaluation : null,
-    isReviewStale: !activeReview && Boolean(latestEvaluation) && !hasCurrentEvaluation,
+    isReviewStale:
+      !activeReview &&
+      Boolean(
+        latestEvaluation &&
+        Object.values(latestEvaluation.docSnapshots ?? {}).some((version) => version !== "missing"),
+      ) &&
+      !hasCurrentEvaluation,
     issues: issues.map((issue) => ({
       ...issue,
       status: normalizeReviewIssueStatus(issue.status),

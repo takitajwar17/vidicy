@@ -1,0 +1,1 @@
+ALTER TABLE "review_job" ADD COLUMN "checkpoint" jsonb;

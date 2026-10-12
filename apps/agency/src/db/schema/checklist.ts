@@ -1,4 +1,5 @@
-import { pgTable, integer, text, index, boolean } from "drizzle-orm/pg-core";
+import { pgTable, integer, text, index, boolean, timestamp } from "drizzle-orm/pg-core";
+import { CHECKLIST_REQUIREMENTS, CHECKLIST_APPLICABILITY } from "../../lib/checklist-state";
 import { type InferSelectModel } from "drizzle-orm";
 import { createId } from "@paralleldrive/cuid2";
 import { commonColumns } from "./_common";
@@ -35,6 +36,11 @@ export const checklistItemTable = pgTable(
     description: text().notNull(),
     commonMistakes: text(),
     isRequired: boolean().default(true).notNull(),
+    requirementType: text({ enum: CHECKLIST_REQUIREMENTS }),
+    applicability: text({ enum: CHECKLIST_APPLICABILITY }),
+    requirementCondition: text(),
+    origin: text({ enum: ["generated", "staff"] }),
+    removedAt: timestamp({ withTimezone: true, mode: "date", precision: 3 }),
     status: text({ enum: checklistItemStatusTuple })
       .default(CHECKLIST_ITEM_STATUS.PENDING)
       .notNull(),

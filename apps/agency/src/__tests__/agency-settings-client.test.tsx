@@ -17,7 +17,7 @@ vi.mock("@/actions/agency-invitation.action", () => ({
   revokeAgencyInvitationAction: vi.fn(),
 }));
 
-import AgencySettingsClient from "@/app/(settings)/settings/agency/agency-settings.client";
+import AgencySettingsClient from "@/app/(dashboard)/dashboard/agency/agency-settings.client";
 
 const props = {
   agency: { id: "agency-1", name: "Test agency", ownerUserId: "owner" },

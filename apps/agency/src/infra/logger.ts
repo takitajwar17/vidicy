@@ -132,20 +132,28 @@ export type AlertCategory =
  * tail consumers can filter on `alertCategory` to route to Slack/PagerDuty.
  */
 export function logAlert(category: AlertCategory, message: string, meta?: Record<string, unknown>) {
-  log.error(`[ALERT:${category}] ${message}`, {
-    alertCategory: category,
-    severity: "critical",
-    ...meta,
-  });
-  // Also send as a tagged Sentry event for alerting
+  console.error(
+    JSON.stringify({
+      timestamp: new Date().toISOString(),
+      level: "error",
+      message: `[ALERT:${category}] ${message}`,
+      alertCategory: category,
+      severity: "critical",
+      ...meta,
+    }),
+  );
+  // Send one event. Calling log.error here would also report the same failure.
   import("@/infra/sentry")
-    .then(({ captureMessage, isInitialized }) => {
+    .then(({ captureException, captureMessage, isInitialized }) => {
       if (!isInitialized()) return;
-      captureMessage(`[ALERT] ${message}`, {
-        level: "fatal",
+      const context = {
+        level: "fatal" as const,
         tags: { alertCategory: category, severity: "critical" },
         extra: meta,
-      });
+      };
+      const error = meta?.error;
+      if (error instanceof Error) captureException(error, context);
+      else captureMessage(`[ALERT] ${message}`, context);
     })
     .catch(() => {
       /* Sentry not available */

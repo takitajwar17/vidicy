@@ -1,7 +1,15 @@
 import { readFileSync, readdirSync } from "node:fs";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { startTestPostgres } from "./helpers/postgres";
-const mocks = vi.hoisted(() => ({ db: vi.fn(), staff: vi.fn(), send: vi.fn(), current: vi.fn() }));
+import { currentReviewMetadata } from "./helpers/workflow-fixture";
+import { loadReviewSnapshot } from "@/server/review-context";
+const mocks = vi.hoisted(() => ({
+  db: vi.fn(),
+  staff: vi.fn(),
+  send: vi.fn(),
+  current: vi.fn(),
+  render: vi.fn(),
+}));
 vi.mock("@/db", async (original) => ({
   ...(await original<typeof import("@/db")>()),
   getDB: mocks.db,
@@ -23,6 +31,7 @@ import {
   checklistItemTable,
   clientReportTable,
   documentEvaluationTable,
+  uploadedDocumentTable,
   userTable,
   visaApplicationTable,
 } from "@/db/schema";
@@ -98,14 +107,32 @@ beforeEach(async () => {
     .insert(applicantTable)
     .values({ applicationId, name: "Applicant", relationship: "primary" })
     .returning();
-  await db.insert(checklistItemTable).values({
-    applicationId,
-    applicantId: applicant.id,
-    documentName: "Passport",
-    description: "Valid passport",
-    isRequired: true,
-  });
+  const [item] = await db
+    .insert(checklistItemTable)
+    .values({
+      applicationId,
+      applicantId: applicant.id,
+      documentName: "Passport",
+      description: "Valid passport",
+      isRequired: true,
+    })
+    .returning();
+  const [document] = await db
+    .insert(uploadedDocumentTable)
+    .values({
+      applicationId,
+      applicantId: applicant.id,
+      checklistItemId: item.id,
+      fileName: "passport.pdf",
+      fileKey: "synthetic/passport",
+      fileSize: 100,
+      mimeType: "application/pdf",
+      extractionStatus: "completed",
+      textContent: "Readable synthetic evidence",
+    })
+    .returning();
   await db.insert(documentEvaluationTable).values({
+    ...(await currentReviewMetadata({ db, applicationId, applicantId: applicant.id })),
     applicationId,
     applicantId: applicant.id,
     reviewStatus: "complete",
@@ -115,6 +142,15 @@ beforeEach(async () => {
     redFlags: [],
     strengths: [],
     recommendations: [],
+    docSnapshots: { [item.id]: `${document.id}:synthetic` },
+    itemFeedback: {
+      [item.id]: {
+        status: "needs_review",
+        hasDocument: true,
+        hasContent: true,
+        feedback: "Replace passport",
+      },
+    },
   });
   const [report] = await db
     .insert(clientReportTable)
@@ -128,6 +164,40 @@ beforeEach(async () => {
   reportId = report.id;
 });
 describe("client report delivery", () => {
+  it("delivers an initial collection request without requiring an AI review", async () => {
+    await db.delete(documentEvaluationTable);
+    await db.delete(uploadedDocumentTable);
+    const snapshot = await loadReviewSnapshot({ db, applicationId });
+    await db
+      .update(clientReportTable)
+      .set({ kind: "collection", reviewContextHash: snapshot.reviewContextHash });
+    mocks.current
+      .mockClear()
+      .mockRejectedValue(new Error("A collection request must not require a review"));
+    await expect(deliverClientReport({ reportId })).resolves.toEqual({ alreadySent: false });
+    expect(mocks.current).not.toHaveBeenCalled();
+    expect(mocks.send).toHaveBeenCalledOnce();
+  });
+  it("blocks delivery when applicant facts change during PDF preparation without a case counter change", async () => {
+    mocks.render.mockImplementationOnce(async () => {
+      await db.update(applicantTable).set({ nationality: "India" });
+      return Buffer.from("%PDF-1.7\nreport attachment");
+    });
+    await expect(deliverClientReport({ reportId })).rejects.toThrow(/changed|out of date/i);
+    expect(mocks.send).not.toHaveBeenCalled();
+    expect((await db.query.clientReportTable.findFirst())?.status).toBe("ready");
+  });
+
+  it("keeps an accepted email historical when applicant facts change during provider delivery", async () => {
+    mocks.send.mockImplementationOnce(async () => {
+      await db.update(applicantTable).set({ nationality: "India" });
+      return { id: "accepted-before-change" };
+    });
+    await deliverClientReport({ reportId });
+    expect((await db.query.clientReportTable.findFirst())?.status).toBe("sent");
+    expect((await db.query.visaApplicationTable.findFirst())?.clientReportStatus).toBe("draft");
+    expect((await getClientReport({ reportId })).isStale).toBe(true);
+  });
   it("does not let a legacy review block a complete review of the current checklist", async () => {
     await db.insert(documentEvaluationTable).values({
       applicationId,
@@ -201,6 +271,58 @@ describe("client report delivery", () => {
     vi.stubEnv("EMAIL_REPLY_TO", "new-reply@example.test");
     await deliverClientReport({ reportId });
     expect(mocks.send.mock.calls[1][0]).toEqual(first);
+  });
+  it("retries a frozen pending request after case facts change without treating the case as sent", async () => {
+    mocks.send.mockRejectedValueOnce(new Error("timeout"));
+    await expect(deliverClientReport({ reportId })).rejects.toThrow("timeout");
+    const original = mocks.send.mock.calls[0][0];
+    await pool.query(
+      `UPDATE client_report SET "deliveryStartedAt" = NOW() - INTERVAL '3 minutes', "updatedAt" = NOW() - INTERVAL '3 minutes' WHERE id = $1`,
+      [reportId],
+    );
+    await db.update(visaApplicationTable).set({ clientName: "Changed client" });
+    expect((await getClientReport({ reportId })).isStale).toBe(true);
+    mocks.current.mockClear();
+    mocks.render.mockRejectedValue(new Error("Do not regenerate a pending PDF"));
+    await deliverClientReport({ reportId });
+    expect(mocks.send.mock.calls[1][0]).toEqual(original);
+    expect(mocks.render).toHaveBeenCalledTimes(1);
+    expect(mocks.current).not.toHaveBeenCalled();
+    expect((await db.query.clientReportTable.findFirst())?.status).toBe("sent");
+    expect((await db.query.visaApplicationTable.findFirst())?.clientReportStatus).toBe("draft");
+  });
+  it("keeps a newer report ready when an older pending request is accepted", async () => {
+    mocks.send.mockRejectedValueOnce(new Error("timeout"));
+    await expect(deliverClientReport({ reportId })).rejects.toThrow("timeout");
+    const original = mocks.send.mock.calls[0][0];
+    await pool.query(
+      `UPDATE client_report SET "deliveryStartedAt" = NOW() - INTERVAL '3 minutes', "updatedAt" = NOW() - INTERVAL '3 minutes', "createdAt" = NOW() - INTERVAL '1 hour' WHERE id = $1`,
+      [reportId],
+    );
+    const [newReport] = await db
+      .insert(clientReportTable)
+      .values({
+        applicationId,
+        summary: "New report",
+        actionItems: [],
+        status: "ready",
+      })
+      .returning();
+    await deliverClientReport({ reportId });
+    expect(mocks.send.mock.calls[1][0]).toEqual(original);
+    expect((await getClientReport({ reportId })).report.status).toBe("sent");
+    expect((await db.query.visaApplicationTable.findFirst())?.clientReportStatus).toBe("ready");
+    expect((await getClientReport({ reportId: newReport.id })).isStale).toBe(false);
+  });
+  it("blocks a pending retry when the original idempotency key is missing", async () => {
+    mocks.send.mockRejectedValueOnce(new Error("timeout"));
+    await expect(deliverClientReport({ reportId })).rejects.toThrow("timeout");
+    await pool.query(
+      `UPDATE client_report SET "deliveryKey" = NULL, "deliveryStartedAt" = NOW() - INTERVAL '3 minutes', "updatedAt" = NOW() - INTERVAL '3 minutes' WHERE id = $1`,
+      [reportId],
+    );
+    await expect(deliverClientReport({ reportId })).rejects.toThrow(/original.*key/i);
+    expect(mocks.send).toHaveBeenCalledTimes(1);
   });
   it("keeps accepted delivery as history if the case changes while sending", async () => {
     mocks.send.mockImplementationOnce(async () => {

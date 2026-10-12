@@ -64,6 +64,41 @@
       "when": 1792582059100,
       "tag": "0008_agency_invitations",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1792669634845,
+      "tag": "0009_dynamic_review_rubric",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1792691451168,
+      "tag": "0010_review_document_checkpoints",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1792730923339,
+      "tag": "0011_checklist_workflow_states",
+      "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1792731627370,
+      "tag": "0012_client_request_states",
+      "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1792817290842,
+      "tag": "0013_durable_checklist_jobs",
+      "breakpoints": true
     }
   ]
 }

@@ -51,8 +51,8 @@ export async function createGeminiEvaluation(params: GeminiEvaluationParams): Pr
       const delayMs = 2_000 * 2 ** attempt + Math.floor(Math.random() * 1_000);
       if (
         attempt >= 2 ||
-        (status !== 429 && status !== 503) ||
-        deadline - performance.now() < delayMs + 1_000
+        ![429, 500, 502, 503, 504].includes(status as number) ||
+        deadline - performance.now() < delayMs + 15_000
       )
         throw error;
       await new Promise((resolve) => setTimeout(resolve, delayMs));

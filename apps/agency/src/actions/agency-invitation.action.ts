@@ -35,7 +35,7 @@ export const createAgencyInvitationAction = createServerAction()
     return withRateLimit(
       async () => {
         const result = await createAgencyInvitation({ email: input.email || undefined });
-        revalidatePath("/settings/agency");
+        revalidatePath("/dashboard/agency");
         return result;
       },
       {
@@ -53,7 +53,7 @@ export const resendAgencyInvitationAction = createServerAction()
     return withRateLimit(
       async () => {
         const result = await resendAgencyInvitation({ invitationId: input.invitationId });
-        revalidatePath("/settings/agency");
+        revalidatePath("/dashboard/agency");
         return result;
       },
       {
@@ -71,7 +71,7 @@ export const revokeAgencyInvitationAction = createServerAction()
     return withRateLimit(
       async () => {
         const result = await revokeAgencyInvitation({ invitationId: input.invitationId });
-        revalidatePath("/settings/agency");
+        revalidatePath("/dashboard/agency");
         return result;
       },
       {

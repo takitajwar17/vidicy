@@ -19,6 +19,9 @@ interface EvaluationTriggerProps {
   rerun?: boolean;
   checklistHref?: string;
   className?: string;
+  blockedReason?: string | null;
+  blockedLabel?: string;
+  compact?: boolean;
 }
 
 export function EvaluationTrigger({
@@ -28,6 +31,9 @@ export function EvaluationTrigger({
   rerun = false,
   checklistHref,
   className,
+  blockedReason,
+  blockedLabel,
+  compact = false,
 }: EvaluationTriggerProps) {
   const router = useRouter();
   const [job, setJob] = useState<Awaited<ReturnType<typeof getLatestReviewJob>>>(null);
@@ -78,14 +84,15 @@ export function EvaluationTrigger({
     }
   }
 
-  const IdleIcon = !hasDocuments ? UploadIcon : rerun ? RefreshCwIcon : BrainCircuitIcon;
-  const idleLabel = hasDocuments
+  const canReview = hasDocuments && !blockedReason;
+  const IdleIcon = !canReview ? UploadIcon : rerun ? RefreshCwIcon : BrainCircuitIcon;
+  const idleLabel = canReview
     ? rerun
       ? "Re-run Review"
-      : "Run Review"
-    : "Upload Documents First";
+      : "Review Available Documents"
+    : (blockedLabel ?? "Upload Documents First");
 
-  if (!hasDocuments && checklistHref) {
+  if (!canReview && checklistHref) {
     return (
       <Button asChild variant="outline" className="gap-2">
         <Link href={checklistHref as Route}>
@@ -100,9 +107,10 @@ export function EvaluationTrigger({
     <div className="flex flex-wrap items-center gap-2">
       <Button
         onClick={handleEvaluate}
-        disabled={loading || !hasDocuments}
-        variant={rerun ? "outline" : "default"}
-        size={rerun ? "sm" : "default"}
+        disabled={loading || !canReview}
+        variant={compact ? "default" : rerun ? "outline" : "default"}
+        size={compact || rerun ? "sm" : "default"}
+        title={blockedReason ?? undefined}
         className={className ?? "gap-2"}
       >
         {loading ? (
@@ -119,8 +127,11 @@ export function EvaluationTrigger({
       </Button>
       {job?.status === "failed" ? (
         <span role="alert" className="text-sm text-destructive">
-          Review failed. Run it again.
+          {job.error || "Review failed. Run it again."}
         </span>
+      ) : null}
+      {blockedReason && !compact ? (
+        <span className="text-xs text-muted-foreground">{blockedReason}</span>
       ) : null}
     </div>
   );

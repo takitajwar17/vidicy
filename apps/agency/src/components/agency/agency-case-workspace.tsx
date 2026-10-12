@@ -6,14 +6,13 @@ import type { ReactNode } from "react";
 import { parseAsString, parseAsStringLiteral, useQueryStates } from "nuqs";
 import {
   ArrowRightIcon,
-  ChevronDownIcon,
+  ChevronLeftIcon,
   ChevronRightIcon,
-  ChevronUpIcon,
   CircleAlertIcon,
   SearchIcon,
 } from "lucide-react";
 import { AgencyCaseDocumentDesk, type AgencyCaseDocument } from "./agency-case-document-desk";
-import { ReviewIssueStatusSelect } from "./agency-case-actions";
+import { AgencyCaseReadiness, ReviewIssueStatusSelect } from "./agency-case-actions";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -41,7 +40,10 @@ interface AgencyCaseWorkspaceProps {
   isReviewStale: boolean;
   defaultTab: "review" | "checklist";
   checklist: ReactNode;
-  notes: ReactNode;
+  details: ReactNode;
+  detailsSidebar: ReactNode;
+  reviewTools: ReactNode;
+  blockedReason: string | null;
   activity: ReactNode;
 }
 
@@ -53,14 +55,21 @@ export function AgencyCaseWorkspace({
   isReviewStale,
   defaultTab,
   checklist,
-  notes,
+  details,
+  detailsSidebar,
+  reviewTools,
+  blockedReason,
   activity,
 }: AgencyCaseWorkspaceProps) {
   const [view, setView] = useQueryStates(
     {
-      tab: parseAsStringLiteral(["review", "checklist", "notes", "activity"]).withDefault(
-        defaultTab,
-      ),
+      tab: parseAsStringLiteral([
+        "review",
+        "checklist",
+        "details",
+        "notes",
+        "activity",
+      ]).withDefault(defaultTab),
       issue: parseAsString,
       document: parseAsString,
       priority: parseAsStringLiteral(["all", "high", "medium", "low"]).withDefault("all"),
@@ -69,6 +78,9 @@ export function AgencyCaseWorkspace({
     },
     { shallow: true },
   );
+  // Keep saved links to the former Notes and Activity tabs working.
+  const activeTab = view.tab === "notes" || view.tab === "activity" ? "details" : view.tab;
+  const showEvidence = activeTab === "review" || activeTab === "checklist";
   const openIssues = issues.filter((issue) => isOpenReviewIssueStatus(issue.status));
   const statusIssues = issues.filter(
     (issue) =>
@@ -108,281 +120,332 @@ export function AgencyCaseWorkspace({
 
   return (
     <Tabs
-      value={view.tab}
+      value={activeTab}
       onValueChange={(tab) => void setView({ tab: tab as typeof view.tab })}
       className={styles.tabs}
     >
       <TabsList className={styles.tabList} aria-label="Case sections">
-        {(["review", "checklist", "notes", "activity"] as const).map((tab) => (
-          <TabsTrigger key={tab} value={tab} className={styles.tab}>
-            {tab[0].toUpperCase() + tab.slice(1)}
+        {(
+          [
+            ["review", "Review"],
+            ["checklist", "Checklist"],
+            ["details", "Details"],
+          ] as const
+        ).map(([value, label]) => (
+          <TabsTrigger key={value} value={value} className={styles.tab}>
+            {label}
           </TabsTrigger>
         ))}
       </TabsList>
-      <div className={styles.body}>
+      <div className={`${styles.body} ${showEvidence ? "" : styles.bodySingle}`}>
         <div className={styles.left}>
-          <TabsContent
-            value="review"
-            className={`${styles.panel} ${styles.reviewPanel} scrollbar-hide`}
-          >
-            {isReviewStale ? (
-              <p role="status" className={styles.notice}>
-                The previous review is incomplete or no longer matches the documents. Run review
-                again before you generate a report or mark the case ready.
-              </p>
-            ) : null}
-            <h2 className={styles.heading}>Needs attention</h2>
-            <p className={styles.summary}>
-              {openIssues.filter((issue) => issue.severity === "high").length} high priority issues
-              and {missingCount} required files missing.
-            </p>
-            <div className={styles.filters}>
-              <div className={styles.filterGroup} aria-label="Issue priority">
-                {(
-                  [
-                    "all",
-                    "high",
-                    "medium",
-                    ...(issues.some((issue) => issue.severity === "low") ? ["low" as const] : []),
-                  ] as const
-                ).map((priority) => (
+          <TabsContent value="review" className={styles.reviewPane}>
+            {missingCount > 0 || openIssues.length > 0 ? (
+              <div className={styles.reviewStatus} role="status" aria-label="Review status">
+                {missingCount > 0 ? (
                   <button
-                    key={priority}
                     type="button"
-                    className={styles.filter}
-                    aria-label={
-                      priority === "all"
-                        ? "All issues"
-                        : `${ISSUE_SEVERITY_META[priority]?.label} priority issues`
-                    }
-                    aria-pressed={view.priority === priority}
-                    onClick={() => void setView({ priority, issue: null, document: null })}
+                    onClick={() => void setView({ tab: "checklist" })}
+                    className={styles.missingFiles}
                   >
-                    {priority === "all" ? "All" : ISSUE_SEVERITY_META[priority]?.label}
-                    <span>
-                      {
-                        statusIssues.filter(
-                          (issue) => priority === "all" || issue.severity === priority,
-                        ).length
-                      }
+                    <CircleAlertIcon />
+                    {missingCount} required {missingCount === 1 ? "file" : "files"} missing
+                    <span className={styles.checklistLink}>
+                      Open checklist <ArrowRightIcon />
                     </span>
                   </button>
-                ))}
+                ) : null}
+                {openIssues.length > 0 ? (
+                  <span>
+                    {openIssues.length} open {openIssues.length === 1 ? "issue" : "issues"}
+                  </span>
+                ) : null}
               </div>
-              <div className={styles.search}>
-                <SearchIcon />
-                <Input
-                  aria-label="Search issues"
-                  placeholder="Search issues…"
-                  value={view.q}
-                  onChange={(event) =>
-                    void setView({ q: event.target.value, issue: null, document: null })
-                  }
-                />
-              </div>
-            </div>
-            <label className={styles.statusFilter}>
-              Show
-              <NativeSelect
-                aria-label="Filter issue status"
-                className="h-8 px-2 py-1 text-xs"
-                value={view.status}
-                onChange={(event) =>
-                  void setView({
-                    status: event.target.value as typeof view.status,
-                    issue: null,
-                    document: null,
-                  })
-                }
-              >
-                <option value="open">Open issues</option>
-                <option value="all">All issues</option>
-                <option value="resolved">Resolved</option>
-                <option value="dismissed">Dismissed</option>
-              </NativeSelect>
-            </label>
-            <div className={styles.tableScroll}>
-              <table className={styles.table} aria-label="Review issues">
-                <thead>
-                  <tr>
-                    <th scope="col">#</th>
-                    <th scope="col">Priority</th>
-                    <th scope="col">Issue</th>
-                    <th scope="col">Source file</th>
-                    <th scope="col">Status</th>
-                    <th scope="col">
-                      <span className="sr-only">Open issue</span>
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filtered.map((issue, index) => {
-                    const source = getIssueDocument({ issue, documents });
-                    return (
-                      <tr key={issue.id} data-selected={selectedIssue?.id === issue.id}>
-                        <td>{index + 1}</td>
-                        <td>
-                          <span className={styles.priority} data-severity={issue.severity}>
-                            <CircleAlertIcon />
-                            {ISSUE_SEVERITY_META[issue.severity as keyof typeof ISSUE_SEVERITY_META]
-                              ?.label ?? issue.severity}
-                          </span>
-                        </td>
-                        <td>
-                          <button
-                            type="button"
-                            aria-pressed={selectedIssue?.id === issue.id}
-                            aria-label={`Review issue: ${issue.title}`}
-                            className={styles.issueButton}
-                            onClick={() => selectIssue(issue.id)}
-                          >
-                            {issue.title}
-                          </button>
-                        </td>
-                        <td>
-                          <span className={styles.source} title={source?.fileName}>
-                            {source?.fileName ??
-                              (issue.documentId || issue.checklistItemId ? "No file" : "Case-wide")}
-                          </span>
-                        </td>
-                        <td>
-                          <span
-                            className={styles.status}
-                            data-open={isOpenReviewIssueStatus(issue.status)}
-                          >
-                            {ISSUE_STATUS_META[normalizeReviewIssueStatus(issue.status)].label}
-                          </span>
-                        </td>
-                        <td>
-                          <button
-                            type="button"
-                            aria-label={`Open finding: ${issue.title}`}
-                            onClick={() => selectIssue(issue.id)}
-                            className="rounded p-1"
-                          >
-                            <ChevronRightIcon className="size-3.5" />
-                          </button>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-              {!filtered.length ? (
-                <div className={styles.empty}>
-                  <p>
-                    {issues.length
-                      ? "No issues match these filters."
-                      : "No tracked issues. Generate the checklist, upload documents, then run review."}
-                  </p>
-                  {issues.length ? (
-                    <button
-                      className="mt-3 font-semibold text-primary underline"
-                      type="button"
-                      onClick={() =>
-                        void setView({
-                          status: "all",
-                          priority: "all",
-                          q: "",
-                          issue: null,
-                          document: null,
-                        })
-                      }
-                    >
-                      Show all issues
-                    </button>
-                  ) : null}
-                </div>
-              ) : null}
-            </div>
-            {selectedIssue ? (
-              <section className={styles.detail} aria-label="Selected issue">
-                <div className={styles.detailHeader}>
-                  <h3>{selectedIssue.title}</h3>
-                  <div className="flex shrink-0 items-center gap-2 text-[10px] text-muted-foreground">
-                    <span>
-                      Issue {selectedIndex + 1} of {filtered.length}
-                    </span>
-                    <button
-                      type="button"
-                      aria-label="Previous issue"
-                      onClick={() => moveIssue(-1)}
-                      disabled={filtered.length < 2}
-                    >
-                      <ChevronUpIcon className="size-4" />
-                    </button>
-                    <button
-                      type="button"
-                      aria-label="Next issue"
-                      onClick={() => moveIssue(1)}
-                      disabled={filtered.length < 2}
-                    >
-                      <ChevronDownIcon className="size-4" />
-                    </button>
-                  </div>
-                </div>
-                <div className={styles.detailBody}>
-                  <div className={styles.detailColumns}>
-                    <div>
-                      <h4>Details</h4>
-                      <p>{selectedIssue.description}</p>
-                    </div>
-                    <div>
-                      <h4>Recommendation</h4>
-                      <p>
-                        {selectedIssue.recommendation ||
-                          "Check this finding against the current documents."}
-                      </p>
-                    </div>
-                  </div>
-                  <p className="mt-2 text-[10px] text-muted-foreground">
-                    {selectedIssue.source === "ai" ? "AI finding" : "Reviewer issue"}
-                    {isReviewStale && selectedIssue.source === "ai" ? " — previous review" : ""}
-                    {manualDocument && manualDocument.id !== sourceDocument?.id
-                      ? " · Viewing a different file"
-                      : ""}
-                  </p>
-                  <div className={styles.detailActions}>
-                    <div>
-                      <p className="mb-1 text-[11px] font-semibold">Status</p>
-                      <ReviewIssueStatusSelect
-                        key={selectedIssue.id}
-                        issueId={selectedIssue.id}
-                        status={selectedIssue.status}
-                        showDismiss
-                      />
-                    </div>
-                    <Button
-                      type="button"
-                      size="sm"
-                      onClick={() => moveIssue(1)}
-                      disabled={filtered.length < 2}
-                    >
-                      Next issue
-                      <ArrowRightIcon />
-                    </Button>
-                  </div>
-                </div>
-              </section>
             ) : null}
+            <section
+              className={`${styles.panel} ${styles.reviewPanel} scrollbar-hide`}
+              aria-label="Review findings"
+            >
+              {isReviewStale ? (
+                <p role="status" className={styles.notice}>
+                  The previous review is incomplete or no longer matches the documents. Run review
+                  again before you generate a report or mark the case ready.
+                </p>
+              ) : null}
+              <div className={styles.sectionHeader}>
+                <div>
+                  <h2 className={styles.sectionTitle}>Review issues</h2>
+                </div>
+                <div className={styles.sectionActions}>{reviewTools}</div>
+              </div>
+              <div className={styles.filters}>
+                <div className={styles.filterGroup} aria-label="Issue priority">
+                  {(
+                    [
+                      "all",
+                      "high",
+                      "medium",
+                      ...(issues.some((issue) => issue.severity === "low") ? ["low" as const] : []),
+                    ] as const
+                  ).map((priority) => (
+                    <button
+                      key={priority}
+                      type="button"
+                      className={styles.filter}
+                      aria-label={
+                        priority === "all"
+                          ? "All issues"
+                          : `${ISSUE_SEVERITY_META[priority]?.label} priority issues`
+                      }
+                      aria-pressed={view.priority === priority}
+                      onClick={() => void setView({ priority, issue: null, document: null })}
+                    >
+                      {priority === "all" ? "All" : ISSUE_SEVERITY_META[priority]?.label}
+                      <span>
+                        {
+                          statusIssues.filter(
+                            (issue) => priority === "all" || issue.severity === priority,
+                          ).length
+                        }
+                      </span>
+                    </button>
+                  ))}
+                </div>
+                <div className={styles.search}>
+                  <SearchIcon />
+                  <Input
+                    aria-label="Search issues"
+                    placeholder="Search issues…"
+                    value={view.q}
+                    onChange={(event) =>
+                      void setView({ q: event.target.value, issue: null, document: null })
+                    }
+                  />
+                </div>
+              </div>
+              <label className={styles.statusFilter}>
+                Show
+                <NativeSelect
+                  aria-label="Filter issue status"
+                  className="h-8 px-2 py-1 text-xs"
+                  value={view.status}
+                  onChange={(event) =>
+                    void setView({
+                      status: event.target.value as typeof view.status,
+                      issue: null,
+                      document: null,
+                    })
+                  }
+                >
+                  <option value="open">Open issues</option>
+                  <option value="all">All issues</option>
+                  <option value="resolved">Resolved</option>
+                  <option value="dismissed">Dismissed</option>
+                </NativeSelect>
+              </label>
+              <div className={styles.tableScroll}>
+                <table className={styles.table} aria-label="Review issues">
+                  <thead>
+                    <tr>
+                      <th scope="col">#</th>
+                      <th scope="col">Priority</th>
+                      <th scope="col">Issue</th>
+                      <th scope="col">Source file</th>
+                      <th scope="col">Status</th>
+                      <th scope="col">
+                        <span className="sr-only">Open issue</span>
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filtered.map((issue, index) => {
+                      const source = getIssueDocument({ issue, documents });
+                      return (
+                        <tr key={issue.id} data-selected={selectedIssue?.id === issue.id}>
+                          <td>{index + 1}</td>
+                          <td>
+                            <span className={styles.priority} data-severity={issue.severity}>
+                              <CircleAlertIcon />
+                              {ISSUE_SEVERITY_META[
+                                issue.severity as keyof typeof ISSUE_SEVERITY_META
+                              ]?.label ?? issue.severity}
+                            </span>
+                          </td>
+                          <td>
+                            <button
+                              type="button"
+                              aria-pressed={selectedIssue?.id === issue.id}
+                              aria-label={`Review issue: ${issue.title}`}
+                              className={styles.issueButton}
+                              onClick={() => selectIssue(issue.id)}
+                            >
+                              <span className="line-clamp-2" title={issue.title}>
+                                {issue.title}
+                              </span>
+                            </button>
+                          </td>
+                          <td>
+                            <span className={styles.source} title={source?.fileName}>
+                              {source?.fileName ??
+                                (issue.documentId || issue.checklistItemId
+                                  ? "No file"
+                                  : "Case-wide")}
+                            </span>
+                          </td>
+                          <td>
+                            <span
+                              className={styles.status}
+                              data-open={isOpenReviewIssueStatus(issue.status)}
+                            >
+                              {ISSUE_STATUS_META[normalizeReviewIssueStatus(issue.status)].label}
+                            </span>
+                          </td>
+                          <td>
+                            <button
+                              type="button"
+                              aria-label={`Open finding: ${issue.title}`}
+                              onClick={() => selectIssue(issue.id)}
+                              className="rounded p-1"
+                            >
+                              <ChevronRightIcon className="size-3.5" />
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+                {!filtered.length ? (
+                  <div className={styles.empty}>
+                    <p>
+                      {issues.length
+                        ? "No issues match these filters."
+                        : "No tracked issues. Generate the checklist, upload documents, then run review."}
+                    </p>
+                    {issues.length ? (
+                      <button
+                        className="mt-3 font-semibold text-primary underline"
+                        type="button"
+                        onClick={() =>
+                          void setView({
+                            status: "all",
+                            priority: "all",
+                            q: "",
+                            issue: null,
+                            document: null,
+                          })
+                        }
+                      >
+                        Show all issues
+                      </button>
+                    ) : null}
+                  </div>
+                ) : null}
+              </div>
+              {selectedIssue ? (
+                <section className={styles.detail} aria-label="Selected issue">
+                  <div className={styles.detailHeader}>
+                    <h3>{selectedIssue.title}</h3>
+                    <div className="flex shrink-0 items-center gap-2 text-xs text-muted-foreground">
+                      <span>
+                        Issue {selectedIndex + 1} of {filtered.length}
+                      </span>
+                      <button
+                        type="button"
+                        aria-label="Previous issue"
+                        onClick={() => moveIssue(-1)}
+                        disabled={filtered.length < 2}
+                      >
+                        <ChevronLeftIcon className="size-4" />
+                      </button>
+                      <button
+                        type="button"
+                        aria-label="Next issue"
+                        onClick={() => moveIssue(1)}
+                        disabled={filtered.length < 2}
+                      >
+                        <ChevronRightIcon className="size-4" />
+                      </button>
+                    </div>
+                  </div>
+                  <div className={styles.detailBody}>
+                    <div className={styles.detailColumns}>
+                      <div>
+                        <h4>Details</h4>
+                        <p>{selectedIssue.description}</p>
+                      </div>
+                      <div>
+                        <h4>Recommendation</h4>
+                        <p>
+                          {selectedIssue.recommendation ||
+                            "Check this finding against the current documents."}
+                        </p>
+                      </div>
+                    </div>
+                    {manualDocument && manualDocument.id !== sourceDocument?.id ? (
+                      <p className="mt-2 text-xs text-muted-foreground">Viewing a different file</p>
+                    ) : null}
+                    <div className={styles.detailActions}>
+                      <div>
+                        <p className="mb-1 text-xs font-medium">Status</p>
+                        <ReviewIssueStatusSelect
+                          key={selectedIssue.id}
+                          issueId={selectedIssue.id}
+                          status={selectedIssue.status}
+                          showDismiss
+                          compact
+                        />
+                      </div>
+                      <Button
+                        type="button"
+                        size="sm"
+                        onClick={() => moveIssue(1)}
+                        disabled={filtered.length < 2}
+                      >
+                        Next issue
+                        <ArrowRightIcon />
+                      </Button>
+                    </div>
+                  </div>
+                </section>
+              ) : null}
+            </section>
+            <AgencyCaseReadiness applicationId={applicationId} blockedReason={blockedReason} />
           </TabsContent>
           <TabsContent value="checklist" className={styles.panel}>
             {checklist}
           </TabsContent>
-          <TabsContent value="notes" className={styles.panel}>
-            {notes}
-          </TabsContent>
-          <TabsContent value="activity" className={styles.panel}>
-            {activity}
+          <TabsContent value="details" className={styles.panel}>
+            <div className={styles.detailsContent}>
+              <div className={styles.sectionHeader}>
+                <div>
+                  <h2 className={styles.sectionTitle}>Details</h2>
+                  <p className={styles.sectionDescription}>
+                    Update the application details and check the case history.
+                  </p>
+                </div>
+              </div>
+              <div className={styles.detailsLayout}>
+                <div className={styles.detailsMain}>{details}</div>
+                <aside aria-label="Case information" className={styles.detailsSidebar}>
+                  <section className={styles.detailsCard} aria-label="Case activity">
+                    {activity}
+                  </section>
+                  {detailsSidebar}
+                </aside>
+              </div>
+            </div>
           </TabsContent>
         </div>
-        <AgencyCaseDocumentDesk
-          applicationId={applicationId}
-          document={activeDocument}
-          documents={documents}
-          noSource={Boolean(selectedIssue && !sourceDocument && !manualDocument)}
-          onSelectDocument={(document) => void setView({ document })}
-        />
+        {showEvidence ? (
+          <AgencyCaseDocumentDesk
+            applicationId={applicationId}
+            document={activeDocument}
+            documents={documents}
+            noSource={Boolean(selectedIssue && !sourceDocument && !manualDocument)}
+            onSelectDocument={(document) => void setView({ document })}
+          />
+        ) : null}
       </div>
     </Tabs>
   );

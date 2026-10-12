@@ -6,14 +6,14 @@ import { getDB } from "@/db";
 import {
   reviewJobTable,
   applicantTable,
-  checklistItemTable,
-  uploadedDocumentTable,
   visaApplicationTable,
   agencyTeamMemberTable,
 } from "@/db/schema";
 import { enqueueReviewJob } from "@/infra/google/review-tasks";
 import { runAgencyEvaluation } from "@/services/agency-evaluation";
 import { withEvaluationMetrics, type EvaluationCallMetric } from "@/infra/evaluation-metrics";
+import { loadReviewSnapshot } from "@/server/review-context";
+import { getReviewAvailability } from "@/lib/checklist-state";
 
 interface ReviewIdentity {
   applicationId: string;
@@ -51,34 +51,40 @@ export async function getLatestReviewJob(
 
 export async function requestReviewJob(input: ReviewIdentity & { userId: string }) {
   const db = getDB();
-  const [applicant, item, document] = await Promise.all([
-    db.query.applicantTable.findFirst({
-      where: and(
-        eq(applicantTable.id, input.applicantId),
-        eq(applicantTable.applicationId, input.applicationId),
-      ),
-    }),
-    db.query.checklistItemTable.findFirst({
-      where: and(
-        eq(checklistItemTable.applicationId, input.applicationId),
-        eq(checklistItemTable.applicantId, input.applicantId),
-      ),
-    }),
-    db.query.uploadedDocumentTable.findFirst({
-      where: and(
-        eq(uploadedDocumentTable.applicationId, input.applicationId),
-        eq(uploadedDocumentTable.applicantId, input.applicantId),
-      ),
-    }),
-  ]);
-  if (!applicant || !item || !document)
+  const applicant = await db.query.applicantTable.findFirst({
+    where: and(
+      eq(applicantTable.id, input.applicantId),
+      eq(applicantTable.applicationId, input.applicationId),
+    ),
+  });
+  if (!applicant) throw new ZSAError("PRECONDITION_FAILED", "Add an applicant before review.");
+  const snapshot = await loadReviewSnapshot({ db, applicationId: input.applicationId });
+  if (snapshot.application.finalSubmissionAt)
     throw new ZSAError(
       "PRECONDITION_FAILED",
-      "Add an applicant, checklist, and document before review.",
+      "This case was submitted. A new review cannot start.",
     );
+  const availability = getReviewAvailability({
+    applicantId: input.applicantId,
+    items: snapshot.checklistItems,
+    documents: snapshot.documents,
+  });
+  if (!availability.canReview) throw new ZSAError("PRECONDITION_FAILED", availability.reason!);
+  const [previous] = await db
+    .select({ checkpoint: reviewJobTable.checkpoint })
+    .from(reviewJobTable)
+    .where(
+      and(
+        eq(reviewJobTable.applicationId, input.applicationId),
+        eq(reviewJobTable.applicantId, input.applicantId),
+        eq(reviewJobTable.status, "failed"),
+      ),
+    )
+    .orderBy(desc(reviewJobTable.createdAt), desc(reviewJobTable.id))
+    .limit(1);
   const [inserted] = await db
     .insert(reviewJobTable)
-    .values(input)
+    .values({ ...input, checkpoint: previous?.checkpoint })
     .onConflictDoNothing()
     .returning(publicColumns);
   const job =
@@ -169,9 +175,16 @@ export async function processReviewJob({ jobId }: { jobId: string }) {
         ),
       ),
     )
-    .returning();
+    .returning({
+      applicationId: reviewJobTable.applicationId,
+      applicantId: reviewJobTable.applicantId,
+      userId: reviewJobTable.userId,
+      attempts: reviewJobTable.attempts,
+      metrics: reviewJobTable.metrics,
+    });
   if (!job) {
     const existing = await db.query.reviewJobTable.findFirst({
+      columns: { status: true },
       where: eq(reviewJobTable.id, jobId),
     });
     if (existing && ["queued", "running"].includes(existing.status))
@@ -205,6 +218,23 @@ export async function processReviewJob({ jobId }: { jobId: string }) {
       terminal = true;
       throw new Error("Review access was revoked");
     }
+    const snapshot = await loadReviewSnapshot({ db, applicationId: job.applicationId });
+    if (snapshot.application.finalSubmissionAt) {
+      terminal = true;
+      throw new ZSAError(
+        "PRECONDITION_FAILED",
+        "This case was submitted. A new review cannot start.",
+      );
+    }
+    const availability = getReviewAvailability({
+      applicantId: job.applicantId,
+      items: snapshot.checklistItems,
+      documents: snapshot.documents,
+    });
+    if (!availability.canReview) {
+      terminal = true;
+      throw new ZSAError("PRECONDITION_FAILED", availability.reason!);
+    }
     await withEvaluationMetrics({
       calls,
       run: () =>
@@ -215,7 +245,7 @@ export async function processReviewJob({ jobId }: { jobId: string }) {
           completion: { jobId, token, started: started - (job.metrics?.durationMs ?? 0), calls },
         }),
     });
-  } catch {
+  } catch (error) {
     await db
       .update(reviewJobTable)
       .set({
@@ -224,9 +254,12 @@ export async function processReviewJob({ jobId }: { jobId: string }) {
         leaseUntil: null,
         updatedAt: new Date(),
         finishedAt: terminal ? new Date() : null,
-        error: terminal
-          ? "Review could not finish. Run it again."
-          : "Review could not finish. It will retry until the attempt limit is reached.",
+        error:
+          error instanceof ZSAError && error.code === "PRECONDITION_FAILED"
+            ? error.message
+            : terminal
+              ? "Review could not finish. Run it again."
+              : "Review could not finish. It will retry until the attempt limit is reached.",
         metrics: {
           durationMs: (job.metrics?.durationMs ?? 0) + performance.now() - started,
           calls,

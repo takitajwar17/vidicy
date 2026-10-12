@@ -3,8 +3,10 @@ import { GoogleGenAI } from "@google/genai";
 import { getRuntimeContext } from "@/infra/runtime-context";
 
 const DEFAULT_VERTEX_LOCATION = "global";
-export const GEMINI_DOCUMENT_EXTRACTION_MODEL = "gemini-3.8-flash";
-export const GEMINI_DOCUMENT_EVALUATION_MODEL = "gemini-3.8-flash";
+export {
+  GEMINI_DOCUMENT_EXTRACTION_MODEL,
+  GEMINI_DOCUMENT_EVALUATION_MODEL,
+} from "@/lib/review-pipeline-version";
 
 function getConfigValue(name: string): string | undefined {
   try {

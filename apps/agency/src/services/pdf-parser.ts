@@ -7,6 +7,10 @@ import { getOpenAIClient, isModelAvailabilityError, isTimeoutLikeAIError } from 
 import { ThinkingLevel } from "@google/genai";
 import { GEMINI_DOCUMENT_EXTRACTION_MODEL, getGeminiClient } from "@/lib/gemini";
 import { buildGeminiDocumentPrompt, GEMINI_DOCUMENT_EMPTY_SENTINEL } from "@/lib/gemini-document";
+import {
+  OPENAI_DOC_EXTRACT_PRIMARY_MODEL,
+  OPENAI_DOC_EXTRACT_FALLBACK_MODEL,
+} from "@/lib/review-pipeline-version";
 
 /**
  * Shared PDF text extraction service.
@@ -29,8 +33,6 @@ export interface PdfParseResult {
   error?: string;
 }
 
-const OPENAI_DOC_EXTRACT_PRIMARY_MODEL = "gpt-4.1";
-const OPENAI_DOC_EXTRACT_FALLBACK_MODEL = "gpt-4.1-mini";
 const OPENAI_DOC_EXTRACT_MAX_CHARS = 120_000;
 const OPENAI_DOC_EXTRACT_EMPTY_SENTINEL = GEMINI_DOCUMENT_EMPTY_SENTINEL;
 export const MAX_PDF_PAGE_COUNT = 40;

@@ -2,11 +2,12 @@
  * Synthetic regression cases for document evaluation scoring.
  *
  * Each case provides mock document text content and expected evaluation
- * quality constraints (score ranges, risk levels, expected flags).
+ * evidence finding checks. Historical score bands do not define current quality.
  * These expectations are developer-authored, not expert labels or an accuracy study.
  */
 
 import type { EvalTestCase } from "../framework/types";
+import type { ReviewRouteContext } from "@/lib/review-rubric";
 
 // ---------------------------------------------------------------------------
 // Input shape (mirrors evaluateDocumentsAction context)
@@ -22,6 +23,7 @@ export interface EvaluationInput {
   embassy?: string;
   applicantName?: string;
   relationship?: string;
+  routeContext?: ReviewRouteContext;
   /** Checklist items with associated document content */
   documents: DocumentItem[];
 }
@@ -41,11 +43,11 @@ export interface DocumentItem {
 }
 
 export interface EvaluationExpected {
-  /** Expected overall score range */
-  scoreRange: { min: number; max: number };
-  /** Optional risk label; omit when only relative score and document findings are specified. */
+  /** Optional caller-supplied evidence-coverage range; never an approval probability. */
+  scoreRange?: { min: number; max: number };
+  /** Optional caller-supplied evidence-state label, independent of coverage percentage. */
   expectedRiskLevel?: "low" | "medium" | "high";
-  /** Controlled variants must score below this reference case. */
+  /** Optional caller-supplied coverage comparison. Built-in findings do not require score changes. */
   lowerScoreThanCaseId?: string;
   /** Each label is required; an array gives accepted alternatives for one finding. */
   expectedRedFlags?: (string | string[])[];
@@ -66,7 +68,7 @@ const limitedEvidenceCases: EvalTestCase<EvaluationInput, EvaluationExpected>[] 
       "All listed uploads are present, but family, asset, prior-travel and trip evidence are absent",
     input: {
       asOfDate: "2026-09-30",
-      visaType: "Tourist / Visitor (B1/B2)",
+      visaType: "B1/B2 Visitor",
       homeCountry: "India",
       destinationCountry: "United States",
       documents: [
@@ -108,23 +110,21 @@ const limitedEvidenceCases: EvalTestCase<EvaluationInput, EvaluationExpected>[] 
       ],
     },
     expected: {
-      scoreRange: { min: 0, max: 100 },
-      lowerScoreThanCaseId: "complete-reference",
       expectedRecommendations: [],
       expectedItemStatuses: { "item-photo": "needs_review" },
     },
     metadata: {
       scenario: "limited-evidence",
       labelRationale:
-        "The production rubric awards points for family (8), assets (7), prior travel (12), and documented purpose/duration (14). These dimensions are not fully established by these five abbreviated uploads. Require a lower score than the complete reference rather than inventing an absolute band. A text description cannot establish photo compliance; the other partial extracts have no expert-labelled valid status.",
+        "A text description cannot establish photo compliance. The remaining abbreviated extracts have no expert-labelled valid status. Unlabelled findings remain unmeasured; absent property or prior travel does not itself establish ineligibility.",
     },
   },
   {
     id: "missing-required-docs",
-    description: "Application missing required passport and bank statement — expect low score",
+    description: "Prepared case missing the fixture-designated passport and bank statement",
     input: {
       asOfDate: "2026-09-30",
-      visaType: "Tourist / Visitor (B1/B2)",
+      visaType: "B1/B2 Visitor",
       homeCountry: "Nigeria",
       destinationCountry: "United States",
       documents: [
@@ -156,8 +156,6 @@ const limitedEvidenceCases: EvalTestCase<EvaluationInput, EvaluationExpected>[] 
       ],
     },
     expected: {
-      scoreRange: { min: 0, max: 45 },
-      expectedRiskLevel: "high",
       expectedRedFlags: ["passport", "bank", ["missing", "absent", "not uploaded", "not provided"]],
       expectedItemStatuses: {
         "item-passport": "missing",
@@ -167,15 +165,15 @@ const limitedEvidenceCases: EvalTestCase<EvaluationInput, EvaluationExpected>[] 
     metadata: {
       scenario: "missing-docs",
       labelRationale:
-        "Required identity and financial evidence are absent; no lower score bound is justified.",
+        "The fixture-designated passport and bank uploads are absent. Check those missing-evidence findings without assigning legal eligibility or approval probability.",
     },
   },
   {
     id: "expired-passport",
-    description: "Application with expired passport — expect red flag and medium/high risk",
+    description: "Prepared passport with an expiry date before the fixed review date",
     input: {
       asOfDate: "2026-09-30",
-      visaType: "Tourist / Visitor (Schengen)",
+      visaType: "Schengen Visitor (Type C)",
       homeCountry: "Egypt",
       destinationCountry: "Germany",
       documents: [
@@ -203,14 +201,12 @@ const limitedEvidenceCases: EvalTestCase<EvaluationInput, EvaluationExpected>[] 
       ],
     },
     expected: {
-      scoreRange: { min: 0, max: 64 },
-      expectedRiskLevel: "high",
       expectedRedFlags: [["expir", "no longer valid"], "passport"],
     },
     metadata: {
       scenario: "expired-doc",
       labelRationale:
-        "Expired identity evidence requires correction. Missing financial, employment and prior-travel evidence prevents a high readiness score; no positive score floor is justified.",
+        "The recorded passport expiry precedes the fixed review date. Check that direct date finding without assigning a risk band from a score.",
     },
   },
   {
@@ -218,7 +214,7 @@ const limitedEvidenceCases: EvalTestCase<EvaluationInput, EvaluationExpected>[] 
     description: "Student case with a material funding shortfall and limited supporting evidence",
     input: {
       asOfDate: "2026-09-30",
-      visaType: "Student (Tier 4 / Student Route)",
+      visaType: "Student",
       homeCountry: "Bangladesh",
       destinationCountry: "United Kingdom",
       documents: [
@@ -253,8 +249,6 @@ const limitedEvidenceCases: EvalTestCase<EvaluationInput, EvaluationExpected>[] 
       ],
     },
     expected: {
-      scoreRange: { min: 0, max: 64 },
-      expectedRiskLevel: "high",
       expectedRedFlags: [
         ["insufficien", "shortfall", "deficit", "inadequate"],
         ["fund", "bank", "financial", "balance"],
@@ -274,15 +268,15 @@ const limitedEvidenceCases: EvalTestCase<EvaluationInput, EvaluationExpected>[] 
     metadata: {
       scenario: "weak-financials",
       labelRationale:
-        "Available GBP 3,200 does not cover the stated GBP 28,000 course fee; other rubric evidence is limited. This is a high-priority document-preparation concern, not a visa outcome prediction.",
+        "Available GBP 3,200 does not cover the stated GBP 28,000 course fee. This checks the supplied amounts, not statutory funding sufficiency, undisclosed exemptions or a visa outcome.",
     },
   },
   {
     id: "mixed-quality-docs",
-    description: "Application with mix of good and problematic documents — expect nuanced scoring",
+    description: "Prepared work documents with employer, role, location and pay contradictions",
     input: {
       asOfDate: "2026-09-30",
-      visaType: "Work Permit",
+      visaType: "Employer-specific Work Permit",
       homeCountry: "Philippines",
       destinationCountry: "Canada",
       documents: [
@@ -317,8 +311,6 @@ const limitedEvidenceCases: EvalTestCase<EvaluationInput, EvaluationExpected>[] 
       ],
     },
     expected: {
-      scoreRange: { min: 0, max: 64 },
-      expectedRiskLevel: "high",
       expectedRedFlags: [
         ["mismatch", "inconsisten", "discrepan", "contradict", "conflict"],
         ["employer", "ABC Tech Solutions", "XYZ Design Studio"],
@@ -329,18 +321,18 @@ const limitedEvidenceCases: EvalTestCase<EvaluationInput, EvaluationExpected>[] 
     metadata: {
       scenario: "mixed-quality",
       labelRationale:
-        "Employer, role, location and salary conflict across core work evidence. Missing supporting rubric evidence provides no defensible positive score floor.",
+        "Employer, role, location and salary contradict the supplied work documents. Check the specific cross-document findings without requiring a weighted score change.",
     },
   },
 ];
 
-// This reference supplies evidence for every dimension in the current application
-// rubric. It is a test of internal document readiness, not an immigration decision.
+// Prepared reference evidence supports controlled document-finding checks.
+// It does not establish complete statutory eligibility or a numerical risk band.
 const completeReferenceInput: EvaluationInput = {
   asOfDate: "2026-09-30",
   applicantName: "PRIYA SHARMA",
   relationship: "primary",
-  visaType: "Tourist / Visitor (B1/B2)",
+  visaType: "B1/B2 Visitor",
   homeCountry: "India",
   currentCountry: "India",
   destinationCountry: "United States",
@@ -431,8 +423,6 @@ function referenceVariant({
       ),
     },
     expected: {
-      scoreRange: { min: 0, max: 100 },
-      lowerScoreThanCaseId: "complete-reference",
       ...expected,
     },
     metadata: {
@@ -440,7 +430,7 @@ function referenceVariant({
       baseCaseId: "complete-reference",
       changedItemId: itemId,
       labelRationale:
-        "Only one document changes. Require the specified finding and a lower score than the complete reference; do not invent an absolute score for a defect the rubric does not assign a fixed penalty.",
+        "Only one document changes. Check the specified evidence finding. Do not infer a mandatory score change or legal outcome.",
     },
   };
 }
@@ -449,12 +439,9 @@ export const evaluationCases: EvalTestCase<EvaluationInput, EvaluationExpected>[
   ...limitedEvidenceCases,
   {
     id: "complete-reference",
-    description:
-      "Complete evidence for all five dimensions of the current internal readiness rubric",
+    description: "Complete prepared document evidence; route eligibility remains unapproved",
     input: completeReferenceInput,
     expected: {
-      scoreRange: { min: 80, max: 100 },
-      expectedRiskLevel: "low",
       expectedItemStatuses: {
         "reference-passport": "ok",
         "reference-bank": "ok",
@@ -464,7 +451,7 @@ export const evaluationCases: EvalTestCase<EvaluationInput, EvaluationExpected>[
     metadata: {
       scenario: "complete-reference",
       labelRationale:
-        "Evidence addresses employment and leave, family, assets, financial history and budget, a consistent tourism itinerary, prior compliant travel and complete identity records. At least 80 is the production rubric's low-risk readiness band; this is a developer-authored expectation, not an expert label.",
+        "Evidence addresses employment and leave, family, assets, financial history and budget, a consistent tourism itinerary, prior compliant travel and complete identity records. These are developer-authored evidence examples, not expert labels or legal eligibility conclusions.",
     },
   },
   referenceVariant({

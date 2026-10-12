@@ -9,37 +9,46 @@ import {
   FileTextIcon,
   Globe2Icon,
   IdCardIcon,
-  PaperclipIcon,
   PlusIcon,
   UserRoundIcon,
   UsersIcon,
 } from "lucide-react";
 import {
-  AddReviewIssueForm,
+  AddReviewIssueDialog,
   AgencyCaseToolbar,
   AgencyCaseStatusSelect,
   AgencyCaseAssignmentSelect,
-  ReviewIssueStatusSelect,
 } from "@/components/agency/agency-case-actions";
-import {
-  IssueSeverityBadge,
-  PriorityBadge,
-  ReviewerAvatar,
-  formatShortDate,
-} from "@/components/agency/agency-ui";
+import { PriorityBadge, ReviewerAvatar, formatShortDate } from "@/components/agency/agency-ui";
 import { AgencyCaseWorkspace } from "@/components/agency/agency-case-workspace";
+import { RouteReviewDetails } from "@/components/agency/route-review-details";
+import { ChecklistResearchDetails } from "@/components/agency/checklist-research-details";
+import { ChecklistItemEditor } from "@/components/agency/checklist-item-editor";
+import {
+  getReviewAvailability,
+  getRequirementLabel,
+  getChecklistRequirement,
+} from "@/lib/checklist-state";
 import { ChecklistGenerator } from "@/components/visa/checklist-generator";
 import { DocumentUpload } from "@/components/visa/document-upload";
+import { DocumentPreviewDrawer } from "@/components/visa/document-preview-drawer";
+import { Button } from "@/components/ui/button";
 import { EvaluationTrigger } from "@/components/visa/evaluation-trigger";
 import { Progress } from "@/components/ui/progress";
 import { PageHeader } from "@/components/page-header";
-import { CHECKLIST_ITEM_STATUS } from "@/db/schema";
 import {
   formatAgencyVisaLabel,
   getDisplayCaseNumber,
   isOpenReviewIssueStatus,
 } from "@/lib/agency-workflow";
 import { getAgencyCaseDetail } from "@/server/agency-data";
+import { buildReviewContextHash, buildReviewRouteContext } from "@/server/review-context";
+import { buildRouteAssessment, canMarkCaseReady, resolveReviewRoute } from "@/lib/review-rubric";
+import {
+  getChecklistItemDescription,
+  getApplicantChecklistDescription,
+} from "@/lib/checklist-research";
+import { readRouteReviewSettings, ROUTE_FACT_LABELS } from "@/lib/route-review-input";
 import { requireApplicationPagePermission } from "@/utils/application-page-auth";
 import styles from "@/components/agency/agency-case-workspace.module.css";
 
@@ -48,10 +57,6 @@ function getPersonName(
 ) {
   if (!user) return null;
   return `${user.firstName ?? ""} ${user.lastName ?? ""}`.trim() || user.email || null;
-}
-
-function isUploadedStatus(status: string) {
-  return status === CHECKLIST_ITEM_STATUS.UPLOADED || status === CHECKLIST_ITEM_STATUS.APPROVED;
 }
 
 export async function AgencyCaseContent({ appId }: { appId: string }) {
@@ -65,6 +70,7 @@ export async function AgencyCaseContent({ appId }: { appId: string }) {
   }
 
   const primaryApplicant = data.primaryApplicant;
+  const showApplicantNames = data.applicants.length > 1;
   const assignedReviewer =
     data.staff.find((member) => member.userId === app.assignedReviewerId && member.user) ?? null;
   const docsByChecklistItem = new Map<string, typeof data.documents>();
@@ -76,19 +82,43 @@ export async function AgencyCaseContent({ appId }: { appId: string }) {
     docsByChecklistItem.set(document.checklistItemId, existing);
   }
 
+  const hasChecklist = data.checklistItems.length > 0;
   const requiredItems = data.checklistItems.filter((item) => item.isRequired);
-  const uploadedRequiredCount = requiredItems.filter((item) =>
-    isUploadedStatus(item.status),
-  ).length;
-  const completionPercent =
-    requiredItems.length > 0 ? Math.round((uploadedRequiredCount / requiredItems.length) * 100) : 0;
+  const progressItems = requiredItems.length ? requiredItems : data.checklistItems;
+  const uploadedItemCount = progressItems.filter((item) => docsByChecklistItem.has(item.id)).length;
+  const progressLabel = requiredItems.length ? "Required files" : "Checklist files";
+  const completionPercent = progressItems.length
+    ? Math.round((uploadedItemCount / progressItems.length) * 100)
+    : 0;
   const missingRequiredItems = requiredItems.filter((item) => !docsByChecklistItem.has(item.id));
+  const unresolvedItems = data.checklistItems.filter(
+    (item) => getChecklistRequirement(item).unresolved,
+  );
   const openIssues = data.issues.filter((issue) => isOpenReviewIssueStatus(issue.status));
-  const highIssues = openIssues.filter((issue) => issue.severity === "high");
-  const mediumIssues = openIssues.filter((issue) => issue.severity === "medium");
   const caseNumber = getDisplayCaseNumber(app.caseNumber, app.id);
-  const hasDocuments = data.documents.length > 0;
+  const hasUsableDocuments = data.applicants.some(
+    (person) =>
+      getReviewAvailability({
+        applicantId: person.id,
+        items: data.checklistItems,
+        documents: data.documents,
+      }).canReview,
+  );
   const hasEvaluation = Boolean(data.latestEvaluation);
+  const route = resolveReviewRoute(app);
+  const snapshot = {
+    application: app,
+    applicants: data.applicants,
+    checklistItems: data.checklistItems,
+    documents: data.documents,
+  };
+  const routeAssessment = primaryApplicant
+    ? buildRouteAssessment({
+        context: buildReviewRouteContext({ ...snapshot, applicantId: primaryApplicant.id }),
+        asOfDate: new Date().toISOString().slice(0, 10),
+      })
+    : null;
+  const routeCanSubmit = data.canSubmit && canMarkCaseReady(routeAssessment);
   const reviewerName = getPersonName(assignedReviewer?.user ?? null);
 
   const documentRows = data.documents.map((document) => ({
@@ -111,13 +141,21 @@ export async function AgencyCaseContent({ appId }: { appId: string }) {
         ]
       : [],
   );
-  const blockedReason = !hasEvaluation
-    ? "Complete a review of the current files first."
-    : missingRequiredItems.length
-      ? "Complete required evidence first."
-      : openIssues.length
-        ? "Resolve or dismiss open issues first."
-        : null;
+  const blockedReason = app.finalSubmissionAt
+    ? "This case was submitted."
+    : !hasUsableDocuments
+      ? "Upload usable evidence for every applicant before marking ready."
+      : !hasEvaluation
+        ? "Complete a review of the current files first."
+        : missingRequiredItems.length
+          ? "Complete required evidence first."
+          : unresolvedItems.length
+            ? "Complete the case details or edit unresolved checklist requirements first."
+            : openIssues.length
+              ? "Resolve or dismiss open issues first."
+              : !routeCanSubmit
+                ? "Complete the current review and outstanding route checks before you mark this case ready."
+                : null;
 
   return (
     <div className={styles.workspace} aria-label="Application review workspace">
@@ -178,237 +216,378 @@ export async function AgencyCaseContent({ appId }: { appId: string }) {
           </span>
         </div>
       </header>
-      <Suspense fallback={<p className="p-6">Loading case workspace…</p>}>
-        <AgencyCaseWorkspace
-          applicationId={app.id}
-          issues={data.issues}
-          documents={documentRows}
-          missingCount={missingRequiredItems.length}
-          isReviewStale={data.isReviewStale}
-          defaultTab={data.checklistItems.length ? "review" : "checklist"}
-          checklist={
-            <>
-              {data.checklistItems.length === 0 && primaryApplicant ? (
-                <Suspense fallback={<p>Loading checklist controls...</p>}>
-                  <ChecklistGenerator
-                    applicationId={app.id}
-                    applicantId={primaryApplicant.id}
-                    applicantName={primaryApplicant.name}
-                  />
-                </Suspense>
-              ) : null}
-              <div className="mb-4 rounded-xl border border-border/80 bg-background p-4">
-                <div className="mb-2 flex items-center justify-between gap-3">
-                  <p className="text-sm font-bold">Required files uploaded</p>
-                  <span className="text-sm font-bold">{completionPercent}%</span>
-                </div>
-                <Progress value={completionPercent} className="h-2" />
-                <p className="mt-2 text-xs text-muted-foreground">
-                  {uploadedRequiredCount}/{requiredItems.length || 0} required documents uploaded.
-                </p>
-              </div>
-
-              <div className="space-y-2">
-                {data.checklistItems.map((item) => {
-                  const itemDocs = docsByChecklistItem.get(item.id) ?? [];
-                  return (
-                    <div
-                      key={item.id}
-                      className="rounded-xl border border-border/80 bg-background p-3"
-                    >
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="min-w-0">
-                          <p className="text-sm font-bold">{item.documentName}</p>
-                          <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">
-                            {item.description}
-                          </p>
-                          <p className="mt-2 text-xs font-semibold text-muted-foreground">
-                            {itemDocs.length} file{itemDocs.length === 1 ? "" : "s"}
-                          </p>
-                        </div>
-                        {primaryApplicant ? (
-                          <DocumentUpload
-                            applicationId={app.id}
-                            applicantId={primaryApplicant.id}
-                            checklistItemId={item.id}
-                            label={itemDocs.length ? "Add" : "Upload"}
-                          />
-                        ) : null}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </>
-          }
-          notes={
-            <>
-              <div className="space-y-4">
-                <div className="rounded-xl border border-border/80 bg-background p-4">
-                  <h3 className="text-sm font-bold">Applicant</h3>
-                  <div className="mt-3 grid gap-3 text-sm text-muted-foreground">
-                    <p>
-                      <span className="font-semibold text-foreground">Name:</span>{" "}
-                      {primaryApplicant?.name ?? "Not set"}
-                    </p>
-                    <p>
-                      <span className="font-semibold text-foreground">Nationality:</span>{" "}
-                      {primaryApplicant?.nationality ?? "Not set"}
-                    </p>
-                    <p>
-                      <span className="font-semibold text-foreground">Passport:</span>{" "}
-                      {primaryApplicant?.passportNumber ?? "Not set"}
-                    </p>
-                    <p>
-                      <span className="font-semibold text-foreground">Previous approvals:</span>{" "}
-                      {primaryApplicant?.approvedBefore
-                        ? `${primaryApplicant.approvedVisaType ?? "Visa"} (${primaryApplicant.approvedYear ?? "year not set"})`
-                        : "None recorded"}
-                    </p>
-                    <p>
-                      <span className="font-semibold text-foreground">Previous rejections:</span>{" "}
-                      {primaryApplicant?.rejectedBefore
-                        ? `${primaryApplicant.rejectedVisaType ?? "Visa"} (${primaryApplicant.rejectedYear ?? "year not set"})`
-                        : "None recorded"}
+      <div className={styles.workspaceBody}>
+        <Suspense fallback={<p className="p-6">Loading case workspace…</p>}>
+          <AgencyCaseWorkspace
+            applicationId={app.id}
+            issues={data.issues}
+            documents={documentRows}
+            missingCount={missingRequiredItems.length}
+            isReviewStale={data.isReviewStale}
+            defaultTab={hasUsableDocuments ? "review" : "checklist"}
+            blockedReason={blockedReason}
+            checklist={
+              <>
+                <div className={styles.sectionHeader}>
+                  <div>
+                    <h2 className={styles.sectionTitle}>Document checklist</h2>
+                    <p className={styles.sectionDescription}>
+                      Collect the files needed for this case.
                     </p>
                   </div>
+                  {!app.finalSubmissionAt ? (
+                    <ChecklistItemEditor
+                      applicationId={app.id}
+                      expectedHash={buildReviewContextHash(snapshot)}
+                      applicants={data.applicants}
+                    />
+                  ) : null}
                 </div>
+                {hasChecklist ? (
+                  <div className="mb-4">
+                    <ChecklistResearchDetails application={app} applicants={data.applicants} />
+                  </div>
+                ) : null}
+                {data.applicants
+                  .filter(
+                    (person) => !data.checklistItems.some((item) => item.applicantId === person.id),
+                  )
+                  .map((person) => (
+                    <Suspense key={person.id} fallback={<p>Loading checklist controls...</p>}>
+                      <ChecklistGenerator
+                        applicationId={app.id}
+                        applicantId={person.id}
+                        applicantName={person.name}
+                        showApplicantName={showApplicantNames}
+                      />
+                    </Suspense>
+                  ))}
+                {hasChecklist ? (
+                  <div className={styles.checklistProgress}>
+                    <div className="mb-2 flex items-center justify-between gap-3">
+                      <p className="text-sm font-semibold">{progressLabel} uploaded</p>
+                      <span className="text-sm font-semibold">{completionPercent}%</span>
+                    </div>
+                    <Progress value={completionPercent} className="h-2" />
+                    <p className="mt-2 text-xs text-muted-foreground">
+                      {uploadedItemCount}/{progressItems.length}{" "}
+                      {requiredItems.length
+                        ? "required documents uploaded."
+                        : "checklist items have files."}
+                    </p>
+                  </div>
+                ) : null}
 
-                <div className="rounded-xl border border-border/80 bg-background p-4">
-                  <h3 className="text-sm font-bold">Reviewer</h3>
-                  <div className="mt-3 flex items-center justify-between gap-3">
+                <div className={styles.checklistRows}>
+                  {data.checklistItems.map((item) => {
+                    const itemDocs = docsByChecklistItem.get(item.id) ?? [];
+                    return (
+                      <article key={item.id} className={styles.checklistRow}>
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <p className="text-sm font-semibold">{item.documentName}</p>
+                            <p className="mt-1 text-xs text-muted-foreground">
+                              {getRequirementLabel(item)}
+                            </p>
+                            {showApplicantNames && item.applicantId ? (
+                              <p className="mt-1 text-xs text-muted-foreground">
+                                {data.applicants.find((person) => person.id === item.applicantId)
+                                  ?.name ?? "Applicant"}
+                              </p>
+                            ) : null}
+                            <p className="mt-1 line-clamp-2 text-sm leading-relaxed text-muted-foreground">
+                              {getApplicantChecklistDescription({
+                                description: item.description,
+                                applicantName:
+                                  !showApplicantNames && item.origin !== "staff"
+                                    ? primaryApplicant?.name
+                                    : undefined,
+                              })}
+                            </p>
+                            <p className="mt-2 text-xs font-semibold text-muted-foreground">
+                              {itemDocs.length} file{itemDocs.length === 1 ? "" : "s"}
+                            </p>
+                          </div>
+                          <div className={styles.checklistActions}>
+                            {!app.finalSubmissionAt ? (
+                              <ChecklistItemEditor
+                                applicationId={app.id}
+                                expectedHash={buildReviewContextHash(snapshot)}
+                                applicants={data.applicants}
+                                item={{
+                                  ...item,
+                                  description: getChecklistItemDescription(item.description),
+                                }}
+                              />
+                            ) : null}
+                            {!app.finalSubmissionAt && (item.applicantId || primaryApplicant) ? (
+                              <DocumentUpload
+                                applicationId={app.id}
+                                applicantId={item.applicantId ?? primaryApplicant!.id}
+                                checklistItemId={item.id}
+                                label={itemDocs.length ? "Replace file" : "Upload"}
+                              />
+                            ) : null}
+                          </div>
+                        </div>
+                        {itemDocs.length ? (
+                          <ul
+                            aria-label={`Uploaded files for ${item.documentName}`}
+                            className="mt-3 space-y-2 border-t border-border/60 pt-3"
+                          >
+                            {itemDocs.map((document, index) => (
+                              <li key={document.id}>
+                                <DocumentPreviewDrawer
+                                  documentId={document.id}
+                                  fileName={document.fileName}
+                                  fileSize={document.fileSize}
+                                  mimeType={document.mimeType}
+                                  uploadedAt={document.uploadedAt}
+                                  isActive={index === 0}
+                                  hasMultipleVersions={itemDocs.length > 1}
+                                  sectionLabel={item.documentName}
+                                />
+                              </li>
+                            ))}
+                          </ul>
+                        ) : null}
+                      </article>
+                    );
+                  })}
+                </div>
+              </>
+            }
+            details={
+              <>
+                <RouteReviewDetails
+                  applicationId={app.id}
+                  expectedHash={buildReviewContextHash(snapshot)}
+                  initialRoute={{
+                    destinationCountry: app.destinationCountry,
+                    visaType: app.visaType,
+                  }}
+                  initial={readRouteReviewSettings(app.settings)}
+                  applicants={data.applicants}
+                />
+                <details
+                  aria-label="Route guidance and official sources"
+                  className={styles.routeGuidance}
+                >
+                  <summary>
+                    <span>Route guidance and official sources</span>
+                    <span className={styles.guidanceStatus}>
+                      {route.status === "unresolved"
+                        ? "Exact route needed"
+                        : "Approved route guidance"}
+                    </span>
+                  </summary>
+                  <div className={styles.guidanceBody}>
+                    <h3 className="text-sm font-semibold">Route requirements</h3>
+                    <p className="mt-2 text-sm text-muted-foreground">
+                      {route.label}.{" "}
+                      {route.status === "unresolved"
+                        ? "Select the exact destination and visa route before you mark the case ready."
+                        : "The review uses the approved route guidance and supplied evidence. Complete the required files and resolve open issues before you mark the case ready."}
+                    </p>
+                    {routeAssessment?.missingFacts.length ? (
+                      <p className="mt-2 text-sm text-muted-foreground">
+                        Details to record:{" "}
+                        {routeAssessment.missingFacts
+                          .map(
+                            (key) =>
+                              ROUTE_FACT_LABELS[key] ??
+                              {
+                                stage: "process stage",
+                                subtype: "exact category",
+                                applicationDate: "filing date",
+                              }[key] ??
+                              key,
+                          )
+                          .join(", ")}
+                        .
+                      </p>
+                    ) : null}
+                    <ul className="mt-2 list-disc space-y-2 pl-5 text-muted-foreground">
+                      {route.guidance.map((guidance) => (
+                        <li key={guidance}>{guidance}</li>
+                      ))}
+                    </ul>
+                    <ul className="mt-3 space-y-1">
+                      {route.sourceUrls.map((url) => (
+                        <li key={url}>
+                          <a
+                            href={url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-primary underline"
+                          >
+                            {new URL(url).hostname}
+                          </a>
+                        </li>
+                      ))}
+                    </ul>
+                    <p className="mt-2 text-muted-foreground">
+                      Use the guidance and sources with the case details to check which requirements
+                      apply.
+                    </p>
+                  </div>
+                </details>
+              </>
+            }
+            detailsSidebar={
+              <>
+                <section className={styles.detailsCard} aria-label="Case team">
+                  <h3 className={styles.cardTitle}>Reviewer</h3>
+                  <div className="mt-4">
                     <ReviewerAvatar
                       name={reviewerName}
                       email={assignedReviewer?.user?.email ?? null}
                       avatar={assignedReviewer?.user?.avatar ?? null}
                     />
+                  </div>
+                  <div className={styles.priorityRow}>
+                    <span>Case priority</span>
                     <PriorityBadge priority={app.priority} />
                   </div>
-                </div>
-
-                <div className="rounded-xl border border-border/80 bg-background p-4">
-                  <h3 className="text-sm font-bold">Add issue</h3>
-                  <div className="mt-3">
-                    <AddReviewIssueForm applicationId={app.id} />
-                  </div>
-                </div>
-              </div>
-              {data.latestReport ? (
-                <div className="mt-4 rounded-md border border-border p-4">
-                  <h3 className="text-sm font-semibold">Client fix list</h3>
-                  <Link
-                    href={`/dashboard/reports/${data.latestReport.id}` as Route}
-                    className="mt-2 block text-xs text-primary underline"
-                  >
-                    Open client report
-                  </Link>
-                </div>
-              ) : null}
-            </>
-          }
-          activity={
-            <>
-              <div className="space-y-3">
-                {[
-                  { label: "Case created", date: app.createdAt, icon: PlusIcon },
-                  { label: "Client submitted files", date: app.submittedAt, icon: FileTextIcon },
-                  {
-                    label: "Review completed",
-                    date: app.reviewCompletedAt,
-                    icon: CheckCircle2Icon,
-                  },
-                  {
-                    label: "Marked ready for submission",
-                    date: app.finalSubmissionAt,
-                    icon: Clock3Icon,
-                  },
-                ].map((event) => (
-                  <div
-                    key={event.label}
-                    className="flex gap-3 rounded-xl border border-border/80 bg-background p-3"
-                  >
-                    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/8 text-primary">
-                      <event.icon className="h-4 w-4" />
-                    </span>
-                    <div>
-                      <p className="text-sm font-bold">{event.label}</p>
-                      <p className="text-xs text-muted-foreground">{formatShortDate(event.date)}</p>
-                    </div>
-                  </div>
-                ))}
-
-                {data.issues.length > 0 ? (
-                  <div className="space-y-2 pt-2">
-                    <h3 className="text-sm font-bold">Tracked issues</h3>
-                    {data.issues.map((issue) => (
-                      <div
-                        key={issue.id}
-                        className="rounded-xl border border-border/80 bg-background p-3"
-                      >
-                        <div className="mb-2 flex items-start justify-between gap-3">
+                </section>
+                <section className={styles.detailsCard} aria-label="Applicant records">
+                  <h3 className={styles.cardTitle}>Applicant records</h3>
+                  <p className={styles.cardDescription}>Passport and previous visa decisions.</p>
+                  {data.applicants.length ? (
+                    data.applicants.map((person) => (
+                      <div className={styles.personRecord} key={person.id}>
+                        <h4>{person.name}</h4>
+                        <dl className={styles.recordList}>
                           <div>
-                            <p className="text-sm font-bold">{issue.title}</p>
-                            <p className="mt-1 text-xs text-muted-foreground">
-                              {issue.description}
-                            </p>
+                            <dt>Passport</dt>
+                            <dd>{person.passportNumber || "Not recorded"}</dd>
                           </div>
-                          <IssueSeverityBadge severity={issue.severity} />
-                        </div>
-                        <ReviewIssueStatusSelect issueId={issue.id} status={issue.status} />
+                          <div>
+                            <dt>Previous approvals:</dt>
+                            <dd>
+                              {person.approvedBefore
+                                ? `${person.approvedVisaType ?? "Visa"} (${person.approvedYear ?? "year not set"})`
+                                : "None recorded"}
+                            </dd>
+                          </div>
+                          <div>
+                            <dt>Previous rejections:</dt>
+                            <dd>
+                              {person.rejectedBefore
+                                ? `${person.rejectedVisaType ?? "Visa"} (${person.rejectedYear ?? "year not set"})`
+                                : "None recorded"}
+                            </dd>
+                          </div>
+                        </dl>
                       </div>
-                    ))}
-                  </div>
+                    ))
+                  ) : (
+                    <p className="mt-3 text-sm text-muted-foreground">No applicants recorded.</p>
+                  )}
+                </section>
+              </>
+            }
+            reviewTools={
+              <>
+                {data.latestReport ? (
+                  <Button asChild size="sm" variant="outline">
+                    <Link href={`/dashboard/reports/${data.latestReport.id}` as Route}>
+                      Open client report
+                    </Link>
+                  </Button>
                 ) : null}
-              </div>
-            </>
-          }
-        />
-      </Suspense>
-      <footer className={styles.footer}>
-        <div className={styles.metrics}>
-          <div className={styles.score}>
-            <span>Readiness score</span>
-            <Progress
-              value={data.latestEvaluation?.overallScore ?? 0}
-              className={
-                data.latestEvaluation && data.latestEvaluation.overallScore < 65
-                  ? "[&>div]:bg-destructive"
-                  : ""
-              }
-            />
-            <strong>
-              {data.latestEvaluation ? `${data.latestEvaluation.overallScore} / 100` : "Pending"}
-            </strong>
-          </div>
-          <span>
-            <FileTextIcon />
-            {openIssues.length} open issues{" "}
-            <span className="hidden 2xl:inline">
-              ({highIssues.length} high, {mediumIssues.length} medium)
-            </span>
-          </span>
-          <span>
-            <PaperclipIcon />
-            {missingRequiredItems.length} required files missing
-          </span>
+                <AddReviewIssueDialog applicationId={app.id} />
+              </>
+            }
+            activity={
+              <>
+                <h3 className={styles.cardTitle}>Case activity</h3>
+                <p className={styles.cardDescription}>Most recent first.</p>
+                <ol className={styles.timeline}>
+                  {[
+                    { label: "Case created", date: app.createdAt, icon: PlusIcon },
+                    { label: "Client submitted files", date: app.submittedAt, icon: FileTextIcon },
+                    {
+                      label: "Review completed",
+                      date: app.reviewCompletedAt,
+                      icon: CheckCircle2Icon,
+                    },
+                    {
+                      label: "Marked ready for submission",
+                      date: app.finalSubmissionAt,
+                      icon: Clock3Icon,
+                    },
+                  ]
+                    .filter((event) => event.date)
+                    .sort(
+                      (left, right) => (right.date?.getTime() ?? 0) - (left.date?.getTime() ?? 0),
+                    )
+                    .map((event) => (
+                      <li key={event.label} className={styles.timelineEvent}>
+                        <span className={styles.timelineIcon}>
+                          <event.icon className="h-4 w-4" />
+                        </span>
+                        <div>
+                          <p className="text-sm font-medium">{event.label}</p>
+                          <time
+                            className="text-xs text-muted-foreground"
+                            dateTime={event.date?.toISOString()}
+                          >
+                            {formatShortDate(event.date)}
+                          </time>
+                        </div>
+                      </li>
+                    ))}
+                </ol>
+              </>
+            }
+          />
+        </Suspense>
+        <div className={styles.tabActions} role="group" aria-label="Case actions">
+          <AgencyCaseToolbar
+            applicationId={app.id}
+            hasEvaluation={hasEvaluation}
+            hasChecklist={hasChecklist}
+            expectedHash={buildReviewContextHash(snapshot)}
+          >
+            {data.applicants.map((person) => {
+              const availability = getReviewAvailability({
+                applicantId: person.id,
+                items: data.checklistItems,
+                documents: data.documents,
+              });
+              return (
+                <Suspense key={person.id} fallback={null}>
+                  <div className="flex flex-wrap items-center gap-2">
+                    {showApplicantNames ? (
+                      <span className="text-xs text-muted-foreground">{person.name}</span>
+                    ) : null}
+                    <EvaluationTrigger
+                      compact
+                      applicationId={app.id}
+                      applicantId={person.id}
+                      hasDocuments={!app.finalSubmissionAt && availability.canReview}
+                      blockedReason={
+                        app.finalSubmissionAt ? "This case was submitted." : availability.reason
+                      }
+                      blockedLabel={
+                        app.finalSubmissionAt
+                          ? "Case submitted"
+                          : availability.state === "checklist_needed"
+                            ? "Generate checklist first"
+                            : availability.state === "processing"
+                              ? "Processing documents"
+                              : "Upload usable documents"
+                      }
+                      rerun={hasEvaluation || data.isReviewStale}
+                    />
+                  </div>
+                </Suspense>
+              );
+            })}
+          </AgencyCaseToolbar>
         </div>
-        <AgencyCaseToolbar
-          applicationId={app.id}
-          hasEvaluation={hasEvaluation}
-          blockedReason={blockedReason}
-        >
-          {primaryApplicant ? (
-            <Suspense fallback={null}>
-              <EvaluationTrigger
-                applicationId={app.id}
-                applicantId={primaryApplicant.id}
-                hasDocuments={hasDocuments}
-                rerun={hasEvaluation || data.isReviewStale}
-              />
-            </Suspense>
-          ) : null}
-        </AgencyCaseToolbar>
-      </footer>
+      </div>
     </div>
   );
 }

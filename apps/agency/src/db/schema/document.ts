@@ -4,6 +4,8 @@ import { createId } from "@paralleldrive/cuid2";
 import { visaApplicationTable, riskLevelTuple, scoreConfidenceTuple } from "./visa-application";
 import { applicantTable } from "./applicant";
 import { checklistItemTable } from "./checklist";
+import type { RouteAssessment } from "@/lib/review-rubric";
+import type { StoredReviewFinding } from "@/lib/review-findings";
 
 export const DOCUMENT_EXTRACTION_STATUS = {
   QUEUED: "queued",
@@ -140,7 +142,7 @@ export const documentEvaluationTable = pgTable(
       .default("incomplete"),
     riskLevel: text({ enum: riskLevelTuple }).notNull(),
     summary: text().notNull(),
-    redFlags: jsonb().notNull().$type<string[]>(),
+    redFlags: jsonb().notNull().$type<StoredReviewFinding[]>(),
     strengths: jsonb().notNull().$type<string[]>(),
     recommendations: jsonb().notNull().$type<string[]>(),
     itemFeedback: jsonb().$type<
@@ -148,6 +150,8 @@ export const documentEvaluationTable = pgTable(
         string,
         {
           status: string;
+          title?: string;
+          recommendation?: string;
           feedback: string;
           /** Per-document AI evaluation score (0-100) */
           score?: number;
@@ -182,16 +186,11 @@ export const documentEvaluationTable = pgTable(
      * Null on evaluations created before this column was added.
      */
     docSnapshots: jsonb().$type<Record<string, string>>(),
-    /**
-     * Ensemble scoring confidence level — only set for borderline scores (within ±12 of
-     * the visa-type threshold). A second adversarial AI pass is run and the two scores are
-     * compared. Null means the score was not borderline and ensemble was not triggered.
-     */
+    routeAssessment: jsonb().$type<RouteAssessment>(),
+    reviewContextHash: text(),
+    /** Historical model-agreement field. Route evidence reviews leave this null. */
     scoreConfidence: text({ enum: scoreConfidenceTuple }).$type<"high" | "moderate" | "low">(),
-    /**
-     * Absolute divergence (|score1 - score2|) between the primary and adversarial AI passes.
-     * Only set when scoreConfidence is set. Null otherwise.
-     */
+    /** Historical score divergence. It is not an accuracy or legal-confidence measure. */
     ensembleDivergence: integer(),
     /**
      * Legacy AI-generated preview Q&A retained for older evaluations.

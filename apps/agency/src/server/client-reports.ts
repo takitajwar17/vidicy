@@ -6,13 +6,18 @@ import { ZSAError } from "zsa";
 import { z } from "zod";
 import { getDB } from "@/db";
 import {
-  checklistItemTable,
   clientReportTable,
   documentEvaluationTable,
+  reviewJobTable,
   visaApplicationTable,
 } from "@/db/schema";
 import { requireAgencyStaff } from "@/server/agency-team";
-import { newestEvaluationOrder, requireCurrentAgencyReview } from "@/server/agency-review";
+import {
+  isEvaluationCurrent,
+  newestEvaluationOrder,
+  requireCurrentAgencyReview,
+} from "@/server/agency-review";
+import { buildReviewRouteContext, loadReviewSnapshot } from "@/server/review-context";
 import { createClientReportEmailRequest, sendClientReportEmail } from "@/utils/email";
 import { CLIENT_REPORT_REVIEW_NOTE } from "@/lib/agency-workflow";
 
@@ -20,6 +25,53 @@ const RETRY_DELAY_MS = 2 * 60_000;
 // Resend retains idempotency keys for 24 hours. Stop earlier to avoid an
 // ambiguous retry creating a second message after the provider forgets its key.
 const RETRY_WINDOW_MS = 23 * 60 * 60_000;
+
+async function loadReportReviewState({
+  db,
+  report,
+}: {
+  db: ReturnType<typeof getDB>;
+  report: typeof clientReportTable.$inferSelect;
+}) {
+  const latest = await db.query.clientReportTable.findFirst({
+    where: eq(clientReportTable.applicationId, report.applicationId),
+    orderBy: [desc(clientReportTable.createdAt), desc(clientReportTable.id)],
+    columns: { id: true },
+  });
+  const snapshot = await loadReviewSnapshot({ db, applicationId: report.applicationId });
+  const reviews = await db.query.documentEvaluationTable.findMany({
+    where: eq(documentEvaluationTable.applicationId, report.applicationId),
+    orderBy: newestEvaluationOrder,
+  });
+  const pendingReview = await db.query.reviewJobTable.findFirst({
+    columns: { id: true },
+    where: and(
+      eq(reviewJobTable.applicationId, report.applicationId),
+      sql`${reviewJobTable.status} in ('queued', 'running')`,
+    ),
+  });
+  const isStale =
+    (report.reviewContextHash != null && report.reviewContextHash !== snapshot.reviewContextHash) ||
+    (report.kind !== "collection" &&
+      (Boolean(pendingReview) ||
+        !snapshot.applicants.length ||
+        snapshot.applicants.some(
+          ({ id: applicantId }) =>
+            !isEvaluationCurrent({
+              evaluation: reviews.find((review) => review.applicantId === applicantId),
+              ...snapshot,
+              routeContext: buildReviewRouteContext({ ...snapshot, applicantId }),
+            }),
+        ))) ||
+    latest?.id !== report.id ||
+    report.status === "draft" ||
+    !["ready", "sent"].includes(snapshot.application.clientReportStatus);
+  return {
+    isStale,
+    isLatest: latest?.id === report.id,
+    reviewContextHash: snapshot.reviewContextHash,
+  };
+}
 
 export async function getClientReport({ reportId }: { reportId: string }) {
   const { session, staff } = await requireAgencyStaff();
@@ -37,33 +89,8 @@ export async function getClientReport({ reportId }: { reportId: string }) {
     ),
   });
   if (!application) throw new ZSAError("NOT_FOUND", "Case not found.");
-  const latest = await db.query.clientReportTable.findFirst({
-    where: eq(clientReportTable.applicationId, application.id),
-    orderBy: [desc(clientReportTable.createdAt), desc(clientReportTable.id)],
-    columns: { id: true },
-  });
-  const [items, reviews] = await Promise.all([
-    db.query.checklistItemTable.findMany({
-      where: eq(checklistItemTable.applicationId, application.id),
-      columns: { applicantId: true },
-    }),
-    db.query.documentEvaluationTable.findMany({
-      where: eq(documentEvaluationTable.applicationId, application.id),
-      orderBy: newestEvaluationOrder,
-      columns: { applicantId: true, reviewStatus: true },
-    }),
-  ]);
-  const reviewApplicantIds = new Set(items.map((item) => item.applicantId));
-  const isStale =
-    !reviewApplicantIds.size ||
-    [...reviewApplicantIds].some(
-      (applicantId) =>
-        reviews.find((review) => review.applicantId === applicantId)?.reviewStatus !== "complete",
-    ) ||
-    latest?.id !== report.id ||
-    report.status === "draft" ||
-    !["ready", "sent"].includes(application.clientReportStatus);
-  return { report, application, isStale, session };
+  const state = await loadReportReviewState({ db, report });
+  return { report, application, session, ...state };
 }
 
 export async function updateClientReportRecipient({
@@ -132,26 +159,35 @@ export async function updateClientReportRecipient({
 }
 
 export async function deliverClientReport({ reportId }: { reportId: string }) {
-  const { report, application, isStale, session } = await getClientReport({ reportId });
-  if (report.status === "sent") return { alreadySent: true };
-  if (isStale)
-    throw new ZSAError("PRECONDITION_FAILED", "This report is out of date. Prepare a new report.");
-  await requireCurrentAgencyReview({
-    db: getDB(),
-    applicationId: application.id,
-    userId: session.userId,
+  const { report, application, isStale, session, reviewContextHash } = await getClientReport({
+    reportId,
   });
+  if (report.status === "sent") return { alreadySent: true };
+  const isRetry = report.status === "sending";
+  if (isRetry && !report.deliveryRequest)
+    throw new ZSAError(
+      "PRECONDITION_FAILED",
+      "The original sender details were not saved. Check the email provider before preparing another report.",
+    );
+  if (isRetry && !report.deliveryKey)
+    throw new ZSAError(
+      "PRECONDITION_FAILED",
+      "The original delivery key was not saved. Check the email provider before preparing another report.",
+    );
+  if (isStale && !isRetry)
+    throw new ZSAError("PRECONDITION_FAILED", "This report is out of date. Prepare a new report.");
+  if (!isRetry && report.kind !== "collection")
+    await requireCurrentAgencyReview({
+      db: getDB(),
+      applicationId: application.id,
+      userId: session.userId,
+    });
   const recipient =
     report.deliveryRequest?.to[0] ?? report.deliveryPayload?.to ?? application.clientEmail?.trim();
   if (!recipient || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(recipient))
     throw new ZSAError("PRECONDITION_FAILED", "Add a valid client email address first.");
   const now = new Date();
-  if (report.status === "sending") {
-    if (!report.deliveryRequest)
-      throw new ZSAError(
-        "PRECONDITION_FAILED",
-        "The original sender details were not saved. Check the email provider before preparing another report.",
-      );
+  if (isRetry) {
     const age = now.getTime() - (report.deliveryStartedAt?.getTime() ?? 0);
     const lastAttemptAge = now.getTime() - report.updatedAt.getTime();
     if (age >= RETRY_WINDOW_MS)
@@ -167,11 +203,13 @@ export async function deliverClientReport({ reportId }: { reportId: string }) {
   }
   const payload = report.deliveryPayload ?? {
     to: recipient,
-    subject: `Your visa document review — ${application.caseNumber ?? application.id}`,
+    subject: `Your ${report.kind === "collection" ? "document request" : "visa document review"} — ${application.caseNumber ?? application.id}`,
     text: [
       `Hello ${application.clientName ?? "Client"},`,
       "",
-      "Your document review is ready.",
+      report.kind === "collection"
+        ? "Please send the documents and details listed below."
+        : "Your document review is ready.",
       "",
       report.summary,
       "",
@@ -204,6 +242,20 @@ export async function deliverClientReport({ reportId }: { reportId: string }) {
         "PRECONDITION_FAILED",
         "The case changed. Refresh the report before sending.",
       );
+    const state = await loadReportReviewState({ db, report });
+    const wasCurrent = !isStale && !state.isStale && state.reviewContextHash === reviewContextHash;
+    if (!isRetry && !wasCurrent)
+      throw new ZSAError(
+        "PRECONDITION_FAILED",
+        "The case or documents changed. Prepare a new report before sending.",
+      );
+    if (!isRetry && report.kind !== "collection")
+      await requireCurrentAgencyReview({
+        db,
+        applicationId: application.id,
+        userId: session.userId,
+        syncIssues: false,
+      });
     const [claim] = await db
       .update(clientReportTable)
       .set({
@@ -222,7 +274,7 @@ export async function deliverClientReport({ reportId }: { reportId: string }) {
       .returning();
     if (!claim)
       throw new ZSAError("PRECONDITION_FAILED", "Delivery is in progress. Refresh the report.");
-    return { report: claim, caseCounter: currentCase[0].updateCounter };
+    return { report: claim, caseCounter: currentCase[0].updateCounter, wasCurrent };
   });
   // Keep the claim on errors: a timeout can mean the provider accepted the
   // message. A retry uses the exact stored payload and idempotency key.
@@ -233,21 +285,39 @@ export async function deliverClientReport({ reportId }: { reportId: string }) {
   if (!accepted?.id) throw new Error("The email provider did not confirm acceptance.");
   await db.withTransaction(async () => {
     await db
+      .select({ id: visaApplicationTable.id })
+      .from(visaApplicationTable)
+      .where(eq(visaApplicationTable.id, application.id))
+      .for("update");
+    const state = await loadReportReviewState({ db, report });
+    const evidenceUnchanged =
+      claimed.wasCurrent && !state.isStale && state.reviewContextHash === reviewContextHash;
+    await db
       .update(clientReportTable)
       .set({ status: "sent", sentAt: new Date(), providerMessageId: accepted.id })
       .where(eq(clientReportTable.id, report.id));
     // A report sent while evidence changed remains a historical sent report;
     // the case stays draft and requires a new report.
-    await db
-      .update(visaApplicationTable)
-      .set({ clientReportStatus: "sent" })
-      .where(
-        and(
-          eq(visaApplicationTable.id, application.id),
-          eq(visaApplicationTable.clientReportStatus, "ready"),
-          sql`${visaApplicationTable.updateCounter} IS NOT DISTINCT FROM ${claimed.caseCounter}`,
-        ),
-      );
+    if (state.isLatest)
+      await db
+        .update(visaApplicationTable)
+        .set({
+          clientReportStatus: evidenceUnchanged ? "sent" : "draft",
+          ...(evidenceUnchanged && report.actionItems.length
+            ? {
+                agencyStatus: "needs_client" as const,
+                status: "in_progress" as const,
+                reviewCompletedAt: null,
+              }
+            : {}),
+        })
+        .where(
+          and(
+            eq(visaApplicationTable.id, application.id),
+            eq(visaApplicationTable.clientReportStatus, "ready"),
+            sql`${visaApplicationTable.updateCounter} IS NOT DISTINCT FROM ${claimed.caseCounter}`,
+          ),
+        );
   });
   return { alreadySent: false };
 }

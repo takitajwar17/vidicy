@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 
 import { PageHeader } from "@/components/page-header";
 import { Badge } from "@/components/ui/badge";
+import { getRequirementLabel, resolveChecklistItems } from "@/lib/checklist-state";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { ReadOnlyDetailsCard } from "./_components/read-only-details-card";
 import { ReadOnlyTableCard } from "./_components/read-only-table-card";
@@ -271,10 +272,17 @@ export default async function AdminApplicationDetailPage({
                       className: "font-mono text-xs",
                     },
                     {
-                      header: "Required",
+                      header: "Requirement",
                       render: (row) => (
                         <Badge variant={row.isRequired ? "default" : "secondary"}>
-                          {row.isRequired ? "Required" : "Optional"}
+                          {row.removedAt
+                            ? "Removed"
+                            : getRequirementLabel(
+                                resolveChecklistItems({
+                                  items: [row],
+                                  settings: data.application.settings,
+                                })[0] ?? row,
+                              )}
                         </Badge>
                       ),
                     },
@@ -348,7 +356,7 @@ export default async function AdminApplicationDetailPage({
                 <ReadOnlyTableCard
                   title="Evaluations"
                   count={data.evaluations.length}
-                  description="Evaluation runs and aggregate scoring."
+                  description="Stored evidence reviews. Coverage and concern labels are not visa approval estimates."
                   rows={data.evaluations}
                   columns={[
                     {
@@ -368,14 +376,27 @@ export default async function AdminApplicationDetailPage({
                       className: "font-mono text-xs",
                     },
                     {
-                      header: "Score",
-                      render: (row) => row.overallScore,
+                      header: "Evidence coverage",
+                      render: (row) =>
+                        !Object.values(row.docSnapshots ?? {}).some(
+                          (version) => version !== "missing",
+                        )
+                          ? "Not assessed"
+                          : data.checklistItems.some((item) => item.isRequired && !item.removedAt)
+                            ? `${row.overallScore}%`
+                            : "Not determined",
                       className: "tabular-nums font-medium",
                     },
                     {
-                      header: "Risk",
+                      header: "Evidence concern",
                       render: (row) => (
-                        <Badge variant="outline">{normalizeText(row.riskLevel)}</Badge>
+                        <Badge variant="outline">
+                          {Object.values(row.docSnapshots ?? {}).some(
+                            (version) => version !== "missing",
+                          )
+                            ? normalizeText(row.riskLevel)
+                            : "Not assessed"}
+                        </Badge>
                       ),
                       className: "capitalize",
                     },

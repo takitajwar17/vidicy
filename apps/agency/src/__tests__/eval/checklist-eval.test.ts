@@ -1,8 +1,8 @@
 /**
  * Checklist generation evaluation tests.
  *
- * Tests the quality of AI-generated visa document checklists by
- * calling GPT-4o with the same prompt structure used in production.
+ * Standalone model-only draft proposal probe. It does not run production research,
+ * authentication, persistence or staff approval. Developer examples are not law.
  *
  * Requires OPENAI_API_KEY env var. LLM-as-judge requires RUN_LLM_JUDGE=true.
  */
@@ -12,7 +12,6 @@ import OpenAI from "openai";
 import { runEvalSuite } from "./framework/runner";
 import { printResults, saveResults, loadBaseline } from "./framework/reporter";
 import {
-  checklistItemCount,
   checklistItemSchema,
   checklistNoDuplicates,
   checklistRequiredDocs,
@@ -24,27 +23,28 @@ import {
   type ChecklistExpected,
 } from "./datasets/checklist-cases";
 import type { ChecklistItemOutput, EvalTestCase } from "./framework/types";
+import { normalizeChecklistCandidates } from "@/lib/checklist-research";
 
 // ---------------------------------------------------------------------------
-// Prompt builder (mirrors production logic from checklist.action.ts)
+// Standalone proposal prompt. Production action safety has separate offline tests.
 // ---------------------------------------------------------------------------
 
 function buildChecklistPrompt(input: ChecklistInput): { system: string; user: string } {
-  const system = `You are an experienced visa officer with 15 years of expertise in visa applications worldwide.
-Your task is to generate a document checklist for a visa application.
+  const system = `Propose draft document candidates for staff review. You are not an immigration decision-maker.
 
 RESPONSE FORMAT: Return a JSON object with an "items" array. Each item must have:
 - "documentName": string (official document name)
 - "description": string (what it should contain, validity requirements, format specs)
 - "commonMistakes": string (concrete mistakes that lead to rejection)
-- "isRequired": boolean
-- "sortOrder": number (required documents first, starting from 0)
+- "requirement": required, recommended, conditional, or unknown
+- "applicability": applies, does_not_apply, or unknown
+- "condition": the applicable condition, or empty
+- "sources": [] (this probe has no retrieved source evidence)
 
 RULES:
-- Generate between 5 and 18 items
-- Descriptions must mention validity period, required format, and content requirements
-- Common mistakes must be concrete and actionable (not generic)
-- Required documents first (lower sortOrder), optional documents after
+- Do not invent a document count, legal threshold, validity period or source quotation
+- Distinguish required, recommended, conditional and unknown claims
+- These are unverified proposals; do not claim they establish statutory requirements
 - No duplicate document names`;
 
   let user = `Generate a visa document checklist for:
@@ -59,7 +59,7 @@ RULES:
 - Rejected Visa: ${input.rejectedVisaType}
 - Rejection Year: ${input.rejectedYear}
 - Rejection Reason: ${input.rejectedReason}
-Include additional documents to address the rejection reason.`;
+Do not add mandatory documents solely because of this refusal.`;
   }
 
   if (input.approvedBefore) {
@@ -67,7 +67,7 @@ Include additional documents to address the rejection reason.`;
   }
 
   if (input.isDependent) {
-    user += `\n\nNote: This is a dependent/family applicant. Include relationship proof and sponsor documents.`;
+    user += `\n\nNote: This is a dependent/family applicant. Resolve any relationship or sponsor-document conditions instead of assuming they are mandatory.`;
   }
 
   return { system, user };
@@ -102,79 +102,95 @@ async function produceChecklist(
   const content = response.choices[0].message.content || "{}";
   const raw = JSON.parse(content);
 
-  // Handle various response shapes (same as production)
-  const items: ChecklistItemOutput[] =
-    raw.items ||
-    raw.checklist ||
-    (Array.isArray(raw) ? raw : Object.values(raw).find((v) => Array.isArray(v))) ||
-    [];
-
-  return items;
+  return normalizeChecklistCandidates({ items: raw.items ?? raw, researchCitations: [] });
 }
 
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
 
-describe("Checklist Generation Evaluation", () => {
-  it("passes all quality metrics across visa scenarios", { timeout: 300_000 }, async () => {
-    const baseline = loadBaseline("checklist-generation");
+describe.skipIf(process.env.RUN_CHECKLIST_EVALS !== "true")(
+  "Unverified checklist proposal probe",
+  () => {
+    it(
+      "records draft safety and developer candidate-name checks",
+      { timeout: 300_000 },
+      async () => {
+        const baseline = loadBaseline("checklist-proposals-v2");
 
-    const { result, regressions } = await runEvalSuite<ChecklistItemOutput[], ChecklistExpected>({
-      suiteName: "checklist-generation",
-      cases: checklistCases,
-      producer: produceChecklist,
-      baseline,
-      metrics: [
-        // Item count within bounds — we use a wrapper since per-case bounds vary
-        {
-          name: "checklistItemCount",
-          threshold: 1.0,
-          score({ output, expected }) {
-            const min = expected?.minItems ?? 5;
-            const max = expected?.maxItems ?? 18;
-            return checklistItemCount(min, max).score({ output, expected });
-          },
-        },
-        checklistItemSchema(),
-        checklistNoDuplicates(),
-        // Required docs — per-case expected docs
-        {
-          name: "checklistRequiredDocs",
-          threshold: 0.8,
-          score({ output, expected }) {
-            const requiredDocs = expected?.requiredDocNames ?? [];
-            return checklistRequiredDocs(requiredDocs).score({ output, expected });
-          },
-        },
-        // LLM-as-judge (optional)
-        {
-          name: "llmJudge(accuracy,completeness,specificity)",
-          threshold: 0.7,
-          async score({ output, input }) {
-            const metric = llmJudgeMetric(["accuracy", "completeness", "specificity"]);
-            return metric.score({
-              output: JSON.stringify(output, null, 2),
-              input: JSON.stringify(input),
-            });
-          },
-        },
-      ],
-    });
+        const { result, regressions } = await runEvalSuite<
+          ChecklistItemOutput[],
+          ChecklistExpected
+        >({
+          suiteName: "checklist-proposals-v2",
+          cases: checklistCases,
+          producer: produceChecklist,
+          baseline,
+          metrics: [
+            {
+              name: "draftsRemainNonMandatory",
+              threshold: 1.0,
+              score({ output }) {
+                const passed = output.every((item) => item.isRequired === false);
+                return { name: "draftsRemainNonMandatory", score: passed ? 1 : 0, passed };
+              },
+            },
+            checklistItemSchema(),
+            checklistNoDuplicates(),
+            // Developer candidate names; this does not verify mandatory law.
+            {
+              name: "developerCandidateCoverage",
+              threshold: 0.8,
+              async score({ output, expected }) {
+                const requiredDocs = expected?.requiredDocNames ?? [];
+                if (!requiredDocs.length)
+                  return {
+                    name: "developerCandidateCoverage",
+                    score: 0,
+                    passed: false,
+                    measured: false,
+                    detail: "No developer candidate labels supplied",
+                  };
+                return {
+                  ...(await checklistRequiredDocs(requiredDocs).score({
+                    output,
+                    expected,
+                  })),
+                  name: "developerCandidateCoverage",
+                };
+              },
+            },
+            // LLM-as-judge (optional)
+            {
+              name: "llmJudge(accuracy,completeness,specificity)",
+              threshold: 0.7,
+              async score({ output, input }) {
+                const metric = llmJudgeMetric(["accuracy", "completeness", "specificity"]);
+                return metric.score({
+                  output: JSON.stringify(output, null, 2),
+                  input: JSON.stringify(input),
+                });
+              },
+            },
+          ],
+        });
 
-    printResults(result, regressions);
-    saveResults(result);
+        printResults(result, regressions);
+        saveResults(result);
 
-    // Assert aggregate pass rates meet minimum thresholds
-    // LLM outputs are non-deterministic, so we check aggregates rather than per-case
-    for (const agg of result.aggregates) {
-      if (agg.name.startsWith("llmJudge")) continue; // skip when not enabled
-      expect(
-        agg.passRate,
-        `Aggregate ${agg.name}: pass rate ${(agg.passRate * 100).toFixed(0)}% below 70%`,
-      ).toBeGreaterThanOrEqual(0.7);
-    }
+        // Assert aggregate pass rates meet minimum thresholds
+        // LLM outputs are non-deterministic, so we check aggregates rather than per-case
+        for (const agg of result.aggregates) {
+          if (agg.passRate === null) continue;
+          if (agg.name.startsWith("llmJudge")) continue; // skip when not enabled
+          expect(
+            agg.passRate,
+            `Aggregate ${agg.name}: pass rate ${(agg.passRate * 100).toFixed(0)}% below 70%`,
+          ).toBeGreaterThanOrEqual(0.7);
+        }
 
-    expect(regressions).toHaveLength(0);
-  });
-});
+        expect(regressions).toHaveLength(0);
+      },
+    );
+  },
+);

@@ -33,6 +33,8 @@ export default async function DashboardPage() {
     requiredCount: row.requiredDocumentCount,
     uploadedRequiredCount: row.uploadedRequiredDocumentCount,
     hasChecklist: row.hasChecklist,
+    usableDocumentCount: row.usableDocumentCount,
+    unresolvedRequirementCount: row.unresolvedRequirementCount,
     reviewState: row.reviewState,
     openIssueCount: row.openIssueCount,
     finalSubmissionAt: row.application.finalSubmissionAt?.toISOString() ?? null,

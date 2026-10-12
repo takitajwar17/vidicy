@@ -1,4 +1,5 @@
 import "server-only";
+import { getReviewFindingText, type StoredReviewFinding } from "@/lib/review-findings";
 
 // ---------------------------------------------------------------------------
 // Shared Atlas system-prompt builder
@@ -294,7 +295,7 @@ export function buildAtlasSystemPrompt(params: BuildAtlasPromptParams): string {
       latestEvaluation.redFlags &&
       Array.isArray(latestEvaluation.redFlags) &&
       latestEvaluation.redFlags.length
-        ? `\nRED FLAGS:\n${(latestEvaluation.redFlags as string[]).map((f) => `  • ${f}`).join("\n")}`
+        ? `\nRED FLAGS:\n${(latestEvaluation.redFlags as StoredReviewFinding[]).map((finding) => `  • ${getReviewFindingText(finding)}`).join("\n")}`
         : "";
     const recsBlock =
       latestEvaluation.recommendations &&

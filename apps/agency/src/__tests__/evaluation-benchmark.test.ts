@@ -5,9 +5,109 @@ import {
   recordEvaluationCall,
   measureProviderCall,
 } from "@/infra/evaluation-metrics";
+import { runEvalSuite } from "./eval/framework/runner";
+import {
+  itemStatusAgreement,
+  recommendationCoverage,
+  redFlagCoverage,
+  riskLevelConsistency,
+} from "./eval/framework/metrics";
+import { llmJudgeMetric } from "./eval/framework/llm-judge";
+import { printResults } from "./eval/framework/reporter";
+import type { OrchestratorEvalOutput } from "./eval/framework/types";
 vi.mock("@/infra/logger", () => ({ logger: { info: vi.fn() } }));
 
 describe("evaluation measurements", () => {
+  it("does not turn a disabled model judge or historical risk band into a quality pass", async () => {
+    const previous = process.env.RUN_LLM_JUDGE;
+    process.env.RUN_LLM_JUDGE = "false";
+    try {
+      expect(await llmJudgeMetric(["accuracy"]).score({ output: "Recorded text" })).toMatchObject({
+        measured: false,
+        passed: false,
+      });
+      expect(
+        await riskLevelConsistency().score({
+          output: { overallScore: 100, riskLevel: "high" } as OrchestratorEvalOutput,
+        }),
+      ).toMatchObject({ measured: false, passed: false });
+    } finally {
+      if (previous === undefined) delete process.env.RUN_LLM_JUDGE;
+      else process.env.RUN_LLM_JUDGE = previous;
+    }
+  });
+  it("reports completed unlabelled answers as unmeasured quality", async () => {
+    const output: OrchestratorEvalOutput = {
+      overallScore: 100,
+      riskLevel: "low",
+      summary: "Complete evidence",
+      redFlags: [],
+      strengths: [],
+      recommendations: [],
+      itemFeedback: {},
+    };
+    const { result } = await runEvalSuite({
+      suiteName: "unlabelled-offline",
+      cases: [{ id: "case", description: "Unlabelled", input: {} }],
+      producer: async () => output,
+      metrics: [itemStatusAgreement(), recommendationCoverage(), redFlagCoverage()],
+      delayBetweenCasesMs: 0,
+    });
+    expect(result.operational).toEqual({ attempted: 1, completed: 1, failed: 0, notRun: 0 });
+    expect(
+      result.aggregates.every(
+        (metric) => metric.mean === null && metric.passRate === null && metric.measuredCount === 0,
+      ),
+    ).toBe(true);
+    expect(result.overallPassed).toBe(false);
+    const log = vi.spyOn(console, "log").mockImplementation(() => undefined);
+    try {
+      printResults(result);
+      expect(log.mock.calls.flat().join(" ")).toContain("Measured checks: UNMEASURED");
+    } finally {
+      log.mockRestore();
+    }
+  });
+
+  it("excludes absent labels and provider failures from measured reference agreement", async () => {
+    const output: OrchestratorEvalOutput = {
+      overallScore: 100,
+      riskLevel: "low",
+      summary: "Evidence",
+      redFlags: [],
+      strengths: [],
+      recommendations: [],
+      itemFeedback: { passport: { status: "ok", feedback: "Readable" } },
+    };
+    const { result } = await runEvalSuite({
+      suiteName: "mixed-offline",
+      cases: [
+        {
+          id: "labelled",
+          description: "Labelled",
+          input: {},
+          expected: { expectedItemStatuses: { passport: "ok" } },
+        },
+        { id: "unlabelled", description: "Unlabelled", input: {} },
+        { id: "failed", description: "Provider failure", input: {} },
+      ],
+      producer: async (testCase) => {
+        if (testCase.id === "failed") throw new Error("Provider unavailable");
+        return output;
+      },
+      metrics: [itemStatusAgreement()],
+      delayBetweenCasesMs: 0,
+      maxRetries: 0,
+    });
+    expect(result.operational).toEqual({ attempted: 3, completed: 2, failed: 1, notRun: 0 });
+    expect(result.aggregates[0]).toMatchObject({
+      mean: 1,
+      passRate: 1,
+      measuredCount: 1,
+      unmeasuredCount: 2,
+    });
+    expect(result.overallPassed).toBe(false);
+  });
   it("retains failed attempts in a supplied collector without error content", async () => {
     const calls: import("@/infra/evaluation-metrics").EvaluationCallMetric[] = [];
     await expect(

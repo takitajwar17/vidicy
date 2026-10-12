@@ -24,15 +24,22 @@ export function printResults(result: EvalRunResult, regressions: RegressionFlag[
   // Per-case results
   console.log("┌─ Per-Case Results ─────────────────────────────────────────────────┐");
   for (const c of result.caseResults) {
-    const icon = c.passed ? "✅" : "❌";
+    const icon =
+      c.executionStatus === "completed" && c.scores.every((score) => score.measured === false)
+        ? "—"
+        : c.passed
+          ? "✅"
+          : "❌";
     const latency = c.latencyMs ? ` (${c.latencyMs}ms)` : "";
     console.log(`│ ${icon} ${c.caseId}${latency}`);
     console.log(`│   ${c.description}`);
 
     for (const s of c.scores) {
-      const sIcon = s.passed ? "✓" : "✗";
+      const sIcon = s.measured === false ? "—" : s.passed ? "✓" : "✗";
       const detail = s.detail ? ` — ${s.detail}` : "";
-      console.log(`│     ${sIcon} ${s.name}: ${s.score.toFixed(3)}${detail}`);
+      console.log(
+        `│     ${sIcon} ${s.name}: ${s.measured === false ? "unmeasured" : s.score.toFixed(3)}${detail}`,
+      );
     }
     console.log("│");
   }
@@ -44,10 +51,12 @@ export function printResults(result: EvalRunResult, regressions: RegressionFlag[
   console.log("│  ─────────────────────────────────────────────────────────────────  │");
   for (const a of result.aggregates) {
     const name = a.name.padEnd(32);
-    const avg = a.mean.toFixed(3).padStart(6);
-    const min = a.min.toFixed(3).padStart(6);
-    const max = a.max.toFixed(3).padStart(6);
-    const pass = `${(a.passRate * 100).toFixed(0)}%`.padStart(8);
+    const avg = (a.mean?.toFixed(3) ?? "—").padStart(6);
+    const min = (a.min?.toFixed(3) ?? "—").padStart(6);
+    const max = (a.max?.toFixed(3) ?? "—").padStart(6);
+    const pass = (
+      a.passRate === null ? "unmeasured" : `${(a.passRate * 100).toFixed(0)}%`
+    ).padStart(8);
     console.log(`│  ${name} ${avg}  ${min}  ${max}  ${pass}   │`);
   }
   console.log("└────────────────────────────────────────────────────────────────────┘\n");
@@ -65,8 +74,15 @@ export function printResults(result: EvalRunResult, regressions: RegressionFlag[
   }
 
   // Overall
-  const overallIcon = result.overallPassed ? "✅ PASSED" : "❌ FAILED";
-  console.log(`  Overall: ${overallIcon}\n`);
+  const hasMeasuredChecks = result.aggregates.some((aggregate) => aggregate.mean !== null);
+  const overallIcon = !hasMeasuredChecks
+    ? "UNMEASURED"
+    : result.overallPassed
+      ? "✅ PASSED"
+      : "❌ FAILED";
+  console.log(`  Measured checks: ${overallIcon}; this does not establish immigration accuracy.\n`);
+  if (result.operational)
+    console.log("  Operational completion:", JSON.stringify(result.operational));
 }
 
 // ---------------------------------------------------------------------------

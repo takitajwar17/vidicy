@@ -550,12 +550,6 @@ export default function AgencySettingsClient({
 }: AgencySettingsClientProps) {
   return (
     <div className="space-y-5">
-      <div className="space-y-1">
-        <h1 className="text-2xl font-bold tracking-tight">Agency settings</h1>
-        <p className="text-sm text-muted-foreground">
-          Your agency details, staff invitations, and membership.
-        </p>
-      </div>
       <Card>
         <CardHeader>
           <CardTitle>Agency details</CardTitle>

@@ -158,8 +158,8 @@ export function AgencyCaseDocumentDesk({
           )}
         </div>
       </div>
-      <details className={styles.documents}>
-        <summary>Documents ({documents.length})</summary>
+      <section className={styles.documents} aria-label="Case documents">
+        <h3 className="font-semibold">Documents ({documents.length})</h3>
         <div className={styles.documentList}>
           {documents.map((file) => (
             <button
@@ -179,7 +179,7 @@ export function AgencyCaseDocumentDesk({
             </button>
           ))}
         </div>
-      </details>
+      </section>
     </section>
   );
 }

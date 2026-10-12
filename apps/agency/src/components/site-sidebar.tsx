@@ -4,6 +4,7 @@ import { getSessionFromCookie } from "@/utils/auth";
 import { ROLES_ENUM } from "@/db/schema";
 import { AppSidebar } from "@/components/app-sidebar";
 import { getAnnouncementsUnreadCountForUser } from "@/server/announcements";
+import { getAgencyNameForSession } from "@/server/agency-team";
 
 /**
  * A server component wrapper for the agency navigation.
@@ -17,7 +18,10 @@ export async function SiteSidebar() {
     return null;
   }
 
-  const announcementsUnreadCount = await getAnnouncementsUnreadCountForUser(session.user.id);
+  const [announcementsUnreadCount, agencyName] = await Promise.all([
+    getAnnouncementsUnreadCountForUser(session.user.id),
+    getAgencyNameForSession(session),
+  ]);
 
   const userProps = {
     name:
@@ -30,19 +34,10 @@ export async function SiteSidebar() {
 
   const isAdmin = session.user.role === ROLES_ENUM.ADMIN;
 
-  if (!session.user.emailVerified) {
-    return (
-      <AppSidebar
-        user={userProps}
-        isAdmin={isAdmin}
-        announcementsUnreadCount={announcementsUnreadCount}
-      />
-    );
-  }
-
   return (
     <AppSidebar
       user={userProps}
+      agencyName={agencyName}
       isAdmin={isAdmin}
       announcementsUnreadCount={announcementsUnreadCount}
     />
