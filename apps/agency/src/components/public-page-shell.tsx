@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { Suspense, type ReactNode } from "react";
 
 import Footer from "@/components/sections/footer";
 import Header from "@/components/sections/header";
@@ -11,7 +11,10 @@ export function PublicSiteShell({ children }: { children: ReactNode }) {
       className="public-site-font-system relative isolate w-full overflow-x-hidden text-foreground"
     >
       <Header />
-      <main id="main-content">{children}</main>
+      <main id="main-content">
+        {/* Keep delayed route chunks inside the main host during hydration replay. */}
+        <Suspense fallback={null}>{children}</Suspense>
+      </main>
       <Footer />
     </div>
   );
