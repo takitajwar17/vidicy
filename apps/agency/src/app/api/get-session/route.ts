@@ -35,6 +35,7 @@ export async function GET(request: Request) {
             config,
           },
           {
+            status: 503,
             headers,
           },
         );

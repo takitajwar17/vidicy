@@ -16,6 +16,7 @@ import {
   revokeAgencyInvitationAction,
 } from "@/actions/agency-invitation.action";
 import { useCsrfToken } from "@/components/csrf-provider";
+import { withSettingsConnectionError } from "@/lib/agency-settings-action";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -68,6 +69,16 @@ interface AgencySettingsClientProps {
   canDeleteAgency: boolean;
 }
 
+const settingsActions = {
+  save: withSettingsConnectionError(updateAgencySettingsAction),
+  create: withSettingsConnectionError(createAgencyInvitationAction),
+  resend: withSettingsConnectionError(resendAgencyInvitationAction),
+  cancel: withSettingsConnectionError(revokeAgencyInvitationAction),
+  leave: withSettingsConnectionError(leaveAgencyAction),
+  transfer: withSettingsConnectionError(transferAgencyOwnershipAction),
+  remove: withSettingsConnectionError(deleteEmptyAgencyAction),
+};
+
 const INVITE_RULE = "Invite codes expire after 7 days and can be used once.";
 
 function formatDate(value: Date | string) {
@@ -82,7 +93,7 @@ function AgencyNameForm({ name }: { name: string }) {
   const router = useRouter();
   const csrfToken = useCsrfToken();
   const [draft, setDraft] = useState(name);
-  const { execute, isPending } = useServerAction(updateAgencySettingsAction);
+  const { execute, isPending } = useServerAction(settingsActions.save);
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!csrfToken) return;
@@ -112,18 +123,26 @@ function AgencyNameForm({ name }: { name: string }) {
   );
 }
 
-function InvitationRow({ invitation }: { invitation: AgencyInvitation }) {
+function invitationStatus(invitation: AgencyInvitation, now: number) {
+  if (invitation.revokedAt) return "Cancelled";
+  if (invitation.redeemedAt) return "Used";
+  if (new Date(invitation.expiresAt).getTime() <= now) return "Expired";
+  return "Pending";
+}
+
+function InvitationRow({
+  invitation,
+  status,
+  onCancelled,
+}: {
+  invitation: AgencyInvitation;
+  status: string;
+  onCancelled: (id: string) => void;
+}) {
   const router = useRouter();
   const csrfToken = useCsrfToken();
-  const resend = useServerAction(resendAgencyInvitationAction);
-  const cancel = useServerAction(revokeAgencyInvitationAction);
-  const status = invitation.revokedAt
-    ? "Cancelled"
-    : invitation.redeemedAt
-      ? "Used"
-      : new Date(invitation.expiresAt).getTime() <= Date.now()
-        ? "Expired"
-        : "Pending";
+  const resend = useServerAction(settingsActions.resend);
+  const cancel = useServerAction(settingsActions.cancel);
   const isPending = resend.isPending || cancel.isPending;
   const [cooldownEndsAt, setCooldownEndsAt] = useState(invitation.retryAvailableAt);
 
@@ -158,6 +177,7 @@ function InvitationRow({ invitation }: { invitation: AgencyInvitation }) {
       toast.error(error?.message ?? "Could not cancel the invitation.");
       return;
     }
+    onCancelled(invitation.id);
     toast.success("Invitation cancelled.");
     router.refresh();
   }
@@ -221,33 +241,89 @@ function InvitationRow({ invitation }: { invitation: AgencyInvitation }) {
   );
 }
 
-function AgencyInvitations({ invitations }: { invitations: AgencyInvitation[] }) {
+function AgencyInvitations({
+  invitations,
+  mode,
+}: {
+  invitations: AgencyInvitation[];
+  mode: "email" | "code";
+}) {
   const router = useRouter();
   const csrfToken = useCsrfToken();
   const [email, setEmail] = useState("");
   const [generated, setGenerated] = useState<{
+    invitationId: string;
     code: string;
     expiresAt: string;
-    emailSent: boolean;
   } | null>(null);
-  const { execute, isPending } = useServerAction(createAgencyInvitationAction);
+  const [now, setNow] = useState(Date.now);
+  const isEmail = mode === "email";
+  const matchingInvitations = invitations.filter((invitation) =>
+    isEmail ? Boolean(invitation.recipientEmail) : !invitation.recipientEmail,
+  );
+  const active = matchingInvitations.filter(
+    (invitation) => invitationStatus(invitation, now) === "Pending",
+  );
+  const history = matchingInvitations.filter(
+    (invitation) => invitationStatus(invitation, now) !== "Pending",
+  );
+  const generatedInvitation = invitations.find(
+    (invitation) => invitation.id === generated?.invitationId,
+  );
+  const showGenerated =
+    generated &&
+    new Date(generated.expiresAt).getTime() > now &&
+    (!generatedInvitation || invitationStatus(generatedInvitation, now) === "Pending");
+
+  useEffect(() => {
+    const expiries = [
+      ...invitations.map((invitation) => new Date(invitation.expiresAt).getTime()),
+      ...(generated ? [new Date(generated.expiresAt).getTime()] : []),
+    ];
+    const next = Math.min(...expiries.filter((expiry) => expiry > now));
+    if (!Number.isFinite(next)) return;
+    const timer = setTimeout(() => setNow(Date.now()), Math.max(0, next - Date.now()));
+    return () => clearTimeout(timer);
+  }, [invitations, generated, now]);
+
+  useEffect(() => {
+    if (generated && !showGenerated) setGenerated(null);
+  }, [generated, showGenerated]);
+
+  useEffect(() => {
+    function refreshInvitations() {
+      setNow(Date.now());
+    }
+    window.addEventListener("focus", refreshInvitations);
+    return () => window.removeEventListener("focus", refreshInvitations);
+  }, []);
+
+  function handleCancelled(id: string) {
+    setGenerated((current) => (current?.invitationId === id ? null : current));
+  }
+  const { execute, isPending } = useServerAction(settingsActions.create);
   async function handleCreate(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!csrfToken) return;
-    const [result, error] = await execute({ email: email.trim() || undefined, csrfToken });
+    if (!csrfToken || (isEmail && !email.trim())) return;
+    const [result, error] = await execute({ email: isEmail ? email.trim() : undefined, csrfToken });
     if (error || !result) {
       toast.error(error?.message ?? "Could not create the invitation.");
       return;
     }
-    setGenerated({ code: result.code, expiresAt: result.expiresAt, emailSent: result.emailSent });
-    if (email.trim() && !result.emailSent)
+    if (!isEmail)
+      setGenerated({
+        invitationId: result.invitationId,
+        code: result.code,
+        expiresAt: result.expiresAt,
+      });
+    if (isEmail && !result.emailSent)
       toast.error("Invite created, but the email was not sent. You can retry it below.");
-    else toast.success(email.trim() ? "Invitation email sent." : "Invite code created.");
+    else toast.success(isEmail ? "Invitation email sent." : "Invite code created.");
     setEmail("");
     router.refresh();
   }
   async function copyCode() {
-    if (!generated) return;
+    if (!showGenerated) return;
     try {
       await navigator.clipboard.writeText(generated.code);
       toast.success("Invite code copied.");
@@ -256,7 +332,7 @@ function AgencyInvitations({ invitations }: { invitations: AgencyInvitation[] })
     }
   }
   async function copyLink() {
-    if (!generated) return;
+    if (!showGenerated) return;
     try {
       await navigator.clipboard.writeText(
         `${window.location.origin}/agency-setup?code=${encodeURIComponent(generated.code)}`,
@@ -267,32 +343,42 @@ function AgencyInvitations({ invitations }: { invitations: AgencyInvitation[] })
     }
   }
   return (
-    <Card id="invitations" className="scroll-mt-20">
+    <Card id={isEmail ? "invitations" : "invite-codes"} className="scroll-mt-20">
       <CardHeader>
-        <CardTitle>Invite staff</CardTitle>
+        <CardTitle>{isEmail ? "Invite staff by email" : "Share an invite code"}</CardTitle>
         <CardDescription>
-          {INVITE_RULE} Staff must accept an invitation before they can join.
+          {isEmail
+            ? "Send an invitation to one person. Only that email address can use it. Invitations expire after 7 days and can be used once."
+            : `Create a code to share yourself. Any person with a verified account can use it. ${INVITE_RULE}`}
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-5">
         <form onSubmit={handleCreate} className="space-y-3">
-          <Label htmlFor="agency-invite-email">Email address (optional)</Label>
-          <Input
-            id="agency-invite-email"
-            type="email"
-            autoComplete="email"
-            value={email}
-            onChange={(event) => setEmail(event.target.value)}
-            placeholder="reviewer@agency.com"
-          />
-          <p className="text-xs text-muted-foreground">
-            Add an email address to send an invitation. Leave it blank to create a code to share.
-          </p>
-          <Button type="submit" disabled={isPending || !csrfToken}>
-            {isPending ? "Creating invitation…" : "Create invitation"}
+          {isEmail && (
+            <>
+              <Label htmlFor="agency-invite-email">Staff email address</Label>
+              <Input
+                id="agency-invite-email"
+                type="email"
+                autoComplete="email"
+                value={email}
+                onChange={(event) => setEmail(event.target.value)}
+                placeholder="reviewer@agency.com"
+                required
+              />
+            </>
+          )}
+          <Button type="submit" disabled={isPending || !csrfToken || (isEmail && !email.trim())}>
+            {isPending
+              ? isEmail
+                ? "Sending invitation…"
+                : "Creating code…"
+              : isEmail
+                ? "Send email invitation"
+                : "Create invite code"}
           </Button>
         </form>
-        {generated && (
+        {showGenerated && (
           <div className="space-y-3 rounded-md border border-primary/30 bg-primary/5 p-4">
             <p className="font-medium">Your new invite code</p>
             <p className="text-sm text-muted-foreground">
@@ -320,14 +406,44 @@ function AgencyInvitations({ invitations }: { invitations: AgencyInvitation[] })
             </div>
           </div>
         )}
-        {invitations.length ? (
-          <ul className="space-y-3" aria-label="Agency invitations">
-            {invitations.map((invitation) => (
-              <InvitationRow key={invitation.id} invitation={invitation} />
+        {active.length ? (
+          <ul
+            className="space-y-3"
+            aria-label={isEmail ? "Active email invitations" : "Active invite codes"}
+          >
+            {active.map((invitation) => (
+              <InvitationRow
+                key={invitation.id}
+                invitation={invitation}
+                status="Pending"
+                onCancelled={handleCancelled}
+              />
             ))}
           </ul>
         ) : (
-          <p className="text-sm text-muted-foreground">No invitations yet.</p>
+          <p className="text-sm text-muted-foreground">
+            {isEmail ? "No active email invitations." : "No active invite codes."}
+          </p>
+        )}
+        {history.length > 0 && (
+          <details className="space-y-3 border-t border-border pt-4">
+            <summary className="cursor-pointer text-sm font-medium">
+              {isEmail ? "Past email invitations" : "Past invite codes"} ({history.length})
+            </summary>
+            <ul
+              className="space-y-3"
+              aria-label={isEmail ? "Past email invitations" : "Past invite codes"}
+            >
+              {history.map((invitation) => (
+                <InvitationRow
+                  key={invitation.id}
+                  invitation={invitation}
+                  status={invitationStatus(invitation, now)}
+                  onCancelled={handleCancelled}
+                />
+              ))}
+            </ul>
+          </details>
         )}
       </CardContent>
     </Card>
@@ -337,7 +453,7 @@ function AgencyInvitations({ invitations }: { invitations: AgencyInvitation[] })
 function LeaveAgencyControl() {
   const csrfToken = useCsrfToken();
   const [open, setOpen] = useState(false);
-  const { execute, isPending } = useServerAction(leaveAgencyAction);
+  const { execute, isPending } = useServerAction(settingsActions.leave);
   async function leave() {
     if (!csrfToken) return;
     const [result, error] = await execute({ csrfToken });
@@ -399,8 +515,8 @@ function OwnershipControls({
   const [deleteName, setDeleteName] = useState("");
   const [transferOpen, setTransferOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
-  const transfer = useServerAction(transferAgencyOwnershipAction);
-  const remove = useServerAction(deleteEmptyAgencyAction);
+  const transfer = useServerAction(settingsActions.transfer);
+  const remove = useServerAction(settingsActions.remove);
   const candidates = members.filter((member) => member.userId && member.userId !== userId);
   const selected = candidates.find((member) => member.id === memberId);
   async function handleTransfer() {
@@ -548,6 +664,16 @@ export default function AgencySettingsClient({
   userId,
   canDeleteAgency,
 }: AgencySettingsClientProps) {
+  const router = useRouter();
+  useEffect(() => {
+    if (!isAdmin) return;
+    function refreshInvitations() {
+      router.refresh();
+    }
+    window.addEventListener("focus", refreshInvitations);
+    return () => window.removeEventListener("focus", refreshInvitations);
+  }, [router, isAdmin]);
+
   return (
     <div className="space-y-5">
       <Card>
@@ -602,7 +728,12 @@ export default function AgencySettingsClient({
           </ul>
         </CardContent>
       </Card>
-      {isAdmin && <AgencyInvitations invitations={invitations} />}
+      {isAdmin && (
+        <>
+          <AgencyInvitations invitations={invitations} mode="email" />
+          <AgencyInvitations invitations={invitations} mode="code" />
+        </>
+      )}
       <Card>
         <CardHeader>
           <CardTitle>{isOwner ? "Ownership" : "Your membership"}</CardTitle>

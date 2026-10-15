@@ -11,7 +11,7 @@ export const OPEN_GRAPH_IMAGE_WIDTH = 1200;
 export const OPEN_GRAPH_IMAGE_HEIGHT = 630;
 export const SITE_URL =
   process.env.NEXT_PUBLIC_SITE_URL ??
-  (process.env.NODE_ENV === "development" ? "http://localhost:3002" : CANONICAL_SITE_URL);
+  (process.env.NODE_ENV === "development" ? "http://localhost:3000" : CANONICAL_SITE_URL);
 export const API_CATALOG_PATH = "/.well-known/api-catalog";
 export const AGENT_CARD_PATH = "/.well-known/agent-card.json";
 export const AGENT_SKILLS_INDEX_PATH = "/.well-known/agent-skills/index.json";

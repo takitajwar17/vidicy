@@ -1436,9 +1436,13 @@ test("shared styles work across pages, forms, menus, and themes", async ({ page,
     }
     await page.getByRole("link", { name: "Invite staff", exact: true }).click();
     await expect(page).toHaveURL(/\/dashboard\/agency#invitations$/);
-    await expect(page.getByLabel("Email address (optional)", { exact: true })).toBeVisible();
+    await expect(page.getByLabel("Staff email address", { exact: true })).toBeVisible();
     await expect(
-      page.getByRole("button", { name: "Create invitation", exact: true }),
+      page.getByRole("button", { name: "Send email invitation", exact: true }),
+    ).toBeDisabled();
+    await page.getByLabel("Staff email address", { exact: true }).fill("staff@example.test");
+    await expect(
+      page.getByRole("button", { name: "Send email invitation", exact: true }),
     ).toBeEnabled();
     await expectDropdownSpacing({ page });
   }

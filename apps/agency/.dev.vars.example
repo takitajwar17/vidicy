@@ -3,8 +3,8 @@
 # For plain `pnpm dev`, you only need `.env`.
 # Remote deploy credentials do not belong here; keep those in `.env` or your shell environment.
 NEXTJS_ENV=development
-NEXT_PUBLIC_SITE_URL=http://localhost:3002
-NEXT_PUBLIC_APP_URL=http://localhost:3002
+NEXT_PUBLIC_SITE_URL=http://localhost:3000
+NEXT_PUBLIC_APP_URL=http://localhost:3000
 
 # Optional integrations for Worker preview/testing. Leave blank until you need the feature.
 

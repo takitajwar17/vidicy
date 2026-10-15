@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { afterEach, describe, it, expect, vi } from "vitest";
 import {
   CANONICAL_SITE_DOMAIN,
   CANONICAL_SITE_URL,
@@ -14,6 +14,39 @@ import {
   GOOGLE_OAUTH_CODE_VERIFIER_COOKIE_NAME,
   REDIRECT_AFTER_SIGN_IN,
 } from "@/constants";
+
+describe("site origin selection", () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    vi.resetModules();
+  });
+
+  it.each([
+    { environment: "development", configured: undefined, expected: "http://localhost:3000" },
+    {
+      environment: "development",
+      configured: "http://localhost:4000",
+      expected: "http://localhost:4000",
+    },
+    {
+      environment: "production",
+      configured: undefined,
+      expected: "https://vidicy-agency-vw6akohvja-as.a.run.app",
+    },
+    {
+      environment: "production",
+      configured: "https://example.test",
+      expected: "https://example.test",
+    },
+  ])("uses $expected in $environment", async ({ environment, configured, expected }) => {
+    vi.stubEnv("NODE_ENV", environment);
+    vi.stubEnv("NEXT_PUBLIC_SITE_URL", configured);
+    vi.resetModules();
+    const constants = await import("@/constants");
+    expect(constants.SITE_URL).toBe(expected);
+    expect(constants.SITE_DOMAIN).toBe(new URL(expected).hostname);
+  });
+});
 
 describe("Application Constants Consistency", () => {
   // ============================

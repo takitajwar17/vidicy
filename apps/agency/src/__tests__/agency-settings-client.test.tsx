@@ -60,14 +60,20 @@ describe("agency settings access and invitation controls", () => {
     expect(html).toContain("Test agency");
     expect(html).toContain("Leave agency");
     expect(html).not.toContain("Save agency name");
-    expect(html).not.toContain("Create invitation");
+    expect(html).not.toContain("Send email invitation");
     expect(html).not.toContain("Transfer ownership");
   });
 
   it("gives admins editable details and states the invite limits", () => {
     const html = renderToStaticMarkup(<AgencySettingsClient {...props} isAdmin />);
     expect(html).toContain("Save agency name");
-    expect(html).toContain("Create invitation");
+    expect(html).toContain("Invite staff by email");
+    expect(html).toContain("Send email invitation");
+    expect(html).toContain("Share an invite code");
+    expect(html).toContain("Create invite code");
+    expect(html).not.toContain("Email address (optional)");
+    expect(html).toContain('id="invitations"');
+    expect(html).toContain('id="invite-codes"');
     expect(html).toContain("Invite codes expire after 7 days and can be used once.");
     expect(html).toContain("Resend email");
     expect(html).toContain("Cancel invitation");
@@ -103,10 +109,26 @@ describe("agency settings access and invitation controls", () => {
     expect(html).not.toContain("Cancel invitation");
   });
 
+  it.each([
+    { field: "revokedAt", status: "Cancelled" },
+    { field: "redeemedAt", status: "Used" },
+    { field: "expiresAt", status: "Expired" },
+  ])("puts $status invitations in history without active controls", ({ field, status }) => {
+    const invitations = [{ ...props.invitations[0], [field]: "2020-01-01T00:00:00Z" }];
+    const html = renderToStaticMarkup(
+      <AgencySettingsClient {...props} isAdmin invitations={invitations} />,
+    );
+    expect(html).toContain(status);
+    expect(html).toContain("Past email invitations (1)");
+    expect(html).toContain("No active email invitations.");
+    expect(html).not.toContain("Cancel invitation");
+    expect(html).not.toContain("Resend email");
+  });
+
   it("does not enable mutations before a security token is available", () => {
     csrf.token = undefined;
     const html = renderToStaticMarkup(<AgencySettingsClient {...props} isAdmin />);
     expect(html).toMatch(/<button[^>]*disabled=""[^>]*>Save agency name<\/button>/);
-    expect(html).toMatch(/<button[^>]*disabled=""[^>]*>Create invitation<\/button>/);
+    expect(html).toMatch(/<button[^>]*disabled=""[^>]*>Create invite code<\/button>/);
   });
 });

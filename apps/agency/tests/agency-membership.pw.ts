@@ -127,12 +127,12 @@ async function signupAndVerify({
   return user.id as string;
 }
 
-async function seedVerifiedUser(context: BrowserContext) {
+async function seedVerifiedUser(context: BrowserContext, email = "outsider@membership.test") {
   const db = drizzle(pool, { schema });
   const [user] = await db
     .insert(schema.userTable)
     .values({
-      email: "outsider@membership.test",
+      email,
       firstName: "Separate",
       lastName: "Owner",
       emailVerified: new Date(),
@@ -516,13 +516,18 @@ test("signup, invitation delivery recovery, member access, agency isolation, own
     ).toBeVisible();
     // The real server persists a failed delivery after bounded provider attempts.
     await owner
-      .getByRole("textbox", { name: "Email address (optional)", exact: true })
+      .getByRole("textbox", { name: "Staff email address", exact: true })
       .fill("member@membership.test");
     writeFileSync(control, "reject");
-    await owner.getByRole("button", { name: "Create invitation", exact: true }).click();
+    await owner.getByRole("button", { name: "Send email invitation", exact: true }).click();
     const codeInput = owner.getByRole("textbox", { name: "New invite code", exact: true });
-    await expect(codeInput).toBeVisible();
-    const code = await codeInput.inputValue();
+    await expect(codeInput).toHaveCount(0);
+    await expect(owner.getByText("Email delivery failed", { exact: true })).toBeVisible();
+    const firstDelivery = messages().find((mail) =>
+      mail.body.to.includes("member@membership.test"),
+    )!;
+    const code = firstDelivery.body.text.match(/code:\s*([A-Za-z0-9-]+)/i)?.[1] ?? "";
+    expect(code).toBeTruthy();
     await expect(owner.getByText("Email delivery failed", { exact: true })).toBeVisible();
     await expect(
       owner.getByRole("button", { name: "Wait two minutes before resending", exact: true }),
@@ -558,24 +563,32 @@ test("signup, invitation delivery recovery, member access, agency isolation, own
     expect(new Set(deliveries.map((mail) => mail.key)).size).toBe(1);
     expect(deliveries[3].body.text).toContain(code);
     expect(deliveries[3].body.text).toContain("7 days");
-    await owner.getByRole("button", { name: "Create invitation", exact: true }).click();
+    await owner.getByRole("button", { name: "Create invite code", exact: true }).click();
     await expect(codeInput).toBeVisible();
     const cancelledCode = await codeInput.inputValue();
     expect(cancelledCode).not.toBe(code);
     const genericInvitation = owner
-      .getByRole("list", { name: "Agency invitations", exact: true })
+      .getByRole("list", { name: "Active invite codes", exact: true })
       .locator("li")
       .filter({ has: owner.getByText("Invite code", { exact: true }) });
     await genericInvitation.getByRole("button", { name: "Cancel invitation", exact: true }).click();
-    await expect(genericInvitation.getByText("Cancelled", { exact: true })).toBeVisible();
-    await owner.getByRole("button", { name: "Create invitation", exact: true }).click();
+    await expect(genericInvitation).toHaveCount(0);
+    await owner.getByText("Past invite codes (1)", { exact: true }).click();
+    await expect(
+      owner
+        .getByRole("list", { name: "Past invite codes", exact: true })
+        .getByText("Cancelled", { exact: true }),
+    ).toBeVisible();
+    await expect(codeInput).toHaveCount(0);
+    await expect(owner.getByRole("button", { name: "Copy code", exact: true })).toHaveCount(0);
+    await owner.getByRole("button", { name: "Create invite code", exact: true }).click();
     await expect(codeInput).toBeVisible();
     await expect(codeInput).not.toHaveValue(cancelledCode);
     const singleUseCode = await codeInput.inputValue();
     expect(singleUseCode).not.toBe(cancelledCode);
     await owner.getByRole("heading", { name: "Agency", exact: true }).scrollIntoViewIfNeeded();
     await screenshot({ page: owner, info, name: "owner-settings-desktop" });
-    await owner.getByText("Invite staff", { exact: true }).scrollIntoViewIfNeeded();
+    await owner.getByText("Invite staff by email", { exact: true }).scrollIntoViewIfNeeded();
     await screenshot({ page: owner, info, name: "owner-invitations-desktop" });
     const memberId = await signupAndVerify({
       page: member,
@@ -616,7 +629,7 @@ test("signup, invitation delivery recovery, member access, agency isolation, own
       0,
     );
     await expect(
-      member.getByRole("button", { name: "Create invitation", exact: true }),
+      member.getByRole("button", { name: "Send email invitation", exact: true }),
     ).toHaveCount(0);
     await member.getByRole("heading", { name: "Agency", exact: true }).scrollIntoViewIfNeeded();
     await screenshot({ page: member, info, name: "member-readonly-settings-mobile" });
@@ -724,15 +737,40 @@ test("signup, invitation delivery recovery, member access, agency isolation, own
     // The owner must transfer ownership before the normal leave control is available.
     await owner.goto(`${base}/dashboard/agency`);
     await expect(owner.getByRole("button", { name: "Leave agency", exact: true })).toHaveCount(0);
+    await expect(
+      owner.getByRole("button", { name: "Delete empty agency", exact: true }),
+    ).toBeDisabled();
+    await expect(
+      owner.getByRole("button", { name: "Transfer ownership", exact: true }),
+    ).toBeDisabled();
     await owner.getByRole("combobox", { name: "New owner", exact: true }).click();
     await owner.getByRole("option", { name: "Agency Member", exact: true }).click();
     await owner.getByRole("button", { name: "Transfer ownership", exact: true }).click();
+    await owner.getByRole("dialog").getByRole("button", { name: "Cancel", exact: true }).click();
+    expect(
+      (await pool.query('SELECT "ownerUserId" FROM agency WHERE id = $1', [agency.id])).rows[0]
+        .ownerUserId,
+    ).toBe(ownerId);
+    await owner.getByRole("button", { name: "Transfer ownership", exact: true }).click();
     await owner.getByRole("button", { name: "Confirm transfer", exact: true }).click();
     await expect(owner.getByRole("button", { name: "Leave agency", exact: true })).toBeVisible();
+    await expect(owner.getByText("You are an agency admin.", { exact: true })).toBeVisible();
+    await expect(
+      owner.getByRole("button", { name: "Save agency name", exact: true }),
+    ).toBeVisible();
+    await expect(
+      owner.getByRole("button", { name: "Create invite code", exact: true }),
+    ).toBeVisible();
+    await expect(
+      owner.getByRole("button", { name: "Transfer ownership", exact: true }),
+    ).toHaveCount(0);
     expect(
       (await pool.query('SELECT "ownerUserId" FROM agency WHERE id = $1', [agency.id])).rows[0]
         .ownerUserId,
     ).toBe(memberId);
+    await owner.getByRole("button", { name: "Leave agency", exact: true }).click();
+    await owner.getByRole("dialog").getByRole("button", { name: "Cancel", exact: true }).click();
+    await expect(owner.getByRole("dialog")).toHaveCount(0);
     await owner.getByRole("button", { name: "Leave agency", exact: true }).click();
     await owner
       .getByRole("dialog")
@@ -762,5 +800,261 @@ test("signup, invitation delivery recovery, member access, agency isolation, own
     await screenshot({ page: member, info, name: "new-owner-settings-desktop" });
   } finally {
     await Promise.all([ownerContext.close(), memberContext.close(), outsiderContext.close()]);
+  }
+});
+
+test("agency settings validates forms, separates invitations, clears inactive codes, and protects deletion", async ({
+  browser,
+}, info) => {
+  test.setTimeout(150_000);
+  const context = await browser.newContext({ viewport: { width: 1440, height: 1000 } });
+  try {
+    await prepareContext(context);
+    await context.grantPermissions(["clipboard-read", "clipboard-write"], { origin: base });
+    const userId = await seedVerifiedUser(context, "settings-controls@membership.test");
+    const page = await context.newPage();
+    await page.goto(`${base}/agency-setup`);
+    await page
+      .getByRole("textbox", { name: "Agency name", exact: true })
+      .fill("Settings Paths Agency");
+    await page.getByRole("button", { name: "Create agency", exact: true }).click();
+    await expect(page).toHaveURL(`${base}/dashboard`);
+    const agencyId = (
+      await pool.query('SELECT "agencyId" FROM agency_team_member WHERE "userId" = $1', [userId])
+    ).rows[0].agencyId;
+    await page.goto(`${base}/dashboard/agency`);
+    const name = page.getByRole("textbox", { name: "Agency name", exact: true });
+    const save = page.getByRole("button", { name: "Save agency name", exact: true });
+    const emailCard = page.locator("#invitations");
+    const codeCard = page.locator("#invite-codes");
+    const email = emailCard.getByRole("textbox", { name: "Staff email address", exact: true });
+    const send = emailCard.getByRole("button", { name: "Send email invitation", exact: true });
+    const create = codeCard.getByRole("button", { name: "Create invite code", exact: true });
+    const rawCode = codeCard.getByRole("textbox", { name: "New invite code", exact: true });
+    const activeCodes = codeCard.getByRole("list", { name: "Active invite codes", exact: true });
+    await expect(
+      emailCard.getByText("No active email invitations.", { exact: true }),
+    ).toBeVisible();
+    await expect(codeCard.getByText("No active invite codes.", { exact: true })).toBeVisible();
+    await expect(codeCard.getByRole("textbox")).toHaveCount(0);
+    await expect(
+      emailCard.getByRole("button", { name: "Create invite code", exact: true }),
+    ).toHaveCount(0);
+    await expect(
+      page.getByText("Invite a staff member before you transfer ownership.", { exact: true }),
+    ).toBeVisible();
+    await name.fill("   ");
+    await expect(save).toBeDisabled();
+    await name.fill("Settings Paths Updated");
+    await expect(name).toHaveAttribute("maxlength", "120");
+
+    async function rejectNextAction() {
+      await page.route("**/dashboard/agency", async function reject(route) {
+        if (route.request().method() !== "POST") return route.continue();
+        await route.fulfill({ status: 503, body: "Private test service failure" });
+        await page.unroute("**/dashboard/agency", reject);
+      });
+    }
+    await rejectNextAction();
+    await save.click();
+    await expect(page.locator('[data-sonner-toast][data-type="error"]').last()).toBeVisible();
+    await expect(save).toBeEnabled();
+    await expect(name).toHaveValue("Settings Paths Updated");
+    expect(
+      (await pool.query("SELECT name FROM agency WHERE id = $1", [agencyId])).rows[0].name,
+    ).toBe("Settings Paths Agency");
+    await save.click();
+    await expect(page.getByText("Agency name saved.", { exact: true })).toBeVisible();
+    await expect(send).toBeDisabled();
+    await email.fill("invalid-address");
+    await send.click();
+    expect(await email.evaluate((element: HTMLInputElement) => element.validity.typeMismatch)).toBe(
+      true,
+    );
+    await expect(
+      emailCard.getByRole("list", { name: "Active email invitations", exact: true }),
+    ).toHaveCount(0);
+    await email.fill("recipient@settings.test");
+    await rejectNextAction();
+    await send.click();
+    await expect(send).toBeEnabled();
+    await expect(email).toHaveValue("recipient@settings.test");
+    expect(
+      (await pool.query('SELECT id FROM agency_invitation WHERE "agencyId" = $1', [agencyId]))
+        .rowCount,
+    ).toBe(0);
+    writeFileSync(control, "accept");
+    await send.click();
+    const emailList = emailCard.getByRole("list", {
+      name: "Active email invitations",
+      exact: true,
+    });
+    await expect(emailList.getByText("Email sent", { exact: true })).toBeVisible();
+    await expect(email).toHaveValue("");
+    await expect(rawCode).toHaveCount(0);
+    await expect(activeCodes).toHaveCount(0);
+    await pool.query(
+      'UPDATE agency_invitation SET "updatedAt" = NOW() - INTERVAL \'3 minutes\' WHERE "agencyId" = $1',
+      [agencyId],
+    );
+    await page.reload();
+    await emailList.getByRole("button", { name: "Resend email", exact: true }).click();
+    await expect(
+      emailList.getByRole("button", { name: "Wait two minutes before resending", exact: true }),
+    ).toBeDisabled();
+    expect(
+      messages().filter((mail) => mail.body.to.includes("recipient@settings.test")),
+    ).toHaveLength(2);
+    await emailList.getByRole("button", { name: "Cancel invitation", exact: true }).click();
+    await expect(emailList).toHaveCount(0);
+    await expect(emailCard.getByText("Past email invitations (1)", { exact: true })).toBeVisible();
+    await emailCard.getByText("Past email invitations (1)", { exact: true }).click();
+    await expect(
+      emailCard
+        .getByRole("list", { name: "Past email invitations", exact: true })
+        .getByText("Cancelled", { exact: true }),
+    ).toBeVisible();
+    await expect(
+      emailCard.getByRole("button", { name: "Cancel invitation", exact: true }),
+    ).toHaveCount(0);
+
+    const mailCount = messages().length;
+    await create.click();
+    await expect(rawCode).toBeVisible();
+    const firstCode = await rawCode.inputValue();
+    expect(messages()).toHaveLength(mailCount);
+    await codeCard.getByRole("button", { name: "Copy code", exact: true }).click();
+    expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(firstCode);
+    await codeCard.getByRole("button", { name: "Copy invitation link", exact: true }).click();
+    expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(
+      `${base}/agency-setup?code=${encodeURIComponent(firstCode)}`,
+    );
+    await page.evaluate(() =>
+      Object.defineProperty(navigator.clipboard, "writeText", {
+        configurable: true,
+        value: async () => {
+          throw new Error("Private test clipboard denial");
+        },
+      }),
+    );
+    await codeCard.getByRole("button", { name: "Copy code", exact: true }).click();
+    await expect(
+      page.getByText("Could not copy. Select and copy the code.", { exact: true }),
+    ).toBeVisible();
+    await codeCard.getByRole("button", { name: "Copy invitation link", exact: true }).click();
+    await expect(
+      page.getByText("Could not copy the invitation link. Use the code instead.", { exact: true }),
+    ).toBeVisible();
+    await expect(rawCode).toHaveValue(firstCode);
+    await codeCard.getByRole("button", { name: "Hide code", exact: true }).click();
+    await expect(rawCode).toHaveCount(0);
+    await expect(activeCodes.locator("li")).toHaveCount(1);
+    await create.click();
+    await expect(rawCode).toBeVisible();
+    const secondCode = await rawCode.inputValue();
+    expect(secondCode).not.toBe(firstCode);
+    await expect(page.getByRole("button", { name: "Close toast", exact: true })).toHaveCount(0);
+    await emailCard.evaluate((element) => element.scrollIntoView({ block: "start" }));
+    await screenshot({ page, info, name: "email-invitations-desktop" });
+    await codeCard.evaluate((element) => element.scrollIntoView({ block: "start" }));
+    await screenshot({ page, info, name: "separate-email-and-code-settings-desktop" });
+    await page.setViewportSize({ width: 390, height: 844 });
+    await emailCard.evaluate((element) => element.scrollIntoView({ block: "start" }));
+    await screenshot({ page, info, name: "email-invitations-mobile" });
+    await codeCard.evaluate((element) => element.scrollIntoView({ block: "start" }));
+    await screenshot({ page, info, name: "separate-email-and-code-settings-mobile" });
+    await activeCodes
+      .locator("li")
+      .last()
+      .getByRole("button", { name: "Cancel invitation", exact: true })
+      .click();
+    await expect(activeCodes.locator("li")).toHaveCount(1);
+    await expect(rawCode).toHaveValue(secondCode);
+    await rejectNextAction();
+    await activeCodes.getByRole("button", { name: "Cancel invitation", exact: true }).click();
+    await expect(
+      activeCodes.getByRole("button", { name: "Cancel invitation", exact: true }),
+    ).toBeEnabled();
+    await expect(rawCode).toHaveValue(secondCode);
+    await activeCodes.getByRole("button", { name: "Cancel invitation", exact: true }).click();
+    await expect(rawCode).toHaveCount(0);
+    await expect(activeCodes).toHaveCount(0);
+
+    // A refreshed server status also clears the currently displayed code.
+    await create.click();
+    await expect(rawCode).toBeVisible();
+    await pool.query(
+      'UPDATE agency_invitation SET "redeemedAt" = NOW(), "redeemedById" = $2 WHERE "agencyId" = $1 AND "revokedAt" IS NULL AND "recipientEmail" IS NULL',
+      [agencyId, userId],
+    );
+    await page.evaluate(() => window.dispatchEvent(new Event("focus")));
+    await expect(rawCode).toHaveCount(0);
+    await create.click();
+    await expect(rawCode).toBeVisible();
+    await pool.query(
+      'UPDATE agency_invitation SET "expiresAt" = NOW() + INTERVAL \'2 seconds\' WHERE "agencyId" = $1 AND "revokedAt" IS NULL AND "redeemedAt" IS NULL',
+      [agencyId],
+    );
+    await page.evaluate(() => window.dispatchEvent(new Event("focus")));
+    await expect(rawCode).toHaveCount(0);
+    await expect(activeCodes).toHaveCount(0);
+    await codeCard.getByText("Past invite codes (4)", { exact: true }).click();
+    const pastCodes = codeCard.getByRole("list", { name: "Past invite codes", exact: true });
+    await expect(pastCodes.getByText("Expired", { exact: true })).toBeVisible();
+    await expect(pastCodes.getByText("Used", { exact: true })).toBeVisible();
+    await expect(pastCodes.getByRole("button")).toHaveCount(0);
+    // The sixth creation is blocked by the per-user invitation limit.
+    await create.click();
+    await expect(page.getByText(/Rate limit exceeded\. Try again in \d+ minutes\./)).toBeVisible();
+    await expect(create).toBeEnabled();
+    await expect(rawCode).toHaveCount(0);
+    expect(
+      (await pool.query('SELECT id FROM agency_invitation WHERE "agencyId" = $1', [agencyId]))
+        .rowCount,
+    ).toBe(5);
+
+    const remove = page.getByRole("button", { name: "Delete empty agency", exact: true });
+    await remove.click();
+    const dialog = page.getByRole("dialog");
+    const confirmName = dialog.getByRole("textbox", { name: "Agency name", exact: true });
+    const permanentDelete = dialog.getByRole("button", {
+      name: "Permanently delete agency",
+      exact: true,
+    });
+    await expect(permanentDelete).toBeDisabled();
+    await confirmName.fill("wrong name");
+    await expect(permanentDelete).toBeDisabled();
+    await dialog.getByRole("button", { name: "Cancel", exact: true }).click();
+    await expect(dialog).toHaveCount(0);
+    expect((await pool.query("SELECT id FROM agency WHERE id = $1", [agencyId])).rowCount).toBe(1);
+    await remove.click();
+    await confirmName.fill("Settings Paths Updated");
+    const db = drizzle(pool, { schema });
+    const [client] = await db
+      .insert(schema.agencyClientTable)
+      .values({ agencyId, name: "Concurrent client" })
+      .returning();
+    await permanentDelete.click();
+    await expect(
+      page.getByText("Only an empty agency can be deleted. Keep existing agency records.", {
+        exact: true,
+      }),
+    ).toBeVisible();
+    await expect(confirmName).toHaveValue("Settings Paths Updated");
+    expect((await pool.query("SELECT id FROM agency WHERE id = $1", [agencyId])).rowCount).toBe(1);
+    await pool.query("DELETE FROM agency_client WHERE id = $1", [client.id]);
+    await permanentDelete.click();
+    await expect(page).toHaveURL(`${base}/agency-setup`);
+    expect((await pool.query("SELECT id FROM agency WHERE id = $1", [agencyId])).rowCount).toBe(0);
+    expect(
+      (await pool.query('SELECT id FROM agency_team_member WHERE "agencyId" = $1', [agencyId]))
+        .rowCount,
+    ).toBe(0);
+    expect(
+      (await pool.query('SELECT id FROM agency_invitation WHERE "agencyId" = $1', [agencyId]))
+        .rowCount,
+    ).toBe(0);
+  } finally {
+    await context.close();
   }
 });

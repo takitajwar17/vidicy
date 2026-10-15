@@ -86,17 +86,35 @@ describe("GET /api/get-session", () => {
     expect(mockGetConfig).not.toHaveBeenCalled();
   });
 
-  it("accepts exact same-origin requests on preview hosts", async () => {
-    const response = await GET(
-      new Request("https://app.example.com/api/get-session", {
-        headers: {
-          origin: "https://app.example.com",
-        },
-      }),
-    );
-
-    expect(response.status).toBe(200);
-    expect(mockGetSessionFromCookie).toHaveBeenCalledTimes(1);
-    expect(mockGetConfig).toHaveBeenCalledTimes(1);
+  it("returns a service error when a session read fails", async () => {
+    mockGetSessionFromCookie.mockRejectedValue(new Error("Private cache connection details"));
+    const response = await GET(new Request("http://localhost:3000/api/get-session"));
+    expect(response.status).toBe(503);
+    expect(response.headers.get("Cache-Control")).toContain("no-store");
+    expect(await response.json()).toEqual({ session: null, config: { featureFlags: {} } });
   });
+
+  it("returns a successful empty session after sign-out or expiry", async () => {
+    mockGetSessionFromCookie.mockResolvedValue(null);
+    const response = await GET(new Request("http://localhost:3000/api/get-session"));
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ session: null, config: { featureFlags: {} } });
+  });
+
+  it.each(["https://app.example.com", "http://localhost:3000"])(
+    "accepts exact same-origin requests on %s",
+    async (origin) => {
+      const response = await GET(
+        new Request(`${origin}/api/get-session`, {
+          headers: {
+            origin,
+          },
+        }),
+      );
+
+      expect(response.status).toBe(200);
+      expect(mockGetSessionFromCookie).toHaveBeenCalledTimes(1);
+      expect(mockGetConfig).toHaveBeenCalledTimes(1);
+    },
+  );
 });

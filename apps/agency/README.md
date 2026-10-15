@@ -681,7 +681,7 @@ Provision the queue, vector index, bucket, SQL instance, secret references, and 
 
 | Command                    | Effect                                                                       |
 | -------------------------- | ---------------------------------------------------------------------------- |
-| `pnpm dev`                 | Start Next.js on port 3002                                                   |
+| `pnpm dev`                 | Start Next.js on port 3000                                                   |
 | `pnpm build`               | Build the application                                                        |
 | `pnpm start`               | Serve the production build; use `PORT` to select a port                      |
 | `pnpm lint`                | Run ESLint                                                                   |

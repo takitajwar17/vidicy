@@ -201,7 +201,7 @@ Run these from the repository root:
 
 | Command                                                | Effect                                                                                                                      |
 | ------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------- |
-| `pnpm dev`                                             | Start the agency development server on port 3002                                                                            |
+| `pnpm dev`                                             | Start the development server on port 3000                                                                                   |
 | `pnpm build`                                           | Build the workspace application                                                                                             |
 | `pnpm lint`                                            | Run the application ESLint command                                                                                          |
 | `pnpm format:check`                                    | Check source formatting with Prettier                                                                                       |
@@ -214,7 +214,7 @@ Run these from the repository root:
 | `pnpm db:generate:agency <name>`                       | Generate a named PostgreSQL migration                                                                                       |
 | `pnpm db:migrate:dev:agency`                           | Apply PostgreSQL migrations to the configured target                                                                        |
 | `pnpm --filter @vidicy/agency run build:analyze`       | Build with bundle analysis                                                                                                  |
-| `PORT=3002 pnpm --filter @vidicy/agency run preview`   | Serve an existing production build with Next.js                                                                             |
+| `PORT=3000 pnpm --filter @vidicy/agency run preview`   | Serve an existing production build with Next.js                                                                             |
 | `pnpm --filter @vidicy/agency run email:dev`           | Open the email preview server on port 3003                                                                                  |
 | `pnpm --filter @vidicy/agency run eval`                | Run the separate model evaluation suites                                                                                    |
 | `pnpm deploy:agency`                                   | Build and deploy the container to the configured Cloud Run service                                                          |

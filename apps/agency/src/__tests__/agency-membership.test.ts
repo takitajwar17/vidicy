@@ -197,12 +197,79 @@ describe("explicit agency setup", () => {
 });
 
 describe("agency settings and leaving", () => {
+  it("allows non-owner admins to save details but denies ownership changes", async () => {
+    const { agencyId } = await owner();
+    const { session } = await addMember(agencyId, "admin");
+    mocks.session.mockResolvedValue(session);
+    await updateAgencySettings({ name: "  Updated by admin  " });
+    expect((await getAgencySettingsData()).agency.name).toBe("Updated by admin");
+    expect((await getAgencySettingsData()).isOwner).toBe(false);
+    await expect(transferAgencyOwnership({ memberId: "missing" })).rejects.toThrow(
+      "Only the agency owner",
+    );
+    await expect(deleteEmptyAgency()).rejects.toThrow("Only the agency owner");
+  });
+  it.each(["", "   ", "a".repeat(121)])("rejects an invalid agency name", async (name) => {
+    await owner();
+    await expect(updateAgencySettings({ name })).rejects.toThrow("1 to 120 characters");
+    expect((await getAgencySettingsData()).agency.name).toBe("Test agency");
+  });
+  it("rejects self, disabled, and other-agency ownership targets", async () => {
+    const { agencyId, session } = await owner();
+    const ownMembership = await fixture.db.query.agencyTeamMemberTable.findFirst({
+      where: eq(schema.agencyTeamMemberTable.userId, session.user.id),
+    });
+    await expect(transferAgencyOwnership({ memberId: ownMembership!.id })).rejects.toThrow(
+      "Choose another active member",
+    );
+    const { member } = await addMember(agencyId);
+    await fixture.db
+      .update(schema.agencyTeamMemberTable)
+      .set({ status: "disabled" })
+      .where(eq(schema.agencyTeamMemberTable.id, member.id));
+    await expect(transferAgencyOwnership({ memberId: member.id })).rejects.toThrow(
+      "Choose another active member",
+    );
+    const other = await newSession("other-owner@example.test");
+    mocks.session.mockResolvedValue(other);
+    await createAgency({ name: "Other agency" });
+    const otherMembership = await fixture.db.query.agencyTeamMemberTable.findFirst({
+      where: eq(schema.agencyTeamMemberTable.userId, other.user.id),
+    });
+    mocks.session.mockResolvedValue(session);
+    await expect(transferAgencyOwnership({ memberId: otherMembership!.id })).rejects.toThrow(
+      "Choose another active member",
+    );
+    expect((await getAgencySettingsData()).agency.ownerUserId).toBe(session.user.id);
+  });
+  it("preserves an agency with clients even when it has no cases", async () => {
+    const { agencyId } = await owner();
+    await fixture.db.insert(schema.agencyClientTable).values({ agencyId, name: "Retained client" });
+    expect((await getAgencySettingsData()).canDeleteAgency).toBe(false);
+    await expect(deleteEmptyAgency()).rejects.toThrow("Only an empty agency");
+    expect(await fixture.db.query.agencyClientTable.findMany()).toHaveLength(1);
+  });
+  it("deletes an empty agency and its memberships and invitations", async () => {
+    const { agencyId } = await owner();
+    await addMember(agencyId);
+    await invitation(agencyId);
+    expect((await getAgencySettingsData()).canDeleteAgency).toBe(true);
+    await deleteEmptyAgency();
+    expect(await fixture.db.query.agencyTable.findMany()).toHaveLength(0);
+    expect(await fixture.db.query.agencyTeamMemberTable.findMany()).toHaveLength(0);
+    expect(await fixture.db.query.agencyInvitationTable.findMany()).toHaveLength(0);
+    expect(await fixture.db.query.userTable.findMany()).toHaveLength(2);
+  });
   it("allows members to read settings and denies changes", async () => {
     const { agencyId } = await owner();
     const { session } = await addMember(agencyId);
     mocks.session.mockResolvedValue(session);
     expect((await getAgencySettingsData()).agency.name).toBe("Test agency");
     await expect(updateAgencySettings({ name: "Changed" })).rejects.toThrow("Only agency admins");
+    await expect(transferAgencyOwnership({ memberId: "missing" })).rejects.toThrow(
+      "Only agency admins",
+    );
+    await expect(deleteEmptyAgency()).rejects.toThrow("Only agency admins");
   });
   it("requires ownership transfer before an owner leaves", async () => {
     await owner();
