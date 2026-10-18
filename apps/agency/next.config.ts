@@ -10,6 +10,10 @@ const skipTypeScriptChecks = process.env.SKIP_TYPESCRIPT_CHECKS === "true";
 const nextConfig: NextConfig = {
   output: "standalone",
   outputFileTracingIncludes: {
+    "/api/client-reports/*": [
+      "./node_modules/@fontsource/manrope/files/manrope-latin-400-normal.woff",
+      "./node_modules/@fontsource/manrope/files/manrope-latin-700-normal.woff",
+    ],
     "/*": [
       "./node_modules/@google-cloud/tasks/build/protos/**/*",
       "../../node_modules/.pnpm/@google-cloud+tasks@*/node_modules/@google-cloud/tasks/build/protos/**/*",
@@ -35,7 +39,19 @@ const nextConfig: NextConfig = {
     ],
   },
   typedRoutes: true,
-  serverExternalPackages: ["winston", "winston-daily-rotate-file", "@google-cloud/tasks", "@google-cloud/storage", "@google/genai", "google-auth-library", "pg", "redis", "@sentry/node", "@napi-rs/canvas"],
+  serverExternalPackages: [
+    "@react-pdf/renderer",
+    "winston",
+    "winston-daily-rotate-file",
+    "@google-cloud/tasks",
+    "@google-cloud/storage",
+    "@google/genai",
+    "google-auth-library",
+    "pg",
+    "redis",
+    "@sentry/node",
+    "@napi-rs/canvas",
+  ],
   typescript: {
     tsconfigPath: "tsconfig.build.json",
     ignoreBuildErrors: skipTypeScriptChecks,

@@ -38,12 +38,20 @@ vi.mock("@/utils/application-auth", () => ({ requireApplicationPermission: () =>
 vi.mock("@/app/api/_utils/request-auth", () => ({
   requireRouteSession: async () => ({ session: await state.actor() }),
 }));
-vi.mock("@/server/agency-team", () => ({
-  requireAgencyStaff: async () => ({ session: await state.actor() }),
-  requireAgencyAdmin: async () => ({ session: await state.actor() }),
-}));
+vi.mock("@/server/agency-team", () => {
+  async function access() {
+    const session = await state.actor();
+    return { session, staff: { agencyId: session.agencyId, role: "admin", isAdmin: true } };
+  }
+  return { requireAgencyStaff: access, requireAgencyAdmin: access };
+});
 vi.mock("@/infra/csrf", () => ({ validateCsrfToken: async () => true }));
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
+// This fixture runs with production React, while Vitest emits development JSX.
+vi.mock("react/jsx-dev-runtime", async () => {
+  const runtime = await import("react/jsx-runtime");
+  return { jsxDEV: runtime.jsx, Fragment: runtime.Fragment };
+});
 vi.mock("@/infra/logger", () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
   logAlert: vi.fn(),
@@ -141,7 +149,7 @@ import { handleDocumentUploadRoute } from "@/app/api/_utils/document-upload";
 import { queueDocumentExtraction } from "@/services/document-pipeline";
 import { requestReviewJob, processReviewJob } from "@/server/review-jobs";
 import { generateClientReportAction } from "@/actions/agency-case.action";
-import { GET as downloadReport } from "@/app/api/client-reports/[reportId]/route";
+import { GET as openReportPDF } from "@/app/api/client-reports/[reportId]/route";
 import { type EvaluationCallMetric, withEvaluationMetrics } from "@/infra/evaluation-metrics";
 import {
   estimateModelCost,
@@ -152,7 +160,7 @@ import {
 import { eq } from "drizzle-orm";
 import { reviewJobTable, visaApplicationTable } from "@/db/schema";
 
-const actors = new AsyncLocalStorage<{ userId: string }>();
+const actors = new AsyncLocalStorage<{ userId: string; agencyId: string }>();
 let cluster: ReturnType<typeof startTestPostgres>;
 let database: Awaited<ReturnType<typeof createWorkflowDatabase>>;
 let redis: Awaited<ReturnType<typeof startTestRedis>>;
@@ -335,6 +343,7 @@ it.skipIf(process.env.RUN_WORKFLOW_BENCHMARK !== "true")(
       "src/infra/google/gemini-capacity.ts",
       "src/server/agency-review.ts",
       "src/server/client-reports.ts",
+      "src/server/client-report-pdf.tsx",
       "src/actions/agency-case.action.ts",
       "src/app/api/_utils/document-upload.ts",
       "src/app/api/client-reports/[reportId]/route.ts",
@@ -487,13 +496,18 @@ it.skipIf(process.env.RUN_WORKFLOW_BENCHMARK !== "true")(
                       }) => Promise<{ id: string }>
                     )({ applicationId: input.applicationId }),
                   );
-                  const downloaded = await stage("download", () =>
-                    downloadReport(new Request("http://isolated.test/report"), {
+                  const reportLink = await stage("reportAccess", () =>
+                    openReportPDF(new Request("http://isolated.test/report"), {
                       params: Promise.resolve({ reportId: created.id }),
                     }),
                   );
-                  expect(downloaded.status).toBe(200);
-                  expect(await downloaded.text()).toContain("Synthetic Client");
+                  expect(reportLink.status).toBe(200);
+                  expect(reportLink.headers.get("content-type")).toBe("application/pdf");
+                  expect(
+                    Buffer.from(await reportLink.arrayBuffer())
+                      .subarray(0, 4)
+                      .toString(),
+                  ).toBe("%PDF");
                   measurement.status = "succeeded";
                 },
               }),
@@ -560,7 +574,7 @@ it.skipIf(process.env.RUN_WORKFLOW_BENCHMARK !== "true")(
           scope:
             process.env.WORKFLOW_LIVE === "true"
               ? "Live model, embedding, storage, and vector APIs with private PostgreSQL and Redis. Production upload, extraction, retrieval, review, publication, and report functions. Task delivery and auth are simulated; direct backend calls do not measure Cloud Run HTTP capacity. No email delivery or billed infrastructure cost is measured."
-              : "Production upload handler, real PDF/image files, extraction and retrieval logic, Redis capacity limit, queued review worker, SQL publication, report creation and HTML download. Task delivery, auth, storage, model replies, embeddings, and vector service are simulated. No email delivery, HTTP transport load, cloud capacity, or billable cost is measured.",
+              : "Production upload handler, real PDF/image files, extraction and retrieval logic, Redis capacity limit, queued review worker, SQL publication, report creation and PDF rendering. Task delivery, auth, storage, model replies, embeddings, and vector service are simulated. No email delivery, HTTP transport load, cloud capacity, or billable cost is measured.",
           globalGeminiConcurrency: Number(process.env.GEMINI_GLOBAL_CONCURRENCY ?? 4),
           providerLocation: process.env.GOOGLE_CLOUD_LOCATION ?? "global",
           documentsPerCase: 1,

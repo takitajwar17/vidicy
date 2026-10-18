@@ -96,12 +96,9 @@ export function ClientReportControls({
           </Button>
         </form>
       ) : null}
-      <Button variant="outline" onClick={() => window.print()}>
-        Print / Save as PDF
-      </Button>
       <Button asChild variant="outline">
-        <a href={`/api/client-reports/${reportId}`} download>
-          Download report
+        <a href={`/api/client-reports/${reportId}`} target="_blank" rel="noopener noreferrer">
+          Open PDF
         </a>
       </Button>
       {canSend ? (

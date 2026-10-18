@@ -18,10 +18,14 @@ import { once } from "node:events";
 import { createClient } from "redis";
 import { drizzle } from "drizzle-orm/node-postgres";
 import { eq } from "drizzle-orm";
+import { extractText, getDocumentProxy } from "unpdf";
 import * as schema from "../src/db/schema";
 import { startTestPostgres } from "../src/__tests__/helpers/postgres";
 import { buildReviewContextHash, buildReviewRouteContext } from "../src/lib/review-context-data";
 import { buildRouteAssessment } from "../src/lib/review-rubric";
+
+// The full browser includes the PDF viewer; the headless shell does not.
+test.use({ channel: "chromium" });
 
 const require = createRequire(import.meta.url);
 let postgres: ReturnType<typeof startTestPostgres>;
@@ -411,7 +415,7 @@ test.afterAll(async () => {
 test("profile is ready before session refresh and keeps drafts during slow or failed refreshes", async ({
   page,
   context,
-}, info) => {
+}) => {
   await context.addCookies([
     { name: "session", value: staffCookie, url: base },
     { name: "csrf-token", value: "isolated-browser-csrf-token", url: base },
@@ -478,10 +482,179 @@ test("profile is ready before session refresh and keeps drafts during slow or fa
   }
 });
 
+test("report PDF includes every action and long paragraphs across A4 pages", async ({
+  page,
+  context,
+}, info) => {
+  test.setTimeout(90_000);
+  await context.addCookies([{ name: "session", value: staffCookie, url: base }]);
+  const db = drizzle(pool, { schema });
+  const application = await db.query.visaApplicationTable.findFirst({
+    where: eq(schema.visaApplicationTable.id, applicationId),
+  });
+  await db
+    .update(schema.visaApplicationTable)
+    .set({ clientReportStatus: "ready" })
+    .where(eq(schema.visaApplicationTable.id, applicationId));
+  const detail =
+    "Upload a clear replacement that shows the full page, all dates, and the account holder's name. Check that these details match the application. Keep the original document for your agency to review.";
+  const actionItems: schema.ClientReportActionItem[] = Array.from({ length: 14 }, (_, index) => ({
+    title: `Document correction ${String(index + 1).padStart(2, "0")}`,
+    detail: `${detail}\n\n${detail} Correction ${index + 1} complete.`,
+    severity: index < 3 ? "high" : index < 9 ? "medium" : "low",
+  }));
+  const [report] = await db
+    .insert(schema.clientReportTable)
+    .values({
+      applicationId,
+      status: "ready",
+      summary:
+        "Your document review is complete. Please make the corrections below, then send the updated documents to your agency. Résumé and bank records must use the same name.",
+      actionItems,
+    })
+    .returning();
+  try {
+    for (const scenario of [
+      { name: "client-document-report", items: actionItems, multipage: true },
+      { name: "short-report", items: actionItems.slice(0, 1), multipage: false },
+      { name: "historical-report", items: actionItems.slice(0, 1), multipage: false },
+      {
+        name: "long-action-report",
+        items: [
+          {
+            ...actionItems[0],
+            detail:
+              Array.from({ length: 40 }, (_, index) => `Paragraph ${index + 1}. ${detail}`).join(
+                "\n\n",
+              ) + "\nLONG-ACTION-END",
+          },
+        ],
+        multipage: true,
+      },
+    ]) {
+      await db
+        .update(schema.clientReportTable)
+        .set({ actionItems: scenario.items })
+        .where(eq(schema.clientReportTable.id, report.id));
+      await db
+        .update(schema.visaApplicationTable)
+        .set({ clientReportStatus: scenario.name === "historical-report" ? "draft" : "ready" })
+        .where(eq(schema.visaApplicationTable.id, applicationId));
+      await page.goto(`${base}/dashboard/reports/${report.id}`);
+      await page.evaluate(() => document.fonts.ready);
+      const pdfLink = page.getByRole("link", { name: "Open PDF", exact: true });
+      await expect(pdfLink).toHaveAttribute("target", "_blank");
+      await expect(pdfLink).toHaveAttribute("rel", "noopener noreferrer");
+      await expect(page.getByRole("button", { name: "Print / Save as PDF" })).toHaveCount(0);
+      if (scenario.name === "long-action-report")
+        await page.evaluate(() => document.documentElement.classList.add("dark"));
+      const pdfResponse = await context.request.get(`${base}/api/client-reports/${report.id}`);
+      expect(pdfResponse.status()).toBe(200);
+      expect(pdfResponse.headers()["content-type"]).toBe("application/pdf");
+      expect(pdfResponse.headers()["content-disposition"]).toMatch(/^inline;.*\.pdf"$/);
+      expect(pdfResponse.headers()["cache-control"]).toBe("private, no-store");
+      const bytes = await pdfResponse.body();
+      const path = info.outputPath(`${scenario.name}.pdf`);
+      writeFileSync(path, bytes);
+      if (scenario.name === "short-report") {
+        await page.evaluate(() => {
+          window.print = () => {
+            document.documentElement.dataset.printRequested = "true";
+          };
+        });
+        const [popup] = await Promise.all([page.waitForEvent("popup"), pdfLink.click()]);
+        await expect.poll(() => popup.url()).toContain(`/api/client-reports/${report.id}`);
+        await popup.waitForLoadState("load");
+        expect(await popup.evaluate(() => window.opener)).toBeNull();
+        // The native PDF viewer paints after the navigation load event.
+        await expect.poll(async () => (await popup.screenshot()).length).toBeGreaterThan(20_000);
+        await popup.screenshot({ path: info.outputPath("pdf-new-tab.png") });
+        expect(await page.locator("html").getAttribute("data-print-requested")).toBeNull();
+        await expect(page).toHaveURL(`${base}/dashboard/reports/${report.id}`);
+        await popup.close();
+      }
+      await info.attach(scenario.name, { path, contentType: "application/pdf" });
+      const pdf = await getDocumentProxy(new Uint8Array(bytes));
+      const firstPage = (await pdf.getPage(1)).getViewport({ scale: 1 });
+      expect(Math.round(firstPage.width)).toBe(595);
+      expect(Math.round(firstPage.height)).toBe(842);
+      if (scenario.name === "long-action-report") {
+        const content = await (await pdf.getPage(1)).getTextContent();
+        expect(content.items.map((item) => ("str" in item ? item.str : "")).join(" ")).toContain(
+          "Paragraph 1.",
+        );
+      }
+      const { text, totalPages } = await extractText(pdf, { mergePages: true });
+      await pdf.destroy();
+      if (scenario.multipage) expect(totalPages).toBeGreaterThan(1);
+      else expect(totalPages).toBe(1);
+      for (const item of scenario.items) expect(text).toContain(item.title);
+      expect(text).toContain(
+        scenario.name === "long-action-report"
+          ? "LONG-ACTION-END"
+          : `Correction ${scenario.items.length} complete.`,
+      );
+      expect(text).toContain("Government authorities make final visa decisions.");
+      expect(text).toContain(`Page 1 of ${totalPages}`);
+      expect(text).not.toContain("Toggle Sidebar");
+      expect(text).not.toContain("Save recipient");
+      expect(text).not.toContain("Client report - Vidicy");
+      expect(text).not.toContain("127.0.0.1");
+      expect(text).not.toMatch(/\d{1,2}:\d{2}\s*[AP]M/);
+      if (scenario.name === "historical-report") {
+        expect(text).toContain("Out of date - historical copy");
+        expect(text).toContain("Prepare a new report before sending");
+      }
+      expect(text).toContain("Résumé");
+      if (scenario.name === "long-action-report") {
+        for (let index = 1; index <= 40; index++) expect(text).toContain(`Paragraph ${index}.`);
+      }
+      if (scenario.name === "client-document-report") {
+        await page.setViewportSize({ width: 1440, height: 1000 });
+        await page.screenshot({
+          path: info.outputPath("report-desktop.png"),
+          animations: "disabled",
+        });
+        await page.evaluate(() => document.documentElement.classList.add("dark"));
+        expect(
+          await page.locator("#client-report").evaluate((element) => {
+            const documentStyle = getComputedStyle(element);
+            const appStyle = getComputedStyle(document.documentElement);
+            return (
+              documentStyle.getPropertyValue("--foreground") ===
+              appStyle.getPropertyValue("--foreground")
+            );
+          }),
+        ).toBe(true);
+        await page.screenshot({
+          path: info.outputPath("report-desktop-dark.png"),
+          animations: "disabled",
+        });
+        await page.evaluate(() => document.documentElement.classList.remove("dark"));
+        await page.setViewportSize({ width: 390, height: 844 });
+        expect(
+          await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
+        ).toBe(true);
+        await page.screenshot({
+          path: info.outputPath("report-mobile.png"),
+          animations: "disabled",
+        });
+        await page.setViewportSize({ width: 1440, height: 1000 });
+      }
+    }
+  } finally {
+    await db.delete(schema.clientReportTable).where(eq(schema.clientReportTable.id, report.id));
+    await db
+      .update(schema.visaApplicationTable)
+      .set({ clientReportStatus: application!.clientReportStatus })
+      .where(eq(schema.visaApplicationTable.id, applicationId));
+  }
+});
+
 test("generate, view, export, and deliver with real auth and a private provider stub", async ({
   page,
   context,
-}) => {
+}, info) => {
   await context.addCookies([
     { name: "session", value: staffCookie, url: base },
     { name: "csrf-token", value: "isolated-browser-csrf-token", url: base },
@@ -526,20 +699,15 @@ test("generate, view, export, and deliver with real auth and a private provider 
     ["complete", applicationId],
   );
   await page.reload();
-  await page.emulateMedia({ media: "print" });
-  await expect(page.locator('[data-sidebar="sidebar"]')).not.toBeVisible();
-  await expect(
-    page.getByRole("heading", { name: "Client document report", exact: true }),
-  ).toBeVisible();
-  const pdf = await page.pdf();
-  expect(pdf.subarray(0, 4).toString()).toBe("%PDF");
-  await page.emulateMedia({ media: "screen" });
-  const download = page.waitForEvent("download");
-  await page.getByRole("link", { name: "Download report" }).click();
-  const downloadedHtml = readFileSync((await (await download).path())!, "utf8");
-  expect(downloadedHtml).toContain("Please replace passport");
-  expect(downloadedHtml).toContain("&lt;script&gt;");
-  expect(downloadedHtml).not.toContain("<script>");
+  const pdfResponse = await context.request.get(`${base}/api/client-reports/${reportId}`);
+  expect(pdfResponse.status()).toBe(200);
+  expect(pdfResponse.headers()["content-type"]).toBe("application/pdf");
+  expect(pdfResponse.headers()["content-disposition"]).toMatch(/^inline;.*\.pdf"$/);
+  expect((await pdfResponse.body()).subarray(0, 4).toString()).toBe("%PDF");
+  await expect(page.getByRole("link", { name: "Open PDF", exact: true })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Download report", exact: true })).toHaveCount(0);
+  expect(await page.locator("#client-report").innerHTML()).toContain("&lt;script&gt;");
+  await expect(page.locator("#client-report script")).toHaveCount(0);
   await expect(page.getByRole("textbox", { name: "Report recipient", exact: true })).toHaveValue(
     "",
   );
