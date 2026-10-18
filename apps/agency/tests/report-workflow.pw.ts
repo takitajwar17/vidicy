@@ -543,6 +543,35 @@ test("report PDF includes every action and long paragraphs across A4 pages", asy
       await page.goto(`${base}/dashboard/reports/${report.id}`);
       await page.evaluate(() => document.fonts.ready);
       const pdfLink = page.getByRole("link", { name: "Open PDF", exact: true });
+      await expect(page.getByRole("link", { name: "Back to case", exact: true })).toHaveCount(0);
+      await expect(pdfLink).toHaveClass(/bg-primary/);
+      await expect(
+        pdfLink
+          .locator("xpath=../..")
+          .getByRole("heading", { name: "Client document report", exact: true }),
+      ).toBeVisible();
+      await expect(
+        page.locator("#client-report").getByRole("link", { name: "Open PDF", exact: true }),
+      ).toHaveCount(0);
+      const reportBounds = await page.locator("#client-report").boundingBox();
+      const correctionsBounds = await page
+        .getByRole("heading", { name: "What you need to do", exact: true })
+        .locator("xpath=../../..")
+        .boundingBox();
+      expect(Math.abs(correctionsBounds!.width - reportBounds!.width)).toBeLessThan(2);
+      {
+        const summaryBounds = await page
+          .getByRole("heading", { name: "Review summary", exact: true })
+          .locator("xpath=../../..")
+          .boundingBox();
+        expect(Math.abs(summaryBounds!.width - reportBounds!.width)).toBeLessThan(2);
+        if (scenario.name === "historical-report") {
+          await page.screenshot({
+            path: info.outputPath("report-historical-desktop.png"),
+            animations: "disabled",
+          });
+        }
+      }
       await expect(pdfLink).toHaveAttribute("target", "_blank");
       await expect(pdfLink).toHaveAttribute("rel", "noopener noreferrer");
       await expect(page.getByRole("button", { name: "Print / Save as PDF" })).toHaveCount(0);
@@ -715,13 +744,9 @@ test("generate, view, export, and deliver with real auth and a private provider 
     .getByRole("textbox", { name: "Report recipient", exact: true })
     .fill("client@example.test");
   await page.getByRole("button", { name: "Save recipient", exact: true }).click();
-  await expect(
-    page.getByRole("button", { name: "Send report to client@example.test", exact: true }),
-  ).toBeEnabled();
+  await expect(page.getByRole("button", { name: "Send report", exact: true })).toBeEnabled();
   writeFileSync(control, "reject");
-  await page
-    .getByRole("button", { name: "Send report to client@example.test", exact: true })
-    .click();
+  await page.getByRole("button", { name: "Send report", exact: true }).click();
   await expect(
     page.getByText("Delivery is pending or its outcome is unknown.", { exact: false }),
   ).toBeVisible();
@@ -2063,7 +2088,7 @@ test.describe("UI audit regression", () => {
       await page.goto(base + `/dashboard/reports/${report.id}`);
       await expect(page.getByRole("button", { name: "Toggle Sidebar", exact: true })).toBeVisible();
       await expect(page.locator("main")).toHaveCount(1);
-      const send = page.getByRole("button", { name: `Send report to ${longEmail}`, exact: true });
+      const send = page.getByRole("button", { name: "Send report", exact: true });
       await expect(send).toBeVisible();
       const bounds = await send.boundingBox();
       expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(width);
@@ -2077,7 +2102,9 @@ test.describe("UI audit regression", () => {
       .set({ clientReportStatus: "draft" })
       .where(eq(schema.visaApplicationTable.id, applicationId));
     await page.reload();
-    await expect(page.locator("article header")).toContainText("Out of date");
+    await expect(
+      page.locator("#client-report").getByText("Out of date", { exact: true }),
+    ).toBeVisible();
     const [ticket] = await db
       .insert(schema.supportTicketTable)
       .values({

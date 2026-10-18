@@ -1,5 +1,5 @@
-import type { Metadata, Route } from "next";
-import Link from "next/link";
+import type { Metadata } from "next";
+import { FileText } from "lucide-react";
 import { notFound } from "next/navigation";
 import { getClientReport } from "@/server/client-reports";
 import { requireAgencyPageSession } from "@/utils/auth-page";
@@ -10,9 +10,12 @@ import {
   getDisplayCaseNumber,
 } from "@/lib/agency-workflow";
 import { getCsrfToken } from "@/infra/csrf";
-import { PageHeader } from "@/components/page-header";
-import { formatShortDate } from "@/components/agency/agency-ui";
+import { AgencyPageShell } from "@/components/agency/agency-page-shell";
+import { formatShortDate, IssueSeverityBadge } from "@/components/agency/agency-ui";
 import { CsrfProvider } from "@/components/csrf-provider";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 
 export const metadata: Metadata = {
   title: "Client report",
@@ -39,56 +42,68 @@ export default async function ClientReportPage({
   const recipient =
     report.deliveryRequest?.to[0] ?? report.deliveryPayload?.to ?? application.clientEmail;
   return (
-    <>
-      <div className="print:hidden">
-        <PageHeader
-          items={[
-            { href: "/dashboard", label: "Dashboard" },
-            { href: "/dashboard/reports", label: "Reports" },
-            { href: `/dashboard/reports/${report.id}`, label: "Client report" },
-          ]}
-        />
-      </div>
-      <article id="client-report" className="mx-auto w-full max-w-4xl space-y-6 p-6 print:p-0">
-        <style>{`@media print {
-        body * { visibility: hidden; }
-        #client-report, #client-report * { visibility: visible; }
-        #client-report { position: absolute; left: 0; top: 0; width: 100%; max-width: none; color: #111; background: white; }
-      }`}</style>
-        <div className="print:hidden">
-          <Link href={`/dashboard/${application.id}` as Route} className="text-primary underline">
-            Back to case
-          </Link>
-        </div>
-        <header className="space-y-2">
-          <h1 className="text-2xl font-bold">
-            {report.kind === "collection" ? "Client document request" : "Client document report"}
-          </h1>
-          <p className="text-sm text-muted-foreground">
-            {report.kind === "collection"
-              ? "Check the requested documents and details before delivery."
-              : "Review the client corrections and prepare the report for delivery."}
-          </p>
-          <p>
-            Case {getDisplayCaseNumber(application.caseNumber, application.id)} ·{" "}
-            {application.clientName ?? "Client"}
-          </p>
-          <p>
-            {application.destinationCountry} · {application.visaType}
-          </p>
-          <p className="text-sm text-muted-foreground">
-            Prepared {formatShortDate(report.createdAt)} ·{" "}
-            {isStale
-              ? "Out of date"
-              : (CLIENT_REPORT_DELIVERY_STATUS_META[
-                  report.status as keyof typeof CLIENT_REPORT_DELIVERY_STATUS_META
-                ]?.label ?? report.status)}
-          </p>
-        </header>
+    <AgencyPageShell
+      breadcrumbs={[
+        { href: "/dashboard", label: "Dashboard" },
+        { href: "/dashboard/reports", label: "Reports" },
+        { href: `/dashboard/reports/${report.id}`, label: "Client report" },
+      ]}
+      title={report.kind === "collection" ? "Client document request" : "Client document report"}
+      description={
+        report.kind === "collection"
+          ? "Check the requested documents and details before delivery."
+          : "Review the client corrections and prepare the report for delivery."
+      }
+      actions={
+        <Button asChild>
+          <a href={`/api/client-reports/${report.id}`} target="_blank" rel="noopener noreferrer">
+            <FileText aria-hidden="true" />
+            Open PDF
+          </a>
+        </Button>
+      }
+    >
+      <article id="client-report" className="min-w-0 space-y-5">
+        <Card>
+          <CardHeader className="flex-row flex-wrap items-center justify-between gap-3 space-y-0">
+            <CardTitle>Report details</CardTitle>
+            <Badge variant="outline" className="rounded-[4px] text-2xs font-bold">
+              {isStale
+                ? "Out of date"
+                : (CLIENT_REPORT_DELIVERY_STATUS_META[
+                    report.status as keyof typeof CLIENT_REPORT_DELIVERY_STATUS_META
+                  ]?.label ?? report.status)}
+            </Badge>
+          </CardHeader>
+          <CardContent>
+            <dl className="grid gap-5 text-sm sm:grid-cols-2 xl:grid-cols-4">
+              <div className="min-w-0 space-y-1">
+                <dt className="text-xs text-muted-foreground">Client</dt>
+                <dd className="break-words font-semibold">{application.clientName ?? "Client"}</dd>
+              </div>
+              <div className="min-w-0 space-y-1">
+                <dt className="text-xs text-muted-foreground">Case reference</dt>
+                <dd className="break-words font-semibold">
+                  {getDisplayCaseNumber(application.caseNumber, application.id)}
+                </dd>
+              </div>
+              <div className="min-w-0 space-y-1">
+                <dt className="text-xs text-muted-foreground">Destination / Visa</dt>
+                <dd className="break-words font-semibold">
+                  {application.destinationCountry} / {application.visaType}
+                </dd>
+              </div>
+              <div className="space-y-1">
+                <dt className="text-xs text-muted-foreground">Prepared</dt>
+                <dd className="font-semibold">{formatShortDate(report.createdAt)}</dd>
+              </div>
+            </dl>
+          </CardContent>
+        </Card>
         {isStale ? (
           <p
             role="alert"
-            className="rounded-md border border-status-warning/50 bg-status-warning/5 p-4"
+            className="rounded-md border border-status-warning/30 bg-status-warning/10 p-4 text-sm text-status-warning"
           >
             This report is out of date. It is a historical copy. Prepare a new report before sending
             current corrections.
@@ -189,6 +204,6 @@ export default async function ClientReportPage({
           <p className="break-all">Report reference: {report.id}</p>
         </footer>
       </article>
-    </>
+    </AgencyPageShell>
   );
 }

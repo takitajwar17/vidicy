@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useId, useState, type FormEvent } from "react";
 import { useServerAction } from "zsa-react";
 import { toast } from "sonner";
+import { Send } from "lucide-react";
 import {
   sendClientReportAction,
   updateClientReportRecipientAction,
@@ -72,49 +73,57 @@ export function ClientReportControls({
     router.refresh();
   }
   return (
-    <div className="flex min-w-0 flex-wrap gap-3 print:hidden">
-      {canEditRecipient ? (
-        <form onSubmit={updateRecipient} className="flex w-full flex-wrap items-end gap-3">
-          <div className="min-w-0 flex-1 space-y-2">
-            <Label htmlFor={emailId}>Report recipient</Label>
-            <Input
-              id={emailId}
-              type="email"
-              autoComplete="email"
-              required
-              value={email}
-              onChange={(event) => setEmail(event.target.value)}
-              disabled={isPending || isSavingRecipient}
-            />
-          </div>
-          <Button
-            type="submit"
-            variant="outline"
-            disabled={isPending || isSavingRecipient || !csrfToken || !hasUnsavedRecipient}
+    <div className="min-w-0 space-y-4">
+      <div className="flex min-w-0 flex-wrap items-end gap-3">
+        {canEditRecipient ? (
+          <form
+            onSubmit={updateRecipient}
+            className="flex w-full min-w-0 max-w-2xl flex-wrap items-end gap-3"
           >
-            {isSavingRecipient ? "Saving…" : "Save recipient"}
+            <div className="min-w-0 flex-[1_1_220px] space-y-2">
+              <Label htmlFor={emailId}>Report recipient</Label>
+              <Input
+                id={emailId}
+                type="email"
+                autoComplete="email"
+                required
+                value={email}
+                onChange={(event) => setEmail(event.target.value)}
+                disabled={isPending || isSavingRecipient}
+              />
+            </div>
+            <Button
+              type="submit"
+              variant="outline"
+              disabled={isPending || isSavingRecipient || !csrfToken || !hasUnsavedRecipient}
+            >
+              {isSavingRecipient ? "Saving…" : "Save recipient"}
+            </Button>
+          </form>
+        ) : recipient ? (
+          <div className="space-y-1 text-sm">
+            <p className="text-xs text-muted-foreground">Report recipient</p>
+            <p className="break-all font-medium">{recipient}</p>
+          </div>
+        ) : null}
+        {canSend ? (
+          <Button
+            disabled={
+              isPending || isSavingRecipient || hasUnsavedRecipient || !recipient || !csrfToken
+            }
+            onClick={sendReport}
+            variant="secondary"
+            className="shrink-0"
+          >
+            <Send aria-hidden="true" />
+            {isPending ? "Sending…" : isPendingDelivery ? "Check / retry delivery" : "Send report"}
           </Button>
-        </form>
-      ) : null}
-      <Button asChild variant="outline">
-        <a href={`/api/client-reports/${reportId}`} target="_blank" rel="noopener noreferrer">
-          Open PDF
-        </a>
-      </Button>
-      {canSend ? (
-        <Button
-          disabled={
-            isPending || isSavingRecipient || hasUnsavedRecipient || !recipient || !csrfToken
-          }
-          onClick={sendReport}
-          className="h-auto min-h-9 max-w-full whitespace-normal break-all py-2"
-        >
-          {isPending
-            ? "Sending…"
-            : isPendingDelivery
-              ? "Check / retry delivery"
-              : `Send report to ${recipient ?? "client"}`}
-        </Button>
+        ) : null}
+      </div>
+      {!recipient && canEditRecipient ? (
+        <p className="text-xs leading-relaxed text-muted-foreground">
+          Save a client email address before sending this report.
+        </p>
       ) : null}
     </div>
   );
