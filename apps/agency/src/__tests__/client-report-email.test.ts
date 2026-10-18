@@ -18,10 +18,22 @@ afterEach(() => {
 
 describe("client report email transport", () => {
   it("retries the same provider body after sender settings change", async () => {
-    const payload = { to: "client@example.test", subject: "Review", text: "Replace the passport" };
+    const attachments = [
+      {
+        filename: "client-report.pdf",
+        content: Buffer.from("%PDF-1.7\nreport").toString("base64"),
+      },
+    ];
+    const payload = {
+      to: "client@example.test",
+      subject: "Review",
+      text: "Replace the passport",
+      attachments,
+    };
     const request = createClientReportEmailRequest(payload);
     const idempotencyKey = "report/test";
     await sendClientReportEmail({ request, idempotencyKey });
+    expect(JSON.parse(transport.mock.calls[0][1].body).attachments).toEqual(attachments);
     vi.stubEnv("EMAIL_FROM", "new@example.test");
     vi.stubEnv("EMAIL_FROM_NAME", "New agency");
     vi.stubEnv("EMAIL_REPLY_TO", "new-reply@example.test");

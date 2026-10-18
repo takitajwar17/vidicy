@@ -10,11 +10,9 @@ const skipTypeScriptChecks = process.env.SKIP_TYPESCRIPT_CHECKS === "true";
 const nextConfig: NextConfig = {
   output: "standalone",
   outputFileTracingIncludes: {
-    "/api/client-reports/*": [
+    "/*": [
       "./node_modules/@fontsource/manrope/files/manrope-latin-400-normal.woff",
       "./node_modules/@fontsource/manrope/files/manrope-latin-700-normal.woff",
-    ],
-    "/*": [
       "./node_modules/@google-cloud/tasks/build/protos/**/*",
       "../../node_modules/.pnpm/@google-cloud+tasks@*/node_modules/@google-cloud/tasks/build/protos/**/*",
       "../../node_modules/.pnpm/google-gax@*/node_modules/google-gax/build/protos/**/*",

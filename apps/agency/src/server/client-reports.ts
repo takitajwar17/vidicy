@@ -221,7 +221,20 @@ export async function deliverClientReport({ reportId }: { reportId: string }) {
       CLIENT_REPORT_REVIEW_NOTE,
     ].join("\n"),
   };
-  const request = report.deliveryRequest ?? createClientReportEmailRequest(payload);
+  let request = report.deliveryRequest;
+  if (!request) {
+    const { renderClientReportPDF } = await import("@/server/client-report-pdf");
+    const pdf = await renderClientReportPDF({ report, application, isStale });
+    request = createClientReportEmailRequest({
+      ...payload,
+      attachments: [
+        {
+          filename: `client-report-${report.id}.pdf`,
+          content: pdf.toString("base64"),
+        },
+      ],
+    });
+  }
   const db = getDB();
   const claimed = await db.withTransaction(async () => {
     // Serialize this short claim with case updates. No provider call runs in

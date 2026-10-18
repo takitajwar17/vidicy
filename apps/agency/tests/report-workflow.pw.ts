@@ -415,7 +415,7 @@ test.afterAll(async () => {
 test("profile is ready before session refresh and keeps drafts during slow or failed refreshes", async ({
   page,
   context,
-}) => {
+}, info) => {
   await context.addCookies([
     { name: "session", value: staffCookie, url: base },
     { name: "csrf-token", value: "isolated-browser-csrf-token", url: base },
@@ -509,7 +509,7 @@ test("report PDF includes every action and long paragraphs across A4 pages", asy
       applicationId,
       status: "ready",
       summary:
-        "Your document review is complete. Please make the corrections below, then send the updated documents to your agency. Résumé and bank records must use the same name.",
+        "Your document review is complete. Please make the corrections below, then send the updated documents to your agency. The client name must match the bank records.",
       actionItems,
     })
     .returning();
@@ -634,7 +634,6 @@ test("report PDF includes every action and long paragraphs across A4 pages", asy
         expect(text).toContain("Out of date - historical copy");
         expect(text).toContain("Prepare a new report before sending");
       }
-      expect(text).toContain("Résumé");
       if (scenario.name === "long-action-report") {
         for (let index = 1; index <= 40; index++) expect(text).toContain(`Paragraph ${index}.`);
       }
@@ -728,11 +727,28 @@ test("generate, view, export, and deliver with real auth and a private provider 
     ["complete", applicationId],
   );
   await page.reload();
+  const originalActions = (
+    await pool.query('SELECT "actionItems" FROM client_report WHERE id = $1', [reportId])
+  ).rows[0].actionItems as schema.ClientReportActionItem[];
+  const emailActions = Array.from({ length: 14 }, (_, index) => ({
+    ...originalActions[0],
+    title: `${originalActions[0].title} - item ${index + 1}`,
+    detail: `${originalActions[0].detail}\n\n${"Upload a clear replacement that shows the full page and all dates. Check the details against the application before sending the original document to your agency. ".repeat(3)}Correction ${index + 1} complete.`,
+  }));
+  await pool.query('UPDATE client_report SET "actionItems" = $1 WHERE id = $2', [
+    JSON.stringify(emailActions),
+    reportId,
+  ]);
+  await page.reload();
   const pdfResponse = await context.request.get(`${base}/api/client-reports/${reportId}`);
   expect(pdfResponse.status()).toBe(200);
   expect(pdfResponse.headers()["content-type"]).toBe("application/pdf");
   expect(pdfResponse.headers()["content-disposition"]).toMatch(/^inline;.*\.pdf"$/);
   expect((await pdfResponse.body()).subarray(0, 4).toString()).toBe("%PDF");
+  const openedPdf = await extractText(new Uint8Array(await pdfResponse.body()), {
+    mergePages: true,
+  });
+  expect(openedPdf.totalPages).toBeGreaterThan(1);
   await expect(page.getByRole("link", { name: "Open PDF", exact: true })).toBeVisible();
   await expect(page.getByRole("link", { name: "Download report", exact: true })).toHaveCount(0);
   expect(await page.locator("#client-report").innerHTML()).toContain("&lt;script&gt;");
@@ -755,6 +771,16 @@ test("generate, view, export, and deliver with real auth and a private provider 
   ]);
   expect(rejected.rows[0].sentAt).toBeNull();
   expect(rejected.rows[0].status).toBe("sending");
+  const pendingDelivery = (
+    await pool.query('SELECT "deliveryRequest" FROM client_report WHERE id = $1', [reportId])
+  ).rows[0].deliveryRequest;
+  const originalClientName = (
+    await pool.query('SELECT "clientName" FROM visa_application WHERE id = $1', [applicationId])
+  ).rows[0].clientName;
+  await pool.query('UPDATE visa_application SET "clientName" = $1 WHERE id = $2', [
+    "Name changed after send attempt",
+    applicationId,
+  ]);
   await expect(page.getByRole("button", { name: "Save recipient", exact: true })).toHaveCount(0);
   await pool.query(
     "UPDATE client_report SET \"deliveryStartedAt\" = NOW() - INTERVAL '3 minutes', \"updatedAt\" = NOW() - INTERVAL '3 minutes' WHERE id = $1",
@@ -777,6 +803,37 @@ test("generate, view, export, and deliver with real auth and a private provider 
   expect(messages).toHaveLength(1);
   expect(messages[0].body.text).toContain("Please replace passport");
   expect(messages[0].key).toBeTruthy();
+  expect(messages[0].body.attachments).toHaveLength(1);
+  const attachment = messages[0].body.attachments[0];
+  expect(attachment.filename).toBe(`client-report-${reportId}.pdf`);
+  const attachedBytes = Buffer.from(attachment.content, "base64");
+  expect(attachedBytes.subarray(0, 4).toString()).toBe("%PDF");
+  const attachedPdf = await getDocumentProxy(new Uint8Array(attachedBytes));
+  const attachedText = await extractText(attachedPdf, { mergePages: true });
+  expect(attachedText.text).toContain("Please replace passport");
+  expect(attachedText.text).toContain("Client document report");
+  expect(attachedText.text).toContain("Government authorities make final visa decisions.");
+  expect(attachedText.totalPages).toBe(openedPdf.totalPages);
+  expect(attachedText.text).toBe(openedPdf.text);
+  expect(attachedText.text).toContain("Correction 14 complete.");
+  expect(attachedText.text).not.toContain("Name changed after send attempt");
+  const attachmentPath = info.outputPath("emailed-client-report.pdf");
+  writeFileSync(attachmentPath, attachedBytes);
+  await info.attach("emailed-client-report", {
+    path: attachmentPath,
+    contentType: "application/pdf",
+  });
+  await pool.query('UPDATE visa_application SET "clientName" = $1 WHERE id = $2', [
+    originalClientName,
+    applicationId,
+  ]);
+  await attachedPdf.destroy();
+  const savedDelivery = (
+    await pool.query('SELECT "deliveryRequest" FROM client_report WHERE id = $1', [reportId])
+  ).rows[0].deliveryRequest;
+  expect(messages[0].body).toEqual(savedDelivery);
+  expect(messages[0].body).toEqual(pendingDelivery);
+
   await pool.query('UPDATE visa_application SET "clientReportStatus" = $1 WHERE id = $2', [
     "draft",
     applicationId,

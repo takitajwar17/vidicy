@@ -396,6 +396,7 @@ export interface ClientReportEmailPayload {
   to: string;
   subject: string;
   text: string;
+  attachments?: ClientReportDeliveryRequest["attachments"];
 }
 
 export function createClientReportEmailRequest(
@@ -408,6 +409,7 @@ export function createClientReportEmailRequest(
     to: [payload.to],
     subject: payload.subject,
     text: payload.text,
+    ...(payload.attachments ? { attachments: payload.attachments } : {}),
     ...(process.env.EMAIL_REPLY_TO ? { reply_to: process.env.EMAIL_REPLY_TO } : {}),
     tags: [{ name: "type", value: "client-report" }],
   };

@@ -184,6 +184,7 @@ export interface ClientReportDeliveryRequest {
   subject: string;
   text: string;
   reply_to?: string;
+  attachments?: { filename: string; content: string }[];
   tags: { name: string; value: string }[];
 }
 

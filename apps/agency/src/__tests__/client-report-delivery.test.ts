@@ -14,6 +14,7 @@ vi.mock("@/db", async (original) => ({
   ...(await original<typeof import("@/db")>()),
   getDB: mocks.db,
 }));
+vi.mock("@/server/client-report-pdf", () => ({ renderClientReportPDF: mocks.render }));
 vi.mock("@/server/agency-team", () => ({ requireAgencyStaff: mocks.staff }));
 vi.mock("@/utils/email", async (original) => ({
   ...(await original<typeof import("@/utils/email")>()),
@@ -71,6 +72,7 @@ beforeEach(async () => {
   await pool.query('TRUNCATE "user" CASCADE');
   mocks.db.mockReturnValue(db);
   mocks.current.mockResolvedValue({});
+  mocks.render.mockReset().mockResolvedValue(Buffer.from("%PDF-1.7\nreport attachment"));
   mocks.send.mockReset();
   mocks.send.mockResolvedValue({ id: "provider_1" });
   const [user] = await db.insert(userTable).values({ email: "staff@example.com" }).returning();
@@ -223,12 +225,59 @@ describe("client report delivery", () => {
         request: expect.objectContaining({
           to: ["client@example.com"],
           text: expect.stringContaining("Upload all pages"),
+          attachments: [
+            {
+              filename: `client-report-${reportId}.pdf`,
+              content: Buffer.from("%PDF-1.7\nreport attachment").toString("base64"),
+            },
+          ],
         }),
         idempotencyKey: expect.any(String),
       }),
     );
     expect((await db.query.clientReportTable.findFirst())?.status).toBe("sent");
     expect((await db.query.visaApplicationTable.findFirst())?.clientReportStatus).toBe("sent");
+  });
+  it("blocks delivery if the case changes while the PDF is prepared", async () => {
+    mocks.render.mockImplementationOnce(async () => {
+      await pool.query(
+        'UPDATE visa_application SET "clientReportStatus" = $1, "updateCounter" = "updateCounter" + 1 WHERE id = $2',
+        ["draft", applicationId],
+      );
+      return Buffer.from("%PDF-1.7\nold report");
+    });
+    await expect(deliverClientReport({ reportId })).rejects.toThrow("case changed");
+    expect(mocks.send).not.toHaveBeenCalled();
+    const saved = await db.query.clientReportTable.findFirst();
+    expect(saved).toMatchObject({ status: "ready", deliveryRequest: null, deliveryKey: null });
+  });
+  it("keeps the report ready when PDF generation fails before an email attempt", async () => {
+    mocks.render.mockRejectedValueOnce(new Error("PDF generation failed"));
+    await expect(deliverClientReport({ reportId })).rejects.toThrow("PDF generation failed");
+    expect(mocks.send).not.toHaveBeenCalled();
+    const saved = await db.query.clientReportTable.findFirst();
+    expect(saved).toMatchObject({
+      status: "ready",
+      deliveryRequest: null,
+      deliveryKey: null,
+      deliveryStartedAt: null,
+    });
+  });
+  it("preserves a legacy pending message without changing its body or attachment set", async () => {
+    const request = {
+      from: "Original <original@example.test>",
+      to: ["client@example.com"],
+      subject: "Original report",
+      text: "Original content",
+      tags: [{ name: "type", value: "client-report" }],
+    };
+    await pool.query(
+      `UPDATE client_report SET status = 'sending', "deliveryRequest" = $1, "deliveryKey" = 'legacy/saved-key', "deliveryStartedAt" = NOW() - INTERVAL '3 minutes', "updatedAt" = NOW() - INTERVAL '3 minutes' WHERE id = $2`,
+      [JSON.stringify(request), reportId],
+    );
+    await deliverClientReport({ reportId });
+    expect(mocks.render).not.toHaveBeenCalled();
+    expect(mocks.send).toHaveBeenCalledWith({ request, idempotencyKey: "legacy/saved-key" });
   });
   it("allows only one concurrent send and never resends an accepted report", async () => {
     let release!: () => void;
@@ -259,6 +308,8 @@ describe("client report delivery", () => {
     mocks.send.mockRejectedValueOnce(new Error("timeout"));
     await expect(deliverClientReport({ reportId })).rejects.toThrow();
     const first = mocks.send.mock.calls[0][0];
+    expect(first.request.attachments).toHaveLength(1);
+    mocks.render.mockRejectedValue(new Error("Do not regenerate the saved PDF"));
     await pool.query(
       'UPDATE "client_report" SET "deliveryStartedAt" = NOW() - INTERVAL \'3 minutes\', "updatedAt" = NOW() - INTERVAL \'3 minutes\' WHERE id = $1',
       [reportId],
@@ -271,6 +322,7 @@ describe("client report delivery", () => {
     vi.stubEnv("EMAIL_REPLY_TO", "new-reply@example.test");
     await deliverClientReport({ reportId });
     expect(mocks.send.mock.calls[1][0]).toEqual(first);
+    expect(mocks.render).toHaveBeenCalledTimes(1);
   });
   it("retries a frozen pending request after case facts change without treating the case as sent", async () => {
     mocks.send.mockRejectedValueOnce(new Error("timeout"));
